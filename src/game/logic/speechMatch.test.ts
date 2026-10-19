@@ -1,66 +1,81 @@
 import { describe, expect, it } from "vitest";
 import { judgeSpeech, matchesPhrase } from "./speechMatch";
-import { COLOR_PHRASE, LIKE_PHRASE, PHRASES, PHRASE_IDS, type PhraseId } from "./english";
-import { ISLAND_FOODS } from "../data/foods";
+import { NUMBER_IDS, PHRASES, type PhraseId } from "./english";
 
-const P = (ids: PhraseId[]) => ids.map((id) => PHRASES[id]);
-const LIKE_OPTIONS = P(ISLAND_FOODS.map((f) => LIKE_PHRASE[f]));
+const P = (...ids: PhraseId[]) => ids.map((id) => PHRASES[id]);
 
-describe("English response matching", () => {
-  it("every displayed sentence matches itself", () => {
-    for (const id of PHRASE_IDS) expect(matchesPhrase(PHRASES[id].en, PHRASES[id]), id).toBe(true);
-  });
-
-  it("ignores punctuation, capitals and articles", () => {
-    expect(judgeSpeech(["do you like apples"], LIKE_OPTIONS)).toMatchObject({ kind: "match", id: "likeApples" });
-    expect(judgeSpeech(["DO YOU LIKE FISH!!"], LIKE_OPTIONS)).toMatchObject({ kind: "match", id: "likeFish" });
-    expect(judgeSpeech(["you like the banana"], LIKE_OPTIONS)).toMatchObject({ kind: "match", id: "likeBananas" });
-  });
-
-  it("accepts Japanese-accented recogniser variants", () => {
-    expect(judgeSpeech(["do you rike apple"], LIKE_OPTIONS)).toMatchObject({ id: "likeApples" });
-    expect(judgeSpeech(["do you like very"], LIKE_OPTIONS)).toMatchObject({ id: "likeBerries" });
-    expect(judgeSpeech(["do you like fishu"], LIKE_OPTIONS)).toMatchObject({ id: "likeFish" });
-    expect(judgeSpeech(["Kenya swim"], P(["canSwim", "canFly", "canJump"]))).toMatchObject({ id: "canSwim" });
-    expect(judgeSpeech(["can you fry"], P(["canSwim", "canFly", "canJump"]))).toMatchObject({ id: "canFly" });
-    expect(judgeSpeech(["it's brew"], P([COLOR_PHRASE.blue]))).toMatchObject({ id: "itsBlue" });
-    expect(judgeSpeech(["it's glean"], P([COLOR_PHRASE.green]))).toMatchObject({ id: "itsGreen" });
-    expect(judgeSpeech(["can you health me"], P(["canHelp"]))).toMatchObject({ id: "canHelp" });
-  });
-
-  it("the question needs both the pattern word and the food", () => {
-    expect(judgeSpeech(["apples"], LIKE_OPTIONS).kind).toBe("none");
-    expect(judgeSpeech(["do you like"], LIKE_OPTIONS).kind).toBe("none");
-    expect(judgeSpeech(["swim"], P(["canSwim"])).kind).toBe("none");
-  });
-
-  it("one sentence never triggers two actions", () => {
-    expect(judgeSpeech(["do you like apples and fish"], LIKE_OPTIONS).kind).toBe("unclear");
-    expect(judgeSpeech(["yes no"], P(["yesIDo", "noIDont"])).kind).not.toBe("match");
-  });
-
-  it("tells yes from no", () => {
-    const yn = P(["yesIDo", "noIDont"]);
-    expect(judgeSpeech(["yes I do"], yn)).toMatchObject({ id: "yesIDo" });
-    expect(judgeSpeech(["yeah"], yn)).toMatchObject({ id: "yesIDo" });
-    expect(judgeSpeech(["no I don't"], yn)).toMatchObject({ id: "noIDont" });
-    expect(judgeSpeech(["no I dont"], yn)).toMatchObject({ id: "noIDont" });
-    const can = P(["yesICan", "noICant"]);
-    expect(judgeSpeech(["yes I can"], can)).toMatchObject({ id: "yesICan" });
-    expect(judgeSpeech(["no I can't"], can)).toMatchObject({ id: "noICant" });
-    // Japanese speakers often drop the t: the "no" still decides.
-    expect(judgeSpeech(["no I can"], can)).toMatchObject({ id: "noICant" });
-  });
-
-  it("only the top hypothesis judges; alternatives only rescue a miss", () => {
-    expect(judgeSpeech(["do you like fish", "do you like apples"], LIKE_OPTIONS)).toMatchObject({ id: "likeFish" });
-    expect(judgeSpeech(["do you light hum", "do you like apples"], LIKE_OPTIONS)).toMatchObject({ id: "likeApples" });
-    expect(judgeSpeech(["hello", "goodbye"], LIKE_OPTIONS).kind).toBe("none");
-  });
-
-  it("colour distractors are other colours", () => {
-    for (const id of Object.values(COLOR_PHRASE)) {
-      for (const d of PHRASES[id].distractors ?? []) expect(Object.values(COLOR_PHRASE)).toContain(d);
+describe("speech matching", () => {
+  it("accepts the care sentences with or without punctuation and articles", () => {
+    for (const said of ["feed the fish", "Feed the fish!", "FEED FISH", "feet the fish", "feeding the fishes"]) {
+      expect(judgeSpeech([said], P("feedFish"))).toMatchObject({ kind: "match", id: "feedFish" });
     }
+    for (const said of ["clean please", "Clean, please!", "clean", "kleen please"]) {
+      expect(judgeSpeech([said], P("cleanPlease"))).toMatchObject({ kind: "match", id: "cleanPlease" });
+    }
+  });
+
+  it("rejects incorrect sentences", () => {
+    expect(judgeSpeech(["fish"], P("feedFish")).kind).toBe("none");
+    expect(judgeSpeech(["feed"], P("feedFish")).kind).toBe("none");
+    expect(judgeSpeech(["clean please"], P("feedFish")).kind).toBe("none");
+    expect(judgeSpeech(["green please"], P("cleanPlease")).kind).toBe("none");
+    expect(judgeSpeech(["hello"], P("feedFish")).kind).toBe("none");
+  });
+
+  it("accepts colour choices with accented variants and rejects other colours", () => {
+    const shop = P("orangePlease", "bluePlease");
+    expect(judgeSpeech(["blue please"], shop)).toMatchObject({ kind: "match", id: "bluePlease" });
+    expect(judgeSpeech(["Bru, please."], shop)).toMatchObject({ kind: "match", id: "bluePlease" });
+    expect(judgeSpeech(["orenji"], shop)).toMatchObject({ kind: "match", id: "orangePlease" });
+    expect(judgeSpeech(["or range please"], shop)).toMatchObject({ kind: "match", id: "orangePlease" });
+    expect(judgeSpeech(["red please"], shop).kind).toBe("none");
+    expect(judgeSpeech(["led please"], P("redPlease", "bluePlease"))).toMatchObject({ kind: "match", id: "redPlease" });
+    expect(judgeSpeech(["yello"], P("yellowPlease", "bluePlease"))).toMatchObject({ kind: "match", id: "yellowPlease" });
+  });
+
+  it("treats two answers at once as unclear, never as correct", () => {
+    expect(judgeSpeech(["blue orange"], P("orangePlease", "bluePlease")).kind).toBe("unclear");
+    expect(judgeSpeech(["two three"], P(...NUMBER_IDS)).kind).toBe("unclear");
+    expect(judgeSpeech(["big small"], P("bigPlease", "smallPlease")).kind).toBe("unclear");
+  });
+
+  it("hears numbers as words, digits and accented variants", () => {
+    const nums = P(...NUMBER_IDS);
+    expect(judgeSpeech(["three"], nums)).toMatchObject({ id: "n3" });
+    expect(judgeSpeech(["3"], nums)).toMatchObject({ id: "n3" });
+    expect(judgeSpeech(["Three fish!"], nums)).toMatchObject({ id: "n3" });
+    expect(judgeSpeech(["tree fish"], nums)).toMatchObject({ id: "n3" });
+    expect(judgeSpeech(["for fish"], nums)).toMatchObject({ id: "n4" });
+    expect(judgeSpeech(["two"], nums)).toMatchObject({ id: "n2" });
+    expect(judgeSpeech(["five fish"], nums)).toMatchObject({ id: "n5" });
+    expect(judgeSpeech(["fish"], nums).kind).toBe("none");
+  });
+
+  it("answers yes or no, not both", () => {
+    const yn = P("yesIDo", "noIDont");
+    expect(judgeSpeech(["yes I do"], yn)).toMatchObject({ id: "yesIDo" });
+    expect(judgeSpeech(["Yeah."], yn)).toMatchObject({ id: "yesIDo" });
+    expect(judgeSpeech(["no I don't"], yn)).toMatchObject({ id: "noIDont" });
+    expect(judgeSpeech(["yes no"], yn).kind).toBe("none");
+  });
+
+  it("'I like ___.' is judged on the colour", () => {
+    const likes = P("likeRed", "likeBlue", "likeYellow", "likeGreen", "likeOrange");
+    expect(judgeSpeech(["I like green"], likes)).toMatchObject({ id: "likeGreen" });
+    expect(judgeSpeech(["i rike blue"], likes)).toMatchObject({ id: "likeBlue" });
+    expect(judgeSpeech(["I like"], likes).kind).toBe("none");
+  });
+
+  it("only the top hypothesis judges; alternatives only rescue a result that matched nothing", () => {
+    const shop = P("orangePlease", "bluePlease");
+    expect(judgeSpeech(["blue please", "orange please"], shop)).toMatchObject({ id: "bluePlease" });
+    expect(judgeSpeech(["um", "orange please"], shop)).toMatchObject({ id: "orangePlease" });
+    expect(judgeSpeech(["blue orange", "orange"], shop).kind).toBe("unclear");
+  });
+
+  it("an interim result is judged like a final one", () => {
+    // "feed the" (interim) is not yet a match; "feed the fish" is.
+    expect(matchesPhrase("feed the", PHRASES.feedFish)).toBe(false);
+    expect(matchesPhrase("feed the fish", PHRASES.feedFish)).toBe(true);
   });
 });

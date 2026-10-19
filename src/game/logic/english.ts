@@ -1,9 +1,9 @@
-import type { AbilityId, ColorId, FoodId } from "../types";
+import type { ColorId } from "../types";
 
 /**
  * Every sentence the student says or taps. `keys` are the content words that
  * must be heard: one word from each group (accent and recogniser variants
- * included). Articles, "do you", "it's", punctuation and word order are not
+ * included). "Please", articles, "I like", punctuation and word order are not
  * judged; a false rejection teaches a child that correct English was wrong.
  */
 export interface Phrase {
@@ -12,114 +12,131 @@ export interface Phrase {
   keys: string[][];
   /** Hearing any of these rules the phrase out ("no" in a "yes" answer). */
   forbid?: string[];
-  /** Wrong-but-plausible sentences for mic-free commands. */
+  /** Wrong-but-plausible sentences for Tap-mode commands. */
   distractors?: PhraseId[];
+  /** The word to highlight on the second miss. */
+  key: string;
 }
 
 export type PhraseId =
-  | "likeApples"
-  | "likeBananas"
-  | "likeFish"
-  | "likeBerries"
-  | "likeMeat"
-  | "itsGreen"
-  | "itsBlue"
-  | "itsOrange"
-  | "itsPurple"
+  | "orangePlease"
+  | "bluePlease"
+  | "yellowPlease"
+  | "redPlease"
+  | "bigPlease"
+  | "smallPlease"
+  | "feedFish"
+  | "cleanPlease"
+  | "n1"
+  | "n2"
+  | "n3"
+  | "n4"
+  | "n5"
   | "yesIDo"
   | "noIDont"
-  | "yesICan"
-  | "noICant"
-  | "canSwim"
-  | "canFly"
-  | "canJump"
-  | "canHelp";
+  | "likeRed"
+  | "likeBlue"
+  | "likeYellow"
+  | "likeGreen"
+  | "likeOrange";
 
-const LIKE = ["like", "likes", "liked", "lake", "lakes", "lik", "lyke", "laik", "rike", "raiku", "bike", "mike", "light", "lie", "lied", "lye", "lime"];
-const CAN_Q = ["can", "could", "kan", "ken", "cam", "con", "cane", "cannes", "kenya", "canyon", "canyou", "kenyou", "come"];
 const YES = ["yes", "yeah", "yep", "yup", "yea", "yas", "yess", "yesh", "jess", "ies", "guess", "okay", "ok", "sure"];
-const NO = ["no", "nope", "nah", "know", "noh", "nou", "nor", "not", "don't", "dont", "can't", "cant", "cannot"];
+const NO = ["no", "nope", "nah", "know", "noh", "nou", "nor", "not", "don't", "dont"];
 
-const FOOD_WORDS: Record<FoodId, string[]> = {
-  apples: ["apple", "apples", "apple's", "appel", "appels", "appeal", "appeals", "apollo", "happle", "apps"],
-  bananas: ["banana", "bananas", "banana's", "nana", "nanas", "bonanza", "banane", "bananna", "banan"],
-  fish: ["fish", "fishes", "fish's", "fishy", "fisch", "fiche", "fischer", "fisher", "feesh", "fishu", "fist", "fishing"],
-  berries: ["berries", "berry", "berrys", "berry's", "barry", "barries", "bury", "buries", "very", "verry", "belly", "bellies", "beri", "berri"],
-  meat: ["meat", "meats", "meet", "meets", "mead", "mitt", "neat", "meat's"]
-};
-
-const COLOR_WORDS: Record<ColorId, string[]> = {
-  green: ["green", "greens", "grin", "greene", "clean", "glean", "grean", "gureen"],
+/**
+ * Colour words with recogniser variants for Japanese-accented English.
+ * "clean"/"glean" count as green only here (colour prompts); the clean
+ * command has its own list without "green". "hello" is a frequent
+ * misrecognition of "yellow"; no colour prompt offers a greeting.
+ */
+export const COLOR_WORDS: Record<ColorId, string[]> = {
+  red: ["red", "reds", "read", "led", "rad", "wred", "redd", "reddo", "red's"],
   blue: ["blue", "blues", "blew", "bleu", "brew", "brue", "bloo", "bru", "blue's", "buru"],
-  orange: ["orange", "oranges", "orrange", "orenji", "orinj", "orange's", "oranje"],
-  purple: ["purple", "purples", "papel", "pupple", "purpur", "pupil", "paapuru", "purpel"]
+  yellow: ["yellow", "yellows", "yello", "yelo", "yeller", "iero", "ierou", "jello", "hello", "yellow's"],
+  green: ["green", "greens", "grin", "greene", "clean", "glean", "grean", "gureen"],
+  orange: ["orange", "oranges", "orrange", "orenji", "orinj", "orange's", "oranje", "orang"]
 };
 
-const ABILITY_WORDS: Record<AbilityId | "help", string[]> = {
-  swim: ["swim", "swims", "swimming", "swin", "sweem", "swing", "swimm", "suim", "twim", "swimmer"],
-  fly: ["fly", "flies", "flying", "fry", "fries", "flight", "fla", "frye", "fly's", "furai"],
-  jump: ["jump", "jumps", "jumping", "jamp", "jumb", "jumbo", "champ", "chump", "jumped", "janpu"],
-  help: ["help", "helps", "helped", "helping", "health", "hep", "herp", "hope", "hellp", "kelp", "hell", "helpu"],
-  grow: ["grow", "grows", "glow", "go"],
-  fire: ["fire", "fires", "fired", "far", "fight", "fia"]
+const BIG = ["big", "bigger", "biggest", "bigg", "bigu", "biggu", "beg", "bag", "big's"];
+const SMALL = ["small", "smaller", "smallest", "smol", "smal", "smoll", "smalls", "sumo", "sumooru", "small's"];
+const FEED = ["feed", "feeds", "feeding", "fead", "feet", "fee", "feat", "fid", "fiid", "feedo"];
+const FISH = ["fish", "fishes", "fish's", "fishy", "fisch", "fiche", "fisher", "feesh", "fishu", "fist", "fishing", "fis"];
+const CLEAN = ["clean", "cleans", "cleaning", "cleaned", "cleaner", "crean", "klean", "kleen", "cleen", "kurin", "kuriin"];
+
+/** esl-counting's number variants, plus digits (Chrome often writes "3"). */
+export const NUMBER_WORDS: Record<number, string[]> = {
+  1: ["one", "won", "wan", "1"],
+  2: ["two", "too", "to", "tu", "2"],
+  3: ["three", "free", "tree", "sri", "sree", "3"],
+  4: ["four", "for", "fore", "foe", "4"],
+  5: ["five", "fife", "faibu", "5"]
 };
 
-export const LIKE_PHRASE: Record<FoodId, PhraseId> = {
-  apples: "likeApples",
-  bananas: "likeBananas",
-  fish: "likeFish",
-  berries: "likeBerries",
-  meat: "likeMeat"
+const NUMBER_EN = ["", "One", "Two", "Three", "Four", "Five"];
+
+export const NUMBER_PHRASE: Record<number, PhraseId> = { 1: "n1", 2: "n2", 3: "n3", 4: "n4", 5: "n5" };
+
+export const SHOP_COLOR_PHRASE: Partial<Record<ColorId, PhraseId>> = {
+  orange: "orangePlease",
+  blue: "bluePlease",
+  yellow: "yellowPlease",
+  red: "redPlease"
 };
 
-export const COLOR_PHRASE: Record<ColorId, PhraseId> = {
-  green: "itsGreen",
-  blue: "itsBlue",
-  orange: "itsOrange",
-  purple: "itsPurple"
+export const LIKE_COLOR_PHRASE: Record<ColorId, PhraseId> = {
+  red: "likeRed",
+  blue: "likeBlue",
+  yellow: "likeYellow",
+  green: "likeGreen",
+  orange: "likeOrange"
 };
 
-/** Which "Can you ___?" question each phrase is (help = whatever the obstacle needs). */
-export const CAN_QUESTION: Partial<Record<PhraseId, AbilityId | "help">> = {
-  canSwim: "swim",
-  canFly: "fly",
-  canJump: "jump",
-  canHelp: "help"
-};
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
-const like = (id: PhraseId, food: FoodId, en: string): Phrase => ({ id, en, keys: [LIKE, FOOD_WORDS[food]] });
-const color = (id: PhraseId, c: ColorId, distractors: PhraseId[]): Phrase => ({
-  id,
-  en: `It's ${c}.`,
-  keys: [COLOR_WORDS[c]],
-  distractors
+const please = (id: PhraseId, c: ColorId): Phrase => ({ id, en: `${cap(c)}, please!`, keys: [COLOR_WORDS[c]], key: cap(c) });
+const like = (id: PhraseId, c: ColorId): Phrase => ({ id, en: `I like ${c}.`, keys: [COLOR_WORDS[c]], key: c });
+const num = (n: number): Phrase => ({
+  id: NUMBER_PHRASE[n],
+  en: `${NUMBER_EN[n]} fish!`,
+  keys: [NUMBER_WORDS[n]],
+  key: NUMBER_EN[n]
 });
-const can = (id: PhraseId, a: AbilityId | "help", en: string): Phrase => ({ id, en, keys: [CAN_Q, ABILITY_WORDS[a]] });
 
 export const PHRASES: Record<PhraseId, Phrase> = {
-  likeApples: like("likeApples", "apples", "Do you like apples?"),
-  likeBananas: like("likeBananas", "bananas", "Do you like bananas?"),
-  likeFish: like("likeFish", "fish", "Do you like fish?"),
-  likeBerries: like("likeBerries", "berries", "Do you like berries?"),
-  likeMeat: like("likeMeat", "meat", "Do you like meat?"),
-  itsGreen: color("itsGreen", "green", ["itsBlue", "itsOrange"]),
-  itsBlue: color("itsBlue", "blue", ["itsGreen", "itsPurple"]),
-  itsOrange: color("itsOrange", "orange", ["itsGreen", "itsBlue"]),
-  itsPurple: color("itsPurple", "purple", ["itsBlue", "itsOrange"]),
-  // Answers are judged on yes / no: the question already fixes "do" or "can".
-  yesIDo: { id: "yesIDo", en: "Yes, I do.", keys: [YES], forbid: NO },
-  noIDont: { id: "noIDont", en: "No, I don't.", keys: [NO], forbid: ["yes", "yeah", "yep"] },
-  yesICan: { id: "yesICan", en: "Yes, I can.", keys: [YES], forbid: NO },
-  noICant: { id: "noICant", en: "No, I can't.", keys: [NO], forbid: ["yes", "yeah", "yep"] },
-  canSwim: can("canSwim", "swim", "Can you swim?"),
-  canFly: can("canFly", "fly", "Can you fly?"),
-  canJump: can("canJump", "jump", "Can you jump?"),
-  canHelp: can("canHelp", "help", "Can you help me?")
+  orangePlease: please("orangePlease", "orange"),
+  bluePlease: please("bluePlease", "blue"),
+  yellowPlease: please("yellowPlease", "yellow"),
+  redPlease: please("redPlease", "red"),
+  bigPlease: { id: "bigPlease", en: "Big, please!", keys: [BIG], key: "Big" },
+  smallPlease: { id: "smallPlease", en: "Small, please!", keys: [SMALL], key: "Small" },
+  feedFish: { id: "feedFish", en: "Feed the fish!", keys: [FEED, FISH], distractors: ["cleanPlease", "bigPlease"], key: "Feed" },
+  cleanPlease: { id: "cleanPlease", en: "Clean, please!", keys: [CLEAN], distractors: ["feedFish", "smallPlease"], key: "Clean" },
+  n1: num(1),
+  n2: num(2),
+  n3: num(3),
+  n4: num(4),
+  n5: num(5),
+  // Answers are judged on yes / no: the question already fixes "do".
+  yesIDo: { id: "yesIDo", en: "Yes, I do.", keys: [YES], forbid: NO, key: "Yes" },
+  noIDont: { id: "noIDont", en: "No, I don't.", keys: [NO], forbid: ["yes", "yeah", "yep"], key: "No" },
+  likeRed: like("likeRed", "red"),
+  likeBlue: like("likeBlue", "blue"),
+  likeYellow: like("likeYellow", "yellow"),
+  likeGreen: like("likeGreen", "green"),
+  likeOrange: like("likeOrange", "orange")
 };
 
 export const PHRASE_IDS = Object.keys(PHRASES) as PhraseId[];
 
-export function foodOfPhrase(id: PhraseId): FoodId | null {
-  const hit = (Object.keys(LIKE_PHRASE) as FoodId[]).find((f) => LIKE_PHRASE[f] === id);
-  return hit ?? null;
+export const NUMBER_IDS: PhraseId[] = ["n1", "n2", "n3", "n4", "n5"];
+
+export function numberOf(id: PhraseId): number | null {
+  const i = NUMBER_IDS.indexOf(id);
+  return i < 0 ? null : i + 1;
+}
+
+export function colorOfPhrase(id: PhraseId): ColorId | null {
+  for (const [c, p] of Object.entries(SHOP_COLOR_PHRASE)) if (p === id) return c as ColorId;
+  for (const [c, p] of Object.entries(LIKE_COLOR_PHRASE)) if (p === id) return c as ColorId;
+  return null;
 }
