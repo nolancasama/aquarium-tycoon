@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
-import { BENCH, DOOR, PEDESTAL, PICO, ROOM } from "../../game/world";
+import { BENCH, DOOR, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../../game/world";
 import { SAND_H, SLOT_POS, STAND_H, TANKS } from "../../game/data/tanks";
 import type { TankType } from "../../game/types";
 
@@ -37,9 +37,18 @@ export function roomGeometry(): THREE.BufferGeometry {
   // Door frame.
   for (const z of [doorA, doorB]) b.box(0.3, 2.4, 0.16, minX, 0, z, "#ffb347");
   b.box(0.3, 0.18, DOOR.w + 0.16, minX, 2.3, DOOR.z, "#ffb347");
-  // Right wall.
-  b.box(t, wallH, maxZ - minZ, maxX + t / 2, 0, (minZ + maxZ) / 2, WALL);
-  b.box(t + 0.04, 0.16, maxZ - minZ, maxX + t / 2 - 0.02, 0, (minZ + maxZ) / 2, TRIM);
+  // Right wall, with the doorway to the Ocean Hall (its door is drawn separately).
+  const hdA = HALL_DOOR.z - HALL_DOOR.w / 2;
+  const hdB = HALL_DOOR.z + HALL_DOOR.w / 2;
+  const r1 = hdA - minZ;
+  const r2 = maxZ - hdB;
+  b.box(t, wallH, r1, maxX + t / 2, 0, minZ + r1 / 2, WALL);
+  b.box(t, wallH, r2, maxX + t / 2, 0, hdB + r2 / 2, WALL);
+  b.box(t, wallH - 2.3, HALL_DOOR.w, maxX + t / 2, 2.3, HALL_DOOR.z, WALL);
+  b.box(t + 0.04, 0.16, r1, maxX + t / 2 - 0.02, 0, minZ + r1 / 2, TRIM);
+  b.box(t + 0.04, 0.16, r2, maxX + t / 2 - 0.02, 0, hdB + r2 / 2, TRIM);
+  for (const z of [hdA, hdB]) b.box(0.3, 2.4, 0.16, maxX, 0, z, "#4fb6d8");
+  b.box(0.3, 0.18, HALL_DOOR.w + 0.16, maxX, 2.3, HALL_DOOR.z, "#4fb6d8");
   // Pico's counter.
   b.box(1.2, 0.85, 0.6, PICO.x, 0, PICO.z - 0.35, "#2fb3c9");
   b.box(1.3, 0.08, 0.7, PICO.x, 0.85, PICO.z - 0.35, "#ffffff");
@@ -81,6 +90,58 @@ export function roomGeometry(): THREE.BufferGeometry {
 }
 
 /** Velvet ropes between the posts (a separate thin mesh, sagging). */
+/** The Ocean Hall's walls, furniture and ropes (the floor and mural are separate textured planes). */
+export function hall2Geometry(): THREE.BufferGeometry {
+  const b = new PartBuilder(0.6);
+  const { minX, maxX, minZ, maxZ, wallH } = HALL2;
+  const t = 0.22;
+  const wall = "#9fd3ea";
+  const trim = "#1f6f9c";
+  b.box(maxX - minX + t, wallH, t, (minX + maxX) / 2, 0, minZ - t / 2, wall);
+  b.box(maxX - minX + t, 0.16, t + 0.04, (minX + maxX) / 2, 0, minZ - t / 2 + 0.02, trim);
+  b.box(maxX - minX + t, 0.1, t + 0.06, (minX + maxX) / 2, wallH - 0.1, minZ - t / 2 + 0.03, trim);
+  b.box(t, wallH, maxZ - minZ, maxX + t / 2, 0, (minZ + maxZ) / 2, wall);
+  b.box(t + 0.04, 0.16, maxZ - minZ, maxX + t / 2 - 0.02, 0, (minZ + maxZ) / 2, trim);
+  // Round portholes on the right wall.
+  for (const z of [-1.8, 0.9]) {
+    b.add(new THREE.TorusGeometry(0.45, 0.07, 6, 20), "#c9a227", [maxX - 0.03, 1.7, z], [0, Math.PI / 2, 0]);
+    b.add(new THREE.CircleGeometry(0.42, 20), "#2a7fbf", [maxX - 0.06, 1.7, z], [0, -Math.PI / 2, 0]);
+  }
+  // Kelp pots in the corners and a low bench for grown-ups.
+  for (const [x, z] of [
+    [minX + 0.6, minZ + 0.5],
+    [maxX - 0.6, minZ + 0.5],
+    [maxX - 0.6, maxZ - 0.8]
+  ]) {
+    b.cyl(0.26, 0.2, 0.42, x, 0, z, "#3a6f8f", 12);
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      b.add(new THREE.SphereGeometry(1, 8, 6), i % 2 ? "#3cb371" : "#2e8b57", [x + Math.cos(a) * 0.1, 0.95, z + Math.sin(a) * 0.1], [Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25], [0.06, 0.6, 0.03]);
+    }
+  }
+  // Ropes in front of pads C, D and E.
+  const posts: [number, number][] = [
+    [SLOT_POS.C.x - (TANKS.ocean.w / 2 + 0.35), SLOT_POS.C.x + TANKS.ocean.w / 2 + 0.35],
+    [SLOT_POS.D.x - (TANKS.big.w / 2 + 0.25), SLOT_POS.D.x + TANKS.big.w / 2 + 0.25],
+    [SLOT_POS.E.x - (TANKS.big.w / 2 + 0.25), SLOT_POS.E.x + TANKS.big.w / 2 + 0.25]
+  ];
+  for (const [x0, x1] of posts) {
+    for (const x of [x0, x1]) {
+      b.cyl(0.05, 0.08, 0.65, x, 0, -1.4, "#d4a017", 8);
+      b.sphere(0.07, x, 0.67, -1.4, "#ffcc33", [1, 1, 1], 8);
+    }
+    const n = 10;
+    for (let i = 0; i < n; i++) {
+      const xa = x0 + ((x1 - x0) * i) / n;
+      const xb = x0 + ((x1 - x0) * (i + 1)) / n;
+      const ya = 0.6 - Math.sin((i / n) * Math.PI) * 0.1;
+      const yb = 0.6 - Math.sin(((i + 1) / n) * Math.PI) * 0.1;
+      b.add(new THREE.CylinderGeometry(0.022, 0.022, Math.hypot(xb - xa, yb - ya), 6), "#c92a4a", [(xa + xb) / 2, (ya + yb) / 2, -1.4], [0, 0, Math.PI / 2 + Math.atan2(yb - ya, xb - xa)], [1, 1, 1], { vary: false });
+    }
+  }
+  return b.build();
+}
+
 export function ropeGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
   for (const [a, c] of ROPE_POSTS) {
@@ -108,7 +169,8 @@ export function tankShellGeometry(type: TankType): THREE.BufferGeometry {
   const h = t.h;
   // Wooden cabinet with two doors.
   b.box(w + 0.16, 0.08, d + 0.14, 0, 0, 0, "#7a4a28");
-  b.box(w + 0.12, STAND_H - 0.12, d + 0.1, 0, 0.08, 0, WOOD);
+  // The Ocean tank stands on blue stone; the others on wood.
+  b.box(w + 0.12, STAND_H - 0.12, d + 0.1, 0, 0.08, 0, type === "ocean" ? "#6f8fa8" : WOOD);
   b.box(w + 0.18, 0.05, d + 0.16, 0, STAND_H - 0.05, 0, "#8f5a30");
   for (const s of [-1, 1]) {
     b.box((w + 0.12) / 2 - 0.08, STAND_H - 0.28, 0.02, (s * (w + 0.12)) / 4, 0.16, d / 2 + 0.05, "#b57744");

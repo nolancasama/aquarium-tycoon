@@ -123,6 +123,18 @@ export function StageCardModal() {
           {card.reward === "yellow" && <FishPicture species="yellowfish" size={110} />}
           {card.reward === "tank" && <Icon id="tank" size={96} />}
           {card.reward === "special" && <PersonFace type="fan" size={84} />}
+          {card.reward === "tall" && (
+            <>
+              <FishPicture species="seahorse" size={84} />
+              <FishPicture species="jellyfish" size={84} />
+            </>
+          )}
+          {card.reward === "upgrades" && (
+            <>
+              <DecorPicture kind="castle" variant="big" size={70} />
+              <Icon id="up" size={64} />
+            </>
+          )}
           <span className="reward-text">
             {reward.en}
             <Ja>{reward.ja}</Ja>
@@ -141,15 +153,17 @@ export function ResultsScreen() {
   const model = useGame((s) => s.model);
   if (screen !== "results") return null;
   const said = model.progress.said.map((id) => PHRASES[id].en);
+  const superStar = model.progress.superStar;
   return (
-    <div className="results-screen ui" data-testid="results">
+    <div className="results-screen ui" data-testid="results" data-super={superStar}>
       <div className="panel results-card">
         <div className="trophy">
+          {superStar && <Icon id="crown" size={64} />}
           <Icon id="trophy" size={96} />
         </div>
         <h1>
-          Aquarium Star!
-          <Ja>アクアリウム スター!</Ja>
+          {superStar ? "Super Aquarium Star!" : "Aquarium Star!"}
+          <Ja>{superStar ? "スーパー アクアリウム スター!" : "アクアリウム スター!"}</Ja>
         </h1>
         <div className="stats">
           <div className="stat" data-testid="stat-fish">

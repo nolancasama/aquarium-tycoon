@@ -21,7 +21,10 @@ export type IconId =
   | "visitor"
   | "shop"
   | "happy"
-  | "trophy";
+  | "trophy"
+  | "turtle"
+  | "up"
+  | "crown";
 
 export function Icon({ id, size = 24, className }: { id: IconId; size?: number; className?: string }) {
   const p = { width: size, height: size, viewBox: "0 0 48 48", className, "aria-hidden": true } as const;
@@ -192,6 +195,32 @@ export function Icon({ id, size = 24, className }: { id: IconId; size?: number; 
           <circle cx="17" cy="20" r="2.6" fill="#22313f" />
           <circle cx="31" cy="20" r="2.6" fill="#22313f" />
           <path d="M15 28a10 10 0 0 0 18 0" fill="none" stroke="#22313f" strokeWidth="3.5" strokeLinecap="round" />
+        </svg>
+      );
+    case "turtle":
+      return (
+        <svg {...p}>
+          <ellipse cx="14" cy="14" rx="9" ry="4" fill="#86c25a" transform="rotate(-30 14 14)" />
+          <ellipse cx="14" cy="34" rx="9" ry="4" fill="#86c25a" transform="rotate(30 14 34)" />
+          <ellipse cx="38" cy="24" rx="7" ry="6" fill="#9ccf6a" />
+          <ellipse cx="22" cy="24" rx="16" ry="12" fill="#3f9b5b" />
+          <path d="M22 12v24M12 18l20 12M12 30l20-12" stroke="#2e7d45" strokeWidth="2.5" />
+          <circle cx="40" cy="22" r="1.8" fill="#15202b" />
+        </svg>
+      );
+    case "up":
+      return (
+        <svg {...p}>
+          <circle cx="24" cy="24" r="19" fill="#4cd27a" />
+          <path d="M24 34V15M15 23l9-9 9 9" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "crown":
+      return (
+        <svg {...p}>
+          <path d="M6 36l4-22 9 10 5-14 5 14 9-10 4 22z" fill="#ffc933" stroke="#c98a00" strokeWidth="2.5" strokeLinejoin="round" />
+          <rect x="6" y="36" width="36" height="6" rx="2" fill="#c98a00" />
+          <circle cx="24" cy="30" r="3" fill="#ff5c8a" />
         </svg>
       );
     case "trophy":

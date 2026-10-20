@@ -3,7 +3,7 @@ import { GameScene } from "./scene/GameScene";
 import { bottomPanel } from "./scene/CameraRig";
 import { Hud } from "./ui/Hud";
 import { DialoguePanel, FishTalk, PromptPanel, RequestBanner } from "./ui/Talk";
-import { DecorChoiceStrip, DecorShop, DecorTray, FishShop, TankShop } from "./ui/Shop";
+import { AnimalShop, DecorChoiceStrip, DecorShop, DecorTray, FishShop, TankShop, UpgradePanel } from "./ui/Shop";
 import { SettingsModal } from "./ui/Settings";
 import { ResultsScreen, StageCardModal, TitleScreen } from "./ui/Screens";
 import { installKeyboard } from "./input/keyboard";
@@ -88,6 +88,7 @@ function BottomPanels() {
   return (
     <div className="bottom-panels" ref={ref}>
       <FishShop />
+      <AnimalShop />
       <DecorChoiceStrip />
       <PromptPanel />
       <DialoguePanel />
@@ -125,6 +126,7 @@ export function App() {
       <DecorTray />
       <DecorShop />
       <TankShop />
+      <UpgradePanel />
       <BottomPanels />
       <TitleScreen />
       <StageCardModal />

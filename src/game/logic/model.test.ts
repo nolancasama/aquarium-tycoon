@@ -29,7 +29,15 @@ import {
   tankById,
   tipFor,
   type Model,
-  type Result
+  type Result,
+  buyTickets,
+  buyUpgrade,
+  canLive,
+  earnSuperStar,
+  homesFor,
+  openHall,
+  tankAt,
+  happiness as happy
 } from "./model";
 
 type M = Model & { lastId?: string };
@@ -301,8 +309,175 @@ describe("progression", () => {
     const coins = m.coins;
     m = earnStar(earnStar(m));
     expect(m.coins).toBe(coins + 50);
-    expect(m.progress).toMatchObject({ star: true, freePlay: true });
+    expect(m.progress).toMatchObject({ star: true, freePlay: true, stage: 6 });
+    // Free play goes on with Level 6's goals.
+    expect(goals(m).map((g) => g.id)).toEqual(["openHall", "turtle", "help"]);
+    expect(judgeReady(m)).toBe(false);
+  });
+});
+
+// ------------------------------------------------------------------ Phase 2
+
+/** A starred aquarium at Level 6, 7 or 8 with plenty of coins. */
+function level(stage: 6 | 7 | 8, coins = 1000): M {
+  const base = withFish(atStage(newModel(), 5), "clownfish");
+  return { ...base, coins, progress: { ...base.progress, stage, star: true, freePlay: true } };
+}
+
+describe("Phase 2: the Ocean Hall and habitats", () => {
+  it("the Ocean Hall opens at Level 6 for 100 coins, with the Ocean tank on pad C", () => {
+    expect(openHall({ ...withFish(atStage(newModel(), 5), "clownfish"), coins: 500 })).toEqual({ ok: false, reason: "locked" });
+    expect(openHall(level(6, 99))).toEqual({ ok: false, reason: "coins" });
+    const m = ok(openHall(level(6, 150)));
+    expect(m.coins).toBe(50);
+    expect(tankAt(m, "C")).toMatchObject({ type: "ocean", fish: [] });
+    expect(m.progress.hallOpen).toBe(true);
+    expect(openHall(m)).toEqual({ ok: false, reason: "owned" });
+  });
+
+  it("turtles live only in the Ocean tank, and are sold only once it exists", () => {
+    expect(buyFish(level(6), "turtle")).toEqual({ ok: false, reason: "locked" });
+    let m: M = ok(openHall(level(6)));
+    m = ok(buyFish(m, "turtle"));
+    const turtle = m.lastId!;
+    expect(placeFish(m, turtle, "t1")).toEqual({ ok: false, reason: "habitat" });
+    m = ok(placeFish(m, turtle, tankAt(m, "C")!.id));
+    expect(tankAt(m, "C")!.fish.map((f) => f.species)).toEqual(["turtle"]);
+  });
+
+  it("seahorses need a tall tank; jellyfish live only with jellyfish", () => {
+    let m: M = ok(openHall(level(7)));
+    expect(buyFish(m, "seahorse")).toEqual({ ok: false, reason: "habitat" });
+    m = ok(buyTank(m, "tall"));
+    m = ok(placeTank(m, "tall", "D"));
+    const tall = m.lastId!;
+    m = ok(buyFish(m, "jellyfish"));
+    m = ok(placeFish(m, m.lastId!, tall));
+    const t = tankById(m, tall)!;
+    expect(canLive("jellyfish", t)).toBe(true);
+    expect(canLive("seahorse", t)).toBe(false);
+    expect(canLive("clownfish", t)).toBe(false);
+    // And no jellyfish into a tank with fish.
+    expect(canLive("jellyfish", tankAt(m, "A")!)).toBe(false);
+    m = ok(buyFish(m, "clownfish"));
+    expect(placeFish(m, m.lastId!, tall)).toEqual({ ok: false, reason: "habitat" });
+  });
+
+  it("homes count bagged animals; the shop refuses when every home is taken", () => {
+    let m: M = ok(openHall(level(6)));
+    for (let i = 0; i < 8; i++) m = ok(buyFish(m, "turtle"));
+    expect(homesFor(m, "turtle")).toBe(0);
+    expect(buyFish(m, "turtle")).toEqual({ ok: false, reason: "full" });
+  });
+
+  it("tall tanks from Level 7; Ocean Hall pads only once it is open; pad C takes only the Ocean tank", () => {
+    expect(buyTank(level(6), "tall")).toEqual({ ok: false, reason: "locked" });
+    let m: M = level(7);
+    m = ok(buyTank(m, "tall"));
+    // Only pad B is free before the hall opens.
+    expect(buyTank(m, "tall")).toEqual({ ok: false, reason: "full" });
+    expect(placeTank(m, "tall", "D")).toEqual({ ok: false, reason: "locked" });
+    m = ok(openHall(m));
+    expect(placeTank(m, "tall", "C")).toEqual({ ok: false, reason: "slotTaken" });
+    m = ok(placeTank(m, "tall", "E"));
+    expect(tankAt(m, "E")!.type).toBe("tall");
+  });
+
+  it("shipwrecks are too big for small and tall tanks; new decorations come with Level 8", () => {
+    let m: M = level(8);
+    m = ok(buyDecor(m, "shipwreck", null));
+    expect(placeDecor(m, m.lastId!, "t1", 0)).toEqual({ ok: false, reason: "tooBig" });
+    expect(buyDecor(level(7), "starfish", "pink")).toEqual({ ok: false, reason: "locked" });
+  });
+});
+
+describe("Phase 2: upgrades", () => {
+  it("are the Level 7 reward", () => {
+    expect(buyUpgrade(level(7), "t1", "lamp")).toEqual({ ok: false, reason: "locked" });
+    expect(buyTickets(level(7))).toEqual({ ok: false, reason: "locked" });
+  });
+
+  it("a filter halves how fast the water gets dirty", () => {
+    let m: M = ok(buyUpgrade(level(8), "t1", "filter"));
+    expect(m.coins).toBe(960);
+    expect(m.progress.upgraded).toBe(true);
+    m = decay(m, 100);
+    expect(tankById(m, "t1")!.clean).toBeCloseTo(90);
+    expect(buyUpgrade(m, "t1", "filter")).toEqual({ ok: false, reason: "owned" });
+  });
+
+  it("a lamp adds happiness, and jellyfish love it", () => {
+    let m: M = ok(openHall(level(8)));
+    m = ok(buyTank(m, "tall"));
+    m = ok(placeTank(m, "tall", "D"));
+    const tall = m.lastId!;
+    m = ok(buyFish(m, "jellyfish"));
+    m = ok(placeFish(m, m.lastId!, tall));
+    const before = happy(tankById(m, tall)!)!;
+    m = ok(buyUpgrade(m, tall, "lamp"));
+    expect(happy(tankById(m, tall)!)!).toBe(before + 5 + 10);
+  });
+
+  it("a small tank grows into a big one, keeping its animals and decorations", () => {
+    let m: M = level(8);
+    m = ok(buyDecor(m, "rock", "big"));
+    m = ok(placeDecor(m, m.lastId!, "t1", 2));
+    m = ok(buyUpgrade(m, "t1", "bigger"));
+    const t = tankById(m, "t1")!;
+    expect(t.type).toBe("big");
+    expect(t.fish).toHaveLength(1);
+    expect(t.decor.map((d) => d.slot)).toEqual([4]);
+    expect(buyUpgrade(m, "t1", "bigger")).toEqual({ ok: false, reason: "owned" });
+  });
+
+  it("the ticket gate is bought once", () => {
+    const m = ok(buyTickets(level(8)));
+    expect(m.progress.tickets).toBe(true);
+    expect(buyTickets(m)).toEqual({ ok: false, reason: "owned" });
+  });
+});
+
+describe("Phase 2: Levels 6 to 8", () => {
+  it("Level 6 needs the hall, a turtle and two visitors; it unlocks the tall tank and its animals", () => {
+    let m: M = ok(openHall(level(6)));
+    m = ok(buyFish(m, "turtle"));
+    m = ok(placeFish(m, m.lastId!, tankAt(m, "C")!.id));
+    m = helpVisitor(m, "a", 10);
+    expect(completeStage(m).ok).toBe(false);
+    m = helpVisitor(m, "b", 10);
+    m = ok(completeStage(m));
+    expect(m.progress.stage).toBe(7);
+    expect(buyTank(m, "tall").ok).toBe(true);
+  });
+
+  it("Level 7 needs a tall tank with a seahorse or jellyfish and two named animals", () => {
+    let m: M = ok(openHall(level(7)));
+    m = ok(buyTank(m, "tall"));
+    m = ok(placeTank(m, "tall", "D"));
+    m = ok(buyFish(m, "seahorse"));
+    m = ok(placeFish(m, m.lastId!, tankAt(m, "D")!.id));
+    m = helpVisitor(m, "a", 10, true);
+    m = helpVisitor(m, "b", 10);
+    expect(completeStage(m).ok).toBe(false);
+    m = helpVisitor(m, "c", 10, true);
+    m = ok(completeStage(m));
+    expect(m.progress).toMatchObject({ stage: 8, allHappy: false, namedInStage: 0 });
+  });
+
+  it("Level 8 needs an upgrade, three visitors and happy animals; the crown pays once", () => {
+    let m: M = level(8);
+    m = ok(buyUpgrade(m, "t1", "lamp"));
+    m = helpVisitor(helpVisitor(helpVisitor(m, "a", 10), "b", 10), "c", 10);
+    expect(judgeReady(m)).toBe(false);
+    m = ok(buyDecor(m, "coral", "red"));
+    m = ok(placeDecor(m, m.lastId!, "t1", 0));
+    m = latchHappy(m);
+    expect(judgeReady(m)).toBe(true);
+    const coins = m.coins;
+    m = earnSuperStar(earnSuperStar(m));
+    expect(m.coins).toBe(coins + 80);
     expect(goals(m)).toEqual([]);
     expect(judgeReady(m)).toBe(false);
+    expect(completeStage(m).ok).toBe(false);
   });
 });

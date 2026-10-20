@@ -3,13 +3,13 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { getGame, useGame } from "../game/store";
 import { rt } from "../game/runtime";
-import { DOOR, PEDESTAL, ROOM } from "../game/world";
-import { SLOT_ORDER, SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
+import { DOOR, HALL2, HALL_DOOR, PEDESTAL, ROOM } from "../game/world";
+import { PAD_TYPES, SLOT_ORDER, SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
 import type { SlotId, TankType } from "../game/types";
-import { tapPad } from "../game/flow/actions";
+import { tapHallDoor, tapPad } from "../game/flow/actions";
 import { PartBuilder } from "./partBuilder";
-import { roomGeometry, ropeGeometry, tankShellGeometry } from "./models/room";
-import { flatMat, floorTexture, muralTexture, padIconTexture, posterTexture, signTexture, smoothMat } from "./materials";
+import { hall2Geometry, roomGeometry, ropeGeometry, tankShellGeometry } from "./models/room";
+import { flatMat, floor2Texture, floorTexture, muralTexture, oceanMuralTexture, padIconTexture, posterTexture, signTexture, smoothMat } from "./materials";
 
 export function Room() {
   const shell = useMemo(() => roomGeometry(), []);
@@ -53,6 +53,8 @@ export function Room() {
       </mesh>
       <Photo />
       <Trophy />
+      <HallDoor />
+      <OceanHall />
       {SLOT_ORDER.map((s) => (
         <Pad key={s} slot={s} />
       ))}
@@ -60,10 +62,80 @@ export function Room() {
   );
 }
 
+/** The Ocean Hall (Phase 2): drawn once it is open. */
+function OceanHall() {
+  const open = useGame((s) => s.model.progress.hallOpen);
+  const shell = useMemo(() => (open ? hall2Geometry() : null), [open]);
+  if (!open || !shell) return null;
+  const w = HALL2.maxX - HALL2.minX;
+  const d = HALL2.maxZ - HALL2.minZ;
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(HALL2.minX + HALL2.maxX) / 2, 0, (HALL2.minZ + HALL2.maxZ) / 2]}>
+        <planeGeometry args={[w, d]} />
+        <meshLambertMaterial map={floor2Texture()} />
+      </mesh>
+      <mesh geometry={shell} material={flatMat} />
+      <mesh position={[(HALL2.minX + HALL2.maxX) / 2, 1.55, HALL2.minZ + 0.005]}>
+        <planeGeometry args={[w - 0.6, 2.7]} />
+        <meshBasicMaterial map={oceanMuralTexture()} toneMapped={false} />
+      </mesh>
+      <mesh position={[(HALL2.minX + HALL2.maxX) / 2, 2.86, HALL2.minZ + 0.02]}>
+        <planeGeometry args={[3.4, 0.62]} />
+        <meshBasicMaterial map={signTexture("OCEAN HALL", "#0f5c8f", "#ffffff", 768, 140)} transparent />
+      </mesh>
+    </group>
+  );
+}
+
+/** The door between the halls: locked with a sign until the Ocean Hall is bought, then it swings open. */
+function HallDoor() {
+  const open = useGame((s) => s.model.progress.hallOpen);
+  const leaf = useRef<THREE.Group>(null);
+  const angle = useRef(open ? 1 : 0);
+  useFrame((_, dt) => {
+    angle.current += ((open ? 1 : 0) - angle.current) * Math.min(1, dt * 2);
+    if (leaf.current) leaf.current.rotation.y = -angle.current * 1.75;
+  });
+  const onClick = (e: ThreeEvent<MouseEvent>) => {
+    if (e.delta > 8 || open) return;
+    e.stopPropagation();
+    tapHallDoor();
+  };
+  const z0 = HALL_DOOR.z - HALL_DOOR.w / 2;
+  return (
+    <group position={[HALL_DOOR.x - 0.02, 0, z0]}>
+      <group ref={leaf}>
+        <mesh position={[0, 1.15, HALL_DOOR.w / 2]} onClick={onClick}>
+          <boxGeometry args={[0.08, 2.3, HALL_DOOR.w]} />
+          <meshLambertMaterial color="#2f8fc4" />
+        </mesh>
+        <mesh position={[-0.05, 1.45, HALL_DOOR.w / 2]} rotation={[0, -Math.PI / 2, 0]}>
+          <circleGeometry args={[0.32, 20]} />
+          <meshBasicMaterial color="#9fe3ff" />
+        </mesh>
+        {!open && (
+          <>
+            <mesh position={[-0.05, 2.0, HALL_DOOR.w / 2]} rotation={[0, -Math.PI / 2, 0]}>
+              <planeGeometry args={[1.5, 0.36]} />
+              <meshBasicMaterial map={signTexture("OCEAN HALL", "#0f5c8f", "#ffffff", 512, 128)} />
+            </mesh>
+            <sprite position={[-0.25, 0.9, HALL_DOOR.w / 2]} scale={[0.5, 0.5, 1]}>
+              <spriteMaterial map={padIconTexture("lock")} transparent depthWrite={false} />
+            </sprite>
+          </>
+        )}
+      </group>
+    </group>
+  );
+}
+
 function Sign() {
   const star = useGame((s) => s.model.progress.star);
+  // Hidden in close-ups, where it showed cut off above the tank.
+  const closeUp = useGame((s) => s.view === "tank");
   return (
-    <mesh position={[0, 2.86, ROOM.minZ + 0.02]}>
+    <mesh position={[0, 2.86, ROOM.minZ + 0.02]} visible={!closeUp}>
       <planeGeometry args={[3.4, 0.62]} />
       <meshBasicMaterial map={signTexture(star ? "★ MY AQUARIUM ★" : "MY AQUARIUM", "#1f7ae0", "#ffffff", 768, 140)} transparent />
     </mesh>
@@ -123,16 +195,20 @@ function Trophy() {
 function Pad({ slot }: { slot: SlotId }) {
   const taken = useGame((s) => s.model.tanks.some((t) => t.slot === slot));
   const unlocked = useGame((s) => s.model.progress.stage >= 4);
+  const hallOpen = useGame((s) => s.model.progress.hallOpen);
   const placing = useGame((s) => (s.placing?.kind === "tank" ? s.placing : null));
   const p = SLOT_POS[slot];
   const ring = useRef<THREE.Mesh>(null);
   const ringMat = useMemo(() => new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.7, depthWrite: false }), []);
   useFrame(() => {
-    const on = Boolean(getGame().placing?.kind === "tank");
+    const pl = getGame().placing;
+    // Only pads that take the carried tank light up.
+    const on = pl?.kind === "tank" && PAD_TYPES[slot].includes(pl.type);
     ringMat.color.set(on ? "#7dffb0" : "#ffffff");
     ringMat.opacity = on ? 0.6 + Math.sin(rt.time * 5) * 0.3 : 0.55;
   });
-  if (taken) return null;
+  // The Ocean tank's pad (C) is never empty once the hall is open; D and E only exist then.
+  if (taken || slot === "C" || (slot !== "A" && slot !== "B" && !hallOpen)) return null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 8) return;
     e.stopPropagation();

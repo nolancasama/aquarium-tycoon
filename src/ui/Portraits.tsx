@@ -1,10 +1,74 @@
 import type { DecorKind, DecorVariant, SpeciesId, VisitorType } from "../game/types";
 import type { Speaker } from "../game/store";
+import { SPECIES } from "../game/data/fish";
 
 /** Inline SVG pictures of the fish, decorations and characters (shop cards, panels). */
 
 export function FishPicture({ species, size = 80 }: { species: SpeciesId; size?: number }) {
   const p = { width: size, height: size * 0.7, viewBox: "0 0 100 70", "aria-hidden": true } as const;
+  const eye = (x: number, y: number, r = 6) => (
+    <>
+      <circle cx={x} cy={y} r={r} fill="#fff" />
+      <circle cx={x + r * 0.25} cy={y + r * 0.1} r={r * 0.62} fill="#15202b" />
+      <circle cx={x + r * 0.45} cy={y - r * 0.3} r={r * 0.22} fill="#fff" />
+    </>
+  );
+  if (species === "pufferfish")
+    return (
+      <svg {...p}>
+        <path d="M20 35L8 26v18z" fill="#f1e4c4" stroke="#a07a4a" strokeWidth="2" />
+        {Array.from({ length: 14 }, (_, i) => {
+          const a = (i / 14) * Math.PI * 2;
+          return <path key={i} d={`M${52 + Math.cos(a) * 26} ${35 + Math.sin(a) * 24}l${Math.cos(a) * 7} ${Math.sin(a) * 7}`} stroke="#c9b48a" strokeWidth="3" strokeLinecap="round" />;
+        })}
+        <ellipse cx="52" cy="35" rx="28" ry="26" fill="#f6f1e4" stroke="#c9b48a" strokeWidth="1.5" />
+        <ellipse cx="52" cy="47" rx="22" ry="12" fill="#fbe7a1" />
+        {[
+          [40, 22],
+          [52, 18],
+          [36, 32],
+          [60, 26]
+        ].map(([x, y]) => (
+          <circle key={`${x}${y}`} cx={x} cy={y} r="3.2" fill="#a07a4a" />
+        ))}
+        {eye(68, 30, 7)}
+        <ellipse cx="80" cy="38" rx="3.5" ry="3" fill="#ff8fa3" />
+      </svg>
+    );
+  if (species === "turtle")
+    return (
+      <svg {...p}>
+        <ellipse cx="30" cy="22" rx="16" ry="6" fill="#86c25a" transform="rotate(-25 30 22)" />
+        <ellipse cx="30" cy="50" rx="16" ry="6" fill="#86c25a" transform="rotate(25 30 50)" />
+        <ellipse cx="74" cy="36" rx="11" ry="9" fill="#9ccf6a" />
+        <ellipse cx="46" cy="36" rx="30" ry="20" fill="#3f9b5b" />
+        <path d="M46 18v36M30 26l32 20M30 46l32-20" stroke="#2e7d45" strokeWidth="3" />
+        {eye(77, 33, 4.5)}
+        <path d="M78 41q4 2 7-1" stroke="#2d5a1e" strokeWidth="2" fill="none" strokeLinecap="round" />
+      </svg>
+    );
+  if (species === "seahorse")
+    return (
+      <svg {...p}>
+        <path d="M52 10c10 0 14 8 10 14s-12 6-12 16 10 12 6 20-14 4-12-4" fill="none" stroke="#ff8fb8" strokeWidth="12" strokeLinecap="round" />
+        <path d="M58 14l16 4" stroke="#ff8fb8" strokeWidth="7" strokeLinecap="round" />
+        <path d="M44 34l-8 4 8 4" fill="#ffd6e6" />
+        {eye(56, 13, 3.5)}
+      </svg>
+    );
+  if (species === "jellyfish")
+    return (
+      <svg {...p}>
+        {[38, 44, 50, 56, 62].map((x, i) => (
+          <path key={x} d={`M${x} 34q${i % 2 ? 6 : -6} 12 0 26`} stroke="#d9a8ff" strokeWidth="3" fill="none" strokeLinecap="round" />
+        ))}
+        <path d="M28 34a22 22 0 0 1 44 0z" fill="#c38bff" opacity="0.9" />
+        <path d="M28 34h44" stroke="#a86bff" strokeWidth="3" />
+        <circle cx="43" cy="24" r="2.6" fill="#3a1a5a" />
+        <circle cx="57" cy="24" r="2.6" fill="#3a1a5a" />
+        <path d="M46 29q4 3 8 0" stroke="#3a1a5a" strokeWidth="2" fill="none" />
+      </svg>
+    );
   if (species === "clownfish")
     return (
       <svg {...p}>
@@ -121,6 +185,57 @@ export function DecorPicture({ kind, variant, size = 72 }: { kind: DecorKind; va
           <rect x="27" y="30" width="6" height="7" rx="1" fill="#ffc935" />
         </svg>
       );
+    case "starfish": {
+      const c = variant === "yellow" ? "#ffd23f" : "#ff7fae";
+      const pts = Array.from({ length: 10 }, (_, i) => {
+        const r = i % 2 ? 9 : 20;
+        const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+        return `${30 + Math.cos(a) * r},${36 + Math.sin(a) * r}`;
+      }).join(" ");
+      return (
+        <svg {...p}>
+          {sand}
+          <polygon points={pts} fill={c} stroke="#00000022" strokeWidth="1.5" />
+        </svg>
+      );
+    }
+    case "castle": {
+      const big = variant !== "small";
+      return (
+        <svg {...p}>
+          {sand}
+          <g transform={big ? undefined : "translate(10 18) scale(0.66)"}>
+            <rect x="14" y="32" width="32" height="20" fill="#e9cf8f" />
+            <rect x="10" y="22" width="9" height="30" fill="#e9cf8f" />
+            <rect x="41" y="22" width="9" height="30" fill="#e9cf8f" />
+            <rect x="25" y="16" width="10" height="36" fill="#e9cf8f" />
+            <path d="M9 22l5.5-8 5.5 8zM40 22l5.5-8 5.5 8zM24 16l6-9 6 9z" fill="#ff8a5f" />
+            <rect x="27" y="42" width="6" height="10" fill="#8a5a33" />
+          </g>
+        </svg>
+      );
+    }
+    case "anemone":
+      return (
+        <svg {...p}>
+          {sand}
+          <rect x="20" y="40" width="20" height="12" rx="4" fill="#7b3fbf" />
+          {[14, 20, 26, 32, 38, 44].map((x, i) => (
+            <path key={x} d={`M${x + 2} 42q${i % 2 ? 4 : -4} -12 0 -24`} stroke="#b57bff" strokeWidth="4" fill="none" strokeLinecap="round" />
+          ))}
+        </svg>
+      );
+    case "shipwreck":
+      return (
+        <svg {...p}>
+          {sand}
+          <path d="M6 44l8 10h34l8-14z" fill="#7a4f2a" transform="rotate(-8 30 48)" />
+          <path d="M30 44V14" stroke="#7a4f2a" strokeWidth="3" transform="rotate(14 30 44)" />
+          <path d="M33 18h12l-2 6H33z" fill="#f4f1e8" transform="rotate(14 30 44)" />
+          <circle cx="22" cy="48" r="2" fill="#3b2a1a" />
+          <circle cx="32" cy="47" r="2" fill="#3b2a1a" />
+        </svg>
+      );
     case "bubbler":
       return (
         <svg {...p}>
@@ -164,6 +279,8 @@ const PEOPLE: Record<VisitorType, { shirt: string; hair: string; hat?: string }>
   child: { shirt: "#ff6b6b", hair: "#3a2a1e", hat: "#ffd43b" },
   adult: { shirt: "#748ffc", hair: "#2b1d14" },
   fan: { shirt: "#22b8cf", hair: "#2f1f12", hat: "#ff7a1a" },
+  grandma: { shirt: "#c77dff", hair: "#d9d9d9" },
+  explorer: { shirt: "#c9a66b", hair: "#3b2a1a", hat: "#e9d8a6" },
   judge: { shirt: "#2b3a67", hair: "#c8c8c8" }
 };
 
@@ -188,6 +305,14 @@ export function PersonFace({ type, size = 56 }: { type: VisitorType; size?: numb
           <circle cx="38" cy="10" r="2" fill="#fff" />
         </g>
       )}
+      {type === "grandma" && (
+        <g>
+          <circle cx="30" cy="12" r="6" fill={c.hair} />
+          <circle cx="25" cy="29" r="4" fill="none" stroke="#5a4632" strokeWidth="1.5" />
+          <circle cx="35" cy="29" r="4" fill="none" stroke="#5a4632" strokeWidth="1.5" />
+        </g>
+      )}
+      {type === "explorer" && <path d="M8 22h44c0-4-6-5-8-5-2-8-26-8-28 0-2 0-8 1-8 5z" fill={c.hat} stroke="#6b5a3e" strokeWidth="1.5" />}
       {type === "judge" && (
         <g>
           <path d="M24 38c3 2 9 2 12 0" stroke={c.hair} strokeWidth="3" strokeLinecap="round" />
@@ -203,11 +328,22 @@ export function PersonFace({ type, size = 56 }: { type: VisitorType; size?: numb
 export function SpeakerFace({ by, size = 56 }: { by: Speaker; size?: number }) {
   if (by === "pico" || by === "game") return <PicoFace size={size} />;
   if (by === "self") return <PersonFace type="child" size={size} />;
-  if (by === "clownfish" || by === "bluetang" || by === "yellowfish")
+  if (by in SPECIES)
     return (
       <span className="face-fish" style={{ width: size, height: size }}>
-        <FishPicture species={by} size={size * 0.9} />
+        <FishPicture species={by as SpeciesId} size={size * 0.9} />
       </span>
     );
-  return <PersonFace type={by} size={size} />;
+  return <PersonFace type={by as VisitorType} size={size} />;
+}
+
+/** The lamp upgrade (what jellyfish like). */
+export function LampPicture({ size = 44 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden>
+      <path d="M8 14h32l-4 8H12z" fill="#24313d" />
+      <rect x="11" y="20" width="26" height="4" rx="2" fill="#fff3b0" />
+      <path d="M12 26l-6 16M24 26v16M36 26l6 16" stroke="#ffe58a" strokeWidth="3" strokeLinecap="round" opacity="0.8" />
+    </svg>
+  );
 }

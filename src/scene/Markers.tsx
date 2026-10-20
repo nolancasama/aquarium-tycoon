@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { getGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
-import { hasSpace } from "../game/logic/model";
+import { canLive, hasSpace } from "../game/logic/model";
 
 /**
  * Bobbing golden arrows over what to tap in the room view: the tank to put a
@@ -32,7 +32,12 @@ export function Markers() {
         const p = SLOT_POS[t.slot];
         spots.push({ x: p.x, y: STAND_H + TANKS[t.type].h + 0.95, z: p.z });
       };
-      if (g.placing?.kind === "fish") for (const t of tanks) if (hasSpace(t)) add(t.id);
+      if (g.placing?.kind === "fish") {
+        // Only tanks the carried animal can live in.
+        const fishId = g.placing.fishId;
+        const carried = g.model.inv.fish.find((f) => f.id === fishId);
+        for (const t of tanks) if (hasSpace(t) && (!carried || canLive(carried.species, t))) add(t.id);
+      }
       for (const id of rt.glow.tanks) add(id);
       const guide = g.guide ?? g.nudge?.target ?? null;
       if (guide?.startsWith("tank-")) {

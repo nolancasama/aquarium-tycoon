@@ -5,6 +5,7 @@ import { SPECIES } from "../data/fish";
 import {
   completeStage,
   earnStar,
+  earnSuperStar,
   finishSpecial,
   fishCount,
   giftFish,
@@ -21,12 +22,13 @@ import {
   type TutorialStep
 } from "../logic/model";
 import { countableTanks, presentColors, type Request } from "../logic/requests";
-import { NUMBER_IDS, NUMBER_PHRASE, type PhraseId } from "../logic/english";
+import { NUMBER_IDS, NUMBER_PHRASE } from "../logic/english";
 import { clearSave, encodeSave, rawSaveExists, readSave, writeSave } from "../logic/save";
 import { ask, say, wait } from "./ask";
 import { backToRoom, openTank, orderFish, startPlacingFish } from "./actions";
-import { celebrate, leave, resetVisitors, runRequest, helped, scripted, spawnVisitor, walkTo } from "./visitors";
-import { ENTRY, PEDESTAL, lookSpot } from "../world";
+import { celebrate, leave, numberSlots, numbersAround, resetVisitors, runRequest, helped, scripted, spawnVisitor, walkTo } from "./visitors";
+import { ENTRY, PEDESTAL, lookSpot, route } from "../world";
+import { HALL_OF } from "../data/tanks";
 import { audio } from "../../audio/audio";
 import { tts } from "../../audio/tts";
 import { recognition, requestMicPermission } from "../../audio/recognition";
@@ -215,6 +217,12 @@ export function toTitle() {
 export function keepPlaying() {
   audio.startMusic("aquarium");
   setGame({ screen: "game", mode: "play", view: "room", tankId: null });
+  // After the star, Level 6 begins: point at the Ocean Hall.
+  const p = model().progress;
+  if (p.stage === 6 && !p.hallOpen) {
+    rt.pico.waveT0 = rt.time;
+    nudge({ en: "A new hall!", ja: "「タンク」で うみの ホールを ひらこう!", target: "btn-tank-shop" }, 9000);
+  }
 }
 
 // ------------------------------------------------------------------ tutorial
@@ -311,7 +319,7 @@ async function tutorial(g: number) {
 
 // ------------------------------------------------------------------ stages
 
-const REWARD: Record<number, Reward> = { 1: "decor", 2: "yellow", 3: "tank", 4: "special" };
+const REWARD: Record<number, Reward> = { 1: "decor", 2: "yellow", 3: "tank", 4: "special", 6: "tall", 7: "upgrades" };
 let cardDone: (() => void) | null = null;
 
 export function closeStageCard() {
@@ -342,6 +350,10 @@ async function stageComplete(g: number) {
     await say("pico", "A big tank!", "おおきな タンクが かえるよ!「タンク」の ボタンを みてね");
   } else if (stage === 4) {
     await specialVisit(g);
+  } else if (stage === 6) {
+    await say("pico", "A tall tank!", "たかい タンクが かえるよ! タツノオトシゴと クラゲは たかい タンクに すむよ");
+  } else if (stage === 7) {
+    await say("pico", "New decorations!", "あたらしい かざりと アップグレードが かえるよ! タンクを ひらいて みてね");
   }
   alive(g);
 }
@@ -393,13 +405,12 @@ async function picoCount(g: number) {
   alive(g);
   setGame({ mode: "play" });
   const n = t.fish.length;
-  const lo = Math.max(1, Math.min(n - 1, 3));
   await ask({
     kind: "command",
     options: [NUMBER_PHRASE[n]],
     judge: NUMBER_IDS,
-    frame: { before: "", after: " fish!", slots: NUMBER_IDS },
-    choices: [lo, lo + 1, lo + 2].map((k) => NUMBER_PHRASE[k]) as PhraseId[],
+    frame: { before: "", after: " fish!", slots: numberSlots(n) },
+    choices: numbersAround(n),
     shuffle: false,
     question: { en: "How many fish?", by: "pico" },
     readQuestion: true,
@@ -494,6 +505,80 @@ async function judgeVisit(g: number) {
   }
 }
 
+/** Level 8: the judge returns: "What's this?", "How many fish?", a yes/no, then the crown. */
+async function judgeVisit2(g: number) {
+  scripted.busy = true;
+  try {
+    backToRoom();
+    setGame({ mode: "busy", panel: null, placing: null, request: null, hall: 0 });
+    for (const v of rt.visitors) if (!v.scripted) leave(v);
+    await say("pico", "The judge is back!", "しんさいんさんが また きたよ! スーパー スターに なれるかな?");
+    alive(g);
+    const judge = spawnVisitor("judge", null, { scripted: true });
+    await walkTo(judge, [ENTRY]);
+    alive(g);
+    // 1. "What's this?" about a sea animal.
+    const home = model().tanks.find((t) => t.fish.some((f) => SPECIES[f.species].kind === "animal"));
+    if (home) {
+      const animal = home.fish.find((f) => SPECIES[f.species].kind === "animal")!;
+      setGame({ hall: HALL_OF[home.slot] });
+      await walkTo(judge, route(judge, lookSpot(home.slot, 0)));
+      alive(g);
+      setGame({ mode: "play" });
+      await runRequest(judge, { kind: "whatsThis", tankId: home.id, fishId: animal.id }, { cancellable: false });
+      alive(g);
+      await celebrate(judge, home.id);
+      alive(g);
+    }
+    // 2. "How many fish?" at a tank of fish.
+    const ct = countableTanks(model())[0];
+    if (ct) {
+      backToRoom();
+      setGame({ mode: "busy", hall: HALL_OF[ct.slot] });
+      await walkTo(judge, route(judge, lookSpot(ct.slot, 0)));
+      alive(g);
+      setGame({ mode: "play" });
+      await runRequest(judge, { kind: "count", tankId: ct.id }, { cancellable: false });
+      alive(g);
+    }
+    // 3. "Do you like sea animals?" — both answers are good.
+    backToRoom();
+    setGame({ mode: "busy", hall: 0 });
+    await walkTo(judge, route(judge, { x: -1.2, z: 1.2 }));
+    judge.face = { x: 0, z: -3 };
+    alive(g);
+    setGame({ mode: "play" });
+    const yes = await ask({
+      kind: "choice",
+      options: ["yesIDo", "noIDont"],
+      question: { en: "Do you like sea animals?", by: "judge" },
+      readQuestion: true,
+      help: "こたえよう!"
+    });
+    alive(g);
+    setGame({ mode: "busy" });
+    await say("judge", yes === "noIDont" ? "Really? I love them!" : "Me too!", yes === "noIDont" ? "ほんと? わたしは だいすき!" : "わたしも!");
+    alive(g);
+    judge.anim = { kind: "clap", t0: rt.time };
+    await say("judge", "You are a Super Aquarium Star!", "あなたは スーパー アクアリウム スター!");
+    alive(g);
+    updateModel(earnSuperStar);
+    audio.play("trophy");
+    audio.startMusic("celebrate");
+    effect("confetti", PEDESTAL.x, 2.2, PEDESTAL.z, 60);
+    effect("sparkle", PEDESTAL.x, 1.6, PEDESTAL.z, 12);
+    rt.camera.shot = { pos: { x: PEDESTAL.x + 2.6, y: 2.3, z: PEDESTAL.z + 3.6 }, target: { x: PEDESTAL.x, y: 1.2, z: PEDESTAL.z } };
+    await wait(3200);
+    alive(g);
+    rt.camera.shot = null;
+    judge.scripted = false;
+    leave(judge);
+    setGame({ screen: "results", mode: "play" });
+  } finally {
+    scripted.busy = false;
+  }
+}
+
 async function giftFlow(g: number) {
   const r = commit(giftFish(model()));
   if (!r.ok) return;
@@ -518,7 +603,13 @@ const NUDGES: Partial<Record<Goal["id"], { en: string; ja: string; target?: stri
   placeBig: { en: "Let's get a big tank!", ja: "「タンク」で おおきな タンクを かおう", target: "btn-tank-shop" },
   fishInBig: { en: "A fish for the big tank!", ja: "おおきな タンクに さかなを いれよう", target: "btn-fish-shop" },
   decorBig: { en: "Decorate the big tank!", ja: "おおきな タンクに かざりを 2つ おこう", target: "tank-B" },
-  allHappy: { en: "Make your fish happy!", ja: "えさ・そうじ・かざりで さかなを ハッピーに しよう" }
+  allHappy: { en: "Make your fish happy!", ja: "えさ・そうじ・かざりで さかなを ハッピーに しよう" },
+  openHall: { en: "A new hall!", ja: "「タンク」で うみの ホールを ひらこう!", target: "btn-tank-shop" },
+  turtle: { en: "A turtle, please!", ja: "「いきもの」で ウミガメを かって うみの タンクに いれよう", target: "btn-animal-shop" },
+  placeTall: { en: "A tall tank!", ja: "「タンク」で たかい タンクを かおう", target: "btn-tank-shop" },
+  tallAnimal: { en: "Seahorses and jellyfish!", ja: "「いきもの」で タツノオトシゴか クラゲを かおう", target: "btn-animal-shop" },
+  named: { en: "Look! A visitor!", ja: "ベンチの おきゃくさんを タップしよう", target: "chip-visitor" },
+  upgrade: { en: "Upgrade a tank!", ja: "タンクを ひらいて「アップ」で アップグレードしよう" }
 };
 
 export function storyTick(dt: number) {
@@ -547,12 +638,13 @@ export function storyTick(dt: number) {
     void flow(specialVisit);
     return;
   }
-  if (m.progress.stage <= 4 && stageDone(m)) {
+  const st = m.progress.stage;
+  if ((st <= 4 || st === 6 || st === 7) && stageDone(m)) {
     void flow(stageComplete);
     return;
   }
   if (judgeReady(m)) {
-    void flow(judgeVisit);
+    void flow(st === 8 ? judgeVisit2 : judgeVisit);
     return;
   }
   if (m.progress.stage === 2 && !m.progress.counted && countableTanks(m).length) {

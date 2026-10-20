@@ -1,16 +1,20 @@
 import { useEffect, useState } from "react";
 import { setGame, useGame } from "../game/store";
-import { goals, happiness, tankById, type Goal } from "../game/logic/model";
-import { TANKS } from "../game/data/tanks";
+import { canLive, goals, happiness, hasSpace, padsFor, tankById, type Goal } from "../game/logic/model";
+import { HALL_OF, TANKS } from "../game/data/tanks";
+import type { VisitorType } from "../game/types";
 import {
   cancelPlacing,
   cleanTank,
   confirmTank,
   feedTank,
+  openAnimalShop,
   openDecorShop,
   openDecorate,
   openFishShop,
   openTankShop,
+  openUpgrades,
+  switchHall,
   takeBaggedFish,
   takeBoxedTank,
   tapBack
@@ -150,8 +154,44 @@ function TopBar() {
   );
 }
 
+/** The arrows at the screen edges between the halls (once the Ocean Hall is open). */
+function HallSwitch() {
+  const open = useGame((s) => s.model.progress.hallOpen);
+  const hall = useGame((s) => s.hall);
+  const model = useGame((s) => s.model);
+  const placing = useGame((s) => s.placing);
+  if (!open) return null;
+  // Guide: the carried animal can only live in the other hall.
+  let guide = false;
+  if (placing?.kind === "fish") {
+    const f = model.inv.fish.find((x) => x.id === placing.fishId);
+    const homes = f ? model.tanks.filter((t) => hasSpace(t) && canLive(f.species, t)) : [];
+    guide = homes.length > 0 && homes.every((t) => HALL_OF[t.slot] !== hall);
+  }
+  if (placing?.kind === "tank") {
+    const pads = padsFor(model, placing.type);
+    guide = pads.length > 0 && pads.every((s) => HALL_OF[s] !== hall);
+  }
+  return hall === 0 ? (
+    <button className={`hall-arrow right ui ${guide ? "guide" : ""}`} onClick={() => switchHall(1)} data-testid="btn-hall-next" aria-label="Ocean Hall">
+      <span>
+        Ocean Hall <Ja>うみの ホール</Ja>
+      </span>
+      <b>▶</b>
+    </button>
+  ) : (
+    <button className={`hall-arrow left ui ${guide ? "guide" : ""}`} onClick={() => switchHall(0)} data-testid="btn-hall-prev" aria-label="First hall">
+      <b>◀</b>
+      <span>
+        Hall 1 <Ja>はじめの ホール</Ja>
+      </span>
+    </button>
+  );
+}
+
 function RoomBar() {
   const stage = useGame((s) => s.model.progress.stage);
+  const hallOpen = useGame((s) => s.model.progress.hallOpen);
   const bag = useGame((s) => s.model.inv.fish.length);
   const box = useGame((s) => s.model.inv.tanks.length);
   const waiting = useGame((s) => s.waiting);
@@ -172,6 +212,7 @@ function RoomBar() {
       </div>
       <div className="bar-main">
         <Big id="btn-fish-shop" icon="fish" label="Fish" ja="さかな" onClick={openFishShop} />
+        {stage >= 6 && <Big id="btn-animal-shop" icon="turtle" label="Animals" ja="いきもの" onClick={openAnimalShop} locked={!hallOpen} />}
         <Big id="btn-decor-shop" icon="decor" label="Decor" ja="かざり" onClick={openDecorShop} locked={stage < 2} />
         <Big id="btn-tank-shop" icon="tank" label="Tank" ja="タンク" onClick={openTankShop} locked={stage < 4} />
       </div>
@@ -184,7 +225,7 @@ function RoomBar() {
   );
 }
 
-function WaitingChip({ id, type }: { id: string; type: "child" | "adult" | "fan" | "judge" }) {
+function WaitingChip({ id, type }: { id: string; type: VisitorType }) {
   const guide = useGame((s) => s.nudge?.target === "chip-visitor");
   return (
     <button className={`chip-btn visitor ui ${guide ? "guide" : ""}`} onClick={() => void openRequest(id)} data-testid="chip-visitor">
@@ -215,7 +256,7 @@ function TankStatus() {
   return (
     <div className="panel tank-status ui" data-testid="status">
       <header>
-        {tank.type === "big" ? "Big tank" : "Small tank"}
+        {def.name}
         <span className="fishcount" data-testid="fish-count">
           <Icon id="fish" size={22} /> {tank.fish.length}/{def.capacity}
         </span>
@@ -240,6 +281,7 @@ function TankBar() {
         {(!tutorial || step === "feed") && <Big id="btn-feed" icon="food" label="" ja="えさ" onClick={() => void feedTank()} />}
         {!tutorial && <Big id="btn-clean" icon="sponge" label="" ja="そうじ" onClick={() => void cleanTank()} />}
         {!tutorial && <Big id="btn-decorate" icon="decor" label="" ja="かざる" onClick={openDecorate} locked={stage < 2} />}
+        {stage >= 8 && <Big id="btn-upgrade" icon="up" label="" ja="アップ" onClick={openUpgrades} />}
       </div>
       <div className="chips-right" />
     </div>
@@ -334,6 +376,7 @@ export function Hud() {
       <TopBar />
       {view === "tank" && <TankStatus />}
       {showRoomBar && <RoomBar />}
+      {free && view === "room" && <HallSwitch />}
       {showTankBar && <TankBar />}
       {free && <PlacingBanner />}
       <Toasts />

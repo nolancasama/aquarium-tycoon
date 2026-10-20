@@ -145,6 +145,65 @@ function bubbler(): DecorModel {
   return { geo: b.build(), mat: flatMat };
 }
 
+function starfish(color: "pink" | "yellow"): DecorModel {
+  const b = new PartBuilder(0.05);
+  const main = color === "pink" ? "#ff7fae" : "#ffd23f";
+  const dots = color === "pink" ? "#ffd0e2" : "#fff3b0";
+  // Five arms lying on a little rock so it shows from the front.
+  b.add(new THREE.IcosahedronGeometry(0.05, 0), "#9aa5b1", [0, 0.025, 0], [0.3, 0.2, 0.1], [1.4, 0.6, 1.1]);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + Math.PI / 2;
+    b.add(new THREE.ConeGeometry(0.022, 0.075, 6), main, [Math.cos(a) * 0.034, 0.075 + Math.sin(a) * 0.034, 0.025], [0, 0, a - Math.PI / 2], [1, 1, 0.5]);
+    b.sphere(0.006, Math.cos(a) * 0.045, 0.075 + Math.sin(a) * 0.045, 0.034, dots, [1, 1, 1], 5);
+  }
+  b.sphere(0.026, 0, 0.075, 0.025, main, [1, 1, 0.55], 10);
+  return { geo: b.build(), mat: smoothMat };
+}
+
+function castle(big: boolean): DecorModel {
+  const b = new PartBuilder(0.2);
+  const s = big ? 1 : 0.68;
+  const sand = "#e9cf8f";
+  b.box(0.22 * s, 0.14 * s, 0.14 * s, 0, 0, 0, sand);
+  for (const x of [-0.13, 0.13]) {
+    b.cyl(0.045 * s, 0.05 * s, 0.24 * s, x * s, 0, 0, sand, 10);
+    b.cone(0.06 * s, 0.09 * s, x * s, 0.24 * s, 0, "#ff8a5f", 10);
+  }
+  b.cyl(0.05 * s, 0.055 * s, 0.3 * s, 0, 0.06 * s, -0.02 * s, sand, 10);
+  b.cone(0.065 * s, 0.1 * s, 0, 0.36 * s, -0.02 * s, "#ff8a5f", 10);
+  // The door and battlements.
+  b.box(0.06 * s, 0.08 * s, 0.01, 0, 0, 0.071 * s, "#8a5a33");
+  for (let i = -2; i <= 2; i++) b.box(0.03 * s, 0.03 * s, 0.03 * s, i * 0.045 * s, 0.14 * s, 0.055 * s, sand);
+  return { geo: b.build(), mat: flatMat };
+}
+
+function anemone(): DecorModel {
+  const b = new PartBuilder(0.05);
+  b.cyl(0.07, 0.09, 0.08, 0, 0, 0, "#7b3fbf", 12);
+  // Wavy tentacles (the plant sway makes them move).
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    const ring = i % 2 ? 0.045 : 0.065;
+    b.add(new THREE.CylinderGeometry(0.008, 0.013, 0.15, 5), i % 3 ? "#b57bff" : "#d9b3ff", [Math.cos(a) * ring, 0.15, Math.sin(a) * ring], [Math.sin(a) * 0.35, 0, -Math.cos(a) * 0.35]);
+    b.sphere(0.012, Math.cos(a) * (ring + 0.025), 0.225, Math.sin(a) * (ring + 0.025), "#f0dcff", [1, 1, 1], 5);
+  }
+  return { geo: b.build(), mat: swayMat };
+}
+
+function shipwreck(): DecorModel {
+  const b = new PartBuilder(0.2);
+  const wood = "#7a4f2a";
+  // A tilted hull half in the sand, a broken mast and a little flag.
+  b.add(new THREE.CylinderGeometry(0.11, 0.07, 0.42, 10, 1, false, 0, Math.PI), wood, [0, 0.08, 0], [0, 0, Math.PI / 2 + 0.15], [1, 1, 0.75]);
+  b.boxAt(0.4, 0.02, 0.15, [0, 0.08, 0], [0, 0, 0.15], "#9b6a3c");
+  for (let i = 0; i < 3; i++) b.cylAt(0.015, 0.012, [-0.12 + i * 0.1, 0.105 + i * 0.014, 0.08], [Math.PI / 2, 0, 0], "#3b2a1a", 8);
+  b.cylAt(0.016, 0.26, [0.04, 0.22, 0], [0, 0, 0.35], wood, 8);
+  b.boxAt(0.08, 0.05, 0.005, [0.0, 0.32, 0], [0, 0, 0.35], "#f4f1e8");
+  b.cylAt(0.008, 0.06, [0.08, 0.36, 0], [0, 0, 0.35], wood, 6);
+  b.sphere(0.04, 0.2, 0.03, 0.06, "#c9b48a", [1.4, 0.5, 1], 8);
+  return { geo: b.build(), mat: flatMat };
+}
+
 const cache = new Map<string, DecorModel>();
 
 export function decorModel(kind: DecorKind, variant: DecorVariant): DecorModel {
@@ -166,6 +225,18 @@ export function decorModel(kind: DecorKind, variant: DecorVariant): DecorModel {
         break;
       case "chest":
         m = chest();
+        break;
+      case "starfish":
+        m = starfish(variant === "yellow" ? "yellow" : "pink");
+        break;
+      case "castle":
+        m = castle(variant === "big");
+        break;
+      case "anemone":
+        m = anemone();
+        break;
+      case "shipwreck":
+        m = shipwreck();
         break;
       default:
         m = bubbler();

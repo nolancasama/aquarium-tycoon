@@ -334,6 +334,99 @@ export const floorTexture = () =>
     return t;
   });
 
+/** The Ocean Hall's floor: deeper blue tiles. */
+export const floor2Texture = () =>
+  cached("floor2", () => {
+    const t = canvasTex(256, 256, (g) => {
+      const s = 64;
+      for (let y = 0; y < 4; y++) {
+        for (let x = 0; x < 4; x++) {
+          g.fillStyle = (x + y) % 2 ? "#cfe8f4" : "#b9dcee";
+          g.fillRect(x * s, y * s, s, s);
+        }
+      }
+      g.strokeStyle = "rgba(60,120,160,0.35)";
+      g.lineWidth = 2;
+      for (let i = 0; i <= 4; i++) {
+        g.beginPath();
+        g.moveTo(i * s, 0);
+        g.lineTo(i * s, 256);
+        g.moveTo(0, i * s);
+        g.lineTo(256, i * s);
+        g.stroke();
+      }
+    });
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(6, 4);
+    return t;
+  });
+
+/** The Ocean Hall's back wall: the deep sea, with jellyfish and a turtle. */
+export const oceanMuralTexture = () =>
+  cached("mural2", () =>
+    canvasTex(1024, 256, (g) => {
+      const grad = g.createLinearGradient(0, 0, 0, 256);
+      grad.addColorStop(0, "#3fa7d6");
+      grad.addColorStop(0.6, "#1b5f99");
+      grad.addColorStop(1, "#0f3f6e");
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 1024, 256);
+      g.fillStyle = "rgba(255,255,255,0.1)";
+      for (let i = 0; i < 6; i++) {
+        const x = 90 + i * 170;
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.lineTo(x + 40, 0);
+        g.lineTo(x + 110, 256);
+        g.lineTo(x + 30, 256);
+        g.closePath();
+        g.fill();
+      }
+      // Jellyfish.
+      for (const [x, y, s] of [
+        [160, 80, 1],
+        [230, 130, 0.7],
+        [860, 70, 0.9]
+      ]) {
+        g.fillStyle = "rgba(220,170,255,0.55)";
+        g.beginPath();
+        g.arc(x, y, 26 * s, Math.PI, 0);
+        g.closePath();
+        g.fill();
+        g.strokeStyle = "rgba(220,170,255,0.5)";
+        g.lineWidth = 3;
+        for (let k = -2; k <= 2; k++) {
+          g.beginPath();
+          g.moveTo(x + k * 9 * s, y);
+          g.quadraticCurveTo(x + k * 9 * s + 8, y + 30 * s, x + k * 9 * s, y + 60 * s);
+          g.stroke();
+        }
+      }
+      // A turtle.
+      g.fillStyle = "rgba(20,70,110,0.5)";
+      g.beginPath();
+      g.ellipse(560, 110, 70, 40, -0.1, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.arc(640, 102, 18, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.ellipse(560, 70, 60, 14, -0.6, 0, Math.PI * 2);
+      g.fill();
+      g.beginPath();
+      g.ellipse(560, 152, 50, 12, 0.6, 0, Math.PI * 2);
+      g.fill();
+      // Sea floor.
+      g.fillStyle = "#0c3358";
+      g.beginPath();
+      g.moveTo(0, 256);
+      for (let x = 0; x <= 1024; x += 32) g.lineTo(x, 236 + Math.sin(x * 0.03) * 8);
+      g.lineTo(1024, 256);
+      g.closePath();
+      g.fill();
+    })
+  );
+
 /** The back wall: an ocean mural with light rays and silhouettes. */
 export const muralTexture = () =>
   cached("mural", () =>

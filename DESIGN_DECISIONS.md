@@ -419,3 +419,89 @@ Zustand), GitHub Pages, and the testing list.
   1366×768 is the tuned target; 1280×800 and 1024×600 touch are checked.
 - **Results:** the trophy stands left of the results card (camera view
   offset) instead of hidden behind it.
+
+## 2026-10-20 — Phase 2 design: Aquarium Expansion (frozen)
+
+Started after Phase 1 was complete and tested (the brief's condition). The
+brief lists six Phase 2 items (larger room, more tank types, more species,
+more visitors, more decorations, tank upgrades); this is how they become play.
+
+### Progression continues after the star
+
+Free play stays free (everything open, no pressure); the goal card carries on
+with three more levels. Phase 1 saves migrate (a starred save starts Level 6).
+
+| Level | Name | Goals | Reward |
+|---|---|---|---|
+| 6 | Ocean Hall | Open the Ocean Hall (100 coins, comes with the Ocean tank); a sea turtle in it; help 2 visitors | Tall tank, seahorse, jellyfish |
+| 7 | Sea Friends | Place a tall tank; a seahorse or jellyfish in it; answer 2 "What's this?" visitors | New decorations, tank upgrades |
+| 8 | Super Aquarium | Buy an upgrade; help 3 visitors; every tank happy at once → the judge returns | Crown on the trophy (Super Star), 80 coins |
+
+### Halls and tanks
+
+- **The Ocean Hall** is a second room to the right of the first (x 6–18),
+  joined by a doorway in the shared wall. Until it is bought the doorway is a
+  locked door with an "OCEAN HALL" sign (tapping it opens the offer). The
+  management view shows one hall at a time; arrows at the screen edges switch
+  halls. Visitors walk through the doorway and visit tanks in both halls; the
+  bench and Pico stay in the first hall.
+- **Pads:** A, B (first hall); C (the Ocean tank, middle of the second hall),
+  D, E (second hall, any tank but the Ocean tank).
+- **Tank types:** Small (3 animals, starter), Big (5, 80 coins), **Tall** (4
+  animals, 2 decoration slots, 70 coins, from Level 7), **Ocean** (8 animals,
+  6 slots, only on pad C, comes with the hall).
+
+### Sea animals (habitat rules)
+
+| Animal | Word | Price | Lives in | Likes | Unlocked |
+|---|---|---|---|---|---|
+| Pufferfish | white (a fish) | 35 | any tank (not with jellyfish) | rock | Level 6 |
+| Sea turtle | turtle (green) | 60 | Ocean tank only | plant | Ocean Hall open |
+| Seahorse | seahorse (pink) | 40 | Tall tank only | plant | Level 7 |
+| Jellyfish | jellyfish (purple) | 45 | Tall tank, only with other jellyfish | the lamp upgrade | Level 7 |
+
+- Placing an animal where it cannot live is refused with Pico's hint (Japanese:
+  why, and which tank). The shop only offers animals with a free home.
+- **Fish are still bought by colour** ("White, please!"). **Sea animals are
+  bought by name** at a second counter: Pico asks "What do you want?" →
+  "A turtle, please!". Colours for fish, names for animals: both natural
+  English, and the animal names are the Let's Try! 1 "What's this?" unit.
+- Each animal moves its own way: the turtle glides and paddles, the jellyfish
+  pulses and drifts, the seahorse swims upright and slowly, the pufferfish
+  puffs up round when tapped or happy.
+
+### English added
+
+- **Said:** "White, please!", "A turtle / seahorse / jellyfish, please!",
+  numbers six to ten, "It's a turtle / jellyfish / seahorse / fish.",
+  "I like pink / purple / white.", "Pink, please!" / "Yellow, please!"
+  (starfish), "Big / Small, please!" (castle).
+- **Heard:** "What do you want?", "What's this?", "I like turtles!",
+  "Look! A turtle!" (visitors say it when they see one: ambient English).
+- **"What's this?" requests:** a visitor stands at a tank, one animal glows, and
+  the student names it. Tap choices are three animal sentences.
+- **Counting** goes up to 8 (the Ocean tank), and only asks about tanks whose
+  animals are all fish ("How many fish?" with a turtle in the tank has no clear
+  answer).
+- Colour requests use the new colours ("I like purple!" → the jellyfish or
+  the anemone); animal requests ask by name ("I like turtles!").
+
+### Decorations, upgrades, visitors
+
+- **New decorations (Level 7):** starfish (pink / yellow, 6), sand castle
+  (big / small, 14 / 9), purple anemone (12), shipwreck (30, too big for small
+  and tall tanks).
+- **Tank upgrades (Level 7, tap to buy in the close-up):** Filter (40, the water
+  gets dirty half as fast), Lamp (30, +5 happiness; jellyfish love it), Bigger
+  tank (60, a small tank becomes a big one, keeping its animals and
+  decorations). **Ticket gate** (50, in the tank shop): up to 4 visitors at
+  once, arriving more often. Upgrades are bought with a tap (no English); their
+  Japanese info text is optional and never assessed.
+- **New visitors (Level 6):** grandma (glasses, cardigan) and an explorer
+  (safari hat, binoculars).
+
+### Saving
+
+`at.save.v1` saves are migrated to version 2 on load (new fields get
+defaults); unknown versions are still discarded. Rejected: discarding Phase 1
+saves (classes would lose their aquariums on update).

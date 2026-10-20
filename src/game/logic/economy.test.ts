@@ -20,9 +20,15 @@ import {
   stageDone,
   tipFor,
   type Model,
-  type Result
+  type Result,
+  buyUpgrade,
+  earnSuperStar,
+  happiness,
+  openHall,
+  UPGRADE_PRICE
 } from "./model";
-import { TANKS } from "../data/tanks";
+import { HALL_PRICE, TANKS } from "../data/tanks";
+import { SPECIES } from "../data/fish";
 import type { SpeciesId } from "../types";
 
 /**
@@ -138,6 +144,67 @@ function play(first: SpeciesId, second: SpeciesId, spendy: boolean) {
   return { m, helpedForTank, minCoins };
 }
 
+/** Levels 6–8 from a starred aquarium: the Ocean Hall, a turtle, a tall tank with jellyfish, a lamp, the crown. */
+function playPhase2(start: Model) {
+  let m = start;
+  let helped = 0;
+  let minCoins = m.coins;
+  const help = (named = false) => {
+    m = playAWhile(m);
+    const reward = m.tanks.some((t) => tipFor(t) === 3) ? 15 : 10;
+    m = helpVisitor(m, `p${++visitorId}`, reward, named);
+    helped++;
+    if (helped > 80) throw new Error("Phase 2 never finished");
+  };
+  const spend = (r: Result) => {
+    m = ok(r);
+    minCoins = Math.min(minCoins, m.coins);
+    return (r as { id?: string }).id;
+  };
+  // Level 6.
+  while (m.coins < HALL_PRICE) help();
+  spend(openHall(m));
+  const ocean = m.tanks.find((t) => t.type === "ocean")!.id;
+  while (m.coins < SPECIES.turtle.price) help();
+  const turtle = spend(buyFish(m, "turtle"))!;
+  spend(placeFish(m, turtle, ocean));
+  while (!stageDone(m)) help();
+  spend(completeStage(m));
+  const level6 = helped;
+  // Level 7.
+  while (m.coins < TANKS.tall.price) help();
+  spend(buyTank(m, "tall"));
+  const tall = spend(placeTank(m, "tall", "D"))!;
+  while (m.coins < SPECIES.jellyfish.price) help();
+  const jelly = spend(buyFish(m, "jellyfish"))!;
+  spend(placeFish(m, jelly, tall));
+  while (!stageDone(m)) help(true);
+  spend(completeStage(m));
+  const level7 = helped - level6;
+  // Level 8: the jellyfish love a lamp; the turtle likes plants.
+  while (m.coins < UPGRADE_PRICE.lamp) help();
+  spend(buyUpgrade(m, tall, "lamp"));
+  let guard = 0;
+  while (!judgeReady(m)) {
+    help();
+    for (const t of m.tanks) {
+      if (t.fish.length && t.food < 90) m = ok(feed(m, t.id));
+      m = ok(clean(m, t.id));
+    }
+    m = latchHappy(m);
+    const unhappy = m.tanks.find((t) => t.fish.length && (happiness(t) ?? 0) < 70 && t.decor.length < TANKS[t.type].slots.length);
+    if (unhappy && m.coins >= 8) {
+      const free = TANKS[unhappy.type].slots.findIndex((_, i) => !unhappy.decor.some((d) => d.slot === i));
+      const plant = spend(buyDecor(m, "plant", "big"))!;
+      spend(placeDecor(m, plant, unhappy.id, free));
+    }
+    m = latchHappy(m);
+    if (++guard > 40) throw new Error("Level 8 never finished");
+  }
+  m = earnSuperStar(m);
+  return { m, helped, level6, level7, minCoins };
+}
+
 describe("economy simulation", () => {
   const paths: [SpeciesId, SpeciesId, boolean][] = [
     ["clownfish", "clownfish", false],
@@ -155,6 +222,17 @@ describe("economy simulation", () => {
       expect(helpedForTank).toBeLessThanOrEqual(6);
     });
   }
+
+  it("Phase 2: Levels 6 to 8 finish from a typical star without a dead end, in a classroom-sized number of visitors", () => {
+    const { m: starred } = play("bluetang", "bluetang", true);
+    const { m, helped, level6, level7, minCoins } = playPhase2(starred);
+    expect(m.progress.superStar).toBe(true);
+    expect(minCoins).toBeGreaterThanOrEqual(0);
+    // About one request visitor a minute: each level fits in a lesson.
+    expect(level6).toBeLessThanOrEqual(12);
+    expect(level7).toBeLessThanOrEqual(10);
+    expect(helped).toBeLessThanOrEqual(35);
+  });
 
   it("a student who spent everything can always earn again while a fish is in a tank", () => {
     let m: M = buyAndPlace(newModel(), "bluetang", "t1");

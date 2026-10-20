@@ -79,3 +79,35 @@ describe("speech matching", () => {
     expect(matchesPhrase("feed the fish", PHRASES.feedFish)).toBe(true);
   });
 });
+
+describe("Phase 2 speech", () => {
+  it("orders sea animals by name", () => {
+    const shop = P("turtlePlease", "seahorsePlease", "jellyfishPlease");
+    expect(judgeSpeech(["a turtle please"], shop)).toMatchObject({ id: "turtlePlease" });
+    expect(judgeSpeech(["sea horse please"], shop)).toMatchObject({ id: "seahorsePlease" });
+    expect(judgeSpeech(["jelly fish"], shop)).toMatchObject({ id: "jellyfishPlease" });
+    expect(judgeSpeech(["blue please"], shop).kind).toBe("none");
+  });
+
+  it("'It's a fish.' is not 'jelly fish', 'sea horse' or a turtle", () => {
+    const its = P("itsTurtle", "itsSeahorse", "itsJellyfish", "itsFish");
+    expect(judgeSpeech(["it's a jelly fish"], its)).toMatchObject({ kind: "match", id: "itsJellyfish" });
+    expect(judgeSpeech(["it's a sea horse"], its)).toMatchObject({ kind: "match", id: "itsSeahorse" });
+    expect(judgeSpeech(["turtle"], its)).toMatchObject({ kind: "match", id: "itsTurtle" });
+    expect(judgeSpeech(["It's a fish."], its)).toMatchObject({ kind: "match", id: "itsFish" });
+    expect(judgeSpeech(["it's a dog"], its).kind).toBe("none");
+  });
+
+  it("counts to ten, and hears the new colours", () => {
+    const nums = P(...NUMBER_IDS);
+    expect(judgeSpeech(["six fish"], nums)).toMatchObject({ id: "n6" });
+    expect(judgeSpeech(["7"], nums)).toMatchObject({ id: "n7" });
+    expect(judgeSpeech(["eight"], nums)).toMatchObject({ id: "n8" });
+    expect(judgeSpeech(["ten"], nums)).toMatchObject({ id: "n10" });
+    const likes = P("likePink", "likePurple", "likeWhite", "likeBlue");
+    expect(judgeSpeech(["I like pink"], likes)).toMatchObject({ id: "likePink" });
+    expect(judgeSpeech(["papuru"], likes)).toMatchObject({ id: "likePurple" });
+    expect(judgeSpeech(["white"], likes)).toMatchObject({ id: "likeWhite" });
+    expect(judgeSpeech(["white please"], P("whitePlease", "bluePlease"))).toMatchObject({ id: "whitePlease" });
+  });
+});

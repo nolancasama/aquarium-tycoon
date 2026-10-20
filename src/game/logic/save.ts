@@ -1,19 +1,20 @@
 import type { DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
 import { SPECIES } from "../data/fish";
-import { DECOR } from "../data/decor";
-import { SLOT_ORDER, TANKS } from "../data/tanks";
+import { DECOR, decorFits } from "../data/decor";
+import { PAD_TYPES, SLOT_ORDER, TANKS } from "../data/tanks";
 import { PHRASES, type PhraseId } from "./english";
-import { newModel, newProgress, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep } from "./model";
+import { canLive, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep } from "./model";
 
 /**
- * Versioned save. A save of an unknown version, or one that does not parse,
- * is discarded whole, never half-loaded. Every field is re-validated: an
- * edited or corrupted save cannot create coins out of nothing-shaped data,
- * overfill a tank, or put two decorations in one slot.
+ * Versioned save. Version 1 (Phase 1) saves are migrated; a save of an unknown
+ * version, or one that does not parse, is discarded whole, never half-loaded.
+ * Every field is re-validated: an edited or corrupted save cannot overfill a
+ * tank, put a turtle in a small tank, put two decorations in one slot, or hold
+ * something its level has not unlocked.
  */
 
 export const SAVE_KEY = "at.save.v1";
-export const VERSION = 1;
+export const VERSION = 2;
 
 export interface SaveData {
   v: number;
@@ -56,34 +57,51 @@ function readDecor(raw: unknown, ids: Set<string>): DecorRec | null {
   return { id, kind: raw.kind, variant };
 }
 
-function readTank(raw: unknown, ids: Set<string>, used: Set<SlotId>): TankRec | null {
+/** Is this tank type on this pad possible at this level? */
+function tankAllowed(type: TankType, slot: SlotId, p: Progress): boolean {
+  if (!PAD_TYPES[slot].includes(type)) return false;
+  if (slot !== "A" && slot !== "B" && !p.hallOpen) return false;
+  if (type === "big") return p.stage >= 4;
+  if (type === "tall") return p.stage >= 7;
+  return true;
+}
+
+function readTank(raw: unknown, ids: Set<string>, used: Set<SlotId>, p: Progress): TankRec | null {
   if (!isObj(raw)) return null;
   const id = str(raw.id);
   if (!id || ids.has(id) || !isTankType(raw.type) || !isSlot(raw.slot) || used.has(raw.slot)) return null;
+  if (!tankAllowed(raw.type, raw.slot, p)) return null;
   ids.add(id);
   used.add(raw.slot);
   const def = TANKS[raw.type];
-  const fish = arr(raw.fish)
-    .map((f) => readFish(f, ids))
-    .filter((f): f is FishRec => Boolean(f))
-    .slice(0, def.capacity);
+  const tank: TankRec = newTank(id, raw.type, raw.slot);
+  // Animals one by one, so habitat rules hold for the whole tank.
+  for (const f of arr(raw.fish)) {
+    const rec = readFish(f, ids);
+    if (rec && tank.fish.length < def.capacity && canLive(rec.species, tank)) tank.fish.push(rec);
+  }
   const slots = new Set<number>();
   const decor: PlacedDecor[] = [];
   for (const d of arr(raw.decor)) {
     const rec = readDecor(d, ids);
     const slot = isObj(d) ? Math.floor(num(d.slot, -1)) : -1;
-    if (!rec || slot < 0 || slot >= def.slots.length || slots.has(slot)) continue;
+    if (!rec || slot < 0 || slot >= def.slots.length || slots.has(slot) || !decorFits(rec.kind, raw.type)) continue;
     slots.add(slot);
     decor.push({ ...rec, slot });
   }
-  return { id, type: raw.type, slot: raw.slot, fish, decor, food: pct(raw.food), clean: pct(raw.clean) };
+  tank.decor = decor;
+  tank.food = pct(raw.food);
+  tank.clean = pct(raw.clean);
+  const up = isObj(raw.upgrades) ? raw.upgrades : {};
+  tank.upgrades = { filter: up.filter === true && p.stage >= 8, lamp: up.lamp === true && p.stage >= 8 };
+  return tank;
 }
 
-function readProgress(raw: unknown, m: Model): Progress {
+function readProgress(raw: unknown, version: number): Progress {
   const src = isObj(raw) ? raw : {};
   const p = newProgress();
   const stage = Math.floor(num(src.stage, 1));
-  p.stage = (stage >= 1 && stage <= 5 ? stage : 1) as StageId;
+  p.stage = (stage >= 1 && stage <= 8 ? stage : 1) as StageId;
   p.tutorial = STEPS.includes(src.tutorial as TutorialStep) ? (src.tutorial as TutorialStep) : "intro";
   // A later stage implies a finished Stage 1 tutorial (apart from its decorating step).
   if (p.stage >= 2 && STEPS.indexOf(p.tutorial) < STEPS.indexOf("decorate")) p.tutorial = "decorate";
@@ -92,17 +110,25 @@ function readProgress(raw: unknown, m: Model): Progress {
   p.fedOnce = src.fedOnce === true;
   p.cleanedOnce = src.cleanedOnce === true;
   p.counted = src.counted === true;
-  p.allHappy = src.allHappy === true && p.stage === 5;
   p.helpedInStage = Math.max(0, Math.min(99, Math.floor(num(src.helpedInStage, 0))));
+  p.namedInStage = Math.max(0, Math.min(99, Math.floor(num(src.namedInStage, 0))));
   p.hearts = Math.max(0, Math.min(9999, Math.floor(num(src.hearts, 0))));
-  p.specialPending = src.specialPending === true && p.stage === 5;
-  p.photo = src.photo === true && p.stage === 5;
-  p.star = src.star === true && p.stage === 5;
-  p.freePlay = src.freePlay === true && p.star;
-  p.said = arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES);
-  p.said = [...new Set(p.said)];
-  // Unlocks follow the stage: a tank can only exist if the stage that unlocks it was reached.
-  if (p.stage < 4) m.tanks = m.tanks.filter((t) => t.type === "small");
+  p.star = src.star === true && p.stage >= 5;
+  // Version 1 ended at the star (Stage 5); the star now opens Level 6.
+  if (version === 1 && p.star && p.stage === 5) {
+    p.stage = 6;
+    p.helpedInStage = 0;
+  }
+  if (p.stage >= 6) p.star = true;
+  p.allHappy = src.allHappy === true && (p.stage === 5 || p.stage === 8);
+  p.specialPending = src.specialPending === true && p.stage === 5 && !p.star;
+  p.photo = src.photo === true && p.stage >= 5;
+  p.freePlay = p.star;
+  p.hallOpen = src.hallOpen === true && p.stage >= 6;
+  p.tickets = src.tickets === true && p.stage >= 8;
+  p.upgraded = src.upgraded === true && p.stage >= 8;
+  p.superStar = src.superStar === true && p.stage === 8;
+  p.said = [...new Set(arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES))];
   return p;
 }
 
@@ -114,19 +140,28 @@ export function decodeSave(text: string | null): SaveData | null {
   } catch {
     return null;
   }
-  if (!isObj(raw) || raw.v !== VERSION || !isObj(raw.model)) return null;
+  if (!isObj(raw) || (raw.v !== 1 && raw.v !== 2) || !isObj(raw.model)) return null;
+  const version = raw.v;
   const src = raw.model;
   const m = newModel();
+  m.progress = readProgress(src.progress, version);
   const ids = new Set<string>();
   const used = new Set<SlotId>();
   const tanks = arr(src.tanks)
-    .map((t) => readTank(t, ids, used))
+    .map((t) => readTank(t, ids, used, m.progress))
     .filter((t): t is TankRec => Boolean(t));
-  // The starter tank is never lost.
-  if (!tanks.some((t) => t.type === "small")) return null;
+  // The starter tank is never lost (a small tank, or the big one it grew into, on pad A).
+  if (!tanks.some((t) => t.slot === "A")) return null;
+  // An open hall always has its Ocean tank.
+  if (m.progress.hallOpen && !tanks.some((t) => t.type === "ocean")) {
+    let n = 1;
+    while (ids.has(`t${900 + n}`)) n++;
+    tanks.push(newTank(`t${900 + n}`, "ocean", "C"));
+    ids.add(`t${900 + n}`);
+  }
   m.tanks = tanks;
-  m.progress = readProgress(src.progress, m);
   const inv = isObj(src.inv) ? src.inv : {};
+  const freePads = SLOT_ORDER.filter((s) => !used.has(s) && (s === "A" || s === "B" || m.progress.hallOpen) && s !== "C").length;
   m.inv = {
     fish: arr(inv.fish)
       .map((f) => readFish(f, ids))
@@ -134,7 +169,9 @@ export function decodeSave(text: string | null): SaveData | null {
     decor: arr(inv.decor)
       .map((d) => readDecor(d, ids))
       .filter((d): d is DecorRec => Boolean(d)),
-    tanks: m.progress.stage >= 4 ? arr(inv.tanks).filter((t): t is TankType => t === "big").slice(0, Math.max(0, SLOT_ORDER.length - m.tanks.length)) : []
+    tanks: arr(inv.tanks)
+      .filter((t): t is TankType => (t === "big" && m.progress.stage >= 4) || (t === "tall" && m.progress.stage >= 7))
+      .slice(0, freePads)
   };
   m.coins = Math.max(0, Math.min(99999, Math.floor(num(src.coins, 0))));
   const stats = isObj(src.stats) ? src.stats : {};

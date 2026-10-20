@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { TANKS } from "../game/data/tanks";
-import { PEDESTAL, waterCentre } from "../game/world";
+import { HALL_X, PEDESTAL, waterCentre } from "../game/world";
 import { tankById } from "../game/logic/model";
 
 /** The live camera, for projecting world points to the screen (picking, tests). */
@@ -16,9 +16,9 @@ export const bottomPanel = { height: 0 };
 export const FOV = 35;
 const TAN = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
 
-/** Management view: the whole room from the front, a little above. */
-export function roomView(aspect: number, orbit: number, zoom: number) {
-  const target = new THREE.Vector3(0, 0.6, -0.8);
+/** Management view: the whole hall from the front, a little above. */
+export function roomView(aspect: number, orbit: number, zoom: number, hall: 0 | 1 = 0) {
+  const target = new THREE.Vector3(HALL_X[hall], 0.6, -0.8);
   const dist = (13.2 / zoom) * Math.max(1, 1.72 / aspect);
   const pitch = 0.6;
   const h = dist * Math.cos(pitch);
@@ -78,7 +78,7 @@ export function CameraRig() {
         wantLook.current.copy(v.target);
       }
     } else {
-      const v = roomView(aspect, c.orbit, c.zoom);
+      const v = roomView(aspect, c.orbit, c.zoom, g.hall);
       want.current.copy(v.pos);
       wantLook.current.copy(v.target);
     }

@@ -42,6 +42,14 @@ const PALETTES: Record<VisitorType, Palette[]> = {
     { shirt: "#ffa94d", pants: "#2b8a3e", hair: "#151515", skin: "#e9c39c", extra: "#2a62e6" },
     { shirt: "#cc5de8", pants: "#1864ab", hair: "#4a2e1a", skin: "#f7dcc4", extra: "#ffd92e" }
   ],
+  grandma: [
+    { shirt: "#c77dff", pants: "#5a4a6b", hair: "#d9d9d9", skin: "#f2d2b6", extra: "#7a4a24" },
+    { shirt: "#ff8fab", pants: "#4a5568", hair: "#e9e9e9", skin: "#eac7a6", extra: "#2b6cb0" }
+  ],
+  explorer: [
+    { shirt: "#c9a66b", pants: "#6b5a3e", hair: "#3b2a1a", skin: "#e8bf98", extra: "#e9d8a6" },
+    { shirt: "#8fae6b", pants: "#4f5b3a", hair: "#1e1e1e", skin: "#f3d3b3", extra: "#f1e3b8" }
+  ],
   judge: [{ shirt: "#2b3a67", pants: "#1f2a4d", hair: "#c8c8c8", skin: "#f0cca8", extra: "#e03131" }]
 };
 
@@ -98,6 +106,21 @@ export function personModel(type: VisitorType, variant: number): PersonModel {
     b.box(0.2, 0.13, 0.08, 0, hip + 0.38, 0.22, "#2b2b33");
     b.cyl(0.04, 0.045, 0.05, 0, hip + 0.38, 0.27, "#555b66", 10);
     b.add(new THREE.CylinderGeometry(0.035, 0.035, 0.06, 10), "#6fc3ff", [0, hip + 0.445, 0.29], [Math.PI / 2, 0, 0]);
+  } else if (type === "grandma") {
+    // A bun, round glasses, a cardigan's buttons and a handbag.
+    b.sphere(hr * 0.5, 0, hy + hr * 0.75, -hr * 0.55, p.hair, [1, 1, 1], 12);
+    for (const x of [-1, 1]) b.add(new THREE.TorusGeometry(hr * 0.2, hr * 0.035, 5, 14), "#5a4632", [x * hr * 0.36, hy + hr * 0.06, hr * 0.98], [0, 0, 0]);
+    b.box(hr * 0.2, hr * 0.04, hr * 0.04, 0, hy + hr * 0.08, hr * 1.0, "#5a4632");
+    for (let i = 0; i < 3; i++) b.sphere(0.018, 0, hip + 0.18 + i * 0.12, 0.215, "#ffffff", [1, 1, 0.5], 6);
+    b.box(0.18, 0.15, 0.08, -0.3, hip - 0.08, 0.04, p.extra);
+    b.torus(0.06, 0.012, [-0.3, hip + 0.1, 0.04], [0, 0, 0], p.extra);
+  } else if (type === "explorer") {
+    // A wide safari hat and binoculars on the chest.
+    b.add(new THREE.CylinderGeometry(hr * 1.75, hr * 1.75, 0.025, 18), p.extra, [0, hy + hr * 0.55, 0]);
+    b.sphere(hr * 1.02, 0, hy + hr * 0.55, 0, p.extra, [1, 0.62, 1], 14);
+    b.add(new THREE.CylinderGeometry(hr * 1.03, hr * 1.03, 0.03, 18), "#6b5a3e", [0, hy + hr * 0.6, 0]);
+    for (const x of [-0.045, 0.045]) b.add(new THREE.CylinderGeometry(0.032, 0.035, 0.1, 10), "#2b2b33", [x, hip + 0.4, 0.23], [Math.PI / 2, 0, 0]);
+    b.box(0.03, 0.03, 0.06, 0, hip + 0.4, 0.22, "#2b2b33");
   } else {
     // The judge: suit, bow tie, rosette, clipboard, moustache.
     b.add(new THREE.ConeGeometry(0.05, 0.08, 4), p.extra, [-0.04, hip + 0.56, 0.2], [0, 0, Math.PI / 2]);
@@ -113,7 +136,7 @@ export function personModel(type: VisitorType, variant: number): PersonModel {
   // A leg hangs from its hip pivot (y = 0) down to the shoe.
   lb.add(new THREE.CylinderGeometry(0.075 * s, 0.065 * s, hip - 0.06, 8), p.pants, [0, -(hip - 0.06) / 2, 0]);
   lb.sphere(0.085 * s, 0, -hip + 0.05, 0.04 * s, type === "judge" ? "#111111" : "#f1f3f5", [1, 0.6, 1.5], 8);
-  const model: PersonModel = { body, leg: lb.build(), hip, legX: 0.1 * s, height: hy + hr * (type === "fan" ? 1.6 : 1.2) };
+  const model: PersonModel = { body, leg: lb.build(), hip, legX: 0.1 * s, height: hy + hr * (type === "fan" ? 1.6 : type === "explorer" ? 1.5 : 1.2) };
   cache.set(key, model);
   return model;
 }

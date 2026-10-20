@@ -3,11 +3,11 @@ import { clearGlow, effect, rt, type VisitorRt } from "../runtime";
 import type { SlotId, Vec2, VisitorType } from "../types";
 import { award, fishCount, happiness, helpVisitor, mood, tankById, tipFor, type TankRec } from "../logic/model";
 import { makeRequest, matchesShow, requestLine, requestReward, stillValid, tankSatisfies, targetsIn, type Request, type ShowTarget } from "../logic/requests";
-import { LIKE_COLOR_PHRASE, NUMBER_IDS, NUMBER_PHRASE, colorOfPhrase, type PhraseId } from "../logic/english";
+import { ITS_IDS, ITS_PHRASE, LIKE_COLOR_PHRASE, NUMBER_IDS, NUMBER_PHRASE, colorOfPhrase, type PhraseId } from "../logic/english";
 import { makeRng, shuffle } from "../logic/rng";
 import { SPECIES } from "../data/fish";
 import { TANKS } from "../data/tanks";
-import { BENCH_SEAT, ENTRY, OUTSIDE, lookSpot, tankOrigin } from "../world";
+import { BENCH_SEAT, ENTRY, OUTSIDE, lookSpot, route, tankOrigin } from "../world";
 import { ask, fastMode, say, speak, wait } from "./ask";
 import { openTank } from "./actions";
 import { audio } from "../../audio/audio";
@@ -27,7 +27,10 @@ export function seedVisitors(seed: number) {
 let visitorNo = 1;
 let lastKind: Request["kind"] | null = null;
 
-const WALK_SPEED: Record<VisitorType, number> = { child: 1.15, adult: 1.0, fan: 1.1, judge: 0.9 };
+const WALK_SPEED: Record<VisitorType, number> = { child: 1.15, adult: 1.0, fan: 1.1, grandma: 0.8, explorer: 1.05, judge: 0.9 };
+/** Visitors who already said "Look! A turtle!" (once each), and when anyone last did. */
+const exclaimed = new Set<string>();
+let lastExclaim = -100;
 const arrivals = new Map<string, () => void>();
 
 /** A visitor stops working the request (or the judge's step) and is free again. */
@@ -120,6 +123,18 @@ function startLook(v: VisitorRt, tankId: string) {
   const md = t ? mood(happiness(t)) : "okay";
   window.setTimeout(() => {
     if (v.state !== "look" || v.at !== tankId) return;
+    // A sea animal is worth saying out loud (ambient English): "Look! A turtle!"
+    const animal = t?.fish.find((f) => SPECIES[f.species].kind === "animal");
+    const g = getGame();
+    if (animal && !exclaimed.has(v.id) && rt.time - lastExclaim > 12 && !g.prompt && !g.line && g.screen === "game") {
+      exclaimed.add(v.id);
+      lastExclaim = rt.time;
+      v.bubble = "wow";
+      v.bubbleT0 = rt.time;
+      v.anim = { kind: "jump", t0: rt.time };
+      void speak(`Look! A ${SPECIES[animal.species].word}!`, v.type);
+      return;
+    }
     if (md === "happy") {
       v.bubble = "heart";
       v.anim = { kind: "jump", t0: rt.time };
@@ -142,7 +157,7 @@ function nextLookOrLeave(v: VisitorRt) {
     const slot = tankSlot(next)!;
     v.state = "walk";
     v.at = next;
-    v.path = [lookSpot(slot, visitorNo + v.seen.length)];
+    v.path = route(v, lookSpot(slot, visitorNo + v.seen.length));
     return;
   }
   leave(v);
@@ -167,7 +182,7 @@ export function leave(v: VisitorRt) {
   v.request = null;
   v.at = null;
   v.face = null;
-  v.path = [ENTRY, OUTSIDE];
+  v.path = [...route(v, ENTRY), OUTSIDE];
   syncWaiting();
 }
 
@@ -246,6 +261,8 @@ export function stepVisitors(dt: number) {
 // ------------------------------------------------------------------ spawning
 
 const TYPES: VisitorType[] = ["child", "adult", "fan"];
+/** Phase 2 adds grandma and the explorer. */
+const MORE_TYPES: VisitorType[] = ["child", "adult", "fan", "grandma", "explorer"];
 
 /** Visitors come only during ordinary play, while at least one fish is in a tank. */
 export function visitorsTick(dt: number) {
@@ -257,19 +274,22 @@ export function visitorsTick(dt: number) {
   rt.sinceRequest += dt;
   if (rt.spawnClock < rt.nextSpawn) return;
   const active = rt.visitors.filter((v) => v.state !== "gone");
-  if (active.length >= 3) return;
+  // The ticket gate: up to 4 visitors, arriving more often.
+  const tickets = m.progress.tickets;
+  if (active.length >= (tickets ? 4 : 3)) return;
   rt.spawnClock = 0;
-  rt.nextSpawn = fastMode() ? 3 : 18 + rand() * 10;
+  rt.nextSpawn = fastMode() ? 3 : tickets ? 14 + rand() * 8 : 18 + rand() * 10;
   const waiting = active.some((v) => v.request && !v.helped);
   let req: Request | null = null;
   if (!waiting) {
     const p = m.progress;
-    const goalStage = !p.star && (p.stage === 3 || p.stage === 5);
+    const goalStage = (!p.star && (p.stage === 3 || p.stage === 5)) || (p.stage >= 6 && !p.superStar);
     const chance = goalStage ? 0.5 : p.stage >= 2 ? 1 / 3 : 0;
     if ((goalStage && rt.sinceRequest > 45) || rand() < chance) req = makeRequest(m, rand, { last: lastKind });
   }
   if (req) rt.sinceRequest = 0;
-  spawnVisitor(TYPES[Math.floor(rand() * TYPES.length)], req);
+  const types = m.progress.stage >= 6 ? MORE_TYPES : TYPES;
+  spawnVisitor(types[Math.floor(rand() * types.length)], req);
 }
 
 /** Scripted events (the judge, the photo day) stop ordinary visitors. */
@@ -286,16 +306,58 @@ let showWait: ShowWait | null = null;
 
 export type RequestOutcome = { ok: boolean; tankId: string | null };
 
-function numbersAround(n: number): PhraseId[] {
-  const lo = Math.max(1, Math.min(n - 1, 3));
+/** Three number words around the answer (Tap mode), never past ten. */
+export function numbersAround(n: number): PhraseId[] {
+  const lo = Math.max(1, Math.min(n - 1, 8));
   return [lo, lo + 1, lo + 2].map((k) => NUMBER_PHRASE[k]);
+}
+
+/** The number words shown in Speak mode: one to five, or further for a big count. */
+export function numberSlots(n: number): PhraseId[] {
+  return NUMBER_IDS.slice(0, Math.max(5, Math.min(10, n + 2)));
 }
 
 /** Run one request with its visitor. Resolves when helped (ok) or put off (not ok). */
 export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable: boolean }): Promise<RequestOutcome> {
   const line = requestLine(req);
   v.bubble = null;
-  if (req.kind === "show") {
+  if (req.kind === "whatsThis") {
+    const t = tankById(model(), req.tankId);
+    const f = t?.fish.find((x) => x.id === req.fishId);
+    if (!t || !f) return { ok: false, tankId: null };
+    openTank(t.id);
+    v.state = "help";
+    const spot = cornerSpot(t, -1);
+    v.x = spot.x;
+    v.z = spot.z;
+    v.path = [];
+    v.face = { x: tankOrigin(t.slot).x, z: tankOrigin(t.slot).z };
+    // The animal glows: that is "this".
+    rt.glow.fish.add(f.id);
+    const answer = ITS_PHRASE[f.species];
+    const others = shuffle(
+      ITS_IDS.filter((p) => p !== answer),
+      rand
+    ).slice(0, 2);
+    // Shown in a shuffled order: the right sentence is not always first.
+    const three = shuffle([answer, ...others], rand);
+    const id = await ask({
+      kind: "command",
+      options: [answer],
+      judge: ITS_IDS,
+      show: three,
+      choices: three,
+      question: { en: line, by: v.type },
+      readQuestion: true,
+      cancellable: opts.cancellable,
+      help: "ひかっている いきものは なに? えいごで いおう"
+    });
+    rt.glow.fish.delete(f.id);
+    if (!id) return { ok: false, tankId: null };
+    await say(v.type, `A ${SPECIES[f.species].word}! I like ${SPECIES[f.species].plural}!`, "ありがとう!");
+    return { ok: true, tankId: t.id };
+  }
+  if (req.kind === "show" || req.kind === "showAnimal") {
     v.state = "help";
     setGame({ request: { visitorId: v.id, by: v.type, req, line, misses: 0, status: "ready" }, panel: null, placing: null });
     rt.slowFish = true;
@@ -319,7 +381,7 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
       kind: "command",
       options: [NUMBER_PHRASE[n]],
       judge: NUMBER_IDS,
-      frame: { before: "", after: " fish!", slots: NUMBER_IDS },
+      frame: { before: "", after: " fish!", slots: numberSlots(n) },
       choices: numbersAround(n),
       shuffle: false,
       question: { en: line, by: v.type },
@@ -349,13 +411,14 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
     await say(v.type, id === "yesIDo" ? "Me too!" : "Oh! Look! They are so cute!", id === "yesIDo" ? "わたしも!" : "みて! かわいいよ!");
     return { ok: true, tankId: null };
   }
-  // chatColor: every colour is a good answer.
+  // chatColor: every colour is a good answer ("I like ___." with the colour words).
   v.state = "help";
-  const all: PhraseId[] = Object.values(LIKE_COLOR_PHRASE);
+  const basic: PhraseId[] = ["likeRed", "likeBlue", "likeYellow", "likeGreen", "likeOrange"];
+  const all: PhraseId[] = model().progress.stage >= 6 ? Object.values(LIKE_COLOR_PHRASE) : basic;
   const id = await ask({
     kind: "choice",
     options: all,
-    show: all,
+    frame: { before: "I like", after: ".", slots: all },
     choices: shuffle(all, rand).slice(0, 3),
     question: { en: line, by: v.type },
     readQuestion: true,
@@ -369,7 +432,7 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
   return { ok: true, tankId: null };
 }
 
-const PHRASE_EN_NUMBER = ["", "One", "Two", "Three", "Four", "Five"];
+const PHRASE_EN_NUMBER = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"];
 
 /** The fish of a colour swim to the glass (a chat about colours has a visible answer). */
 function showOffColor(color: ColorId) {
@@ -379,14 +442,16 @@ function showOffColor(color: ColorId) {
 /** A fish or decoration was tapped while a "show me" request waits. Returns true if it was handled. */
 export function answerShow(target: ShowTarget, tankId: string, ref: { fishId?: string; slot?: number }): boolean {
   const r = getGame().request;
-  if (!r || r.req.kind !== "show" || r.status === "correct") return false;
+  if (!r || (r.req.kind !== "show" && r.req.kind !== "showAnimal") || r.status === "correct") return false;
   const req = r.req;
   if (matchesShow(req, target)) {
     setGame({ request: { ...r, status: "correct" }, nudge: null });
     audio.play("correct");
     if (ref.fishId) {
-      // Every fish of that colour in the tank comes to the glass.
-      for (const f of rt.fish.values()) if (f.tankId === tankId && SPECIES[f.species].color === req.color) f.showT0 = rt.time;
+      // Every animal the visitor asked for in that tank comes to the glass.
+      for (const f of rt.fish.values()) {
+        if (f.tankId === tankId && matchesShow(req, { type: "fish", species: f.species })) f.showT0 = rt.time;
+      }
     }
     rt.slowFish = false;
     clearGlow();
@@ -413,7 +478,7 @@ export function answerShow(target: ShowTarget, tankId: string, ref: { fishId?: s
 }
 
 /** Third miss: the right tank (room view) and the right fish/decorations (close-up) glow. */
-export function glowAnswers(req: Extract<Request, { kind: "show" }>) {
+export function glowAnswers(req: Extract<Request, { kind: "show" | "showAnimal" }>) {
   const m = model();
   clearGlow();
   for (const t of m.tanks) {
@@ -480,7 +545,7 @@ export async function celebrate(v: VisitorRt, tankId: string | null) {
 export async function helped(v: VisitorRt, req: Request, tankId: string | null) {
   const t = tankId ? tankById(model(), tankId) : null;
   const amount = requestReward(req, t);
-  updateModel((m) => helpVisitor(m, v.id, amount));
+  updateModel((m) => helpVisitor(m, v.id, amount, req.kind === "whatsThis"));
   v.helped = true;
   effect("coins", v.x, 2, v.z, Math.min(6, Math.round(amount / 3)));
   audio.play("coin");
@@ -530,6 +595,7 @@ export function showTargets(t: TankRec): ShowTarget[] {
 /** Clear visitors (new game / title). */
 export function resetVisitors() {
   arrivals.clear();
+  exclaimed.clear();
   showWait = null;
   lastKind = null;
   setGame({ waiting: null });

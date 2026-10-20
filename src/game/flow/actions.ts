@@ -1,19 +1,23 @@
 import { commit, getGame, model, setGame, toast, type Panel } from "../store";
 import { effect, rt } from "../runtime";
-import type { DecorKind, DecorVariant, SlotId, SpeciesId } from "../types";
-import { SPECIES, SPECIES_BY_COLOR } from "../data/fish";
+import type { DecorKind, DecorVariant, SlotId, SpeciesId, TankType } from "../types";
+import { ANIMAL_ORDER, FISH_ORDER, SPECIES, SPECIES_BY_COLOR } from "../data/fish";
 import { DECOR } from "../data/decor";
-import { TANKS } from "../data/tanks";
+import { HALL_OF, PAD_TYPES, TANKS } from "../data/tanks";
 import {
   buyDecor,
   buyFish,
   buyTank,
+  buyTickets,
+  buyUpgrade,
+  canLive,
   clean,
   feed,
-  freeSpace,
   hasSpace,
+  homesFor,
   isSpeciesUnlocked,
   moveDecor,
+  openHall,
   placeDecor,
   placeFish,
   placeTank,
@@ -21,10 +25,11 @@ import {
   tankAt,
   tankById,
   tanksUnlocked,
-  unlockedSpecies,
-  type TutorialStep
+  upgradesUnlocked,
+  type TutorialStep,
+  type UpgradeKind
 } from "../logic/model";
-import { SHOP_COLOR_PHRASE, colorOfPhrase, type PhraseId } from "../logic/english";
+import { ANIMAL_PHRASE, SHOP_COLOR_PHRASE, colorOfPhrase, speciesOfPhrase, type PhraseId } from "../logic/english";
 import { ask, say, speak } from "./ask";
 import { answerShow, openRequest } from "./visitors";
 import { dropPellets } from "../sim";
@@ -60,9 +65,30 @@ function allowed(act: Act): boolean {
 // ------------------------------------------------------------------ views
 
 export function openTank(tankId: string) {
-  if (!tankById(model(), tankId)) return;
+  const t = tankById(model(), tankId);
+  if (!t) return;
   audio.play("tick");
-  setGame({ view: "tank", tankId, panel: null, placing: getGame().placing?.kind === "fish" ? null : getGame().placing });
+  // Back from the close-up lands in this tank's hall.
+  setGame({ view: "tank", tankId, hall: HALL_OF[t.slot], panel: null, placing: getGame().placing?.kind === "fish" ? null : getGame().placing });
+}
+
+/** The locked door to the Ocean Hall: its offer is in the tank shop (from Level 6). */
+export function tapHallDoor() {
+  if (!allowed("tankShop")) return;
+  if (model().progress.stage < 6) {
+    audio.play("error");
+    toast({ en: "Not yet!", ja: "アクアリウム スターに なったら ひらけるよ", tone: "info" });
+    return;
+  }
+  openTankShop();
+}
+
+/** The arrows at the screen edges: show the other hall. */
+export function switchHall(hall: 0 | 1) {
+  const g = getGame();
+  if (g.screen !== "game" || g.view !== "room" || (hall === 1 && !g.model.progress.hallOpen)) return;
+  audio.play("tick");
+  setGame({ hall });
 }
 
 export function backToRoom() {
@@ -82,15 +108,80 @@ export function closePanel() {
 
 // ------------------------------------------------------------------ fish shop
 
+const fishWithHome = () => FISH_ORDER.filter((s) => isSpeciesUnlocked(model(), s) && homesFor(model(), s) > 0);
+
 export function openFishShop() {
   if (!allowed("fishShop")) return;
-  const m = model();
-  if (freeSpace(m) <= 0) {
+  if (!fishWithHome().length) {
     audio.play("error");
     toast({ en: "The tanks are full!", ja: "タンクが いっぱい! おおきな タンクが ひつよう", tone: "warn" });
     return;
   }
   void orderFish();
+}
+
+/** Why an animal cannot go somewhere (Japanese help; the English stays in the prompts). */
+export function habitatHint(s: SpeciesId): string {
+  if (s === "turtle") return "ウミガメは うみの タンク (うみの ホール) に すむよ";
+  if (s === "seahorse") return "タツノオトシゴは たかい タンクに すむよ";
+  if (s === "jellyfish") return "クラゲは たかい タンクで クラゲだけで くらすよ";
+  return "クラゲの タンクには はいれないよ";
+}
+
+export function openAnimalShop() {
+  if (!allowed("fishShop")) return;
+  const m = model();
+  const unlocked = ANIMAL_ORDER.filter((s) => isSpeciesUnlocked(m, s));
+  if (!unlocked.length) {
+    audio.play("error");
+    toast({ en: "Level 6!", ja: "うみの ホールを ひらくと かえるよ", tone: "info" });
+    return;
+  }
+  if (!unlocked.some((s) => homesFor(m, s) > 0)) {
+    audio.play("error");
+    toast({ en: "No home!", ja: unlocked.map(habitatHint).join(" / "), tone: "warn" }, 4200);
+    return;
+  }
+  void orderAnimal();
+}
+
+/**
+ * The sea-animal counter: "What do you want?" → "A turtle, please!". Animals
+ * are ordered by name (fish by colour); only animals with a free home are on offer.
+ */
+export async function orderAnimal(): Promise<SpeciesId | null> {
+  setGame({ panel: "animalShop", placing: null, view: "room", tankId: null });
+  for (;;) {
+    const m = model();
+    const species = ANIMAL_ORDER.filter((s) => isSpeciesUnlocked(m, s) && homesFor(m, s) > 0 && m.coins >= SPECIES[s].price);
+    if (!species.length) {
+      await say("pico", "Sorry! You need more coins.", "コインが たりないよ。おきゃくさんを たすけて コインを ためよう");
+      setGame({ panel: null });
+      return null;
+    }
+    const id = await ask({
+      kind: "choice",
+      options: species.map((s) => ANIMAL_PHRASE[s]!),
+      question: { en: "What do you want?", by: "pico" },
+      readQuestion: true,
+      cancellable: true,
+      shuffle: true,
+      help: "ほしい いきものの なまえを えいごで いおう!"
+    });
+    if (!id) {
+      setGame({ panel: null });
+      return null;
+    }
+    const s = speciesOfPhrase(id)!;
+    const r = commit(buyFish(model(), s));
+    if (r.ok) {
+      audio.play("purchase");
+      setGame({ panel: null });
+      startPlacingFish(r.id!);
+      return s;
+    }
+    await say("pico", "Sorry! You need more coins.", "コインが たりないよ");
+  }
 }
 
 /**
@@ -102,7 +193,7 @@ export async function orderFish(opts: { tutorial?: boolean } = {}): Promise<Spec
   setGame({ panel: "fishShop", placing: null, view: "room", tankId: null });
   for (;;) {
     const m = model();
-    const species = (opts.tutorial ? (["clownfish", "bluetang"] as SpeciesId[]) : unlockedSpecies(m)).filter((s) => m.coins >= SPECIES[s].price);
+    const species = (opts.tutorial ? (["clownfish", "bluetang"] as SpeciesId[]) : fishWithHome()).filter((s) => m.coins >= SPECIES[s].price);
     if (!species.length) {
       await say("pico", "Sorry! You need more coins.", "コインが たりないよ。おきゃくさんを たすけて コインを ためよう");
       setGame({ panel: null });
@@ -163,7 +254,13 @@ export function tapTank(tankId: string) {
     if (!allowed("tapTank")) return;
     const fishId = g.placing.fishId;
     const t = tankById(model(), tankId);
-    if (!t) return;
+    const animal = model().inv.fish.find((f) => f.id === fishId);
+    if (!t || !animal) return;
+    if (!canLive(animal.species, t)) {
+      audio.play("error");
+      toast({ en: "Not here!", ja: habitatHint(animal.species), tone: "warn" }, 3600);
+      return;
+    }
     if (!hasSpace(t)) {
       audio.play("error");
       toast({ en: "This tank is full!", ja: "この タンクは いっぱい", tone: "warn" });
@@ -196,9 +293,9 @@ export function openTankShop() {
   setGame({ panel: "tankShop", placing: null });
 }
 
-export function buyBigTank() {
+export function buyTankType(type: TankType) {
   const m = model();
-  const r = commit(buyTank(m, "big"));
+  const r = commit(buyTank(m, type));
   if (!r.ok) {
     audio.play("error");
     if (r.reason === "coins") toast({ en: "More coins, please!", ja: "もっと コインが ひつよう", tone: "warn" });
@@ -206,7 +303,34 @@ export function buyBigTank() {
     return;
   }
   audio.play("purchase");
-  setGame({ panel: null, view: "room", tankId: null, placing: { kind: "tank", type: "big", slot: null } });
+  setGame({ panel: null, view: "room", tankId: null, placing: { kind: "tank", type, slot: null } });
+}
+
+export const buyBigTank = () => buyTankType("big");
+
+/** Level 6: open the Ocean Hall (the Ocean tank comes with it) and go and see it. */
+export function buyHall() {
+  const r = commit(openHall(model()));
+  if (!r.ok) {
+    audio.play("error");
+    toast({ en: "More coins, please!", ja: "もっと コインが ひつよう", tone: "warn" });
+    return;
+  }
+  audio.play("unlock");
+  setGame({ panel: null, view: "room", tankId: null, hall: 1 });
+  effect("confetti", 12, 2.6, -1, 40);
+  toast({ en: "The Ocean Hall!", ja: "うみの ホールが ひらいたよ! うみの タンクに ウミガメを いれよう", tone: "good" }, 4000);
+}
+
+export function buyTicketGate() {
+  const r = commit(buyTickets(model()));
+  if (!r.ok) {
+    audio.play("error");
+    toast({ en: "More coins, please!", ja: "もっと コインが ひつよう", tone: "warn" });
+    return;
+  }
+  audio.play("purchase");
+  toast({ en: "More visitors!", ja: "おきゃくさんが たくさん くるよ", tone: "good" });
 }
 
 /** The box chip: place a bought tank. */
@@ -221,6 +345,10 @@ export function tapPad(slot: SlotId) {
   const g = getGame();
   if (tankAt(model(), slot)) return;
   if (g.placing?.kind === "tank") {
+    if (!PAD_TYPES[slot].includes(g.placing.type)) {
+      audio.play("error");
+      return;
+    }
     audio.play("pick");
     setGame({ placing: { ...g.placing, slot } });
     return;
@@ -339,6 +467,10 @@ export function tapSlot(tankId: string, slot: number) {
     }
     const r = commit(placeDecor(model(), p.decorId, tankId, slot));
     if (r.ok) placedFx(tankId, slot);
+    else if (r.reason === "tooBig") {
+      audio.play("error");
+      toast({ en: "Too big!", ja: "おおきすぎる! おおきな タンクか うみの タンクに おこう", tone: "warn" }, 3600);
+    }
     setGame({ placing: null });
     return;
   }
@@ -495,4 +627,35 @@ export function cardState(s: SpeciesId): "locked" | "coins" | "ok" {
   const m = model();
   if (!isSpeciesUnlocked(m, s)) return "locked";
   return m.coins >= SPECIES[s].price ? "ok" : "coins";
+}
+
+// ------------------------------------------------------------------ upgrades
+
+/** Close-up: the upgrade panel (filter, lamp, bigger tank). */
+export function openUpgrades() {
+  if (!allowed("decorate")) return;
+  if (!upgradesUnlocked(model())) {
+    audio.play("error");
+    toast({ en: "Level 8!", ja: "レベル8で アップグレードが かえるよ", tone: "info" });
+    return;
+  }
+  audio.play("tick");
+  setGame({ panel: "upgrade", placing: null });
+}
+
+export function buyTankUpgrade(kind: UpgradeKind) {
+  const g = getGame();
+  if (!g.tankId) return;
+  const r = commit(buyUpgrade(model(), g.tankId, kind));
+  if (!r.ok) {
+    audio.play("error");
+    if (r.reason === "coins") toast({ en: "More coins, please!", ja: "もっと コインが ひつよう", tone: "warn" });
+    return;
+  }
+  audio.play("purchase");
+  const t = tankById(model(), g.tankId);
+  if (t) {
+    const w = toWorld(t.slot, { x: 0, y: TANKS[t.type].h * 0.6, z: 0 });
+    effect("sparkle", w.x, w.y, w.z, 10);
+  }
 }

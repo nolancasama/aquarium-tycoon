@@ -1530,6 +1530,119 @@ mark.key {
   bottom: 190px;
 }
 
+/* ------------------------------------------------------------ Phase 2: halls, tank offers, upgrades */
+
+.hall-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 72px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border: 3px solid var(--aqua-soft);
+  box-shadow: var(--shadow);
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--sea-dark);
+  z-index: 10;
+}
+
+.hall-arrow b {
+  font-size: 30px;
+}
+
+.hall-arrow.right {
+  right: 0;
+  border-radius: 24px 0 0 24px;
+  border-right: none;
+}
+
+.hall-arrow.left {
+  left: 0;
+  border-radius: 0 24px 24px 0;
+  border-left: none;
+}
+
+.hall-arrow .ja {
+  display: block;
+}
+
+.offers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.card.tank-offer {
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-top: 0;
+}
+
+.card.tank-offer .tank-pic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 100px;
+}
+
+.card.tank-offer .tank-info {
+  flex: 1;
+  font-size: 19px;
+}
+
+.card.tank-offer .buy {
+  min-height: 56px;
+  padding: 6px 14px;
+}
+
+.tank-info .info {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ja);
+}
+
+.upgrade-rows {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.upgrade-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 18px;
+  background: #f1fafd;
+  font-weight: 900;
+  font-size: 21px;
+}
+
+.upgrade-row .up-text {
+  flex: 1;
+}
+
+.upgrade-row.owned {
+  background: #e3f8ea;
+}
+
+.upgrade-row .primary {
+  min-height: 52px;
+  padding: 6px 14px;
+}
+
+.results-card .trophy {
+  display: grid;
+  justify-items: center;
+}
+
 /* The request banner sits below the top bar when the goal card is hidden. */
 .view-tank .tank-status {
   top: 76px;

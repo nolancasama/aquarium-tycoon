@@ -5,8 +5,8 @@ import { makeRng } from "./rng";
 import { fishBounds, floorAt, newSwimState, stepSwim, type Column, type SwimEnv } from "./swim";
 
 describe("fish swimming", () => {
-  for (const type of ["small", "big"] as const) {
-    for (const id of SPECIES_ORDER) {
+  for (const id of SPECIES_ORDER) {
+    for (const type of SPECIES[id].habitat) {
       it(`${id} stays inside the ${type} tank, above the sand and decorations`, () => {
         const def = SPECIES[id];
         const tank = TANKS[type];

@@ -10,10 +10,14 @@ import { happiness, HAPPY, type Model, type TankRec } from "./model";
  */
 
 export type Request =
-  /** "I like blue fish!" (fishOnly) or "I like red!" (any fish or decoration). */
+  /** "I like blue fish!" (fishOnly) or "I like red!" (any animal or decoration). */
   | { kind: "show"; color: ColorId; fishOnly: boolean }
-  /** "How many fish?" about one tank. */
+  /** "I like turtles!": show that animal (Phase 2). */
+  | { kind: "showAnimal"; species: SpeciesId }
+  /** "How many fish?" about one tank of fish. */
   | { kind: "count"; tankId: string }
+  /** "What's this?" about one animal, which glows (Phase 2). */
+  | { kind: "whatsThis"; tankId: string; fishId: string }
   /** "Do you like fish?" → "Yes, I do." / "No, I don't." */
   | { kind: "chatLike" }
   /** "What color do you like?" → "I like ___." */
@@ -27,8 +31,11 @@ export function colorOf(t: ShowTarget): ColorId | null {
   return t.type === "fish" ? SPECIES[t.species].color : decorVersion(t.kind, t.variant).color;
 }
 
-export function matchesShow(req: Extract<Request, { kind: "show" }>, t: ShowTarget): boolean {
-  if (req.fishOnly && t.type !== "fish") return false;
+const isFish = (s: SpeciesId) => SPECIES[s].kind === "fish";
+
+export function matchesShow(req: Extract<Request, { kind: "show" | "showAnimal" }>, t: ShowTarget): boolean {
+  if (req.kind === "showAnimal") return t.type === "fish" && t.species === req.species;
+  if (req.fishOnly && (t.type !== "fish" || !isFish(t.species))) return false;
   return colorOf(t) === req.color;
 }
 
@@ -40,16 +47,16 @@ export function targetsIn(t: TankRec): ShowTarget[] {
   ];
 }
 
-export function tankSatisfies(req: Extract<Request, { kind: "show" }>, t: TankRec): boolean {
+export function tankSatisfies(req: Extract<Request, { kind: "show" | "showAnimal" }>, t: TankRec): boolean {
   return targetsIn(t).some((x) => matchesShow(req, x));
 }
 
-/** Colours present in the aquarium (fish only, or fish and decorations). */
+/** Colours present in the aquarium (fish only, or animals and decorations). */
 export function presentColors(m: Model, fishOnly: boolean): ColorId[] {
   const out = new Set<ColorId>();
   for (const t of m.tanks) {
     for (const x of targetsIn(t)) {
-      if (fishOnly && x.type !== "fish") continue;
+      if (fishOnly && (x.type !== "fish" || !isFish(x.species))) continue;
       const c = colorOf(x);
       if (c) out.add(c);
     }
@@ -57,9 +64,14 @@ export function presentColors(m: Model, fishOnly: boolean): ColorId[] {
   return [...out];
 }
 
-/** Tanks a visitor can ask "How many fish?" about (2–5 fish). */
+/** Sea animals (not fish) in the aquarium. */
+export function presentAnimals(m: Model): SpeciesId[] {
+  return [...new Set(m.tanks.flatMap((t) => t.fish.map((f) => f.species)).filter((s) => !isFish(s)))];
+}
+
+/** Tanks a visitor can ask "How many fish?" about: 2–8 animals, all of them fish. */
 export function countableTanks(m: Model): TankRec[] {
-  return m.tanks.filter((t) => t.fish.length >= 2 && t.fish.length <= 5);
+  return m.tanks.filter((t) => t.fish.length >= 2 && t.fish.length <= 8 && t.fish.every((f) => isFish(f.species)));
 }
 
 export interface RequestOptions {
@@ -74,12 +86,18 @@ export function makeRequest(m: Model, rand: () => number, opts: RequestOptions):
   const anyColor = (stage >= 4 || m.progress.star) && rand() < 0.5;
   const showColors = presentColors(m, !anyColor);
   const counts = countableTanks(m);
+  const animals = presentAnimals(m);
   const options: { kind: RequestKind; weight: number }[] = [];
-  if (showColors.length) options.push({ kind: "show", weight: showColors.length >= 2 ? 45 : 12 });
-  if (counts.length) options.push({ kind: "count", weight: 30 });
+  if (showColors.length) options.push({ kind: "show", weight: showColors.length >= 2 ? 40 : 12 });
+  if (counts.length) options.push({ kind: "count", weight: 26 });
+  if (animals.length && stage >= 6) {
+    options.push({ kind: "showAnimal", weight: 18 });
+    // "What's this?" is Level 7's goal: it comes often then.
+    options.push({ kind: "whatsThis", weight: stage === 7 ? 50 : 20 });
+  }
   if (m.tanks.some((t) => t.fish.length)) {
-    options.push({ kind: "chatLike", weight: 12 });
-    options.push({ kind: "chatColor", weight: 13 });
+    options.push({ kind: "chatLike", weight: 10 });
+    options.push({ kind: "chatColor", weight: 12 });
   }
   const pool = options.filter((o) => o.kind !== opts.last);
   const list = pool.length ? pool : options;
@@ -94,11 +112,20 @@ export function makeRequest(m: Model, rand: () => number, opts: RequestOptions):
       break;
     }
   }
+  const pick = <T,>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
   switch (kind) {
     case "show":
-      return { kind: "show", color: showColors[Math.floor(rand() * showColors.length)], fishOnly: !anyColor };
+      return { kind: "show", color: pick(showColors), fishOnly: !anyColor };
     case "count":
-      return { kind: "count", tankId: counts[Math.floor(rand() * counts.length)].id };
+      return { kind: "count", tankId: pick(counts).id };
+    case "showAnimal":
+      return { kind: "showAnimal", species: pick(animals) };
+    case "whatsThis": {
+      const homes = m.tanks.filter((t) => t.fish.some((f) => !isFish(f.species)));
+      const t = pick(homes);
+      const f = pick(t.fish.filter((x) => !isFish(x.species)));
+      return { kind: "whatsThis", tankId: t.id, fishId: f.id };
+    }
     default:
       return { kind };
   }
@@ -109,8 +136,12 @@ export function requestLine(req: Request): string {
   switch (req.kind) {
     case "show":
       return req.fishOnly ? `I like ${req.color} fish!` : `I like ${req.color}!`;
+    case "showAnimal":
+      return `I like ${SPECIES[req.species].plural}!`;
     case "count":
       return "How many fish?";
+    case "whatsThis":
+      return "What's this?";
     case "chatLike":
       return "Do you like fish?";
     case "chatColor":
@@ -125,12 +156,17 @@ export function requestReward(req: Request, tank: TankRec | null): number {
   return 10 + (h !== null && h >= HAPPY ? 5 : 0);
 }
 
-/** Is this request still possible (fish can be moved while a visitor waits)? */
+/** Is this request still possible (animals can be added or moved while a visitor waits)? */
 export function stillValid(m: Model, req: Request): boolean {
   if (req.kind === "show") return presentColors(m, req.fishOnly).includes(req.color);
+  if (req.kind === "showAnimal") return presentAnimals(m).includes(req.species);
   if (req.kind === "count") {
     const t = m.tanks.find((x) => x.id === req.tankId);
-    return Boolean(t && t.fish.length >= 1 && t.fish.length <= 5);
+    return Boolean(t && t.fish.length >= 1 && t.fish.length <= 8 && t.fish.every((f) => isFish(f.species)));
+  }
+  if (req.kind === "whatsThis") {
+    const t = m.tanks.find((x) => x.id === req.tankId);
+    return Boolean(t && t.fish.some((f) => f.id === req.fishId));
   }
   return m.tanks.some((t) => t.fish.length);
 }

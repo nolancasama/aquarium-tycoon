@@ -10,14 +10,32 @@ import type { Column } from "./logic/swim";
  */
 
 export const ROOM = { minX: -6, maxX: 6, minZ: -4, maxZ: 4, wallH: 3.2 };
+/** The Ocean Hall (Phase 2), right of the first hall, sharing its right wall. */
+export const HALL2 = { minX: 6, maxX: 18, minZ: -4, maxZ: 4, wallH: 3.2 };
+/** Management-view centre of each hall. */
+export const HALL_X = [0, 12] as const;
 
 /** The entrance is in the left wall, toward the front. */
 export const DOOR = { x: -6, z: 1.5, w: 1.8 };
 export const ENTRY: Vec2 = { x: -5.3, z: 1.5 };
 export const OUTSIDE: Vec2 = { x: -7.4, z: 1.5 };
-/** The bench where request visitors wait (they sit facing the tanks). */
-export const BENCH: Vec2 = { x: 4.4, z: 2.1 };
-export const BENCH_SEAT: Vec2 = { x: 4.3, z: 2.1 };
+/** The doorway between the halls (in the shared wall), and the points either side of it. */
+export const HALL_DOOR = { x: 6, z: 1.5, w: 1.8 };
+export const DOOR_WEST: Vec2 = { x: 5.3, z: 1.5 };
+export const DOOR_EAST: Vec2 = { x: 6.7, z: 1.5 };
+/** The bench where request visitors wait (they sit facing the room centre). */
+export const BENCH: Vec2 = { x: 4.4, z: 2.95 };
+export const BENCH_SEAT: Vec2 = { x: 4.3, z: 2.95 };
+
+export const hallOfX = (x: number): 0 | 1 => (x > HALL_DOOR.x ? 1 : 0);
+
+/** A walking route from a point to a point, through the doorway when they are in different halls. */
+export function route(from: Vec2, to: Vec2): Vec2[] {
+  const a = hallOfX(from.x);
+  const b = hallOfX(to.x);
+  if (a === b) return [to];
+  return a === 0 ? [DOOR_WEST, DOOR_EAST, to] : [DOOR_EAST, DOOR_WEST, to];
+}
 /** The trophy pedestal by the entrance. */
 export const PEDESTAL: Vec2 = { x: -4.7, z: -0.3 };
 /** Pico's counter between the tanks. */
@@ -54,6 +72,9 @@ export function decorRadius(kind: string, variant: string | null): number {
   if (kind === "plant") return variant === "big" ? 0.16 : 0.12;
   if (kind === "rock") return variant === "big" ? 0.17 : 0.11;
   if (kind === "coral") return 0.14;
+  if (kind === "castle") return variant === "big" ? 0.18 : 0.13;
+  if (kind === "shipwreck") return 0.26;
+  if (kind === "anemone") return 0.13;
   return 0.1;
 }
 

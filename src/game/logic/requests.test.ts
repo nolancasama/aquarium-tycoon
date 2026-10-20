@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeRng } from "./rng";
-import { buyDecor, buyFish, newModel, placeDecor, placeFish, type Model, type Result } from "./model";
+import { buyDecor, buyFish, newModel, openHall, placeDecor, placeFish, type Model, type Result } from "./model";
 import { countableTanks, makeRequest, matchesShow, presentColors, requestLine, requestReward, stillValid, tankSatisfies, type Request } from "./requests";
 import type { SpeciesId } from "../types";
 
@@ -102,5 +102,56 @@ describe("visitor requests", () => {
     expect(requestReward({ kind: "count", tankId: "t1" }, m.tanks[0])).toBe(15);
     expect(requestReward({ kind: "count", tankId: "t1" }, aquarium(3, ["clownfish"]).tanks[0])).toBe(10);
     expect(requestReward({ kind: "chatLike" }, null)).toBe(8);
+  });
+});
+
+/** Level 6+ with the Ocean Hall: two clownfish and a turtle in the Ocean tank, a blue tang in the small one. */
+function oceanAquarium(stage: 5 | 6 | 7): Model {
+  let m: Model = { ...newModel(), coins: 2000, progress: { ...newModel().progress, stage: 6, star: true, tutorial: "done" } };
+  m = ok(openHall(m));
+  const ocean = m.tanks.find((t) => t.type === "ocean")!.id;
+  for (const s of ["turtle", "clownfish", "clownfish"] as SpeciesId[]) {
+    m = ok(buyFish(m, s));
+    m = ok(placeFish(m, m.inv.fish[0].id, ocean));
+  }
+  m = ok(buyFish(m, "bluetang"));
+  m = ok(placeFish(m, m.inv.fish[0].id, "t1"));
+  return { ...m, progress: { ...m.progress, stage } };
+}
+
+describe("Phase 2 requests", () => {
+  const kindsOf = (m: Model, n = 400) => {
+    const rand = makeRng(21);
+    const seen = new Map<string, Request>();
+    for (let i = 0; i < n; i++) {
+      const r = makeRequest(m, rand, { last: null });
+      if (r) seen.set(r.kind, r);
+    }
+    return seen;
+  };
+
+  it("asks about sea animals by name, and 'What's this?', only from Level 6", () => {
+    expect(kindsOf(oceanAquarium(5)).has("whatsThis")).toBe(false);
+    const seen = kindsOf(oceanAquarium(7));
+    expect(seen.get("showAnimal")).toEqual({ kind: "showAnimal", species: "turtle" });
+    const w = seen.get("whatsThis") as Extract<Request, { kind: "whatsThis" }>;
+    const m = oceanAquarium(7);
+    expect(m.tanks.find((t) => t.id === w.tankId)!.fish.find((f) => f.id === w.fishId)!.species).toBe("turtle");
+    expect(requestLine({ kind: "showAnimal", species: "turtle" })).toBe("I like turtles!");
+    expect(requestLine(w)).toBe("What's this?");
+  });
+
+  it("'I like turtles!' accepts only the turtle; 'I like green fish!' never means the turtle", () => {
+    const req = { kind: "showAnimal", species: "turtle" } as const;
+    expect(matchesShow(req, { type: "fish", species: "turtle" })).toBe(true);
+    expect(matchesShow(req, { type: "fish", species: "clownfish" })).toBe(false);
+    expect(matchesShow({ kind: "show", color: "green", fishOnly: true }, { type: "fish", species: "turtle" })).toBe(false);
+    expect(matchesShow({ kind: "show", color: "green", fishOnly: false }, { type: "fish", species: "turtle" })).toBe(true);
+  });
+
+  it("counts only tanks where every animal is a fish", () => {
+    const m = oceanAquarium(7);
+    expect(countableTanks(m)).toEqual([]);
+    expect(stillValid(m, { kind: "count", tankId: m.tanks.find((t) => t.type === "ocean")!.id })).toBe(false);
   });
 });

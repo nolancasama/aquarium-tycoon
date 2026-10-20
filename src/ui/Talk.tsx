@@ -7,8 +7,7 @@ import { SPECIES } from "../game/data/fish";
 import { tankById } from "../game/logic/model";
 import { tankSatisfies } from "../game/logic/requests";
 import { Icon } from "./icons";
-import { SpeakerFace } from "./Portraits";
-import { DecorPicture } from "./Portraits";
+import { DecorPicture, FishPicture, LampPicture, SpeakerFace } from "./Portraits";
 import { SWATCH, UI } from "./i18n";
 
 export function Ja({ children }: { children: React.ReactNode }) {
@@ -28,6 +27,8 @@ const NAME: Record<string, string> = {
   child: "Visitor",
   adult: "Visitor",
   fan: "Fish fan",
+  grandma: "Visitor",
+  explorer: "Explorer",
   judge: "Judge"
 };
 export const speakerName = (by: Speaker) => NAME[by] ?? SPECIES[by as keyof typeof SPECIES]?.name ?? "";
@@ -205,12 +206,15 @@ export function RequestBanner() {
   const view = useGame((s) => s.view);
   const tankId = useGame((s) => s.tankId);
   const model = useGame((s) => s.model);
-  if (!r || r.req.kind !== "show") return null;
+  if (!r || (r.req.kind !== "show" && r.req.kind !== "showAnimal")) return null;
   const req = r.req;
   const highlight = r.misses >= 2;
   const words = r.line.split(/(\s+)/);
   const here = tankId ? tankById(model, tankId) : null;
   const wrongTank = r.misses >= 3 && view === "tank" && here !== null && !tankSatisfies(req, here);
+  // The key word: the colour (with a swatch) or the animal (with its picture).
+  const key = req.kind === "show" ? req.color : SPECIES[req.species].plural;
+  const clue = req.kind === "show" ? <i className="swatch" style={{ background: SWATCH[req.color] }} /> : <FishPicture species={req.species} size={34} />;
   return (
     <div className={`panel request ui ${r.status}`} data-testid="request" role="status">
       <SpeakerFace by={r.by} size={58} />
@@ -218,9 +222,9 @@ export function RequestBanner() {
         <span className="who">{speakerName(r.by)}</span>
         <p className="req-en" data-testid="request-line">
           {words.map((w, i) =>
-            highlight && w.toLowerCase().replace(/[^a-z]/g, "") === req.color ? (
+            highlight && w.toLowerCase().replace(/[^a-z]/g, "") === key ? (
               <mark key={i} className="key">
-                <i className="swatch" style={{ background: SWATCH[req.color] }} />
+                {clue}
                 {w}
               </mark>
             ) : (
@@ -258,7 +262,7 @@ export function FishTalk() {
     <div className="panel fish-talk ui" key={ft.id} data-testid="fish-talk">
       <SpeakerFace by={ft.species} size={52} />
       <span className="ft-en">{def.likesLine}</span>
-      <DecorPicture kind={def.likes} size={44} />
+      {def.likes === "lamp" ? <LampPicture size={44} /> : <DecorPicture kind={def.likes} size={44} />}
     </div>
   );
 }

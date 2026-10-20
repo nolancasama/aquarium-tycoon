@@ -28,14 +28,19 @@ export const STAGE_NAMES: Record<number, Text> = {
   2: { en: "More Fish", ja: "さかなを ふやそう" },
   3: { en: "First Visitors", ja: "おきゃくさんが きた!" },
   4: { en: "Aquarium Designer", ja: "すいぞくかん デザイナー" },
-  5: { en: "Aquarium Star", ja: "アクアリウム スター" }
+  5: { en: "Aquarium Star", ja: "アクアリウム スター" },
+  6: { en: "Ocean Hall", ja: "うみの ホール" },
+  7: { en: "Sea Friends", ja: "うみの なかま" },
+  8: { en: "Super Aquarium", ja: "スーパー すいぞくかん" }
 };
 
 export const REWARD_TEXT: Record<string, Text> = {
   decor: { en: "Decorations!", ja: "かざりが かえるように なったよ!" },
   yellow: { en: "A new fish!", ja: "あたらしい さかなが かえるよ!" },
   tank: { en: "A big tank!", ja: "おおきな タンクが かえるよ!" },
-  special: { en: "A special visitor!", ja: "とくべつな おきゃくさんが くるよ!" }
+  special: { en: "A special visitor!", ja: "とくべつな おきゃくさんが くるよ!" },
+  tall: { en: "A tall tank!", ja: "たかい タンク、タツノオトシゴ、クラゲが かえるよ!" },
+  upgrades: { en: "Upgrades!", ja: "あたらしい かざりと アップグレードが かえるよ!" }
 };
 
 export function goalText(g: Goal): Text {
@@ -62,6 +67,18 @@ export function goalText(g: Goal): Text {
       return { en: "Decorate it", ja: "おおきな タンクに かざり 2つ" };
     case "allHappy":
       return { en: "Happy fish everywhere", ja: "ぜんぶの さかなを ハッピーに" };
+    case "openHall":
+      return { en: "Open the Ocean Hall", ja: "うみの ホールを ひらく" };
+    case "turtle":
+      return { en: "A turtle", ja: "うみの タンクに ウミガメ" };
+    case "placeTall":
+      return { en: "A tall tank", ja: "たかい タンクを おく" };
+    case "tallAnimal":
+      return { en: "Seahorse or jellyfish", ja: "たかい タンクに タツノオトシゴか クラゲ" };
+    case "named":
+      return { en: "What's this?", ja: "「What's this?」に こたえる" };
+    case "upgrade":
+      return { en: "An upgrade", ja: "アップグレードを かう" };
   }
 }
 
@@ -71,5 +88,8 @@ export const SWATCH: Record<string, string> = {
   blue: "#2a62e6",
   yellow: "#ffd92e",
   green: "#2fbf5a",
-  orange: "#ff6f0f"
+  orange: "#ff6f0f",
+  pink: "#ff7fae",
+  purple: "#a35cff",
+  white: "#f4f1e8"
 };

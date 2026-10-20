@@ -127,14 +127,173 @@ function yellowFish(L: number) {
   return f.build();
 }
 
+function pufferfish(L: number) {
+  const f = new FishBuilder();
+  const r = L * 0.42;
+  f.ell([r * 1.1, r, r * 0.95], [0, 0, 0], "#f6f1e4", [0, 0, 0], 22);
+  // A creamy-yellow belly and brown spots.
+  f.ell([r * 0.95, r * 0.6, r * 0.85], [0, -r * 0.42, 0], "#fbe7a1", [0, 0, 0], 16);
+  let seed = 5;
+  const rnd = () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+  for (let i = 0; i < 16; i++) {
+    const a = rnd() * Math.PI * 2;
+    const b = rnd() * Math.PI * 0.6 + 0.15;
+    const p: [number, number, number] = [Math.cos(a) * Math.sin(b) * r * 1.1, Math.cos(b) * r * 0.98, Math.sin(a) * Math.sin(b) * r * 0.95];
+    if (p[0] > r * 0.6) continue;
+    f.ell([r * 0.12, r * 0.12, r * 0.12], p, "#a07a4a", [0, 0, 0], 8);
+  }
+  // Little spikes all over (they stand out when it puffs up).
+  for (let i = 0; i < 26; i++) {
+    const a = rnd() * Math.PI * 2;
+    const b = rnd() * Math.PI;
+    const dir = new THREE.Vector3(Math.cos(a) * Math.sin(b), Math.cos(b), Math.sin(a) * Math.sin(b));
+    const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir));
+    const at: [number, number, number] = [dir.x * r * 1.08, dir.y * r * 0.98, dir.z * r * 0.93];
+    f.b.add(new THREE.ConeGeometry(r * 0.06, r * 0.18, 5), "#e8dcc0", at, [e.x, e.y, e.z], [1, 1, 1], { vary: false });
+  }
+  f.fin([0.12 * L, 0.12 * L, 0.012 * L], [-r * 1.1 - 0.04 * L, 0, 0], "#f1e4c4", "#a07a4a");
+  for (const s of [1, -1]) f.fin([0.07 * L, 0.05 * L, 0.012 * L], [r * 0.2, -r * 0.1, s * r * 0.92], "#f1e4c4", null, [s * 0.4, s * 0.4, -0.4]);
+  f.eyes(r * 0.62, r * 0.25, r * 0.66, 0.085 * L);
+  f.blush(r * 0.55, -r * 0.15, r * 0.8, 0.045 * L);
+  f.ell([0.05 * L, 0.045 * L, 0.05 * L], [r * 1.08, -r * 0.1, 0], "#ff8fa3", [0, 0, 0], 10);
+  return f.build();
+}
+
+/** Built upright: y is up the body, the snout points +x. */
+function seahorse(L: number) {
+  const f = new FishBuilder();
+  const pink = "#ff8fb8";
+  const light = "#ffc2d9";
+  // An S-shaped body of overlapping beads, the tail curling forward at the bottom.
+  const spine: [number, number, number][] = [];
+  for (let i = 0; i <= 9; i++) {
+    const t = i / 9;
+    spine.push([Math.sin(t * Math.PI * 1.1) * L * 0.08 - L * 0.02, L * (0.32 - t * 0.62), 0]);
+  }
+  spine.forEach((p, i) => {
+    const r = L * (0.11 - i * 0.008);
+    f.ell([r, r * 0.9, r * 0.8], p, i % 2 ? pink : "#ff9cc2", [0, 0, 0], 12);
+  });
+  // The curled tail.
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 1.4;
+    f.ell([L * 0.03, L * 0.03, L * 0.025], [L * 0.03 + Math.sin(a) * L * 0.07, -L * 0.33 + Math.cos(a) * L * 0.07 - L * 0.07, 0], pink, [0, 0, 0], 8);
+  }
+  // Head, crest, long snout.
+  f.ell([L * 0.11, L * 0.1, L * 0.085], [0, L * 0.38, 0], pink, [0, 0, 0], 14);
+  f.b.add(new THREE.CylinderGeometry(L * 0.035, L * 0.05, L * 0.2, 10), pink, [L * 0.15, L * 0.35, 0], [0, 0, Math.PI / 2 + 0.25], [1, 1, 1], { vary: false });
+  f.ell([L * 0.04, L * 0.05, L * 0.04], [L * 0.25, L * 0.32, 0], "#ff6f9f", [0, 0, 0], 8);
+  f.b.add(new THREE.ConeGeometry(L * 0.04, L * 0.09, 6), light, [-L * 0.02, L * 0.49, 0], [0, 0, 0.3], [1, 1, 1], { vary: false });
+  // Belly ridges and the little back fin.
+  for (let i = 1; i < 7; i++) f.ell([L * 0.02, L * 0.012, L * 0.07], [spine[i][0] + L * 0.09, spine[i][1], 0], light, [0, 0, 0], 6);
+  f.fin([0.07 * L, 0.06 * L, 0.01 * L], [-L * 0.11, L * 0.05, 0], "#ffd6e6", null);
+  f.eyes(L * 0.05, L * 0.4, L * 0.06, 0.05 * L);
+  return f.build();
+}
+
+/** The jellyfish's bell and tentacles (drawn with its own see-through material). */
+function jellyfish(L: number) {
+  const b = new PartBuilder(0);
+  const r = L * 0.5;
+  b.add(new THREE.SphereGeometry(r, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), "#c38bff", [0, 0, 0], [0, 0, 0], [1, 0.85, 1], { vary: false });
+  b.add(new THREE.SphereGeometry(r * 0.6, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), "#f0d6ff", [0, -r * 0.02, 0], [0, 0, 0], [1, 0.7, 1], { vary: false });
+  // A rim, frilly arms in the middle, long thin tentacles round the edge.
+  b.add(new THREE.TorusGeometry(r * 0.98, r * 0.06, 5, 20), "#a86bff", [0, -r * 0.05, 0], [Math.PI / 2, 0, 0], [1, 1, 1], { vary: false });
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    b.add(new THREE.SphereGeometry(1, 8, 6), "#e0b8ff", [Math.cos(a) * r * 0.2, -r * 0.7, Math.sin(a) * r * 0.2], [0, a, 0.1], [r * 0.12, r * 0.7, r * 0.05], { vary: false });
+  }
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    b.add(new THREE.CylinderGeometry(r * 0.025, r * 0.012, r * 1.9, 4), "#d9a8ff", [Math.cos(a) * r * 0.85, -r * 1.0, Math.sin(a) * r * 0.85], [0, 0, 0], [1, 1, 1], { vary: false });
+  }
+  // Cute face on the front of the bell.
+  for (const x of [-1, 1]) b.add(new THREE.SphereGeometry(r * 0.09, 8, 6), "#3a1a5a", [x * r * 0.28, r * 0.25, r * 0.78], [0, 0, 0], [1, 1.2, 0.6], { vary: false });
+  b.add(new THREE.TorusGeometry(r * 0.12, r * 0.025, 4, 10, Math.PI), "#3a1a5a", [0, r * 0.12, r * 0.84], [0, 0, Math.PI], [1, 1, 1], { vary: false });
+  const g = b.build();
+  g.computeVertexNormals();
+  return g;
+}
+
+export interface TurtleModel {
+  body: THREE.BufferGeometry;
+  /** A front flipper (pivot at the shoulder, reaching +z); mirrored for the other side. */
+  front: THREE.BufferGeometry;
+  back: THREE.BufferGeometry;
+}
+
+function turtle(L: number): TurtleModel {
+  const f = new FishBuilder();
+  const a = L * 0.42;
+  // Shell with scutes, a cream plastron underneath, head and tail.
+  f.ell([a, L * 0.16, a * 0.82], [0, 0.02 * L, 0], "#3f9b5b", [0, 0, 0], 22);
+  f.ell([a * 0.94, L * 0.08, a * 0.78], [0, -0.06 * L, 0], "#f0e2b0", [0, 0, 0], 18);
+  const scutes: [number, number][] = [
+    [0, 0],
+    [0.45, 0],
+    [-0.45, 0],
+    [0.2, 0.45],
+    [-0.2, 0.45],
+    [0.2, -0.45],
+    [-0.2, -0.45]
+  ];
+  for (const [x, z] of scutes) {
+    const k = Math.sqrt(Math.max(0.15, 1 - x * x - z * z * 0.8));
+    f.ell([a * 0.22, L * 0.035, a * 0.2], [x * a, L * 0.02 + L * 0.155 * k, z * a * 0.82], "#2e7d45", [0, 0, 0], 10);
+  }
+  f.ell([L * 0.12, L * 0.1, L * 0.1], [a + L * 0.09, L * 0.01, 0], "#9ccf6a", [0, 0, 0], 14);
+  f.ell([L * 0.05, L * 0.04, L * 0.03], [-a - L * 0.03, -L * 0.01, 0], "#8bc35e", [0, 0, 0], 8);
+  f.eyes(a + L * 0.15, L * 0.05, L * 0.065, 0.035 * L);
+  f.b.add(new THREE.TorusGeometry(L * 0.025, L * 0.007, 4, 10, Math.PI), "#2d5a1e", [a + L * 0.2, -L * 0.015, 0], [Math.PI / 2, 0, Math.PI], [1, 1, 1], { vary: false });
+  const body = f.build();
+  const flipper = (len: number) => {
+    const b = new PartBuilder(0);
+    b.add(new THREE.SphereGeometry(1, 12, 8), "#86c25a", [len * 0.12, 0, len * 0.5], [0, -0.35, 0], [len * 0.22, len * 0.06, len * 0.5], { vary: false });
+    const g = b.build();
+    g.computeVertexNormals();
+    return g;
+  };
+  return { body, front: flipper(L * 0.5), back: flipper(L * 0.26) };
+}
+
 const cache = new Map<SpeciesId, THREE.BufferGeometry>();
 
 export function fishGeometry(s: SpeciesId): THREE.BufferGeometry {
   let g = cache.get(s);
   if (!g) {
     const L = SPECIES[s].length;
-    g = s === "clownfish" ? clownfish(L) : s === "bluetang" ? blueTang(L) : yellowFish(L);
+    switch (s) {
+      case "clownfish":
+        g = clownfish(L);
+        break;
+      case "bluetang":
+        g = blueTang(L);
+        break;
+      case "yellowfish":
+        g = yellowFish(L);
+        break;
+      case "pufferfish":
+        g = pufferfish(L);
+        break;
+      case "seahorse":
+        g = seahorse(L);
+        break;
+      case "jellyfish":
+        g = jellyfish(L);
+        break;
+      default:
+        g = turtleModel().body;
+    }
     cache.set(s, g);
   }
   return g;
+}
+
+let turtleCache: TurtleModel | null = null;
+export function turtleModel(): TurtleModel {
+  if (!turtleCache) turtleCache = turtle(SPECIES.turtle.length);
+  return turtleCache;
 }

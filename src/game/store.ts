@@ -12,7 +12,7 @@ export type Screen = "title" | "game" | "results";
  */
 export type Mode = "play" | "ask" | "talk" | "busy";
 export type View = "room" | "tank";
-export type Panel = null | "fishShop" | "decorShop" | "tankShop" | "decorate";
+export type Panel = null | "fishShop" | "animalShop" | "decorShop" | "tankShop" | "decorate" | "upgrade";
 
 export type Placing =
   | null
@@ -94,7 +94,7 @@ export interface RequestUi {
   status: "ready" | "wrong" | "correct";
 }
 
-export type Reward = "decor" | "yellow" | "tank" | "special";
+export type Reward = "decor" | "yellow" | "tank" | "special" | "tall" | "upgrades";
 
 export interface StageCard {
   stage: StageId;
@@ -118,6 +118,8 @@ export interface GameState {
   screen: Screen;
   mode: Mode;
   view: View;
+  /** Which hall the management view shows (1: the Ocean Hall). */
+  hall: 0 | 1;
   tankId: string | null;
   panel: Panel;
   placing: Placing;
@@ -193,6 +195,7 @@ export const useGame = create<GameState>(() => ({
   screen: "title",
   mode: "busy",
   view: "room",
+  hall: 0,
   tankId: null,
   panel: null,
   placing: null,
