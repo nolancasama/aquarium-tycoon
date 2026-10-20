@@ -6,11 +6,12 @@
  *   { say: "do you like apples" } -> one interim + final result
  *   { error: "not-allowed" }       -> a permission error
  *   { say: null }                  -> silence (no-speech)
+ *   { say: "...", interimOnly: true } -> only an interim result, never a final one
  */
 export const BROWSER_STUBS = `
 (() => {
   const w = window;
-  w.__speech = { say: null, error: null, starts: 0 };
+  w.__speech = { say: null, error: null, interimOnly: false, starts: 0 };
   const synth = w.speechSynthesis;
   if (synth) {
     // Like Chrome: speaking ends after a while, and cancel() ends it at once.
@@ -35,6 +36,13 @@ export const BROWSER_STUBS = `
         if (plan.say == null) {
           this.onerror && this.onerror({ error: 'no-speech' });
           this._finish();
+          return;
+        }
+        if (plan.interimOnly) {
+          const result = [{ transcript: String(plan.say) }];
+          result.isFinal = false;
+          this.onresult && this.onresult({ resultIndex: 0, results: [result] });
+          setTimeout(() => this._finish(), 300);
           return;
         }
         const words = String(plan.say).split(' ');

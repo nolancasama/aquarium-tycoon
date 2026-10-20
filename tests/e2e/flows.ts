@@ -111,6 +111,52 @@ async function earnTo(page: Page, coins: number) {
   while ((await state(page)).coins < coins) await helpChat(page);
 }
 
+const judgeComing = (s: AtState) => s.progress.allHappy || s.mode !== "play" || Boolean(s.line);
+
+/**
+ * Stage 5: feed and clean every tank, and add a coral where the fish are not
+ * happy yet (decorations are what make fish happy). The judge comes the
+ * moment every tank is happy, so every step first checks that it has not.
+ */
+async function makeHappy(page: Page, ids: string[]) {
+  await page.waitForTimeout(1500);
+  for (let round = 0; round < 3 && !judgeComing(await state(page)); round++) {
+    for (const id of ids) {
+      if (judgeComing(await state(page))) break;
+      const opened = await openTank(page, id).then(
+        () => true,
+        () => false
+      );
+      if (!opened) break;
+      for (const btn of ["btn-feed", "btn-clean"]) {
+        const b = page.getByTestId(btn);
+        if (await b.isVisible()) await b.click({ timeout: 3_000 }).catch(() => undefined);
+      }
+      await page.waitForTimeout(400);
+      const now = await state(page);
+      const t = now.tanks.find((x) => x.id === id)!;
+      if (judgeComing(now) || (t.happy ?? 0) >= 72) continue;
+      // Not happy enough: a coral in a free slot.
+      const used = new Set(t.decor.map((d) => d.slot));
+      const free = [0, 1, 2, 3, 4].find((i) => !used.has(i) && i < (t.type === "big" ? 5 : 3));
+      if (free === undefined) continue;
+      await earnTo(page, 10);
+      if (judgeComing(await state(page))) break;
+      await openTank(page, id);
+      await page.getByTestId("btn-decorate").click();
+      await page.getByTestId("tray-shop").click();
+      await page.locator("[data-testid=decor-card][data-kind=coral]").click();
+      await reply(page, "redPlease");
+      await waitFor(page, (x) => x.placing?.kind === "decor", 5_000, "placing a coral");
+      await click3d(page, "slot", `${id}:${free}`);
+      await waitFor(page, (x) => x.tanks.find((tt) => tt.id === id)!.decor.length === t.decor.length + 1, 5_000, "coral placed");
+      const done = page.getByTestId("btn-done-decor");
+      if (await done.isVisible()) await done.click({ timeout: 3_000 }).catch(() => undefined);
+    }
+  }
+  await waitFor(page, (x) => x.progress.allHappy, 20_000, "all happy");
+}
+
 /** Stage 1: Pico's tutorial. */
 export async function tutorial(page: Page) {
   await waitFor(page, (s) => s.prompt?.question === "Blue or orange?", 20_000, "fish shop");
@@ -215,23 +261,7 @@ export async function stagesTwoToFive(page: Page) {
   await helpChat(page);
   await helpCount(page, "t1");
   await helpChat(page);
-  // Feed and clean both tanks if the judge is not already on the way (the
-  // judge comes the moment every tank is happy).
-  await page.waitForTimeout(1500);
-  for (const id of ["t1", big]) {
-    const now = await state(page);
-    if (now.progress.allHappy || now.mode !== "play" || now.line) break;
-    const opened = await openTank(page, id).then(
-      () => true,
-      () => false
-    );
-    if (!opened) break;
-    for (const btn of ["btn-feed", "btn-clean"]) {
-      const b = page.getByTestId(btn);
-      if (await b.isVisible()) await b.click({ timeout: 3_000 }).catch(() => undefined);
-    }
-  }
-  s = await waitFor(page, (x) => x.progress.allHappy || Boolean(x.line && /judge/i.test(x.line.en)), 20_000, "all happy");
+  await makeHappy(page, ["t1", big]);
   // The judge.
   s = await waitFor(page, (x) => x.request?.kind === "show" && x.request.by === "judge", 60_000, "judge's show request");
   await shot(page, "judge-request");
