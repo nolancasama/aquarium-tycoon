@@ -201,8 +201,8 @@ kbd {
 
 .coins .plus {
   position: absolute;
-  right: -6px;
-  top: -18px;
+  left: calc(100% + 6px);
+  top: 10px;
   color: #c98a00;
   font-size: 20px;
   font-weight: 900;
@@ -219,11 +219,11 @@ kbd {
 @keyframes rise {
   from {
     opacity: 1;
-    transform: translateY(6px);
+    transform: translateY(8px);
   }
   to {
     opacity: 0;
-    transform: translateY(-16px);
+    transform: translateY(-10px);
   }
 }
 
@@ -1213,9 +1213,23 @@ mark.key {
   background: radial-gradient(ellipse at center, rgba(11, 58, 92, 0.05), rgba(11, 58, 92, 0.35));
 }
 
-.modal-back,
-.results-screen {
+.modal-back {
   background: rgba(11, 58, 92, 0.35);
+}
+
+/* The trophy shows on the left (camera view offset); the card sits right. */
+.results-screen {
+  background: linear-gradient(90deg, rgba(11, 58, 92, 0) 30%, rgba(11, 58, 92, 0.35));
+  place-items: center end;
+  padding-right: 5vw;
+}
+
+@media (max-aspect-ratio: 6/5) {
+  .results-screen {
+    place-items: center;
+    padding-right: 0;
+    background: rgba(11, 58, 92, 0.35);
+  }
 }
 
 .title-card {
@@ -1510,6 +1524,10 @@ mark.key {
   pointer-events: none;
   z-index: 50;
   transition: opacity 0.4s;
+}
+
+.panel-decorate .nudge {
+  bottom: 190px;
 }
 
 /* The request banner sits below the top bar when the goal card is hidden. */

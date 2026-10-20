@@ -297,7 +297,6 @@ async function tutorial(g: number) {
     const t = model().tanks[0];
     openTank(t.id);
     setGame({ mode: "play", panel: "decorate", guide: "tray" });
-    nudge({ en: "Tap a plant, then tap the sand!", ja: "かざりを えらんで、すなの ○を タップ" }, 9000);
     await until(() => model().tanks.some((x) => x.decor.length > 0), g);
     setGame({ guide: null, nudge: null });
     await wait(900);
@@ -334,7 +333,7 @@ async function stageComplete(g: number) {
   effect("confetti", 0, 2.6, 0, 40);
   await new Promise<void>((resolve) => {
     cardDone = resolve;
-    setGame({ stageCard: { stage, reward: REWARD[stage] } });
+    setGame({ stageCard: { stage, reward: REWARD[stage] }, nudge: null });
   });
   alive(g);
   commit(completeStage(model()));

@@ -382,7 +382,7 @@ export function answerShow(target: ShowTarget, tankId: string, ref: { fishId?: s
   if (!r || r.req.kind !== "show" || r.status === "correct") return false;
   const req = r.req;
   if (matchesShow(req, target)) {
-    setGame({ request: { ...r, status: "correct" } });
+    setGame({ request: { ...r, status: "correct" }, nudge: null });
     audio.play("correct");
     if (ref.fishId) {
       // Every fish of that colour in the tank comes to the glass.
@@ -393,6 +393,11 @@ export function answerShow(target: ShowTarget, tankId: string, ref: { fishId?: s
     const w = showWait;
     showWait = null;
     w?.resolve({ ok: true, tankId });
+    // The banner shows its tick for a moment, then goes (the judge never calls helped()).
+    window.setTimeout(() => {
+      const now = getGame().request;
+      if (now && now.visitorId === r.visitorId && now.status === "correct") setGame({ request: null });
+    }, fastMode() ? 60 : 1200);
     return true;
   }
   const misses = r.misses + 1;
@@ -453,11 +458,15 @@ export async function celebrate(v: VisitorRt, tankId: string | null) {
     v.z = spot.z;
     v.path = [];
     v.face = { x: o.x, z: o.z };
-    v.yaw = Math.atan2(o.x - spot.x, o.z - spot.z);
+    v.yaw = Math.atan2(o.x - spot.x, o.z - spot.z) + 0.6;
+    // From the front-left: the fish at the glass, and the visitor at the
+    // right corner turned toward us in three-quarter view.
     rt.camera.shot = {
-      pos: { x: o.x + w * 0.35 + 1.4, y: 1.75, z: o.z + 3.4 },
-      target: { x: o.x + w * 0.22, y: 1.05, z: o.z + 0.3 }
+      pos: { x: o.x - w * 0.15 - 0.9, y: 1.6, z: o.z + 4.1 },
+      target: { x: o.x + w * 0.22, y: 1.1, z: o.z + 0.45 }
     };
+    // The visitor turns to cheer toward the player.
+    v.face = { x: rt.camera.shot.pos.x, z: rt.camera.shot.pos.z };
     effect("hearts", v.x, 1.9, v.z, 5);
     await wait(2600);
     rt.camera.shot = null;

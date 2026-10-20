@@ -1,12 +1,18 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { BENCH, DOOR, PEDESTAL, PICO, ROOM } from "../../game/world";
-import { SAND_H, STAND_H, TANKS } from "../../game/data/tanks";
+import { SAND_H, SLOT_POS, STAND_H, TANKS } from "../../game/data/tanks";
 import type { TankType } from "../../game/types";
 
 /** The room shell and furniture (one merged mesh), and the tank stand/frame per tank type. */
 
 const WALL = "#bfe8f3";
+
+/** One short rope in front of each pad: slot A holds the small tank, slot B the big one. */
+const ROPE_POSTS: [number, number][] = [
+  [SLOT_POS.A.x - (TANKS.small.w / 2 + 0.45), SLOT_POS.A.x + TANKS.small.w / 2 + 0.45],
+  [SLOT_POS.B.x - (TANKS.big.w / 2 + 0.3), SLOT_POS.B.x + TANKS.big.w / 2 + 0.3]
+];
 const TRIM = "#3f9cc4";
 const WOOD = "#c58a55";
 
@@ -66,8 +72,8 @@ export function roomGeometry(): THREE.BufferGeometry {
       b.add(new THREE.SphereGeometry(1, 8, 6), i % 2 ? "#3cbf61" : "#2fa651", [x + Math.cos(a) * 0.12 * s, 0.75 * s, z + Math.sin(a) * 0.12 * s], [Math.sin(a) * 0.4, 0, -Math.cos(a) * 0.4], [0.07 * s, 0.38 * s, 0.035 * s]);
     }
   }
-  // Rope posts along the viewing walk.
-  for (const x of [-4.9, -1.2, 1.2, 4.9]) {
+  // Rope posts in front of each tank pad (outside the close-up frame).
+  for (const x of ROPE_POSTS.flat()) {
     b.cyl(0.05, 0.08, 0.65, x, 0, -1.4, "#d4a017", 8);
     b.sphere(0.07, x, 0.67, -1.4, "#ffcc33", [1, 1, 1], 8);
   }
@@ -77,10 +83,7 @@ export function roomGeometry(): THREE.BufferGeometry {
 /** Velvet ropes between the posts (a separate thin mesh, sagging). */
 export function ropeGeometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0);
-  for (const [a, c] of [
-    [-4.9, -1.2],
-    [1.2, 4.9]
-  ]) {
+  for (const [a, c] of ROPE_POSTS) {
     const n = 10;
     for (let i = 0; i < n; i++) {
       const t0 = i / n;

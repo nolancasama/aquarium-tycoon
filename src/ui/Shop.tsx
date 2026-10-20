@@ -62,6 +62,25 @@ export function FishShop() {
   );
 }
 
+/** "Red or blue?" / "Big or small?": the two versions as pictures (no words) above the prompt. */
+export function DecorChoiceStrip() {
+  const kind = useGame((s) => s.decorAsk);
+  const coins = useGame((s) => s.model.coins);
+  const prompt = useGame((s) => s.prompt);
+  if (!kind || !prompt) return null;
+  const def = DECOR[kind];
+  return (
+    <div className="shop-strip ui" data-testid="decor-choice">
+      {def.versions.map((v) => (
+        <div key={String(v.variant)} className={`card fish-card ${coins < v.price ? "short" : ""}`}>
+          <DecorPicture kind={kind} variant={v.variant} size={92} />
+          <Price n={v.price} short={coins < v.price} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function DecorShop() {
   const panel = useGame((s) => s.panel);
   const coins = useGame((s) => s.model.coins);

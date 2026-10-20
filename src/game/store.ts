@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { SlotId, SpeciesId, StageId, TankType, Text, VisitorType } from "./types";
+import type { DecorKind, SlotId, SpeciesId, StageId, TankType, Text, VisitorType } from "./types";
 import type { PhraseId } from "./logic/english";
 import type { Request } from "./logic/requests";
 import { newModel, type Model, type Result } from "./logic/model";
@@ -148,6 +148,8 @@ export interface GameState {
   fishTalk: { id: number; species: SpeciesId } | null;
   /** HUD control the tutorial points at (its data-testid). */
   guide: string | null;
+  /** The decoration whose two versions are being chosen ("Red or blue?"): pictures above the prompt. */
+  decorAsk: DecorKind | null;
 }
 
 const SETTINGS_KEY = "at.settings.v1";
@@ -212,7 +214,8 @@ export const useGame = create<GameState>(() => ({
   coinPop: null,
   waiting: null,
   fishTalk: null,
-  guide: null
+  guide: null,
+  decorAsk: null
 }));
 
 export const setGame = useGame.setState;

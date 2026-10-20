@@ -3,7 +3,7 @@ import { GameScene } from "./scene/GameScene";
 import { bottomPanel } from "./scene/CameraRig";
 import { Hud } from "./ui/Hud";
 import { DialoguePanel, FishTalk, PromptPanel, RequestBanner } from "./ui/Talk";
-import { DecorShop, DecorTray, FishShop, TankShop } from "./ui/Shop";
+import { DecorChoiceStrip, DecorShop, DecorTray, FishShop, TankShop } from "./ui/Shop";
 import { SettingsModal } from "./ui/Settings";
 import { ResultsScreen, StageCardModal, TitleScreen } from "./ui/Screens";
 import { installKeyboard } from "./input/keyboard";
@@ -88,6 +88,7 @@ function BottomPanels() {
   return (
     <div className="bottom-panels" ref={ref}>
       <FishShop />
+      <DecorChoiceStrip />
       <PromptPanel />
       <DialoguePanel />
     </div>
@@ -111,8 +112,9 @@ export function App() {
   useCameraGestures(wrap);
   const touch = useGame((s) => s.touch);
   const view = useGame((s) => s.view);
+  const panel = useGame((s) => s.panel);
   return (
-    <div className={`app ${touch ? "touch" : ""} view-${view}`} ref={wrap}>
+    <div className={`app ${touch ? "touch" : ""} view-${view} ${panel ? `panel-${panel}` : ""}`} ref={wrap}>
       <GameScene />
       <Hud />
       <div className="top-panels">

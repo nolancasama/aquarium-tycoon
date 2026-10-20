@@ -280,6 +280,7 @@ export async function buyDecorKind(kind: DecorKind) {
       toast({ en: "More coins, please!", ja: "もっと コインが ひつよう", tone: "warn" });
       return;
     }
+    setGame({ decorAsk: kind });
     const id = await ask({
       kind: "choice",
       options: affordable.map((v) => VARIANT_PHRASE[v.variant!]),
@@ -289,6 +290,7 @@ export async function buyDecorKind(kind: DecorKind) {
       shuffle: true,
       help: kind === "coral" ? "いろを えいごで いおう!" : "おおきさを えいごで いおう!"
     });
+    setGame({ decorAsk: null });
     if (!id) return;
     variant = PHRASE_VARIANT[id] ?? null;
   }
