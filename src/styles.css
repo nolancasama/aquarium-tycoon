@@ -1605,6 +1605,27 @@ mark.key {
     bottom: 96px;
     font-size: 16px;
   }
+  /* A prompt needs the whole height: the goal card steps aside. */
+  .talking .goals {
+    display: none;
+  }
+  .shop-strip .card {
+    flex-direction: row;
+    width: auto;
+    padding: 4px 10px;
+    gap: 6px;
+  }
+  .shop-strip .card > svg {
+    width: 64px;
+    height: 45px;
+  }
+  .prompt {
+    padding: 6px 10px 8px;
+  }
+  .prompt-question {
+    padding-bottom: 2px;
+    margin-bottom: 2px;
+  }
   .toasts {
     top: 110px;
   }

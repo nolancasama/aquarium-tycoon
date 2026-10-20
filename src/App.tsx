@@ -113,8 +113,9 @@ export function App() {
   const touch = useGame((s) => s.touch);
   const view = useGame((s) => s.view);
   const panel = useGame((s) => s.panel);
+  const talking = useGame((s) => Boolean(s.prompt || s.line));
   return (
-    <div className={`app ${touch ? "touch" : ""} view-${view} ${panel ? `panel-${panel}` : ""}`} ref={wrap}>
+    <div className={`app ${touch ? "touch" : ""} view-${view} ${panel ? `panel-${panel}` : ""} ${talking ? "talking" : ""}`} ref={wrap}>
       <GameScene />
       <Hud />
       <div className="top-panels">
