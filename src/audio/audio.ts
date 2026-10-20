@@ -1,15 +1,13 @@
 /**
- * Procedural Web Audio: no files, no network. Surf, the river, birds, a
- * cheerful steel-drum tune, monster voices and every effect are synthesised.
+ * Procedural Web Audio: no files, no network. The aquarium hum, bubbles, a
+ * gentle music-box tune and every effect are synthesised.
  *
  * Buses: music and ambience duck under spoken English and go silent while the
  * microphone listens (classroom speakers bleed into the mic).
  */
 
-import type { MonsterId } from "../game/types";
-
 type Wave = OscillatorType;
-type Tune = "island" | "celebrate";
+type Tune = "aquarium" | "celebrate";
 
 const midi = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
@@ -19,24 +17,22 @@ export type SfxName =
   | "tick"
   | "micOn"
   | "micOff"
-  | "pick"
-  | "give"
-  | "munch"
-  | "discover"
-  | "journal"
-  | "friend"
-  | "vines"
-  | "thud"
+  | "coin"
+  | "purchase"
+  | "bubble"
+  | "sprinkle"
+  | "gulp"
   | "splash"
-  | "stones"
-  | "sparkle"
-  | "stone"
-  | "poof"
-  | "switch"
-  | "bump";
-
-/** Monster moods for vocalisations (the English itself is TTS). */
-export type Mood = "hello" | "happy" | "sad" | "excited" | "sleepy" | "surprised";
+  | "scrub"
+  | "happy"
+  | "wow"
+  | "hmm"
+  | "place"
+  | "pick"
+  | "unlock"
+  | "flash"
+  | "trophy"
+  | "door";
 
 class AudioEngine {
   ctx: AudioContext | null = null;
@@ -47,14 +43,14 @@ class AudioEngine {
   private ambDuck!: GainNode;
   private sfxBus!: GainNode;
   private noise!: AudioBuffer;
-  private musicVolume = 0.35;
+  private musicVolume = 0.2;
   private sfxVolume = 0.75;
   private speaking = false;
   private listening = false;
-  private ocean: GainNode | null = null;
-  private river: GainNode | null = null;
+  private hum: GainNode | null = null;
   private musicTimer = 0;
   private music: { next: number; step: number; tune: Tune } | null = null;
+  private lastPlayed = new Map<SfxName, number>();
 
   /** Must be called from a user gesture (Start button). */
   unlock() {
@@ -109,8 +105,8 @@ class AudioEngine {
   private applyVolumes() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this.musicBus.gain.setTargetAtTime(this.musicVolume * 0.3, t, 0.05);
-    this.ambBus.gain.setTargetAtTime(Math.max(this.musicVolume, 0.25) * 0.6, t, 0.05);
+    this.musicBus.gain.setTargetAtTime(this.musicVolume * 0.35, t, 0.05);
+    this.ambBus.gain.setTargetAtTime(Math.max(this.musicVolume, 0.2) * 0.5, t, 0.05);
     this.sfxBus.gain.setTargetAtTime(this.sfxVolume * 0.9, t, 0.05);
     this.applyDuck();
   }
@@ -118,8 +114,8 @@ class AudioEngine {
   private applyDuck() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    const music = this.listening ? 0 : this.speaking ? 0.28 : 1;
-    const amb = this.listening ? 0.04 : this.speaking ? 0.45 : 1;
+    const music = this.listening ? 0 : this.speaking ? 0.25 : 1;
+    const amb = this.listening ? 0 : this.speaking ? 0.45 : 1;
     this.musicDuck.gain.setTargetAtTime(music, t, 0.08);
     this.ambDuck.gain.setTargetAtTime(amb, t, 0.08);
   }
@@ -179,6 +175,11 @@ class AudioEngine {
     src.start(t, Math.random() * 2, attack + decay + 0.1);
   }
 
+  /** One rising bubble "blip". */
+  private blip(t: number, base: number, peak: number, bus?: AudioNode) {
+    this.tone(base, t, { to: base * 2.2, peak, attack: 0.004, decay: 0.07, bus });
+  }
+
   private get now(): number {
     return this.ctx ? this.ctx.currentTime + 0.01 : 0;
   }
@@ -191,6 +192,10 @@ class AudioEngine {
 
   play(name: SfxName) {
     if (!this.ready()) return;
+    // The same sound twice within 60 ms is one sound (many fish eating at once).
+    const last = this.lastPlayed.get(name) ?? -1;
+    if (performance.now() - last < 60) return;
+    this.lastPlayed.set(name, performance.now());
     const t = this.now;
     switch (name) {
       case "correct":
@@ -210,168 +215,117 @@ class AudioEngine {
       case "micOff":
         this.tone(1100, t, { to: 700, peak: 0.06, decay: 0.08 });
         break;
-      case "pick":
-        this.tone(midi(84), t, { peak: 0.1, decay: 0.12, type: "triangle" });
-        this.tone(midi(91), t + 0.07, { peak: 0.08, decay: 0.25, type: "triangle" });
-        this.noiseBurst(t, { filter: "bandpass", freq: 2200, q: 1.2, peak: 0.05, decay: 0.08 });
+      case "coin":
+        this.tone(midi(88), t, { peak: 0.09, decay: 0.08, type: "square" });
+        this.tone(midi(95), t + 0.07, { peak: 0.08, decay: 0.32, type: "square" });
         break;
-      case "give":
-        this.noiseBurst(t, { filter: "bandpass", freq: 600, to: 1800, q: 0.8, peak: 0.08, attack: 0.05, decay: 0.2 });
-        this.tone(midi(76), t + 0.1, { peak: 0.08, decay: 0.3, type: "triangle" });
+      case "purchase":
+        [76, 80, 83].forEach((m, i) => this.tone(midi(m), t + i * 0.06, { peak: 0.08, decay: 0.18, type: "triangle" }));
+        this.tone(midi(88), t + 0.2, { peak: 0.1, decay: 0.5, type: "triangle" });
+        this.noiseBurst(t, { filter: "highpass", freq: 4000, peak: 0.04, decay: 0.12 });
         break;
-      case "munch":
-        for (let i = 0; i < 5; i++) this.noiseBurst(t + i * 0.13, { filter: "bandpass", freq: 1900 + (i % 2) * 400, q: 1.5, peak: 0.13, decay: 0.05 });
-        this.tone(midi(81), t + 0.72, { peak: 0.08, decay: 0.3 });
+      case "bubble":
+        for (let i = 0; i < 3; i++) this.blip(t + i * 0.08 + Math.random() * 0.03, 400 + Math.random() * 400, 0.05);
         break;
-      case "discover":
-        this.tone(midi(88), t, { peak: 0.12, decay: 0.15, type: "triangle" });
-        this.tone(midi(93), t + 0.1, { peak: 0.14, decay: 0.5, type: "triangle" });
+      case "sprinkle":
+        for (let i = 0; i < 7; i++) this.noiseBurst(t + i * 0.045, { filter: "bandpass", freq: 3500 + Math.random() * 2500, q: 2, peak: 0.05, decay: 0.03 });
+        for (let i = 0; i < 4; i++) this.blip(t + 0.25 + i * 0.09, 500 + i * 80, 0.03);
         break;
-      case "journal":
-        this.noiseBurst(t, { filter: "bandpass", freq: 3000, to: 1200, q: 0.9, peak: 0.07, attack: 0.02, decay: 0.16 });
-        [79, 83, 86].forEach((m, i) => this.tone(midi(m), t + 0.12 + i * 0.07, { peak: 0.06, decay: 0.35 }));
-        break;
-      case "friend":
-        [72, 76, 79, 84].forEach((m, i) => this.tone(midi(m), t + i * 0.12, { peak: 0.15, decay: 0.25, type: "triangle" }));
-        this.tone(midi(88), t + 0.5, { peak: 0.16, attack: 0.02, decay: 1.4, type: "triangle" });
-        this.tone(midi(84), t + 0.5, { peak: 0.08, attack: 0.02, decay: 1.4 });
-        this.tone(midi(79), t + 0.5, { peak: 0.08, attack: 0.02, decay: 1.4 });
-        for (let i = 0; i < 10; i++) this.tone(2000 + Math.random() * 2600, t + 0.55 + i * 0.07, { peak: 0.022, decay: 0.3 });
-        break;
-      case "vines":
-        for (let i = 0; i < 10; i++) {
-          this.noiseBurst(t + i * 0.12, { filter: "bandpass", freq: 900 + i * 160, q: 1.1, peak: 0.06, attack: 0.03, decay: 0.16 });
-        }
-        [60, 64, 67, 72, 76].forEach((m, i) => this.tone(midi(m), t + i * 0.22, { peak: 0.06, attack: 0.04, decay: 0.5, type: "triangle" }));
-        break;
-      case "thud":
-        this.tone(90, t, { to: 50, peak: 0.42, decay: 0.3 });
-        this.noiseBurst(t, { filter: "lowpass", freq: 500, to: 120, peak: 0.28, decay: 0.35 });
+      case "gulp":
+        this.tone(340, t, { to: 160, peak: 0.08, decay: 0.07 });
+        this.blip(t + 0.06, 700, 0.03);
         break;
       case "splash":
         this.noiseBurst(t, { filter: "bandpass", freq: 2200, to: 500, q: 0.6, peak: 0.22, attack: 0.015, decay: 0.4 });
         [460, 620, 780].forEach((f, i) => this.tone(f, t + i * 0.05, { to: f * 0.45, peak: 0.06, decay: 0.12 }));
+        for (let i = 0; i < 5; i++) this.blip(t + 0.2 + i * 0.07, 380 + Math.random() * 500, 0.04);
         break;
-      case "stones":
-        this.noiseBurst(t, { filter: "lowpass", freq: 300, to: 90, peak: 0.32, attack: 0.1, decay: 1.2 });
-        for (let i = 0; i < 4; i++) {
-          this.tone(520 - i * 40, t + 0.3 + i * 0.28, { to: 160, peak: 0.12, decay: 0.15 });
-          this.noiseBurst(t + 0.3 + i * 0.28, { filter: "bandpass", freq: 1400, to: 500, peak: 0.08, decay: 0.15 });
-        }
+      case "scrub":
+        for (let i = 0; i < 6; i++) this.noiseBurst(t + i * 0.2, { filter: "bandpass", freq: 1500 + (i % 2) * 700, q: 1.2, peak: 0.07, attack: 0.05, decay: 0.12 });
+        [84, 88, 91].forEach((m, i) => this.tone(midi(m), t + 1.2 + i * 0.07, { peak: 0.05, decay: 0.4 }));
         break;
-      case "sparkle":
-        [84, 88, 91, 96].forEach((m, i) => this.tone(midi(m), t + i * 0.06, { peak: 0.05, attack: 0.02, decay: 0.6 }));
+      case "happy":
+        [79, 83, 86, 91].forEach((m, i) => this.tone(midi(m), t + i * 0.07, { peak: 0.07, decay: 0.2, type: "triangle" }));
         break;
-      case "stone":
-        // A deep, old chord for the Monster Stone.
-        [48, 55, 60, 64, 67].forEach((m, i) => this.tone(midi(m), t + i * 0.15, { peak: 0.08, attack: 0.3, decay: 2.4, type: "triangle" }));
+      case "wow":
+        this.tone(midi(67), t, { to: midi(79), peak: 0.07, attack: 0.05, decay: 0.3, type: "triangle" });
+        this.tone(midi(84), t + 0.25, { peak: 0.05, decay: 0.3, type: "triangle" });
         break;
-      case "poof":
-        this.noiseBurst(t, { filter: "bandpass", freq: 900, to: 3000, q: 0.7, peak: 0.12, attack: 0.02, decay: 0.25 });
+      case "hmm":
+        this.tone(midi(62), t, { to: midi(58), peak: 0.05, attack: 0.05, decay: 0.35, type: "triangle" });
         break;
-      case "switch":
-        this.tone(midi(76), t, { peak: 0.08, decay: 0.12, type: "triangle" });
-        this.tone(midi(83), t + 0.08, { peak: 0.08, decay: 0.2, type: "triangle" });
+      case "place":
+        this.tone(midi(72), t, { to: midi(79), peak: 0.1, decay: 0.12, type: "triangle" });
+        this.noiseBurst(t, { filter: "lowpass", freq: 600, peak: 0.08, decay: 0.12 });
+        this.blip(t + 0.1, 500, 0.04);
         break;
-      case "bump":
-        this.tone(140, t, { to: 90, peak: 0.12, decay: 0.12, type: "triangle" });
+      case "pick":
+        this.tone(midi(79), t, { to: midi(84), peak: 0.07, decay: 0.1, type: "triangle" });
+        break;
+      case "unlock":
+        [72, 76, 79, 84].forEach((m, i) => this.tone(midi(m), t + i * 0.12, { peak: 0.13, decay: 0.25, type: "triangle" }));
+        this.tone(midi(88), t + 0.5, { peak: 0.14, attack: 0.02, decay: 1.4, type: "triangle" });
+        this.tone(midi(84), t + 0.5, { peak: 0.07, attack: 0.02, decay: 1.4 });
+        this.tone(midi(79), t + 0.5, { peak: 0.07, attack: 0.02, decay: 1.4 });
+        for (let i = 0; i < 10; i++) this.tone(2000 + Math.random() * 2600, t + 0.55 + i * 0.07, { peak: 0.02, decay: 0.3 });
+        break;
+      case "flash":
+        this.noiseBurst(t, { filter: "highpass", freq: 3000, peak: 0.08, attack: 0.002, decay: 0.05 });
+        this.tone(2400, t + 0.02, { to: 600, peak: 0.04, decay: 0.15 });
+        break;
+      case "trophy":
+        [60, 64, 67, 72, 76, 79, 84].forEach((m, i) => this.tone(midi(m), t + i * 0.09, { peak: 0.11, decay: 0.3, type: "triangle" }));
+        [72, 76, 79, 84].forEach((m) => this.tone(midi(m), t + 0.7, { peak: 0.08, attack: 0.02, decay: 2, type: "triangle" }));
+        for (let i = 0; i < 16; i++) this.tone(1800 + Math.random() * 3000, t + 0.7 + i * 0.06, { peak: 0.02, decay: 0.3 });
+        break;
+      case "door":
+        this.tone(midi(84), t, { peak: 0.06, decay: 0.4 });
+        this.tone(midi(79), t + 0.18, { peak: 0.06, decay: 0.6 });
         break;
     }
-  }
-
-  /** A monster's own voice (no words: the English is spoken by TTS). */
-  voice(id: MonsterId, mood: Mood) {
-    if (!this.ready()) return;
-    const t = this.now;
-    const up = mood === "happy" || mood === "excited" || mood === "hello" || mood === "surprised";
-    if (id === "leafy") {
-      // Leafy: high, squeaky chirps.
-      const n = mood === "excited" ? 5 : mood === "sad" ? 2 : 3;
-      for (let i = 0; i < n; i++) {
-        const f = midi(86 + (up ? i * 2 : -i * 3));
-        this.tone(f, t + i * 0.09, { to: f * (up ? 1.25 : 0.8), peak: 0.07, attack: 0.01, decay: 0.08, type: "square" });
-      }
-    } else if (id === "bubbo") {
-      // Bubbo: bubbly blubs that drop in pitch.
-      const n = mood === "excited" ? 5 : 3;
-      for (let i = 0; i < n; i++) {
-        const f = midi((up ? 64 : 58) + (up ? i * 3 : -i * 2));
-        this.tone(f * 1.6, t + i * 0.11, { to: f * 0.7, peak: 0.12, attack: 0.008, decay: 0.1 });
-        this.tone(f * 3.2, t + i * 0.11, { to: f * 1.6, peak: 0.03, attack: 0.004, decay: 0.05 });
-      }
-    } else if (id === "puff") {
-      for (let i = 0; i < 3; i++) this.tone(midi(91 + i * 2), t + i * 0.12, { peak: 0.05, attack: 0.03, decay: 0.2 });
-    } else {
-      for (let i = 0; i < 3; i++) this.tone(midi(55 + i * 4), t + i * 0.1, { to: midi(60 + i * 4), peak: 0.1, decay: 0.1, type: "sawtooth" });
-    }
-    if (mood === "sleepy") this.noiseBurst(t, { filter: "bandpass", freq: 500, q: 1.5, peak: 0.04, attack: 0.3, decay: 0.8 });
   }
 
   // ------------------------------------------------------------- ambience
 
   startAmbience() {
-    if (!this.ctx || this.ocean) return;
+    if (!this.ctx || this.hum) return;
     const ctx = this.ctx;
-    const loop = (type: BiquadFilterType, freq: number, q: number) => {
-      const src = ctx.createBufferSource();
-      src.buffer = this.noise;
-      src.loop = true;
-      const f = ctx.createBiquadFilter();
-      f.type = type;
-      f.frequency.value = freq;
-      f.Q.value = q;
-      const g = ctx.createGain();
-      src.connect(f).connect(g);
-      src.start(0, Math.random() * 2);
-      return g;
-    };
-    // Surf: a low swell rising and falling every ~7 s.
-    const surf = loop("lowpass", 420, 0.6);
-    surf.gain.value = 0.9;
-    const near = ctx.createGain();
-    near.gain.value = 0.6;
+    // A soft, low aquarium hum that swells slowly.
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = 260;
+    f.Q.value = 0.5;
+    const g = ctx.createGain();
+    g.gain.value = 0.35;
     const swell = ctx.createGain();
-    swell.gain.value = 0.5;
-    surf.connect(swell).connect(near).connect(this.ambBus);
+    swell.gain.value = 0.7;
+    src.connect(f).connect(g).connect(swell).connect(this.ambBus);
+    src.start(0, Math.random() * 2);
     const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.14;
+    lfo.frequency.value = 0.09;
     const depth = ctx.createGain();
-    depth.gain.value = 0.32;
+    depth.gain.value = 0.25;
     lfo.connect(depth).connect(swell.gain);
     lfo.start();
-    this.ocean = near;
-    // River: a brighter, steady babble that only plays near the river.
-    const river = loop("bandpass", 1100, 0.7);
-    river.gain.value = 0;
-    river.connect(this.ambBus);
-    this.river = river;
-    window.setInterval(() => this.critters(), 900);
+    this.hum = g;
+    window.setInterval(() => this.bubbles(), 700);
   }
 
-  /** 0 = far, 1 = right beside: surf and river loudness from the player's position. */
-  setNearness(sea: number, river: number) {
-    if (!this.ctx || !this.ocean || !this.river) return;
-    const t = this.ctx.currentTime;
-    this.ocean.gain.setTargetAtTime(0.35 + 0.65 * Math.max(0, Math.min(1, sea)), t, 0.5);
-    this.river.gain.setTargetAtTime(0.32 * Math.max(0, Math.min(1, river)), t, 0.5);
-  }
-
-  /** Tropical birds: sparse, randomised, never while listening. */
-  private critters() {
+  /** Sparse bubble blips from the filters; never while listening. */
+  private bubbles() {
     if (!this.ready() || this.listening) return;
-    if (Math.random() > 0.22) return;
+    if (Math.random() > 0.35) return;
     const t = this.now;
-    const base = 1800 + Math.random() * 1600;
-    const n = 2 + Math.floor(Math.random() * 4);
-    for (let i = 0; i < n; i++) {
-      const tt = t + i * (0.1 + Math.random() * 0.07);
-      this.tone(base * (1 + Math.random() * 0.15), tt, { to: base * 1.4, peak: 0.02, attack: 0.01, decay: 0.07, bus: this.ambBus });
-    }
+    const n = 1 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) this.blip(t + i * (0.06 + Math.random() * 0.08), 300 + Math.random() * 500, 0.03, this.ambBus);
   }
 
   // ------------------------------------------------------------------ music
 
-  startMusic(tune: Tune = "island") {
+  startMusic(tune: Tune = "aquarium") {
     if (!this.ctx) return;
     if (this.music?.tune === tune) return;
     window.clearInterval(this.musicTimer);
@@ -388,7 +342,7 @@ class AudioEngine {
     const ctx = this.ctx;
     const m = this.music;
     if (!ctx || !m) return;
-    const bpm = m.tune === "celebrate" ? 118 : 104;
+    const bpm = m.tune === "celebrate" ? 112 : 84;
     const eighth = 60 / bpm / 2;
     while (m.next < ctx.currentTime + 0.3) {
       this.playStep(m.step, m.next, eighth, m.tune);
@@ -397,54 +351,56 @@ class AudioEngine {
     }
   }
 
-  /** Steel drum: a sine with quick inharmonic partials. */
-  private pan(f: number, t: number, peak: number) {
+  /** Music box / celesta: a sine with a bright, quickly fading partial. */
+  private bell(f: number, t: number, peak: number) {
     const bus = this.musicBus;
-    this.tone(f, t, { peak, attack: 0.004, decay: 0.45, bus });
-    this.tone(f * 2.01, t, { peak: peak * 0.35, attack: 0.002, decay: 0.18, bus });
-    this.tone(f * 2.98, t, { peak: peak * 0.12, attack: 0.002, decay: 0.08, bus });
+    this.tone(f, t, { peak, attack: 0.004, decay: 0.9, bus });
+    this.tone(f * 4.01, t, { peak: peak * 0.18, attack: 0.002, decay: 0.12, bus });
   }
 
   private playStep(step: number, t: number, eighth: number, tune: Tune) {
-    // 8 bars of 8 eighths, calypso feel: notes on 0, 3, 4, 6.
+    // 8 bars of 8 eighths. C – Am – F – G, twice, with a floating melody.
     const MELODY: number[][] =
       tune === "celebrate"
         ? [
-            [72, 0, 0, 76, 79, 0, 84, 0],
-            [83, 0, 0, 79, 76, 0, 79, 0],
-            [77, 0, 0, 81, 84, 0, 81, 0],
+            [72, 0, 76, 0, 79, 0, 84, 0],
+            [81, 0, 79, 0, 76, 0, 79, 0],
+            [77, 0, 81, 0, 84, 0, 81, 0],
             [79, 0, 0, 0, 74, 0, 0, 0],
-            [76, 0, 0, 79, 84, 0, 88, 0],
-            [86, 0, 0, 84, 81, 0, 79, 0],
+            [76, 0, 79, 0, 84, 0, 88, 0],
+            [86, 0, 84, 0, 81, 0, 79, 0],
             [77, 0, 76, 74, 0, 72, 74, 0],
             [72, 0, 0, 0, 0, 0, 0, 0]
           ]
         : [
-            [76, 0, 0, 79, 0, 0, 76, 0],
-            [74, 0, 0, 72, 0, 0, 74, 0],
-            [76, 0, 0, 79, 81, 0, 79, 0],
-            [76, 0, 0, 0, 0, 0, 0, 0],
-            [77, 0, 0, 81, 0, 0, 77, 0],
-            [76, 0, 0, 79, 0, 0, 76, 0],
-            [74, 0, 72, 74, 0, 76, 74, 0],
+            [76, 0, 0, 0, 79, 0, 0, 0],
+            [81, 0, 0, 79, 76, 0, 0, 0],
+            [77, 0, 0, 0, 72, 0, 74, 0],
+            [74, 0, 0, 0, 0, 0, 0, 0],
+            [76, 0, 0, 0, 79, 0, 84, 0],
+            [83, 0, 0, 81, 79, 0, 0, 0],
+            [77, 0, 76, 0, 74, 0, 71, 0],
             [72, 0, 0, 0, 0, 0, 0, 0]
           ];
-    const ROOT = [48, 43, 48, 48, 41, 48, 43, 48];
+    const ROOT = [48, 45, 41, 43, 48, 45, 41, 43];
+    const CHORD = [
+      [0, 4, 7],
+      [0, 3, 7],
+      [0, 4, 7],
+      [0, 4, 7]
+    ];
     const bar = Math.floor(step / 8) % 8;
     const s = step % 8;
     const note = MELODY[bar][s];
-    if (note) this.pan(midi(note), t, tune === "celebrate" ? 0.13 : 0.1);
+    if (note) this.bell(midi(note), t, tune === "celebrate" ? 0.11 : 0.085);
     const root = ROOT[bar];
-    // Bass on 1 and the "and" of 2 (calypso).
-    if (s === 0 || s === 3 || s === 4) {
-      this.tone(midi(s === 3 ? root + 7 : root) - 0, t, { peak: 0.11, attack: 0.01, decay: eighth * 2.5, bus: this.musicBus, type: "triangle" });
+    if (s === 0) this.tone(midi(root), t, { peak: 0.1, attack: 0.02, decay: eighth * 6, bus: this.musicBus, type: "triangle" });
+    // Gentle broken chord.
+    if (s % 2 === 1) {
+      const c = CHORD[bar % 4];
+      const n = root + 12 + c[((s - 1) / 2) % 3];
+      this.tone(midi(n), t, { peak: 0.03, attack: 0.01, decay: 0.5, bus: this.musicBus });
     }
-    // Off-beat chord plucks.
-    if (s === 2 || s === 6) {
-      for (const n of [root + 16, root + 19, root + 24]) this.tone(midi(n), t, { peak: 0.022, attack: 0.005, decay: 0.16, bus: this.musicBus });
-    }
-    // Shaker.
-    if (s % 2 === 1) this.noiseBurst(t, { filter: "highpass", freq: 5200, peak: 0.018, attack: 0.004, decay: 0.05, bus: this.musicBus });
   }
 }
 

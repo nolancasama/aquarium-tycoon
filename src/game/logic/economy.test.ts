@@ -32,7 +32,9 @@ import type { SpeciesId } from "../types";
  * at most ~6 helped visitors in Stages 3–4, and there is no dead end).
  */
 
-function ok(r: Result): Model & { lastId?: string } {
+type M = Model & { lastId?: string };
+
+function ok(r: Result): M {
   if (!r.ok) throw new Error(`refused: ${r.reason}`);
   return Object.assign(r.m, { lastId: r.id });
 }
@@ -41,7 +43,7 @@ let visitorId = 0;
 
 /** ~45 s of play: one ordinary visitor tips at every tank, and the student feeds/cleans when needed. */
 function playAWhile(m: Model): Model {
-  let out = decay(m, 45);
+  let out: M = decay(m, 45);
   for (const t of out.tanks) {
     if (t.fish.length && t.food < 50) out = ok(feed(out, t.id));
     if (t.fish.length && t.clean < 50) out = ok(clean(out, t.id));
@@ -63,7 +65,7 @@ function buyAndPlace(m: Model, s: SpeciesId, tankId: string): Model {
 }
 
 function play(first: SpeciesId, second: SpeciesId, spendy: boolean) {
-  let m = newModel();
+  let m: M = newModel();
   let minCoins = m.coins;
   const track = () => (minCoins = Math.min(minCoins, m.coins));
   // Stage 1 (tutorial).
@@ -155,7 +157,7 @@ describe("economy simulation", () => {
   }
 
   it("a student who spent everything can always earn again while a fish is in a tank", () => {
-    let m = buyAndPlace(newModel(), "bluetang", "t1");
+    let m: M = buyAndPlace(newModel(), "bluetang", "t1");
     m = { ...m, coins: 0 };
     // Even starving, dirty fish still earn a coin per visitor.
     m = decay(m, 10_000);

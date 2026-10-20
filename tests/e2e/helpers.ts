@@ -1,44 +1,37 @@
 import { expect, type Page } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
 import { BROWSER_STUBS } from "./stubs";
 
-export interface MiState {
+export interface AtState {
   screen: string;
   mode: string;
+  view: string;
+  tankId: string | null;
+  panel: string | null;
+  placing: { kind: string; slot?: string | null } | null;
   micState: string;
-  progress: {
-    monsters: Record<string, { discovered: boolean; asked: Record<string, boolean>; friend: boolean; canKnown: Record<string, boolean> }>;
-    active: string | null;
-    bag: Record<string, number>;
-    solved: string[];
-    metMaple: boolean;
-    finished: boolean;
-    said: string[];
-  };
-  objective: { id: string; [k: string]: unknown };
-  focus: { id: string; kind: string } | null;
-  journalOpen: boolean;
-  discovering: { monster: string; colored: boolean } | null;
-  friendCard: string | null;
-  prompt: {
-    id: number;
-    kind: string;
-    status: string;
-    buttons: boolean;
-    misses: number;
-    sentences: string[];
-    choices: string[];
-    question: string | null;
-  } | null;
+  coins: number;
+  stage: number;
+  tutorial: string;
+  progress: { stage: number; tutorial: string; hearts: number; helpedInStage: number; counted: boolean; cleanedOnce: boolean; fedOnce: boolean; allHappy: boolean; star: boolean; freePlay: boolean; photo: boolean; said: string[]; firstFish: string | null };
+  goals: { id: string; done: boolean; n?: number; of?: number }[];
+  tanks: { id: string; slot: string; type: string; fish: string[]; fishIds: string[]; decor: { slot: number; kind: string; variant: string | null }[]; food: number; clean: number; happy: number | null }[];
+  inv: { fish: number; decor: { id: string; kind: string; variant: string | null }[]; tanks: number };
+  prompt: { id: number; kind: string; status: string; buttons: boolean; misses: number; highlight: boolean; sentences: string[]; choices: string[]; question: string | null } | null;
   line: { by: string; en: string } | null;
-  player: { x: number; z: number; y: number; riding: boolean };
-  monsters: Record<string, { x: number; z: number; mode: string }>;
-  palm: number;
-  stones: number;
+  request: { kind: string; color: string | null; misses: number; status: string; by: string } | null;
+  stageCard: { stage: number; reward: string } | null;
+  waiting: { id: string; type: string } | null;
+  visitors: { id: string; type: string; state: string; request: string | null; helped: boolean }[];
+  pellets: number;
+  countGlow: boolean;
+  glowFish: number;
   perf: { calls: number; triangles: number; fps: number };
 }
 
 /** Open the game with speech stubs and the test hook. Returns collected page errors. */
-export async function boot(page: Page, query = "fast=1"): Promise<string[]> {
+export async function boot(page: Page, query = "fast=1&seed=1"): Promise<string[]> {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => {
@@ -50,53 +43,88 @@ export async function boot(page: Page, query = "fast=1"): Promise<string[]> {
   return errors;
 }
 
-export const state = (page: Page): Promise<MiState> => page.evaluate(() => (window as never as { __mi: { state(): MiState } }).__mi.state());
+export const state = (page: Page): Promise<AtState> => page.evaluate(() => (window as never as { __at: { state(): AtState } }).__at.state());
 
-export async function hook(page: Page, name: string, ...args: unknown[]) {
-  return page.evaluate(([n, a]) => (window as never as Record<string, Record<string, (...x: unknown[]) => unknown>>).__mi[n as string](...(a as unknown[])), [name, args] as const);
+export async function hook<T = unknown>(page: Page, name: string, ...args: unknown[]): Promise<T> {
+  return page.evaluate(([n, a]) => (window as never as Record<string, Record<string, (...x: unknown[]) => unknown>>).__at[n as string](...(a as unknown[])), [name, args] as const) as Promise<T>;
 }
 
-export async function waitFor(page: Page, pred: (s: MiState) => boolean, timeout = 30_000, label = "condition"): Promise<MiState> {
+export async function waitFor(page: Page, pred: (s: AtState) => boolean, timeout = 30_000, label = "condition"): Promise<AtState> {
   const t0 = Date.now();
   let s = await state(page);
   while (!pred(s)) {
-    if (Date.now() - t0 > timeout) throw new Error(`timed out waiting for ${label}: ${JSON.stringify({ mode: s.mode, line: s.line, prompt: s.prompt, objective: s.objective })}`);
+    if (Date.now() - t0 > timeout) {
+      throw new Error(`timed out waiting for ${label}: ${JSON.stringify({ mode: s.mode, view: s.view, panel: s.panel, line: s.line, prompt: s.prompt, request: s.request, tutorial: s.tutorial, stage: s.stage, stageCard: s.stageCard, goals: s.goals })}`);
+    }
     await page.waitForTimeout(60);
     s = await state(page);
   }
   return s;
 }
 
-/** Start a new game in tap (mic-free) or speech mode and wait for exploration after Maple's intro. */
-export async function startGame(page: Page, mode: "tap" | "speak") {
+/** Choose the answer mode on the title and start a new game. */
+export async function startNew(page: Page, mode: "tap" | "speak") {
   await page.getByTestId(mode === "tap" ? "mode-tap" : "mode-speak").click();
-  await page.getByTestId("btn-start").click();
-  await waitFor(page, (s) => s.mode === "explore" && s.progress.metMaple, 30_000, "intro done");
+  await page.getByTestId("btn-new").click();
+  await waitFor(page, (s) => s.screen === "game", 10_000, "game screen");
 }
 
-/** Wait for a prompt offering this sentence as a button, and tap it. */
-export async function tap(page: Page, phraseId: string) {
-  const s = await waitFor(page, (x) => Boolean(x.prompt?.buttons && x.prompt.choices.includes(phraseId) && x.prompt.status !== "correct" && x.prompt.status !== "wrong"), 30_000, `button ${phraseId}`);
-  await page.locator(`[data-testid=choice][data-id=${phraseId}]`).click();
-  await waitFor(page, (x) => !x.prompt || x.prompt.id !== s.prompt!.id || x.prompt.status === "wrong", 10_000, `prompt after ${phraseId}`);
+/** Answer the open prompt: tap the choice (Tap mode / rescue) or speak it into the stub recogniser. */
+export async function answer(page: Page, phraseId: string, spoken?: string) {
+  const s = await waitFor(page, (x) => Boolean(x.prompt && x.prompt.status !== "correct" && x.prompt.status !== "listening" && x.prompt.status !== "wrong"), 30_000, `prompt for ${phraseId}`);
+  if (s.prompt!.buttons) {
+    await page.locator(`[data-testid=choice][data-id=${phraseId}]`).click();
+  } else {
+    await say(page, spoken ?? phraseId);
+  }
+  await waitFor(page, (x) => !x.prompt || x.prompt.id !== s.prompt!.id, 15_000, `prompt ${phraseId} answered`);
 }
 
-/** Speak into the stub recogniser for the open prompt (one Space press = one session). */
-export async function speak(page: Page, text: string | null, error: string | null = null) {
+/** One Space press = one listening session with the stub saying `text` (null = silence). */
+export async function say(page: Page, text: string | null, error: string | null = null) {
   await waitFor(page, (x) => Boolean(x.prompt && x.prompt.status !== "listening" && x.prompt.status !== "correct"), 30_000, "prompt to speak to");
-  await page.evaluate(([say, err]) => {
-    const w = window as never as { __speech: { say: string | null; error: string | null } };
-    w.__speech.say = say;
-    w.__speech.error = err;
-  }, [text, error] as const);
+  await page.evaluate(
+    ([t, e]) => {
+      const w = window as never as { __speech: { say: string | null; error: string | null } };
+      w.__speech.say = t;
+      w.__speech.error = e;
+    },
+    [text, error] as const
+  );
   await page.keyboard.press("Space");
-  await waitFor(page, (x) => !x.prompt || x.prompt.status !== "listening", 10_000, "listening to end");
-  await page.waitForTimeout(80);
+  await waitFor(page, (x) => !x.prompt || x.prompt.status !== "listening", 12_000, "listening to end");
 }
 
-/** Walk up to a named thing (test hook) and press E on it. */
-export async function use(page: Page, target: string, focusId: string, dist = 1.4) {
-  await hook(page, "goTo", target, dist);
-  await waitFor(page, (s) => s.focus?.id === focusId && s.mode === "explore", 10_000, `focus ${focusId}`);
-  await page.keyboard.press("KeyE");
+/** Click a thing in the 3D view at its projected screen position. */
+export async function click3d(page: Page, kind: string, id = "") {
+  const p = await hook<{ x: number; y: number } | null>(page, "where", kind, id);
+  if (!p) throw new Error(`nothing on screen for ${kind} ${id}`);
+  await page.mouse.click(p.x, p.y);
+}
+
+/** Wait until the camera has settled in the close-up (or the room), then click. */
+export async function settle(page: Page, ms = 900) {
+  await page.waitForTimeout(ms);
+}
+
+/** Close a stage card when it shows. */
+export async function stageOk(page: Page, stage: number) {
+  await waitFor(page, (s) => s.stageCard?.stage === stage, 30_000, `stage ${stage} card`);
+  await shot(page, `stage-${stage}-card`);
+  await page.getByTestId("stage-ok").click();
+}
+
+/** Back to ordinary play (no line, prompt or scripted moment). */
+export async function playing(page: Page, timeout = 30_000) {
+  return waitFor(page, (s) => s.mode === "play" && !s.line && !s.prompt && !s.stageCard, timeout, "ordinary play");
+}
+
+let shotN = 0;
+/** Screenshots for review when SHOTS=1 (saved to .tmp/shots/<test>). */
+export async function shot(page: Page, name: string) {
+  if (!process.env.SHOTS) return;
+  await page.waitForTimeout(700);
+  const dir = path.join(process.cwd(), ".tmp", "shots", process.env.SHOTS_DIR ?? "run");
+  fs.mkdirSync(dir, { recursive: true });
+  await page.screenshot({ path: path.join(dir, `${String(++shotN).padStart(2, "0")}-${name}.png`) });
 }

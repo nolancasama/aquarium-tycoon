@@ -11,6 +11,7 @@ export class PartBuilder {
   private parts: THREE.BufferGeometry[] = [];
   private seed = 1;
 
+  /** `ao` = height (m) over which colours darken toward the floor; 0 = no darkening (fish). */
   constructor(private ao = 0.55) {}
 
   private rand(): number {
@@ -40,7 +41,7 @@ export class PartBuilder {
     const colors = new Float32Array(p.count * 3);
     for (let i = 0; i < p.count; i++) {
       const y = p.getY(i);
-      const t = opts.flatAo ? 1 : THREE.MathUtils.smoothstep(y, 0, this.ao);
+      const t = opts.flatAo || this.ao <= 0 ? 1 : THREE.MathUtils.smoothstep(y, 0, this.ao);
       const k = 0.58 + 0.42 * t;
       colors[i * 3] = base.r * k;
       colors[i * 3 + 1] = base.g * k;

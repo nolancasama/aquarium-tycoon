@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest";
 import { decodeSave, encodeSave } from "./save";
 import { buyDecor, buyFish, buyTank, newModel, placeDecor, placeFish, placeTank, type Model, type Result } from "./model";
 
-function ok(r: Result): Model & { lastId?: string } {
+type M = Model & { lastId?: string };
+
+function ok(r: Result): M {
   if (!r.ok) throw new Error(r.reason);
   return Object.assign(r.m, { lastId: r.id });
 }
 
 function played(): Model {
-  let m: Model = { ...newModel(), coins: 300, progress: { ...newModel().progress, stage: 4, tutorial: "done", hearts: 5, said: ["feedFish", "bluePlease"] } };
+  let m: M = { ...newModel(), coins: 300, progress: { ...newModel().progress, stage: 4, tutorial: "done", hearts: 5, said: ["feedFish", "bluePlease"] } };
   m = ok(buyFish(m, "bluetang"));
   m = ok(placeFish(m, m.lastId!, "t1"));
   m = ok(buyFish(m, "clownfish")); // stays in its bag

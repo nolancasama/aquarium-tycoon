@@ -1,48 +1,53 @@
 import { PHRASES, type PhraseId } from "../logic/english";
 import { judgeSpeech, type Judgement } from "../logic/speechMatch";
 import { makeRng, shuffle } from "../logic/rng";
-import { noteSaid } from "../logic/progress";
-import { getGame, setGame, updateProgress, type Choice, type Line, type Mode, type PromptUi, type Speaker } from "../store";
-import { MONSTERS } from "../data/monsters";
+import { noteSaid } from "../logic/model";
+import { getGame, setGame, updateModel, type Choice, type Line, type Mode, type PromptUi, type Speaker } from "../store";
+import { SPECIES } from "../data/fish";
 import { recognition, HARD_ERRORS } from "../../audio/recognition";
 import { tts } from "../../audio/tts";
 import { audio } from "../../audio/audio";
+import { rt } from "../runtime";
 
 /**
  * The English interaction layer. Everything the student says or chooses goes
  * through `ask()`, which resolves with the sentence they produced:
  *
- *  - command: one target sentence ("It's green."). Speech must match it;
- *    mic-free shows it among wrong-but-plausible sentences.
- *  - choice: several sentences, all valid ("Do you like apples / fish ...?",
- *    "Yes, I do. / No, I don't."); whichever is said or tapped is the answer.
+ *  - command: one target sentence ("Feed the fish!", "Three fish!"). Speech
+ *    must match it; Tap mode shows it among real alternatives.
+ *  - choice: several sentences, all valid ("Blue, please!" / "Orange,
+ *    please!"); whichever is said or tapped is the answer.
  *
  * One press of Space / 🎤 = one bounded listening session. A valid interim
  * result is accepted at once; a session that ends without a match is a miss.
- * Miss 1: try again. Miss 2: the sentence is read aloud again. Miss 3: the
- * choices become tappable. Permission/hardware errors switch to tapping at once.
+ * Miss 1: "Try again!" and the English is replayed slowly. Miss 2: the key
+ * word is highlighted (with a picture clue). Miss 3: the choices become
+ * tappable. Permission/hardware errors switch to tapping for the session.
  */
 
 export interface AskRequest {
   kind: "command" | "choice";
   /** Accepted sentences (a command accepts only the first). */
   options: PhraseId[];
-  /** Sentences displayed in speech mode (default: the command target, or every choice). */
+  /** Sentences displayed in Speak mode (default: the command target, or every choice). */
   show?: PhraseId[];
-  /** Show "before ___ after" with picture slots instead of whole sentences (speech mode). */
-  frame?: { before: string; after: string };
+  /** Show "before ___ after" with word slots instead of whole sentences (Speak mode). */
+  frame?: { before: string; after: string; slots: PhraseId[] };
+  /** Speech is judged against these (default: the options). Two of them at once is unclear. */
+  judge?: PhraseId[];
+  /** Tap-mode buttons (default: the choices, or the command and its distractors). */
+  choices?: PhraseId[];
   question?: { en: string; ja?: string; by: Speaker };
   /** Japanese help for the task. */
   help?: string;
-  picture?: string;
-  icons?: Partial<Record<PhraseId, string>>;
-  crossed?: PhraseId[];
-  /** Shuffle the tappable choices (so the useful one is not always first). */
+  /** Shuffle the tappable choices (so the right one is not always first). */
   shuffle?: boolean;
   cancellable?: boolean;
   readQuestion?: boolean;
-  /** Read the target sentence aloud when the prompt opens (speech mode, commands). */
+  /** Read the target sentence aloud when the prompt opens (Speak mode, commands). */
   readSentence?: boolean;
+  /** Second miss: an extra visual clue in the world (the counting glow). */
+  onClue?: () => void;
 }
 
 interface Active {
@@ -67,15 +72,26 @@ export function micUsable(): boolean {
   return g.settings.mic && recognition.supported && g.micState !== "blocked" && g.micState !== "unsupported";
 }
 
+const VOICES: Record<string, { pitch: number; rate: number }> = {
+  pico: { pitch: 1.3, rate: 0.9 },
+  self: { pitch: 1.3, rate: 0.92 },
+  game: { pitch: 1.1, rate: 0.9 },
+  child: { pitch: 1.55, rate: 0.95 },
+  adult: { pitch: 0.95, rate: 0.9 },
+  fan: { pitch: 1.2, rate: 0.98 },
+  judge: { pitch: 0.85, rate: 0.86 }
+};
+
 function voiceOf(by: Speaker): { pitch: number; rate: number } {
-  if (by === "maple") return { pitch: 1.1, rate: 0.9 };
-  if (by === "self") return { pitch: 1.3, rate: 0.95 };
-  if (by === "game") return { pitch: 1.1, rate: 0.9 };
-  return MONSTERS[by].voice;
+  return VOICES[by] ?? SPECIES[by as keyof typeof SPECIES]?.voice ?? VOICES.game;
 }
 
-export function speak(text: string, by: Speaker = "game"): Promise<void> {
-  return tts.speak(text, voiceOf(by));
+export function speak(text: string, by: Speaker = "game", slow = false): Promise<void> {
+  const v = voiceOf(by);
+  rt.pico.talking = by === "pico";
+  return tts.speak(text, { pitch: v.pitch, rate: v.rate * (slow ? 0.7 : 1) }).finally(() => {
+    if (by === "pico") rt.pico.talking = false;
+  });
 }
 
 function update(patch: Partial<PromptUi>) {
@@ -84,21 +100,17 @@ function update(patch: Partial<PromptUi>) {
   setGame({ prompt: { ...p, ...patch } });
 }
 
-const choice = (req: AskRequest, id: PhraseId): Choice => ({
-  id,
-  en: PHRASES[id].en,
-  icon: req.icons?.[id],
-  crossed: req.crossed?.includes(id) || undefined
-});
+const choice = (id: PhraseId): Choice => ({ id, en: PHRASES[id].en });
 
 function choicesFor(req: AskRequest): Choice[] {
+  if (req.choices) return (req.shuffle === false ? req.choices : shuffle(req.choices, rng)).map(choice);
   if (req.kind === "choice") {
-    const list = req.options.map((id) => choice(req, id));
+    const list = req.options.map(choice);
     return req.shuffle ? shuffle(list, rng) : list;
   }
   const target = req.options[0];
   const ids = [target, ...(PHRASES[target].distractors ?? [])].slice(0, 3);
-  return shuffle(ids, rng).map((id) => choice(req, id));
+  return shuffle(ids, rng).map(choice);
 }
 
 export function ask(req: AskRequest): Promise<PhraseId | null> {
@@ -111,9 +123,8 @@ export function ask(req: AskRequest): Promise<PhraseId | null> {
     kind: req.kind,
     question: req.question ?? null,
     help: req.help ?? null,
-    picture: req.picture ?? null,
-    sentences: show.map((id) => choice(req, id)),
-    frame: req.frame ? { ...req.frame, slots: req.options.map((id) => choice(req, id)) } : null,
+    sentences: show.map(choice),
+    frame: req.frame ? { before: req.frame.before, after: req.frame.after, slots: req.frame.slots.map(choice) } : null,
     choices: choicesFor(req),
     status: "ready",
     heard: "",
@@ -122,9 +133,10 @@ export function ask(req: AskRequest): Promise<PhraseId | null> {
     wrongId: null,
     matched: null,
     cancellable: Boolean(req.cancellable),
-    reading: false
+    reading: false,
+    highlight: false
   };
-  const back: Mode = g.mode === "busy" ? "busy" : "explore";
+  const back: Mode = g.mode === "busy" ? "busy" : "play";
   setGame({ prompt, mode: "ask", line: null });
   return new Promise((resolve) => {
     active = { req, resolve, done: false, stopListening: null, back };
@@ -135,36 +147,50 @@ export function ask(req: AskRequest): Promise<PhraseId | null> {
 async function readOpening(req: AskRequest, id: number) {
   if (req.readQuestion && req.question) await speak(req.question.en, req.question.by);
   if (getGame().prompt?.id !== id) return;
-  // Mic-free: the student must read; reading the right answer aloud would give it away.
+  // Tap mode: the student must read; reading the right answer aloud would give it away.
   if (req.readSentence && req.kind === "command" && micUsable()) await readSentences(id);
 }
 
-async function readSentences(id: number) {
+async function readSentences(id: number, slow = false) {
   const p = getGame().prompt;
   if (!p || p.id !== id) return;
   update({ reading: true });
-  const list = p.frame ? p.frame.slots : p.sentences;
+  const list = p.frame ? [] : p.sentences;
   for (const s of list) {
     if (getGame().prompt?.id !== id) return;
-    await speak(s.en, "self");
+    await speak(s.en, "self", slow);
   }
   if (getGame().prompt?.id === id) update({ reading: false });
 }
 
-/** Replay (🔊): the sentence to say, or in mic-free mode every choice in order (listening, not a give-away). */
+/** Miss 1: the English again, slowly: the question for a choice, the sentence for a command. */
+async function replaySlow(id: number) {
+  const a = active;
+  const p = getGame().prompt;
+  if (!a || !p || p.id !== id) return;
+  tts.cancel();
+  if (a.req.kind === "command" && !p.frame) {
+    await readSentences(id, true);
+  } else if (p.question) {
+    await speak(p.question.en, p.question.by, true);
+  }
+}
+
+/** Replay (🔊): the question and the sentence to say; in Tap mode every choice in order (listening, not a give-away). */
 export async function replay() {
   const p = getGame().prompt;
   if (!p || p.status === "listening") return;
   tts.cancel();
+  if (p.question) await speak(p.question.en, p.question.by);
+  if (getGame().prompt?.id !== p.id) return;
   if (p.buttons) {
-    if (p.question) await speak(p.question.en, p.question.by);
     for (const c of p.choices) {
       if (getGame().prompt?.id !== p.id) return;
       await speak(c.en, "self");
     }
     return;
   }
-  void readSentences(p.id);
+  if (active?.req.kind === "command") void readSentences(p.id);
 }
 
 function finish(id: PhraseId | null) {
@@ -189,12 +215,12 @@ function succeed(id: PhraseId) {
   tts.cancel();
   audio.play("correct");
   update({ status: "correct", matched: id, wrongId: null });
-  updateProgress((p) => noteSaid(p, id));
+  updateModel((m) => noteSaid(m, id));
   window.setTimeout(() => {
     active = null;
     if (getGame().prompt?.status === "correct") setGame({ prompt: null, mode: a.back });
     a.resolve(id);
-  }, fastMode() ? 60 : 600);
+  }, fastMode() ? 60 : 650);
 }
 
 function accepted(id: PhraseId): boolean {
@@ -207,7 +233,7 @@ function accepted(id: PhraseId): boolean {
 export function micPress() {
   const a = active;
   const p = getGame().prompt;
-  if (!a || a.done || !p) return;
+  if (!a || a.done || !p || p.status === "correct") return;
   if (p.status === "listening") {
     a.stopListening?.();
     return;
@@ -217,7 +243,8 @@ export function micPress() {
     return;
   }
   tts.cancel();
-  const speechOptions = (a.req.kind === "choice" ? a.req.options : [a.req.options[0]]).map((id) => PHRASES[id]);
+  const judgeIds = a.req.judge ?? (a.req.kind === "choice" ? a.req.options : [a.req.options[0]]);
+  const speechOptions = judgeIds.map((id) => PHRASES[id]);
   let last: Judgement = { kind: "none", heard: "" };
   let hard = false;
   audio.setListening(true);
@@ -251,17 +278,19 @@ export function micPress() {
 }
 
 function miss(j: Judgement, hard: boolean) {
+  const a = active;
   const p = getGame().prompt;
-  if (!p) return;
+  if (!p || !a) return;
   if (hard) {
-    setGame({ micState: "blocked", hint: "micBlocked" });
+    setGame({ micState: "blocked" });
     update({ status: "miss", buttons: true });
     return;
   }
   const misses = p.misses + 1;
   audio.play("error");
-  update({ status: j.kind === "unclear" ? "unclear" : "miss", misses, buttons: p.buttons || misses >= 3 });
-  if (misses === 2) void readSentences(p.id);
+  update({ status: j.kind === "unclear" ? "unclear" : "miss", misses, buttons: p.buttons || misses >= 3, highlight: p.highlight || misses >= 2 });
+  if (misses === 1) void replaySlow(p.id);
+  if (misses === 2) a.req.onClue?.();
 }
 
 /** Tap / click / number key on a sentence. */
@@ -274,7 +303,8 @@ export function choose(id: PhraseId) {
     return;
   }
   audio.play("error");
-  update({ status: "wrong", wrongId: id });
+  update({ status: "wrong", wrongId: id, misses: p.misses + 1, highlight: p.misses + 1 >= 2 });
+  if (p.misses + 1 === 2) a.req.onClue?.();
   window.setTimeout(() => {
     const now = getGame().prompt;
     if (now && now.id === p.id && now.wrongId === id) update({ wrongId: null, status: "ready" });
@@ -307,7 +337,9 @@ let lineDone: (() => void) | null = null;
 /** Show a line of dialogue, read it aloud, wait for Next. */
 export function say(by: Speaker, en: string, ja?: string, extra: Partial<Line> = {}): Promise<void> {
   const line: Line = { id: lineId++, by, en, ja, ...extra };
-  setGame({ line, mode: getGame().mode === "busy" ? "busy" : "talk", prompt: null });
+  const mode = getGame().mode;
+  setGame({ line, mode: mode === "busy" ? "busy" : "talk", prompt: null });
+  if (by === "pico") rt.pico.waveT0 = rt.time;
   void speak(en, by);
   return new Promise((resolve) => {
     lineDone = () => {
@@ -318,12 +350,13 @@ export function say(by: Speaker, en: string, ja?: string, extra: Partial<Line> =
   });
 }
 
-/** Next ▶ (click, E, Space, Enter). */
+/** Next ▶ (click, Space, Enter). */
 export function nextLine() {
   if (!getGame().line || !lineDone) return;
   tts.cancel();
   audio.play("tick");
-  setGame({ line: null });
+  const g = getGame();
+  setGame({ line: null, mode: g.mode === "talk" ? "play" : g.mode });
   lineDone();
 }
 
@@ -336,7 +369,7 @@ export function fastMode(): boolean {
   return typeof location !== "undefined" && new URLSearchParams(location.search).get("fast") === "1";
 }
 
-/** A pause that test runs skip. */
+/** A pause that test runs shorten. */
 export function wait(ms: number): Promise<void> {
   return new Promise((r) => window.setTimeout(r, fastMode() ? Math.min(ms, 40) : ms));
 }

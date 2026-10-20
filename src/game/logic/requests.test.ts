@@ -4,13 +4,15 @@ import { buyDecor, buyFish, newModel, placeDecor, placeFish, type Model, type Re
 import { countableTanks, makeRequest, matchesShow, presentColors, requestLine, requestReward, stillValid, tankSatisfies, type Request } from "./requests";
 import type { SpeciesId } from "../types";
 
-function ok(r: Result): Model & { lastId?: string } {
+type M = Model & { lastId?: string };
+
+function ok(r: Result): M {
   if (!r.ok) throw new Error(r.reason);
   return Object.assign(r.m, { lastId: r.id });
 }
 
 function aquarium(stage: 1 | 2 | 3 | 4 | 5, fish: SpeciesId[], coral = false): Model {
-  let m: Model = { ...newModel(), coins: 1000, progress: { ...newModel().progress, stage, tutorial: "done" } };
+  let m: M = { ...newModel(), coins: 1000, progress: { ...newModel().progress, stage, tutorial: "done" } };
   for (const s of fish) {
     m = ok(buyFish(m, s));
     m = ok(placeFish(m, m.inv.fish[0].id, "t1"));
@@ -69,7 +71,7 @@ describe("visitor requests", () => {
     const rand = makeRng(11);
     let last: Request["kind"] | null = null;
     for (let i = 0; i < 300; i++) {
-      const r = makeRequest(m, rand, { last })!;
+      const r: Request = makeRequest(m, rand, { last })!;
       expect(r.kind).not.toBe(last);
       last = r.kind;
     }

@@ -505,6 +505,11 @@ export function earnStar(m: Model): Model {
   return { ...paidModel, progress: { ...paidModel.progress, star: true, freePlay: true } };
 }
 
+/** Set a tank's care levels directly (the tutorial's hungry new fish; tests). */
+export function setCare(m: Model, tankId: string, food: number, cleanLevel: number): Model {
+  return mapTank(m, tankId, (t) => ({ ...t, food: Math.max(0, Math.min(100, food)), clean: Math.max(0, Math.min(100, cleanLevel)) }));
+}
+
 export function setTutorial(m: Model, step: TutorialStep): Model {
   return { ...m, progress: { ...m.progress, tutorial: step } };
 }

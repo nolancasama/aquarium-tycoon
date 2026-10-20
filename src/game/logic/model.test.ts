@@ -32,7 +32,9 @@ import {
   type Result
 } from "./model";
 
-function ok(r: Result): Model & { lastId?: string } {
+type M = Model & { lastId?: string };
+
+function ok(r: Result): M {
   if (!r.ok) throw new Error(`refused: ${r.reason}`);
   return Object.assign(r.m, { lastId: r.id });
 }
@@ -40,7 +42,7 @@ function ok(r: Result): Model & { lastId?: string } {
 const atStage = (m: Model, stage: 1 | 2 | 3 | 4 | 5): Model => ({ ...m, progress: { ...m.progress, stage, tutorial: stage > 1 ? "done" : "intro" } });
 
 function withFish(m: Model, ...species: ("clownfish" | "bluetang" | "yellowfish")[]): Model {
-  let out = { ...m, coins: m.coins + 1000 };
+  let out: M = { ...m, coins: m.coins + 1000 };
   for (const s of species) {
     out = ok(buyFish(out, s));
     out = ok(placeFish(out, out.inv.fish[0].id, out.tanks[0].id));
@@ -79,7 +81,7 @@ describe("economy", () => {
   });
 
   it("does not sell fish when every place is taken (bags count)", () => {
-    let m = withFish(newModel(), "clownfish", "clownfish");
+    let m: M = withFish(newModel(), "clownfish", "clownfish");
     expect(freeSpace(m)).toBe(1);
     m = ok(buyFish(m, "clownfish"));
     expect(freeSpace(m)).toBe(0);
@@ -87,7 +89,7 @@ describe("economy", () => {
   });
 
   it("only places fish into a tank with room", () => {
-    let m = withFish(newModel(), "clownfish", "clownfish", "clownfish");
+    let m: M = withFish(newModel(), "clownfish", "clownfish", "clownfish");
     m = { ...m, inv: { ...m.inv, fish: [{ id: "fx", species: "clownfish" }] } };
     expect(placeFish(m, "fx", "t1")).toEqual({ ok: false, reason: "full" });
   });
@@ -95,7 +97,7 @@ describe("economy", () => {
   it("sells tanks only after Stage 3, and only while a slot is free", () => {
     const early = { ...newModel(), coins: 500 };
     expect(buyTank(early, "big")).toEqual({ ok: false, reason: "locked" });
-    let m = ok(buyTank(atStage(early, 4), "big"));
+    let m: M = ok(buyTank(atStage(early, 4), "big"));
     expect(m.coins).toBe(420);
     expect(buyTank(m, "big")).toEqual({ ok: false, reason: "full" });
     m = ok(placeTank(m, "big", "B"));
@@ -112,7 +114,7 @@ describe("economy", () => {
   });
 
   it("pays a reward key only once", () => {
-    let m = award(newModel(), 10, "v1");
+    let m: M = award(newModel(), 10, "v1");
     m = award(m, 10, "v1");
     expect(m.coins).toBe(110);
     m = helpVisitor(m, "v2", 10);
@@ -140,7 +142,7 @@ describe("decorations", () => {
   });
 
   it("are bought, placed, moved (swapping) and put away", () => {
-    let m = atStage(newModel(), 2);
+    let m: M = atStage(newModel(), 2);
     m = ok(buyDecor(m, "coral", "red"));
     expect(m.coins).toBe(90);
     const coral = m.lastId!;
@@ -162,7 +164,7 @@ describe("decorations", () => {
 
 describe("care", () => {
   it("feeding adds food (capped) and is refused when the fish are full", () => {
-    let m = withFish(newModel(), "clownfish");
+    let m: M = withFish(newModel(), "clownfish");
     m = decay(m, 150); // food 100 -> 50
     expect(tankById(m, "t1")!.food).toBeCloseTo(50);
     m = ok(feed(m, "t1"));
@@ -173,7 +175,7 @@ describe("care", () => {
   });
 
   it("cleaning restores the water", () => {
-    let m = withFish(newModel(), "clownfish");
+    let m: M = withFish(newModel(), "clownfish");
     m = decay(m, 200);
     expect(tankById(m, "t1")!.clean).toBeCloseTo(60);
     m = ok(clean(m, "t1"));
@@ -182,7 +184,7 @@ describe("care", () => {
   });
 
   it("decays only tanks with fish, and never below zero", () => {
-    let m = withFish(newModel(), "clownfish");
+    let m: M = withFish(newModel(), "clownfish");
     m = decay(m, 30);
     expect(tankById(m, "t1")!.food).toBeCloseTo(90);
     expect(tankById(m, "t1")!.clean).toBeCloseTo(94);
@@ -193,7 +195,7 @@ describe("care", () => {
   });
 
   it("happiness follows food, cleanliness and decorations", () => {
-    let m = withFish(atStage(newModel(), 2), "clownfish");
+    let m: M = withFish(atStage(newModel(), 2), "clownfish");
     const t0 = tankById(m, "t1")!;
     expect(happiness(t0)).toBe(60); // fed and clean, nothing to play with
     m = { ...m, coins: 100 };
@@ -222,7 +224,7 @@ describe("care", () => {
 
 describe("progression", () => {
   it("Stage 1 rewards decorations and two free ones", () => {
-    let m = ok(buyFish(newModel(), "clownfish"));
+    let m: M = ok(buyFish(newModel(), "clownfish"));
     m = ok(placeFish(m, m.lastId!, "t1"));
     expect(stageDone(m)).toBe(false);
     m = decay(m, 60);
@@ -240,7 +242,7 @@ describe("progression", () => {
   });
 
   it("Stage 2 needs two fish, the count and a clean; it unlocks the Yellow Fish", () => {
-    let m = withFish(atStage(newModel(), 2), "clownfish");
+    let m: M = withFish(atStage(newModel(), 2), "clownfish");
     expect(completeStage(m).ok).toBe(false);
     m = withFish(m, "bluetang");
     m = markCounted(m);
@@ -252,7 +254,7 @@ describe("progression", () => {
   });
 
   it("Stage 3 needs three helped visitors and unlocks tanks", () => {
-    let m = withFish(atStage(newModel(), 3), "clownfish");
+    let m: M = withFish(atStage(newModel(), 3), "clownfish");
     m = helpVisitor(helpVisitor(m, "a", 10), "b", 10);
     expect(completeStage(m).ok).toBe(false);
     m = helpVisitor(m, "c", 10);
@@ -262,7 +264,7 @@ describe("progression", () => {
   });
 
   it("Stage 4 needs the big tank with a fish and two decorations, then the special visitor pays once", () => {
-    let m = withFish(atStage(newModel(), 4), "clownfish");
+    let m: M = withFish(atStage(newModel(), 4), "clownfish");
     m = { ...m, coins: 200 };
     m = ok(buyTank(m, "big"));
     m = ok(placeTank(m, "big", "B"));
@@ -283,7 +285,7 @@ describe("progression", () => {
   });
 
   it("Stage 5 latches 'all happy', then the judge's star opens free play", () => {
-    let m = withFish(atStage(newModel(), 5), "clownfish");
+    let m: M = withFish(atStage(newModel(), 5), "clownfish");
     m = helpVisitor(helpVisitor(helpVisitor(m, "a", 10), "b", 10), "c", 10);
     expect(judgeReady(m)).toBe(false);
     m = latchHappy(m); // 60: not happy yet
