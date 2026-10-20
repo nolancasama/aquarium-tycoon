@@ -44,7 +44,11 @@ test("progress is saved as it happens and Continue restores it after a refresh",
   await page.waitForTimeout(600);
   await click3d(page, "tank", "t1");
   await waitFor(page, (x) => x.tanks[0].fish.length === 1, 5_000, "placed");
-  await page.waitForTimeout(1200); // autosave debounce
+  // Saved by the autosave itself (a closed lid or a crash fires no pagehide).
+  await page.waitForTimeout(1200);
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("at.save.v1") ?? "null"));
+  expect(stored.model.tanks[0].fish.map((f: { species: string }) => f.species)).toEqual(["bluetang"]);
+  expect(stored.model.coins).toBe(70);
   await page.reload();
   await expect(page.getByTestId("btn-continue")).toBeVisible();
   await page.getByTestId("btn-continue").click();
