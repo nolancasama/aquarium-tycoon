@@ -16,7 +16,6 @@ import {
   setCare,
   setTutorial,
   stageDone,
-  tankById,
   type Goal,
   type Model,
   type TutorialStep
@@ -576,8 +575,4 @@ export function storyTick(dt: number) {
 /** Tests: is a scripted flow running? */
 export function flowBusy() {
   return busyFlow;
-}
-
-export function tankName(id: string) {
-  return tankById(model(), id)?.type === "big" ? "Big tank" : "Small tank";
 }

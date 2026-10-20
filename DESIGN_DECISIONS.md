@@ -374,3 +374,48 @@ Zustand), GitHub Pages, and the testing list.
   bubbles, feed sprinkle, gulp, coin, purchase, happy chirp, visitor reactions,
   splash, unlock fanfare, mic on/off, correct, gentle error. Music and ambience
   silent while listening.
+
+## 2026-10-20 — Phase 1 decisions made while building
+
+- **Built directly by Claude** at the user's request ("do yourself, no router").
+- **Room:** 12 × 8 m, entrance in the left wall (in view of the management
+  camera), Pico's counter between the two pads, the bench at the front right
+  (request visitors sit facing the room centre, so they are seen in profile),
+  the trophy pedestal by the door. One short rope in front of each pad, so its
+  posts stay outside the close-up frame.
+- **Taps in a close-up pick the nearest thing on screen** (fish within 75 px,
+  decorations 80 px, decorating slots 120 px; a fish wins a near-tie). Moving
+  fish are hard targets for 8-year-olds; mesh-exact picking was rejected.
+- **Only a visitor waiting with a request takes a tap.** Anyone walking past,
+  or hidden because they stand between the close-up camera and the tank, lets
+  the tap through to the tank behind (a walking visitor used to swallow taps on
+  the big tank).
+- **The celebration is a three-quarter shot from the front-left**: the fish at
+  the glass and the visitor at the tank's right corner, turned to cheer toward
+  the player. Rejected: the first version shot over the visitor's shoulder
+  (a big back of a head).
+- **Stage cards may interrupt the decorating tray** (the goal was just met
+  there), never a carried fish, decoration or tank. Waiting for the tray to
+  close left children who never press OK without their reward.
+- **The judge comes the moment every tank is happy** (the latch); ordinary
+  visitors leave, a waiting request is dropped without penalty.
+- **The shop offers only colours the student can afford**; greyed cards show
+  the shortfall. Saying an unaffordable colour gets "Sorry! You need more
+  coins." and the question again.
+- **"Red or blue?" / "Big or small?" show both versions as pictures** (no
+  words) above the prompt, like the fish cards: the choice is meaningful and
+  the English still has to be produced or read.
+- **Interim acceptance has a known edge:** "blue orange" said in one breath is
+  accepted as blue if the recogniser first reports "blue" as an interim result.
+  This is the inherited rule (a valid interim result is accepted at once); a
+  two-colour utterance is judged unclear only when it arrives whole.
+- **The tutorial fish arrives hungry** (food 45), so the feeding lesson has a
+  visible reason; care time does not run during the tutorial or scripted
+  moments.
+- **Measured budget:** 48 draw calls, ~38k triangles with both tanks,
+  decorations and visitors (SwiftShader). Adaptive pixel ratio inherited.
+- **Short screens (phone landscape) are a fallback:** prompts take the whole
+  height (the goal card steps aside) and shop cards are compact. Chromebook
+  1366×768 is the tuned target; 1280×800 and 1024×600 touch are checked.
+- **Results:** the trophy stands left of the results card (camera view
+  offset) instead of hidden behind it.

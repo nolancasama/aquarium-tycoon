@@ -11,6 +11,12 @@ test("the whole loop in Tap mode: tutorial, five stages, the judge, free play", 
   await hook(page, "advance", 60);
   const s = await playing(page);
   expect(s.goals).toEqual([]);
+  // Chromebook budget with both tanks, decorations and visitors on screen.
+  await hook(page, "visitors", true);
+  await page.waitForTimeout(6000);
+  const perf = (await state(page)).perf;
+  console.log(`draw calls ${perf.calls}, triangles ${perf.triangles}`);
+  expect(perf.calls).toBeLessThan(150);
   await click3d(page, "tank", "t1");
   await waitFor(page, (x) => x.view === "tank", 5_000, "close-up");
   const food = (await state(page)).tanks[0].food;

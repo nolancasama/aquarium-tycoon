@@ -1,48 +1,60 @@
 # Current State
 
 ## Status
-Phase 1 vertical slice is implemented and plays end to end. Verified 2026-10-20:
-`npm test` (56 unit tests), typecheck, build, and the Tap-mode Playwright
-playthrough (`tests/e2e/loop.spec.ts`: tutorial → five stages → judge → results →
-free play) pass. Visuals checked by eye in screenshots at 1366×768
-(`.tmp/shots/tap/` from the e2e run with `SHOTS=1`, `.tmp/scenes/` from
-`node scripts/shots.mjs` at real speed).
+**Phase 1 (the vertical slice) is complete and tested.** A new player can start,
+buy a fish with English, place it, feed and clean, decorate, help visitors,
+earn coins, buy and place the big tank, pass the judge's inspection (Aquarium
+Star), and keep playing; progress saves and resumes; everything works in Tap
+mode and with a blocked or missing microphone.
+
+Verified 2026-10-20: typecheck, `npm test` (56 unit tests), build, and
+`npm run e2e` on the production preview: 15 Playwright specs passed (4.3 min).
+Every new e2e spec was shown to fail on an injected bug (autosave off, hard mic
+errors ignored, double reward, HUD pushed off-screen, interim results ignored)
+and pass again after reverting. Unit tests were shown to fail on a too-expensive
+big tank and on removed fish clamping.
+
+Visuals checked by eye at 1366×768 (`.tmp/shots/tap/`, `.tmp/scenes/`,
+`.tmp/peek/`) and at 844×390 touch (`.tmp/peek/844x390-touch/`). Layout at
+1366×768, 1280×800 touch and 1024×600 touch is asserted by `layout.spec.ts`.
+Budget measured: 48 draw calls, ~38k triangles with two tanks and visitors.
 
 ## What Exists
-- **Design:** DESIGN_DECISIONS.md "Phase 1 design (frozen)" is the spec.
-- **Rules (pure, tested):** `game/logic/model.ts` (economy, care, happiness,
-  rewards, stage goals), `swim.ts` (bounded fish steering), `requests.ts`,
-  `english.ts` + `speechMatch.ts`, `save.ts` (`at.save.v1`, validated),
-  `economy.test.ts` (simulated student through all stages).
-- **Flow:** `game/flow/ask.ts` (speech/tap prompts + hint ladder), `actions.ts`
-  (every button / 3D tap), `visitors.ts` (spawning, walking, tips, requests,
-  celebration shot), `story.ts` (tutorial, stage cards, Pico's count, photo
-  day, judge, autosave, nudges), `input.ts`. `game/sim.ts` per-frame step;
-  `runtime.ts` per-frame state; `store.ts` zustand.
-- **Scene:** `scene/Room.tsx`, `Tank.tsx` (water shader, glass, fish with
-  swim-bend shader, decorations, pellets, bubbles, dirt, sponge, badge,
-  nearest-target tap picking), `Visitors.tsx`, `Pico.tsx`, `Effects.tsx`,
-  `Markers.tsx`, `CameraRig.tsx`; models in `scene/models/`.
-- **UI:** `ui/Hud.tsx`, `Talk.tsx` (prompt, dialogue, request banner),
-  `Shop.tsx`, `Screens.tsx` (title, stage card, results), `Settings.tsx`.
-- **Test hook:** `window.__at` with `?e2e=1` (`state`, `where`, `freezeFish`,
-  `advance`, `setCare`, `visitors`, `requestVisitor`). `?fast=1` shortens waits.
-- **Dev:** `npx vite --port 5320`; `BASE_URL=http://127.0.0.1:5320 npx playwright test`
-  runs e2e against it (`SHOTS=1 SHOTS_DIR=name` saves screenshots).
-
-## Current Work
-Remaining Phase 1 checks: speech-mode playthrough (interim acceptance, wrong
-speech), mic-blocked fallback, save/continue/new game, layout at Chromebook and
-touch sizes, README, final full run on the built preview.
+- **Design:** DESIGN_DECISIONS.md — brief changes, the frozen Phase 1 design,
+  and decisions made while building.
+- **Rules (pure, tested):** `src/game/logic/` — `model.ts` (economy, care,
+  happiness, rewards, stage goals), `swim.ts`, `requests.ts`, `english.ts`,
+  `speechMatch.ts`, `save.ts` (`at.save.v1`), `economy.test.ts` (simulated
+  student through all five stages).
+- **Flow:** `src/game/flow/` — `ask.ts` (speech/tap prompts, hint ladder),
+  `actions.ts`, `visitors.ts`, `story.ts` (tutorial, stage cards, Pico's count,
+  photo day, judge, autosave, nudges), `input.ts`; `sim.ts`, `runtime.ts`,
+  `store.ts`.
+- **Scene / UI:** `src/scene/` (room, tanks with water/fish/decor shaders,
+  visitors, Pico, effects, markers, camera), `src/ui/` (HUD, prompts, shops,
+  screens, settings).
+- **Tests:** `tests/e2e/` — `loop`, `speech`, `fallback`, `save`, `requests`,
+  `layout` (+ `flows.ts`, `helpers.ts`, `stubs.ts`). README lists what each covers.
+- **Scripts:** `scripts/shots.mjs` (real-speed scenes), `scripts/peek.mjs`
+  (Speak-mode prompt states). Both need a server on 5320 (`npx vite --port 5320`).
+- **Deploy:** `.github/workflows/deploy-pages.yml` (tests + build + Pages once
+  public). The repository is local only (no GitHub remote yet).
 
 ## Known Issues
+- Real speech recognition, TTS voices, audio levels and real Chromebook GPU
+  performance are untested (stubs and SwiftShader only).
 - `THREE.Clock` deprecation warning from R3F (harmless).
-- SwiftShader runs at ~5–20 fps; real Chromebook GPU performance untested.
-- Real speech recognition and TTS voices untested (stubs only).
+- In the big tank's close-up the back-wall sign shows, cut off, at the top left.
+- Playtime (~20–30 min to the trophy) is an estimate, not measured with children.
 
 ## Next Steps
-1. Finish the remaining checks above.
-2. Play on a real Chromebook with a class.
+1. Play it on a real school Chromebook with a class: speech acceptance, whether
+   children find the visitor chip and the Decorate button, Stage 3–5 pacing.
+2. If wanted, publish: create the GitHub repo, push, make it public, enable
+   Pages (Actions).
+3. Phase 2 (per the brief): a larger room, more tank types and species,
+   upgrades, more visitors and decorations. Freeze its design first.
 
 ## Codex / Delegated Work
 None. The user asked Claude to implement directly ("do yourself, no router").
+Nothing is pending review.

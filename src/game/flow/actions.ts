@@ -1,4 +1,4 @@
-import { commit, getGame, model, setGame, toast, updateModel, type Panel } from "../store";
+import { commit, getGame, model, setGame, toast, type Panel } from "../store";
 import { effect, rt } from "../runtime";
 import type { DecorKind, DecorVariant, SlotId, SpeciesId } from "../types";
 import { SPECIES, SPECIES_BY_COLOR } from "../data/fish";
@@ -495,8 +495,4 @@ export function cardState(s: SpeciesId): "locked" | "coins" | "ok" {
   const m = model();
   if (!isSpeciesUnlocked(m, s)) return "locked";
   return m.coins >= SPECIES[s].price ? "ok" : "coins";
-}
-
-export function updateCareForTests(tankId: string, food: number, cleanLevel: number) {
-  updateModel((m) => ({ ...m, tanks: m.tanks.map((t) => (t.id === tankId ? { ...t, food, clean: cleanLevel } : t)) }));
 }

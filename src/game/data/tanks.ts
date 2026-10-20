@@ -58,9 +58,3 @@ export const SLOT_POS: Record<SlotId, Vec3> = {
 };
 
 export const SLOT_ORDER: SlotId[] = ["A", "B"];
-
-/** Where a visitor stands to look into a tank (in front of it). */
-export function viewingSpot(slot: SlotId, offset = 0): { x: number; z: number } {
-  const p = SLOT_POS[slot];
-  return { x: p.x + offset, z: p.z + 1.45 };
-}

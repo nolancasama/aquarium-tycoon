@@ -66,4 +66,10 @@ test("silence and a network error are ordinary misses, not a switch to buttons",
   s = await waitFor(page, (x) => Boolean(x.prompt), 5_000, "feed prompt");
   expect(s.prompt!.buttons).toBe(true);
   expect((await state(page)).micState).toBe("ready");
+  // In Tap mode, Space never opens the microphone.
+  const starts = await page.evaluate(() => (window as never as { __speech: { starts: number } }).__speech.starts);
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => (window as never as { __speech: { starts: number } }).__speech.starts)).toBe(starts);
+  expect((await state(page)).prompt?.status).toBe("ready");
 });
