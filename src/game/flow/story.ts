@@ -498,7 +498,8 @@ async function judgeVisit(g: number) {
     alive(g);
     rt.camera.shot = null;
     judge.scripted = false;
-    leave(judge);
+    // Gone at once: walking out, the judge would cross the trophy shot.
+    judge.state = "gone";
     setGame({ screen: "results", mode: "play" });
   } finally {
     scripted.busy = false;
@@ -572,7 +573,8 @@ async function judgeVisit2(g: number) {
     alive(g);
     rt.camera.shot = null;
     judge.scripted = false;
-    leave(judge);
+    // Gone at once: walking out, the judge would cross the trophy shot.
+    judge.state = "gone";
     setGame({ screen: "results", mode: "play" });
   } finally {
     scripted.busy = false;

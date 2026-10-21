@@ -31,6 +31,7 @@ export function installE2eHook(seed: number) {
         mode: g.mode,
         view: g.view,
         tankId: g.tankId,
+        hall: g.hall,
         panel: g.panel,
         placing: g.placing,
         micState: g.micState,

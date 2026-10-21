@@ -114,7 +114,7 @@ function GoalCard() {
   return (
     <div className="panel goals ui" data-testid="goals">
       <header>
-        {p.star ? (
+        {p.star && list.length === 0 ? (
           <>
             <Icon id="star" size={22} /> Free play <Ja>じゆうに あそぼう</Ja>
           </>

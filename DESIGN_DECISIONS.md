@@ -505,3 +505,14 @@ with three more levels. Phase 1 saves migrate (a starred save starts Level 6).
 `at.save.v1` saves are migrated to version 2 on load (new fields get
 defaults); unknown versions are still discarded. Rejected: discarding Phase 1
 saves (classes would lose their aquariums on update).
+
+### Decided while testing Phase 2 (2026-10-22)
+
+- **Goal card header:** once the player has the star, it says "Free play" only
+  when no goals are left; during Levels 6–8 it shows "Lv N" and the level name.
+  Rejected: "Free play" over the Level 6–8 goals (it hid that a new level had
+  started).
+- **The judge leaves the results screen at once.** After both inspections the
+  judge disappears as the results card appears instead of walking out.
+  Walking, they crossed the trophy shot and filled half the screen. Rejected:
+  moving the results camera (the trophy orbit is the point of that shot).

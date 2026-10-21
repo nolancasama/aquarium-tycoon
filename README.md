@@ -62,7 +62,9 @@ speech, hint ladder, interim results, accents and digits), `fallback` (blocked
 or missing microphone, silence, mode switch), `save` (autosave, continue,
 restored tanks/unlocks/settings, new game, corrupted save), `requests` ("show
 me" ladder, rewards once, waiting without a timer, counting clue), `layout`
-(HUD fits at 1366×768, 1280×800 touch and 1024×600 touch; touch shopping).
+(HUD fits at 1366×768, 1280×800 touch and 1024×600 touch; touch shopping),
+`phase2` (Levels 6–8 from a starred save: Ocean Hall, habitats, tall tank,
+"What's this?", upgrades, the second judge; animal names by voice).
 
 Test hook: `?e2e=1` exposes `window.__at` (state, screen positions, frozen
 fish, time, visitors); `?fast=1` shortens waits; `?seed=N` fixes randomness.

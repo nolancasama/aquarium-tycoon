@@ -10,7 +10,8 @@ test("the whole loop in Tap mode: tutorial, five stages, the judge, free play", 
   // Free play: everything stays open; caring still works.
   await hook(page, "advance", 60);
   const s = await playing(page);
-  expect(s.goals).toEqual([]);
+  // Free play goes on with Level 6 (the Ocean Hall).
+  expect(s.goals.map((g) => g.id)).toEqual(["openHall", "turtle", "help"]);
   // Chromebook budget with both tanks, decorations and visitors on screen.
   await hook(page, "visitors", true);
   await page.waitForTimeout(6000);

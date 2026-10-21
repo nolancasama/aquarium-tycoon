@@ -13,6 +13,10 @@ export type AnswerMode = "tap" | "speak";
 
 const SPOKEN: Record<string, string> = {
   orangePlease: "orange please",
+  turtlePlease: "a turtle, please",
+  jellyfishPlease: "jellyfish please",
+  itsTurtle: "it's a turtle",
+  itsJellyfish: "it's a jellyfish",
   bluePlease: "Blue, please!",
   yellowPlease: "yellow please",
   redPlease: "red please",
@@ -32,7 +36,7 @@ const SPOKEN: Record<string, string> = {
 
 export const reply = (page: Page, id: string) => answer(page, id, SPOKEN[id] ?? id);
 
-async function toRoom(page: Page) {
+export async function toRoom(page: Page) {
   const s = await state(page);
   if (s.view === "tank") {
     // The game may already be on its way back to the room (a scripted moment).
@@ -42,17 +46,26 @@ async function toRoom(page: Page) {
   }
 }
 
-async function openTank(page: Page, tankId: string) {
+export async function openTank(page: Page, tankId: string) {
   const s = await state(page);
   if (s.view === "tank" && s.tankId === tankId) return;
   await toRoom(page);
+  // Tanks on pads C–E are in the Ocean Hall.
+  const slot = (await state(page)).tanks.find((t) => t.id === tankId)!.slot;
+  const hall = ["C", "D", "E"].includes(slot) ? 1 : 0;
+  if ((await state(page)).hall !== hall) {
+    // The arrows hide while a scripted moment (the judge) runs: fail, don't hang.
+    await page.getByTestId(hall ? "btn-hall-next" : "btn-hall-prev").click({ timeout: 5_000 });
+    await waitFor(page, (x) => x.hall === hall, 5_000, `hall ${hall}`);
+    await settle(page, 1200);
+  }
   await click3d(page, "tank", tankId);
   await waitFor(page, (x) => x.view === "tank" && x.tankId === tankId, 5_000, `close-up of ${tankId}`);
   await settle(page, 1100);
 }
 
 /** Tap a fish of this species in the tank (fish frozen so the click lands). */
-async function tapFishOf(page: Page, tankId: string, species: string) {
+export async function tapFishOf(page: Page, tankId: string, species: string) {
   await openTank(page, tankId);
   await hook(page, "freezeFish", true);
   await settle(page, 300);
@@ -107,7 +120,7 @@ async function buyFish(page: Page, phrase: string, tankId: string) {
   await waitFor(page, (s) => s.tanks.find((t) => t.id === tankId)!.fish.length === count + 1, 5_000, "fish poured in");
 }
 
-async function earnTo(page: Page, coins: number) {
+export async function earnTo(page: Page, coins: number) {
   while ((await state(page)).coins < coins) await helpChat(page);
 }
 
@@ -118,7 +131,7 @@ const judgeComing = (s: AtState) => s.progress.allHappy || s.mode !== "play" || 
  * happy yet (decorations are what make fish happy). The judge comes the
  * moment every tank is happy, so every step first checks that it has not.
  */
-async function makeHappy(page: Page, ids: string[]) {
+export async function makeHappy(page: Page, ids: string[]) {
   await page.waitForTimeout(1500);
   for (let round = 0; round < 3 && !judgeComing(await state(page)); round++) {
     for (const id of ids) {
@@ -138,7 +151,8 @@ async function makeHappy(page: Page, ids: string[]) {
       if (judgeComing(now) || (t.happy ?? 0) >= 72) continue;
       // Not happy enough: a coral in a free slot.
       const used = new Set(t.decor.map((d) => d.slot));
-      const free = [0, 1, 2, 3, 4].find((i) => !used.has(i) && i < (t.type === "big" ? 5 : 3));
+      const slots = { small: 3, big: 5, tall: 2, ocean: 6 }[t.type as "small" | "big" | "tall" | "ocean"];
+      const free = [0, 1, 2, 3, 4, 5].find((i) => !used.has(i) && i < slots);
       if (free === undefined) continue;
       await earnTo(page, 10);
       if (judgeComing(await state(page))) break;

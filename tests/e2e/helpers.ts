@@ -8,13 +8,14 @@ export interface AtState {
   mode: string;
   view: string;
   tankId: string | null;
+  hall: 0 | 1;
   panel: string | null;
   placing: { kind: string; slot?: string | null } | null;
   micState: string;
   coins: number;
   stage: number;
   tutorial: string;
-  progress: { stage: number; tutorial: string; hearts: number; helpedInStage: number; counted: boolean; cleanedOnce: boolean; fedOnce: boolean; allHappy: boolean; star: boolean; freePlay: boolean; photo: boolean; said: string[]; firstFish: string | null };
+  progress: { stage: number; tutorial: string; hearts: number; helpedInStage: number; counted: boolean; cleanedOnce: boolean; fedOnce: boolean; allHappy: boolean; star: boolean; freePlay: boolean; photo: boolean; said: string[]; firstFish: string | null; hallOpen: boolean; namedInStage: number; superStar: boolean };
   goals: { id: string; done: boolean; n?: number; of?: number }[];
   tanks: { id: string; slot: string; type: string; fish: string[]; fishIds: string[]; decor: { slot: number; kind: string; variant: string | null }[]; food: number; clean: number; happy: number | null }[];
   inv: { fish: number; decor: { id: string; kind: string; variant: string | null }[]; tanks: number };

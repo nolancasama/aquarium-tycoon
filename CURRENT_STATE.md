@@ -19,6 +19,24 @@ Visuals checked by eye at 1366×768 (`.tmp/shots/tap/`, `.tmp/scenes/`,
 1366×768, 1280×800 touch and 1024×600 touch is asserted by `layout.spec.ts`.
 Budget measured: 48 draw calls, ~38k triangles with two tanks and visitors.
 
+## Phase 2 (built and tested, 2026-10-22)
+Design in DESIGN_DECISIONS.md "Phase 2 design: Aquarium Expansion" (plus
+"Decided while testing Phase 2"). Levels 6–8: the Ocean Hall (second room,
+arrows to switch), turtle / seahorse / jellyfish with habitats, tall and ocean
+tanks, upgrades, ticket gate, "I like turtles!", "What's this? — It's a ___.",
+numbers to ten, the second judge and Super Aquarium Star. Save v2 migrates v1.
+
+Verified 2026-10-22: typecheck, `npm test` (93 unit tests), build, and the
+full e2e suite on the production preview: 17 specs passed (8.1 min).
+`phase2.spec.ts` plays Levels 6–8 from a starred save (Tap) and checks
+animal answers by voice; both specs were shown to fail on an injected bug
+(turtle allowed in the small tank; "It's a fish." accepted for the turtle) and
+pass after reverting. Screenshots checked by eye at 1366×768
+(`.tmp/shots/phase2/`, `.tmp/shots/final/`).
+Fixed while testing: goal card said "Free play" over the Level 6–8 goals; the
+leaving judge blocked the trophy on both results screens; test helpers now
+switch halls.
+
 ## What Exists
 - **Design:** DESIGN_DECISIONS.md — brief changes, the frozen Phase 1 design,
   and decisions made while building.
@@ -52,8 +70,8 @@ Budget measured: 48 draw calls, ~38k triangles with two tanks and visitors.
    children find the visitor chip and the Decorate button, Stage 3–5 pacing.
 2. If wanted, publish: create the GitHub repo, push, make it public, enable
    Pages (Actions).
-3. Phase 2 (per the brief): a larger room, more tank types and species,
-   upgrades, more visitors and decorations. Freeze its design first.
+3. Phase 2 by eye in real time (not just screenshots): the animals' movement,
+   hall switching, and Level 6–8 pacing with children.
 
 ## Codex / Delegated Work
 None. The user asked Claude to implement directly ("do yourself, no router").
