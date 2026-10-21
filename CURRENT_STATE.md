@@ -55,8 +55,9 @@ switch halls.
   `layout` (+ `flows.ts`, `helpers.ts`, `stubs.ts`). README lists what each covers.
 - **Scripts:** `scripts/shots.mjs` (real-speed scenes), `scripts/peek.mjs`
   (Speak-mode prompt states). Both need a server on 5320 (`npx vite --port 5320`).
-- **Deploy:** `.github/workflows/deploy-pages.yml` (tests + build + Pages once
-  public). The repository is local only (no GitHub remote yet).
+- **Deploy:** public repo github.com/nolancasama/aquarium-tycoon; every push to
+  `main` runs tests + build and deploys to https://nolancasama.github.io/aquarium-tycoon/
+  (`.github/workflows/deploy-pages.yml`). Live since 2026-10-22.
 
 ## Known Issues
 - Real speech recognition, TTS voices, audio levels and real Chromebook GPU
@@ -68,9 +69,7 @@ switch halls.
 ## Next Steps
 1. Play it on a real school Chromebook with a class: speech acceptance, whether
    children find the visitor chip and the Decorate button, Stage 3–5 pacing.
-2. If wanted, publish: create the GitHub repo, push, make it public, enable
-   Pages (Actions).
-3. Phase 2 by eye in real time (not just screenshots): the animals' movement,
+2. Phase 2 by eye in real time (not just screenshots): the animals' movement,
    hall switching, and Level 6–8 pacing with children.
 
 ## Codex / Delegated Work
