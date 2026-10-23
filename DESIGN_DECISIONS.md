@@ -516,3 +516,32 @@ saves (classes would lose their aquariums on update).
   judge disappears as the results card appears instead of walking out.
   Walking, they crossed the trophy shot and filled half the screen. Rejected:
   moving the results camera (the trophy orbit is the point of that shot).
+
+## 2026-10-24 — Tank and animal visual polish (part 1)
+
+- Keep the bright, warm cartoon direction: readable silhouettes, soft gradients,
+  gentle wet highlights and clean species colours at 1366×768. Detail belongs on
+  the animals and inside the tanks. Hall geometry, room lighting and room art
+  remain a separate pass.
+- Use shared procedural CanvasTextures (256–512 px), existing vertex colours and
+  small shader patches, with no asset files. School networks can block external
+  assets. Sand has seeded painted patches, fine grain and sparse pebbles; its
+  existing merged surface and dune receive cheap scrolling caustics. Decorations
+  use vertex colour finishes; animals retain their geometry and animation with
+  species detail, belly gradients, soft rims and highlights in the fish shader.
+- Keep water saturated cyan at the surface and deep blue below, preserving the
+  original display-space palette and readable animated light patches. Applying
+  an extra sRGB conversion washed the blue into mint and was rejected. Glass
+  uses soft bright side edges and one faint diagonal streak on existing panes.
+  Animal gradients, wet rims and decoration markings use broad contrast that
+  remains visible at normal 1366×768 gameplay scale. Dirty water
+  keeps its distinct green murk and algae. Contact blobs reuse the existing
+  radial shadow texture, merged into one batch per tank, following the sand.
+- Reject external textures (network reliability and inconsistent art), real
+  shadows/reflections/refraction (extra passes and Chromebook cost), and extra
+  animal/decoration geometry for surface detail (cost without useful silhouette
+  improvement). No postprocessing or shadow maps.
+- `scripts/visual.mjs` uses the speech stubs, seeded Phase-2 save, test hook and
+  fixed virtual frames to capture both halls, every species, decorations, puff,
+  care states and pellets. Its mixed Ocean trio is explicitly a review tableau;
+  normal saved habitats still separate turtles, seahorses and jellyfish.

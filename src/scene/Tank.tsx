@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { getGame, useGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { SPECIES } from "../game/data/fish";
@@ -12,7 +13,7 @@ import { tapDecor, tapFish, tapSlot, tapTank } from "../game/flow/actions";
 import { tankShellGeometry } from "./models/room";
 import { fishGeometry, turtleModel } from "./models/fish";
 import { decorModel } from "./models/decor";
-import { additiveSprite, algaeTexture, badgeTexture, flatMat, fishMaterial, glassTexture, glowTexture, shaderTime, surfaceMaterial, waterMaterial } from "./materials";
+import { additiveSprite, algaeTexture, badgeTexture, flatMat, fishMaterial, glassTexture, glowTexture, shaderTime, shadowMaterial, surfaceMaterial, tankShellMaterial, waterMaterial } from "./materials";
 import { project, FOV } from "./CameraRig";
 
 /** Every placed tank. */
@@ -118,7 +119,8 @@ function Tank({ tank }: { tank: TankRec }) {
   const yMid = STAND_H + def.h / 2;
   return (
     <group position={[o.x, 0, o.z]}>
-      <mesh geometry={shell} material={flatMat} />
+      <mesh geometry={shell} material={tankShellMaterial} />
+      <ContactShadows tank={tank} />
       <mesh position={[0, yMid, 0]} material={water}>
         <boxGeometry args={[def.w, def.h, def.d]} />
       </mesh>
@@ -166,12 +168,12 @@ function Glass({ w, d, h }: { w: number; d: number; h: number }) {
         map: glassTexture(),
         color: "#e8fbff",
         transparent: true,
-        opacity: 0.22,
+        opacity: 0.34,
         depthWrite: false
       }),
     []
   );
-  const side = useMemo(() => new THREE.MeshBasicMaterial({ color: "#d9f6ff", transparent: true, opacity: 0.12, depthWrite: false }), []);
+  const side = useMemo(() => new THREE.MeshBasicMaterial({ map: glassTexture(), color: "#d9f6ff", transparent: true, opacity: 0.22, depthWrite: false }), []);
   const y = STAND_H + h / 2;
   return (
     <group renderOrder={5}>
@@ -212,7 +214,7 @@ function FishMesh({ id, species, tankId }: { id: string; species: SpeciesId; tan
 function BendingFish({ id, species, tankId }: { id: string; species: SpeciesId; tankId: string }) {
   const ref = useRef<THREE.Mesh>(null);
   const def = SPECIES[species];
-  const mat = useMemo(() => fishMaterial(def.length), [def.length]);
+  const mat = useMemo(() => fishMaterial(def.length, species), [def.length, species]);
   useEffect(() => () => mat.dispose(), [mat]);
   const glow = useRef(0);
   const puff = useRef(0);
@@ -261,7 +263,15 @@ function BendingFish({ id, species, tankId }: { id: string; species: SpeciesId; 
 /** The jellyfish: a see-through bell that pulses as it drifts. */
 function JellyMesh({ id, tankId }: { id: string; tankId: string }) {
   const ref = useRef<THREE.Mesh>(null);
-  const mat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false, emissive: new THREE.Color(0.12, 0.04, 0.2) }), []);
+  const mat = useMemo(() => {
+    const m = fishMaterial(SPECIES.jellyfish.length, "jellyfish");
+    m.userData.uAmp.value = 0;
+    m.transparent = true;
+    m.opacity = 0.78;
+    m.depthWrite = false;
+    m.emissive.setRGB(0.12, 0.04, 0.2);
+    return m;
+  }, []);
   useEffect(() => () => mat.dispose(), [mat]);
   const glow = useRef(0);
   useFrame((_, dt) => {
@@ -287,7 +297,11 @@ function TurtleMesh({ id, tankId }: { id: string; tankId: string }) {
   const model = turtleModel();
   const group = useRef<THREE.Group>(null);
   const flippers = useRef<(THREE.Mesh | null)[]>([]);
-  const mat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), []);
+  const mat = useMemo(() => {
+    const m = fishMaterial(SPECIES.turtle.length, "turtle");
+    m.userData.uAmp.value = 0;
+    return m;
+  }, []);
   useEffect(() => () => mat.dispose(), [mat]);
   const glow = useRef(0);
   const a = SPECIES.turtle.length * 0.42;
@@ -330,6 +344,36 @@ function TurtleMesh({ id, tankId }: { id: string; tankId: string }) {
 }
 
 // ------------------------------------------------------------------ decorations
+
+const contactMat = shadowMaterial(0.24);
+
+/** One merged blob batch per tank, fitted to the existing sand/dune surface. */
+function ContactShadows({ tank }: { tank: TankRec }) {
+  const def = TANKS[tank.type];
+  const geo = useMemo(() => {
+    const parts = tank.decor.map((d) => {
+      const slot = def.slots[d.slot];
+      const width = ({ plant: 0.3, coral: 0.28, rock: d.variant === "big" ? 0.46 : 0.3, shell: 0.22, chest: 0.4, bubbler: 0.24, starfish: 0.25, castle: 0.4, anemone: 0.3, shipwreck: 0.52 })[d.kind] * def.h;
+      const g = new THREE.PlaneGeometry(width, width * 0.72, 8, 8);
+      g.rotateX(-Math.PI / 2);
+      const p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        const x = slot.x + p.getX(i), z = slot.z + p.getZ(i);
+        const radius = def.w * 0.32;
+        const k = 1 - ((x + def.w * 0.18) / radius) ** 2 - ((z + def.d * 0.18) / (radius * 0.55)) ** 2;
+        const dune = STAND_H + SAND_H - 0.01 + radius * 0.09 * Math.sqrt(Math.max(0, k));
+        p.setXYZ(i, x, Math.max(STAND_H + SAND_H, dune) + 0.002, z);
+      }
+      return g;
+    });
+    if (!parts.length) return new THREE.BufferGeometry();
+    const g = mergeGeometries(parts);
+    parts.forEach((part) => part.dispose());
+    return g;
+  }, [tank.decor, def]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  return tank.decor.length ? <mesh geometry={geo} material={contactMat} /> : null;
+}
 
 function Decorations({ tank }: { tank: TankRec }) {
   return (

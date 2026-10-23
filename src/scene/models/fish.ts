@@ -43,7 +43,8 @@ class FishBuilder {
 
   build(): THREE.BufferGeometry {
     const g = this.b.build();
-    g.computeVertexNormals();
+    // Keep the primitives' smooth normals: recomputing on merged,
+    // non-indexed triangles turns every rounded body into flat facets.
     g.computeBoundingSphere();
     return g;
   }
@@ -214,7 +215,6 @@ function jellyfish(L: number) {
   for (const x of [-1, 1]) b.add(new THREE.SphereGeometry(r * 0.09, 8, 6), "#3a1a5a", [x * r * 0.28, r * 0.25, r * 0.78], [0, 0, 0], [1, 1.2, 0.6], { vary: false });
   b.add(new THREE.TorusGeometry(r * 0.12, r * 0.025, 4, 10, Math.PI), "#3a1a5a", [0, r * 0.12, r * 0.84], [0, 0, Math.PI], [1, 1, 1], { vary: false });
   const g = b.build();
-  g.computeVertexNormals();
   return g;
 }
 
@@ -253,7 +253,6 @@ function turtle(L: number): TurtleModel {
     const b = new PartBuilder(0);
     b.add(new THREE.SphereGeometry(1, 12, 8), "#86c25a", [len * 0.12, 0, len * 0.5], [0, -0.35, 0], [len * 0.22, len * 0.06, len * 0.5], { vary: false });
     const g = b.build();
-    g.computeVertexNormals();
     return g;
   };
   return { body, front: flipper(L * 0.5), back: flipper(L * 0.26) };

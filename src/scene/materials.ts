@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { SpeciesId } from "../game/types";
 
 /**
  * Shared materials and procedural textures. Everything is vertex-coloured
@@ -288,25 +289,99 @@ export const algaeTexture = () =>
 /** Diagonal highlights on the glass. */
 export const glassTexture = () =>
   cached("glass", () =>
-    canvasTex(256, 128, (g) => {
-      g.fillStyle = "rgba(255,255,255,0)";
-      g.fillRect(0, 0, 256, 128);
-      g.fillStyle = "rgba(255,255,255,0.55)";
-      for (const [x, w] of [
-        [40, 14],
-        [64, 5],
-        [190, 9]
-      ]) {
-        g.beginPath();
-        g.moveTo(x, 0);
-        g.lineTo(x + w, 0);
-        g.lineTo(x + w - 40, 128);
-        g.lineTo(x - 40, 128);
-        g.closePath();
-        g.fill();
+    canvasTex(256, 256, (g) => {
+      const streak = g.createLinearGradient(0, 0, 256, 120);
+      for (const [stop, alpha] of [[0, 0], [0.29, 0], [0.36, 0.28], [0.43, 0], [1, 0]]) {
+        streak.addColorStop(stop, `rgba(255,255,255,${alpha})`);
       }
+      g.fillStyle = streak;
+      g.fillRect(0, 0, 256, 256);
+      for (const x of [0, 256]) {
+        const corner = g.createRadialGradient(x, 256, 0, x, 256, 44);
+        corner.addColorStop(0, "rgba(24,95,119,0.26)");
+        corner.addColorStop(1, "rgba(24,95,119,0)");
+        g.fillStyle = corner;
+        g.fillRect(0, 0, 256, 256);
+      }
+      const edges = g.createLinearGradient(0, 0, 256, 0);
+      for (const [stop, alpha] of [[0, 0.95], [0.008, 0.7], [0.025, 0.12], [0.045, 0], [0.955, 0], [0.975, 0.12], [0.992, 0.7], [1, 0.95]]) edges.addColorStop(stop, `rgba(239,255,255,${alpha})`);
+      g.fillStyle = edges;
+      g.fillRect(0, 0, 256, 256);
+      g.strokeStyle = "rgba(226,255,255,0.65)";
+      g.beginPath();
+      g.moveTo(2, 7);
+      g.lineTo(254, 7);
+      g.stroke();
     })
   );
+
+/** Warm painted sand: seeded, seamless patches, quiet grain, sparse pebbles. */
+export const sandTexture = () => cached("sand", () => {
+  const t = canvasTex(512, 512, (g) => {
+    g.fillStyle = "#efd9a7";
+    g.fillRect(0, 0, 512, 512);
+    let seed = 29;
+    const r = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+    for (let i = 0; i < 32; i++) {
+      const x = r() * 512, y = r() * 512, radius = 25 + r() * 65;
+      for (const dx of [-512, 0, 512]) for (const dy of [-512, 0, 512]) {
+        const patch = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, radius);
+        patch.addColorStop(0, i % 2 ? "rgba(210,170,106,0.14)" : "rgba(255,247,216,0.3)");
+        patch.addColorStop(1, "rgba(239,217,167,0)");
+        g.fillStyle = patch;
+        g.fillRect(x + dx - radius, y + dy - radius, radius * 2, radius * 2);
+      }
+    }
+    for (let i = 0; i < 4600; i++) {
+      g.fillStyle = i % 2 ? "rgba(167,127,77,0.12)" : "rgba(255,254,235,0.24)";
+      g.fillRect(r() * 512, r() * 512, 0.6 + r(), 0.6 + r());
+    }
+    for (let i = 0; i < 22; i++) {
+      const x = 8 + r() * 496, y = 8 + r() * 496;
+      g.fillStyle = ["#c8b590", "#d3c5ae", "#f9ebc7"][i % 3];
+      g.beginPath(); g.ellipse(x, y, 1.4 + r() * 1.5, 1 + r(), r() * 3, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "rgba(255,250,228,0.6)";
+      g.fillRect(x - 0.8, y - 0.8, 1.3, 0.6);
+    }
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.generateMipmaps = true;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  return t;
+});
+
+// Patch the existing merged tank shell, including its dune, without adding a
+// coplanar sand plane or touching the room model/materials. One shared material.
+export const tankShellMaterial = (() => {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uSand = { value: sandTexture() };
+    shader.uniforms.uTime = shaderTime;
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>
+varying vec3 vTankPos;
+varying vec3 vTankUp;`).replace("#include <begin_vertex>", `#include <begin_vertex>
+vTankPos = position;
+vTankUp = normalMatrix * vec3(0.0, 1.0, 0.0);`);
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
+varying vec3 vTankPos;
+varying vec3 vTankUp;
+uniform sampler2D uSand;
+uniform float uTime;`).replace("#include <color_fragment>", `#include <color_fragment>
+// Beige sand only: exclude coloured pebbles, posts, cabinet and filter.
+float sand = step(0.749, vTankPos.y) * (1.0 - step(0.94, vTankPos.y))
+  * step(vColor.b * 1.35, vColor.r) * step(vColor.r * 0.74, vColor.g);
+vec2 sp = vTankPos.xz * 1.8;
+vec3 painted = texture2D(uSand, sp).rgb;
+float c1 = sin(sp.x * 12.0 + sin(sp.y * 9.0 + uTime * 0.32))
+  * sin(sp.y * 11.0 - uTime * 0.25);
+float c2 = sin(sp.x * 8.0 - sp.y * 10.0 + uTime * 0.38);
+float caustic = smoothstep(0.72, 1.0, c1 * 0.65 + c2 * 0.35);
+diffuseColor.rgb = mix(diffuseColor.rgb, painted * (0.88 + caustic * 0.08), sand);`).replace("#include <normal_fragment_begin>", `#include <normal_fragment_begin>
+normal = normalize(mix(normal, normalize(vTankUp), sand * 0.85));`);
+  };
+  m.customProgramCacheKey = () => "tank-sand-v1";
+  return m;
+})();
 
 export const floorTexture = () =>
   cached("floor", () => {
@@ -591,14 +666,15 @@ export function waterMaterial(h: number): THREE.ShaderMaterial & { uniforms: { u
       varying vec3 vN;
       void main() {
         float t = clamp((vPos.y + uH * 0.5) / uH, 0.0, 1.0);
-        vec3 deep = vec3(0.05, 0.36, 0.58);
-        vec3 top = vec3(0.36, 0.83, 0.93);
+        // These are display-space colours, matching the original water shader.
+        vec3 deep = vec3(0.035, 0.29, 0.53);
+        vec3 top = vec3(0.30, 0.81, 0.94);
         vec3 col = mix(deep, top, smoothstep(0.0, 1.0, t));
         vec2 p = abs(vN.z) > 0.5 ? vPos.xy : vPos.zy;
         p *= 7.0;
         float c = sin(p.x * 1.7 + uTime * 1.1) * sin(p.y * 2.3 - uTime * 0.9) + 0.6 * sin((p.x + p.y) * 2.9 + uTime * 1.4);
-        col += smoothstep(0.7, 1.4, c) * 0.16 * (0.4 + t);
-        col = mix(col, vec3(0.38, 0.47, 0.25), uDirt * 0.6);
+        col += smoothstep(0.7, 1.4, c) * 0.16 * (0.4 + t) * (1.0 - uDirt * 0.7);
+        col = mix(col, vec3(0.33, 0.43, 0.16), uDirt * 0.8);
         gl_FragColor = vec4(col, 1.0);
       }`
   }) as THREE.ShaderMaterial & { uniforms: { uDirt: { value: number } } };
@@ -623,9 +699,10 @@ export function surfaceMaterial(): THREE.ShaderMaterial & { uniforms: { uDirt: {
       void main() {
         vec2 p = vUv * vec2(9.0, 5.0);
         float r = sin(p.x * 2.1 + uTime * 1.6) * sin(p.y * 2.7 - uTime * 1.2) + 0.5 * sin((p.x - p.y) * 3.3 + uTime * 2.0);
-        float hi = smoothstep(0.5, 1.3, r);
-        vec3 col = mix(vec3(0.62, 0.92, 0.98), vec3(0.55, 0.62, 0.35), uDirt * 0.6) + hi * 0.25;
-        gl_FragColor = vec4(col, 0.42 + hi * 0.25);
+        float hi = smoothstep(0.8, 1.4, r);
+        float edge = 1.0 - smoothstep(0.0, 0.025, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
+        vec3 col = mix(vec3(0.50, 0.89, 0.98), vec3(0.38, 0.52, 0.23), uDirt * 0.7) + hi * 0.22 + edge * 0.14;
+        gl_FragColor = vec4(col, 0.30 + hi * 0.18 + edge * 0.18);
       }`
   }) as THREE.ShaderMaterial & { uniforms: { uDirt: { value: number } } };
 }
@@ -639,29 +716,111 @@ export interface FishMaterial extends THREE.MeshLambertMaterial {
  * (vertex shader), so one mesh per fish swims smoothly. All fish share one
  * compiled program; the uniforms are per fish.
  */
-export function fishMaterial(length: number): FishMaterial {
+export function fishMaterial(length: number, species: SpeciesId = "clownfish"): FishMaterial {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true }) as FishMaterial;
   m.userData = { uPhase: { value: 0 }, uAmp: { value: 0.3 }, uLen: { value: length } };
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uPhase = m.userData.uPhase;
     shader.uniforms.uAmp = m.userData.uAmp;
     shader.uniforms.uLen = m.userData.uLen;
+    shader.uniforms.uSpecies = { value: ["clownfish", "bluetang", "yellowfish", "pufferfish", "turtle", "seahorse", "jellyfish"].indexOf(species) };
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
         `#include <common>
 uniform float uPhase;
 uniform float uAmp;
-uniform float uLen;`
+uniform float uLen;
+varying vec3 vFishPos;
+varying vec3 vFishNormal;
+varying vec2 vFishUv;`
       )
       .replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
+vFishPos = position / uLen;
+vFishNormal = normal;
+vFishUv = uv;
 float bt = clamp((uLen * 0.22 - transformed.x) / uLen, 0.0, 1.3);
 transformed.z += sin(uPhase - bt * 2.6) * uAmp * bt * bt * uLen;`
       );
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
+uniform float uSpecies;
+varying vec3 vFishPos;
+varying vec3 vFishNormal;
+varying vec2 vFishUv;`).replace("#include <color_fragment>", `#include <color_fragment>
+vec3 fp = vFishPos;
+float chroma = max(vColor.r, max(vColor.g, vColor.b)) - min(vColor.r, min(vColor.g, vColor.b));
+float colourMask = smoothstep(0.03, 0.18, chroma);
+float brightMask = smoothstep(0.06, 0.3, max(vColor.r, max(vColor.g, vColor.b)));
+float belly = 1.0 - smoothstep(-0.23, 0.12, fp.y);
+diffuseColor.rgb *= mix(0.76, 1.12, belly * brightMask);
+vec3 bellyColour = uSpecies == 1.0 ? vec3(0.22, 0.52, 1.0) : vec3(1.0, 0.86, 0.58);
+diffuseColor.rgb = mix(diffuseColor.rgb, bellyColour, belly * colourMask * brightMask * 0.40);
+if (uSpecies == 0.0) {
+  // Continuous bands avoid the pinched, intersecting ellipsoid band surfaces.
+  float body = step(fp.x * fp.x / 0.25 + fp.y * fp.y / 0.073 + fp.z * fp.z / 0.033, 1.08);
+  float band = min(abs(fp.x - 0.15) - 0.04, min(abs(fp.x + 0.04) - 0.05, abs(fp.x + 0.33) - 0.035));
+  float outline = 1.0 - smoothstep(0.012, 0.018, band);
+  float white = 1.0 - smoothstep(-0.003, 0.002, band);
+  diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.012, 0.016, 0.024), vec3(1.0), white), body * outline);
+}
+if (uSpecies == 2.0) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.40, 0.025), smoothstep(-0.1, 0.38, fp.y) * colourMask * 0.32);
+// Thin fins and tail catch soft light at the edges, while keeping dark rims.
+float fin = max(smoothstep(0.27, 0.36, abs(fp.y)), 1.0 - smoothstep(-0.56, -0.42, fp.x));
+float finEdge = 0.3 + 0.7 * pow(1.0 - abs(normalize(vFishNormal).z), 0.7);
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.92, 0.65), fin * finEdge * colourMask * brightMask * 0.65);
+if (uSpecies == 1.0) {
+  float palette = 1.0 - smoothstep(0.85, 1.0, length((fp.xy - vec2(-0.10, 0.13)) / vec2(0.31, 0.105)));
+  float hole = 1.0 - smoothstep(0.7, 1.0, length((fp.xy - vec2(-0.10, 0.095)) / vec2(0.13, 0.042)));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.008, 0.018, 0.065), palette * (1.0 - hole));
+  // A very quiet scale hint on the larger tang only; never on its dark palette.
+  vec2 scaleUv = fp.xy * vec2(24.0, 28.0);
+  scaleUv.x += mod(floor(scaleUv.y), 2.0) * 0.5;
+  float scales = smoothstep(0.39, 0.47, length(fract(scaleUv) - 0.5));
+  diffuseColor.rgb *= 1.0 - scales * 0.035 * colourMask * (1.0 - fin);
+}
+if (uSpecies == 3.0) {
+  vec2 spots = fp.xy * 13.0;
+  spots.x += sin(floor(spots.y) * 3.7) * 0.8;
+  float dot = 1.0 - smoothstep(0.10, 0.19, length(fract(spots) - 0.5));
+  diffuseColor.rgb *= 1.0 - dot * smoothstep(-0.03, 0.20, fp.y) * 0.38;
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.94, 0.73), belly * brightMask * 0.6);
+}
+if (uSpecies == 4.0) {
+  float shell = (1.0 - step(0.4, abs(fp.x))) * step(0.04, fp.y) * step(vColor.r * 1.15, vColor.g);
+  vec2 plate = fp.xz * vec2(6.0, 7.0);
+  plate.x += mod(floor(plate.y), 2.0) * 0.5;
+  vec2 edge = abs(fract(plate) - 0.5);
+  float seam = smoothstep(0.35, 0.46, max(edge.x, edge.y));
+  diffuseColor.rgb *= 1.0 - shell * seam * 0.65;
+  diffuseColor.rgb += shell * (1.0 - seam) * vec3(0.10, 0.26, 0.045);
+}
+if (uSpecies == 5.0) {
+  float ridge = pow(0.5 + 0.5 * sin(fp.y * 85.0 + fp.x * 24.0), 3.0);
+  diffuseColor.rgb *= 1.0 - ridge * 0.42 * colourMask;
+  diffuseColor.rgb += vec3(0.08, 0.035, 0.035) * smoothstep(-0.4, 0.45, fp.y) * colourMask;
+}
+if (uSpecies == 6.0) {
+  float bell = smoothstep(-0.12, 0.04, fp.y);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.72, 0.39, 0.95), bell * 0.22);
+  diffuseColor.rgb += vec3(0.48, 0.22, 0.55) * bell * (1.0 - smoothstep(0.0, 0.40, length(fp.xz)));
+  diffuseColor.a *= mix(0.78, 1.0, smoothstep(0.0, 0.42, length(fp.xz)));
+}
+// Existing dark eye spheres get a crisp white catchlight in their UV space.
+float eye = (1.0 - smoothstep(0.025, 0.1, max(vColor.r, max(vColor.g, vColor.b)))) * step(0.2, fp.x);
+float catchlight = 1.0 - smoothstep(0.10, 0.16, length(vFishUv - vec2(0.33, 0.32)));
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), eye * catchlight);
+`).replace("#include <opaque_fragment>", `
+vec3 viewDir = normalize(vViewPosition);
+float rim = pow(1.0 - abs(dot(normal, viewDir)), 3.0);
+float wet = pow(max(dot(normal, normalize(viewDir + vec3(-0.4, 0.8, 0.6))), 0.0), 18.0);
+float litColour = smoothstep(0.035, 0.18, max(vColor.r, max(vColor.g, vColor.b)));
+outgoingLight += (vec3(0.19, 0.28, 0.34) * rim + vec3(0.28, 0.27, 0.25) * wet) * litColour;
+if (uSpecies == 6.0) outgoingLight += vec3(0.13, 0.07, 0.2) * rim;
+#include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => "fish-bend-v1";
+  m.customProgramCacheKey = () => "fish-painted-v2";
   return m;
 }
 
