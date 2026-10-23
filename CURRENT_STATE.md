@@ -37,6 +37,20 @@ Fixed while testing: goal card said "Free play" over the Level 6–8 goals; the
 leaving judge blocked the trophy on both results screens; test helpers now
 switch halls.
 
+## Visual polish (2026-10-24)
+Purely visual pass; no gameplay, save or input change. Design in
+DESIGN_DECISIONS.md "Tank and animal visual polish (part 1)" and "Hall visual
+polish (part 2)". Fish shader: belly gradients, wet rims, crisp markings;
+procedural sand with caustics; decoration finishes; richer water and glass
+edges; Hall 1 cream/teal wainscot and tiles; Ocean Hall deep-blue walls, wave
+floor with caustic shimmer; blob shadows under furniture and stands.
+
+Verified 2026-10-24: typecheck, `npm test` (93), build, `npm run e2e` (17/17,
+6.2 min). Before/after by eye at 1366×768 with `node scripts/visual.mjs <label>`
+(server on 5320): `.tmp/visual/before/` (HEAD before the pass), `after2/` (final).
+Perf (seeded Phase-2 save, hall views): Hall 1 69 → 77 draw calls, 60.4k →
+64.6k triangles; Ocean Hall 67 → 76, 47.9k → 52.1k. Loop spec: 57 calls, 38.7k tris.
+
 ## What Exists
 - **Design:** DESIGN_DECISIONS.md — brief changes, the frozen Phase 1 design,
   and decisions made while building.
@@ -54,7 +68,8 @@ switch halls.
 - **Tests:** `tests/e2e/` — `loop`, `speech`, `fallback`, `save`, `requests`,
   `layout` (+ `flows.ts`, `helpers.ts`, `stubs.ts`). README lists what each covers.
 - **Scripts:** `scripts/shots.mjs` (real-speed scenes), `scripts/peek.mjs`
-  (Speak-mode prompt states). Both need a server on 5320 (`npx vite --port 5320`).
+  (Speak-mode prompt states), `scripts/visual.mjs` (deterministic before/after
+  art captures + perf.json). All need a server on 5320 (`npx vite --port 5320`).
 - **Deploy:** public repo github.com/nolancasama/aquarium-tycoon; every push to
   `main` runs tests + build and deploys to https://nolancasama.github.io/aquarium-tycoon/
   (`.github/workflows/deploy-pages.yml`). Live since 2026-10-22.
@@ -65,6 +80,10 @@ switch halls.
 - `THREE.Clock` deprecation warning from R3F (harmless).
 - In the big tank's close-up the back-wall sign shows, cut off, at the top left.
 - Playtime (~20–30 min to the trophy) is an estimate, not measured with children.
+- Visual polish judged from SwiftShader screenshots only; fps on a real
+  Chromebook after the pass is unmeasured. Rocks and coral are still faceted
+  low-poly (by design, toned not remodelled); Ocean Hall walls are on the dark
+  side; Ocean Hall stands are the same wood as Hall 1's.
 
 ## Next Steps
 1. Play it on a real school Chromebook with a class: speech acceptance, whether
@@ -73,5 +92,5 @@ switch halls.
    hall switching, and Level 6–8 pacing with children.
 
 ## Codex / Delegated Work
-None. The user asked Claude to implement directly ("do yourself, no router").
-Nothing is pending review.
+None pending. Visual polish part 1 was done by Codex (router) and reviewed;
+part 2 by Claude after Codex hit its usage limit.

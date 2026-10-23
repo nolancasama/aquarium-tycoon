@@ -3,17 +3,53 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { getGame, useGame } from "../game/store";
 import { rt } from "../game/runtime";
-import { DOOR, HALL2, HALL_DOOR, PEDESTAL, ROOM } from "../game/world";
+import { BENCH, DOOR, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../game/world";
 import { PAD_TYPES, SLOT_ORDER, SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
 import type { SlotId, TankType } from "../game/types";
 import { tapHallDoor, tapPad } from "../game/flow/actions";
 import { PartBuilder } from "./partBuilder";
 import { hall2Geometry, roomGeometry, ropeGeometry, tankShellGeometry } from "./models/room";
-import { flatMat, floor2Texture, floorTexture, muralTexture, oceanMuralTexture, padIconTexture, posterTexture, signTexture, smoothMat } from "./materials";
+import { flatMat, floorTexture, muralTexture, oceanFloorMaterial, oceanMuralTexture, padIconTexture, posterTexture, shadowMaterial, signTexture, smoothMat } from "./materials";
+
+/** Soft contact blobs under furniture: [x, z, width, depth], merged into one mesh. */
+function blobGeometry(blobs: [number, number, number, number][]): THREE.BufferGeometry {
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  blobs.forEach(([x, z, w, d], i) => {
+    for (const [u, v] of [[0, 0], [1, 0], [1, 1], [0, 1]]) {
+      pos.push(x + (u - 0.5) * w, 0.004, z - (v - 0.5) * d);
+      uv.push(u, v);
+    }
+    idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+const blobMat = shadowMaterial(0.3);
+
+const HALL1_BLOBS: [number, number, number, number][] = [
+  [PICO.x, PICO.z - 0.35, 1.9, 1.2],
+  [BENCH.x, BENCH.z, 1.0, 2.1],
+  [PEDESTAL.x, PEDESTAL.z, 1.3, 1.3],
+  [ROOM.minX + 0.6, ROOM.minZ + 0.6, 0.85, 0.85],
+  [ROOM.maxX - 0.6, ROOM.minZ + 0.6, 0.85, 0.85],
+  [ROOM.maxX - 0.6, ROOM.maxZ - 1.2, 0.7, 0.7],
+  [ROOM.minX + 0.55, DOOR.z - 1.35, 0.65, 0.65]
+];
+const HALL2_BLOBS: [number, number, number, number][] = [
+  [HALL2.minX + 0.6, HALL2.minZ + 0.5, 0.85, 0.85],
+  [HALL2.maxX - 0.6, HALL2.minZ + 0.5, 0.85, 0.85],
+  [HALL2.maxX - 0.6, HALL2.maxZ - 0.8, 0.85, 0.85]
+];
 
 export function Room() {
   const shell = useMemo(() => roomGeometry(), []);
   const rope = useMemo(() => ropeGeometry(), []);
+  const blobs = useMemo(() => blobGeometry(HALL1_BLOBS), []);
   const w = ROOM.maxX - ROOM.minX;
   const d = ROOM.maxZ - ROOM.minZ;
   return (
@@ -32,6 +68,7 @@ export function Room() {
         <meshBasicMaterial color="#e9fbff" />
       </mesh>
       <mesh geometry={shell} material={flatMat} />
+      <mesh geometry={blobs} material={blobMat} />
       <mesh geometry={rope} material={smoothMat} />
       {/* The mural on the back wall, and the aquarium's name. */}
       <mesh position={[0, 1.55, ROOM.minZ + 0.005]}>
@@ -66,6 +103,7 @@ export function Room() {
 function OceanHall() {
   const open = useGame((s) => s.model.progress.hallOpen);
   const shell = useMemo(() => (open ? hall2Geometry() : null), [open]);
+  const blobs = useMemo(() => blobGeometry(HALL2_BLOBS), []);
   if (!open || !shell) return null;
   const w = HALL2.maxX - HALL2.minX;
   const d = HALL2.maxZ - HALL2.minZ;
@@ -73,9 +111,10 @@ function OceanHall() {
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(HALL2.minX + HALL2.maxX) / 2, 0, (HALL2.minZ + HALL2.maxZ) / 2]}>
         <planeGeometry args={[w, d]} />
-        <meshLambertMaterial map={floor2Texture()} />
+        <primitive object={oceanFloorMaterial()} attach="material" />
       </mesh>
       <mesh geometry={shell} material={flatMat} />
+      <mesh geometry={blobs} material={blobMat} />
       <mesh position={[(HALL2.minX + HALL2.maxX) / 2, 1.55, HALL2.minZ + 0.005]}>
         <planeGeometry args={[w - 0.6, 2.7]} />
         <meshBasicMaterial map={oceanMuralTexture()} toneMapped={false} />

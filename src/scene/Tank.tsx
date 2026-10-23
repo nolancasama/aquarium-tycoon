@@ -120,6 +120,7 @@ function Tank({ tank }: { tank: TankRec }) {
   return (
     <group position={[o.x, 0, o.z]}>
       <mesh geometry={shell} material={tankShellMaterial} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0.04]} scale={[def.w + 0.9, def.d + 0.7, 1]} geometry={unitPlane} material={standShadowMat} />
       <ContactShadows tank={tank} />
       <mesh position={[0, yMid, 0]} material={water}>
         <boxGeometry args={[def.w, def.h, def.d]} />
@@ -346,6 +347,9 @@ function TurtleMesh({ id, tankId }: { id: string; tankId: string }) {
 // ------------------------------------------------------------------ decorations
 
 const contactMat = shadowMaterial(0.24);
+/** The soft floor shadow under every stand (one shared plane and material). */
+const standShadowMat = shadowMaterial(0.34);
+const unitPlane = new THREE.PlaneGeometry(1, 1);
 
 /** One merged blob batch per tank, fitted to the existing sand/dune surface. */
 function ContactShadows({ tank }: { tank: TankRec }) {

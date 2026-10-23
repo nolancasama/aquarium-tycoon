@@ -386,22 +386,18 @@ normal = normalize(mix(normal, normalize(vTankUp), sand * 0.85));`);
 export const floorTexture = () =>
   cached("floor", () => {
     const t = canvasTex(256, 256, (g) => {
-      const s = 64;
-      for (let y = 0; y < 4; y++) {
-        for (let x = 0; x < 4; x++) {
-          g.fillStyle = (x + y) % 2 ? "#e9f3f6" : "#d6e9ef";
-          g.fillRect(x * s, y * s, s, s);
+      tiles(g, ["#eef6f8", "#dcecf1"], 11, "rgba(150,186,200,0.55)");
+      // Small warm-sand corner insets where four tiles meet.
+      g.fillStyle = "#f4e3c4";
+      for (let y = 0; y <= 4; y++) {
+        for (let x = 0; x <= 4; x++) {
+          g.beginPath();
+          g.moveTo(x * 64, y * 64 - 7);
+          g.lineTo(x * 64 + 7, y * 64);
+          g.lineTo(x * 64, y * 64 + 7);
+          g.lineTo(x * 64 - 7, y * 64);
+          g.fill();
         }
-      }
-      g.strokeStyle = "rgba(120,160,180,0.35)";
-      g.lineWidth = 2;
-      for (let i = 0; i <= 4; i++) {
-        g.beginPath();
-        g.moveTo(i * s, 0);
-        g.lineTo(i * s, 256);
-        g.moveTo(0, i * s);
-        g.lineTo(256, i * s);
-        g.stroke();
       }
     });
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -409,25 +405,56 @@ export const floorTexture = () =>
     return t;
   });
 
+/** 4×4 alternating tiles with a quiet per-tile tone shift, a soft top-left sheen and grout. */
+function tiles(g: CanvasRenderingContext2D, colours: [string, string], seed: number, grout: string) {
+  const s = 64;
+  const r = () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+  for (let y = 0; y < 4; y++) {
+    for (let x = 0; x < 4; x++) {
+      g.fillStyle = colours[(x + y) % 2];
+      g.fillRect(x * s, y * s, s, s);
+      const v = r() - 0.5;
+      g.fillStyle = v > 0 ? `rgba(255,255,255,${v * 0.22})` : `rgba(40,80,100,${-v * 0.1})`;
+      g.fillRect(x * s, y * s, s, s);
+      const sheen = g.createLinearGradient(x * s, y * s, x * s + s, y * s + s);
+      sheen.addColorStop(0, "rgba(255,255,255,0.22)");
+      sheen.addColorStop(0.45, "rgba(255,255,255,0)");
+      sheen.addColorStop(1, "rgba(0,40,60,0.05)");
+      g.fillStyle = sheen;
+      g.fillRect(x * s, y * s, s, s);
+    }
+  }
+  g.strokeStyle = grout;
+  g.lineWidth = 3;
+  for (let i = 0; i <= 4; i++) {
+    g.beginPath();
+    g.moveTo(i * s, 0);
+    g.lineTo(i * s, 256);
+    g.moveTo(0, i * s);
+    g.lineTo(256, i * s);
+    g.stroke();
+  }
+}
+
 /** The Ocean Hall's floor: deeper blue tiles. */
 export const floor2Texture = () =>
   cached("floor2", () => {
     const t = canvasTex(256, 256, (g) => {
-      const s = 64;
-      for (let y = 0; y < 4; y++) {
-        for (let x = 0; x < 4; x++) {
-          g.fillStyle = (x + y) % 2 ? "#cfe8f4" : "#b9dcee";
-          g.fillRect(x * s, y * s, s, s);
-        }
-      }
-      g.strokeStyle = "rgba(60,120,160,0.35)";
-      g.lineWidth = 2;
-      for (let i = 0; i <= 4; i++) {
+      tiles(g, ["#5fa9cf", "#4f9cc4"], 23, "rgba(22,70,108,0.6)");
+      // A pale wave mosaic running across every second tile row.
+      g.strokeStyle = "rgba(205,240,252,0.38)";
+      g.lineWidth = 3.5;
+      g.lineCap = "round";
+      for (const y0 of [32, 160]) {
         g.beginPath();
-        g.moveTo(i * s, 0);
-        g.lineTo(i * s, 256);
-        g.moveTo(0, i * s);
-        g.lineTo(256, i * s);
+        for (let x = 0; x <= 256; x += 4) {
+          const y = y0 + Math.sin((x / 256) * Math.PI * 4) * 9;
+          if (x === 0) g.moveTo(x, y);
+          else g.lineTo(x, y);
+        }
         g.stroke();
       }
     });
@@ -435,6 +462,29 @@ export const floor2Texture = () =>
     t.repeat.set(6, 4);
     return t;
   });
+
+/** The Ocean Hall floor: tiles plus a slow, faint caustic shimmer near the tanks (one shader term). */
+export const oceanFloorMaterial = (() => {
+  let m: THREE.MeshLambertMaterial | null = null;
+  return () => {
+    if (m) return m;
+    m = new THREE.MeshLambertMaterial({ map: floor2Texture() });
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = shaderTime;
+      shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>
+varying vec2 vFloorXZ;`).replace("#include <worldpos_vertex>", `#include <worldpos_vertex>
+vFloorXZ = (modelMatrix * vec4(transformed, 1.0)).xz;`);
+      shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
+uniform float uTime;
+varying vec2 vFloorXZ;`).replace("#include <map_fragment>", `#include <map_fragment>
+vec2 cp = vFloorXZ * 1.6;
+float cw = sin(cp.x * 2.1 + uTime * 0.6 + sin(cp.y * 1.7 + uTime * 0.4)) + sin(cp.y * 2.4 - uTime * 0.5 + sin(cp.x * 1.3 - uTime * 0.3));
+float caustic = smoothstep(1.15, 1.85, cw) * (1.0 - smoothstep(-2.5, 1.0, vFloorXZ.y));
+diffuseColor.rgb += vec3(0.16, 0.26, 0.3) * caustic;`);
+    };
+    return m;
+  };
+})();
 
 /** The Ocean Hall's back wall: the deep sea, with jellyfish and a turtle. */
 export const oceanMuralTexture = () =>
@@ -771,9 +821,11 @@ float fin = max(smoothstep(0.27, 0.36, abs(fp.y)), 1.0 - smoothstep(-0.56, -0.42
 float finEdge = 0.3 + 0.7 * pow(1.0 - abs(normalize(vFishNormal).z), 0.7);
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0, 0.92, 0.65), fin * finEdge * colourMask * brightMask * 0.65);
 if (uSpecies == 1.0) {
-  float palette = 1.0 - smoothstep(0.85, 1.0, length((fp.xy - vec2(-0.10, 0.13)) / vec2(0.31, 0.105)));
-  float hole = 1.0 - smoothstep(0.7, 1.0, length((fp.xy - vec2(-0.10, 0.095)) / vec2(0.13, 0.042)));
-  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.008, 0.018, 0.065), palette * (1.0 - hole));
+  // A solid palette from behind the eye, sweeping down into the tail base (an
+  // inner blue loop read as a grey ring at gameplay scale).
+  float palette = 1.0 - smoothstep(0.8, 1.0, length((fp.xy - vec2(-0.06, 0.13)) / vec2(0.28, 0.085)));
+  palette = max(palette, 1.0 - smoothstep(0.8, 1.0, length((fp.xy - vec2(-0.34, 0.06)) / vec2(0.11, 0.07))));
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.008, 0.018, 0.065), palette);
   // A very quiet scale hint on the larger tang only; never on its dark palette.
   vec2 scaleUv = fp.xy * vec2(24.0, 28.0);
   scaleUv.x += mod(floor(scaleUv.y), 2.0) * 0.5;
@@ -815,7 +867,8 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), eye * catchlight);
 vec3 viewDir = normalize(vViewPosition);
 float rim = pow(1.0 - abs(dot(normal, viewDir)), 3.0);
 float wet = pow(max(dot(normal, normalize(viewDir + vec3(-0.4, 0.8, 0.6))), 0.0), 18.0);
-float litColour = smoothstep(0.035, 0.18, max(vColor.r, max(vColor.g, vColor.b)));
+// From the painted colour, so dark markings (tang palette, band outlines) stay dark.
+float litColour = smoothstep(0.035, 0.18, max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b)));
 outgoingLight += (vec3(0.19, 0.28, 0.34) * rim + vec3(0.28, 0.27, 0.25) * wet) * litColour;
 if (uSpecies == 6.0) outgoingLight += vec3(0.13, 0.07, 0.2) * rim;
 #include <opaque_fragment>`);

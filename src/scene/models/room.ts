@@ -6,7 +6,30 @@ import type { TankType } from "../../game/types";
 
 /** The room shell and furniture (one merged mesh), and the tank stand/frame per tank type. */
 
-const WALL = "#bfe8f3";
+const WALL = "#fbeedb";
+
+interface WallStyle {
+  skin?: string;
+  low: string;
+  rail: string;
+  base: string;
+}
+const HALL1_WALL: WallStyle = { low: "#5cc3d0", rail: "#ffffff", base: "#2b7c99" };
+const HALL2_WALL: WallStyle = { skin: "#3f8cc0", low: "#1f6194", rail: "#8fe0f5", base: "#123f63" };
+
+/**
+ * One-sided wall dressing on the face at x, pointing into the room (inward ±1):
+ * an optional full-height skin, a wainscot, a rail and a baseboard. One-sided so
+ * the wall the two halls share can look different from each side.
+ */
+function dressWall(b: PartBuilder, x: number, inward: number, z0: number, z1: number, s: WallStyle, wallH: number) {
+  const len = z1 - z0;
+  const z = (z0 + z1) / 2;
+  if (s.skin) b.box(0.02, wallH, len, x + inward * 0.01, 0, z, s.skin, 0);
+  b.box(0.035, 1.05, len, x + inward * 0.0175, 0, z, s.low);
+  b.box(0.06, 0.06, len, x + inward * 0.03, 1.02, z, s.rail);
+  b.box(0.07, 0.16, len, x + inward * 0.035, 0, z, s.base);
+}
 
 /** One short rope in front of each pad: slot A holds the small tank, slot B the big one. */
 const ROPE_POSTS: [number, number][] = [
@@ -32,8 +55,8 @@ export function roomGeometry(): THREE.BufferGeometry {
   b.box(t, wallH, leftLen1, minX - t / 2, 0, minZ + leftLen1 / 2, WALL);
   b.box(t, wallH, leftLen2, minX - t / 2, 0, doorB + leftLen2 / 2, WALL);
   b.box(t, wallH - 2.3, DOOR.w, minX - t / 2, 2.3, DOOR.z, WALL);
-  b.box(t + 0.04, 0.16, leftLen1, minX - t / 2 + 0.02, 0, minZ + leftLen1 / 2, TRIM);
-  b.box(t + 0.04, 0.16, leftLen2, minX - t / 2 + 0.02, 0, doorB + leftLen2 / 2, TRIM);
+  dressWall(b, minX, 1, minZ, doorA, HALL1_WALL, wallH);
+  dressWall(b, minX, 1, doorB, maxZ, HALL1_WALL, wallH);
   // Door frame.
   for (const z of [doorA, doorB]) b.box(0.3, 2.4, 0.16, minX, 0, z, "#ffb347");
   b.box(0.3, 0.18, DOOR.w + 0.16, minX, 2.3, DOOR.z, "#ffb347");
@@ -45,8 +68,8 @@ export function roomGeometry(): THREE.BufferGeometry {
   b.box(t, wallH, r1, maxX + t / 2, 0, minZ + r1 / 2, WALL);
   b.box(t, wallH, r2, maxX + t / 2, 0, hdB + r2 / 2, WALL);
   b.box(t, wallH - 2.3, HALL_DOOR.w, maxX + t / 2, 2.3, HALL_DOOR.z, WALL);
-  b.box(t + 0.04, 0.16, r1, maxX + t / 2 - 0.02, 0, minZ + r1 / 2, TRIM);
-  b.box(t + 0.04, 0.16, r2, maxX + t / 2 - 0.02, 0, hdB + r2 / 2, TRIM);
+  dressWall(b, maxX, -1, minZ, hdA, HALL1_WALL, wallH);
+  dressWall(b, maxX, -1, hdB, maxZ, HALL1_WALL, wallH);
   for (const z of [hdA, hdB]) b.box(0.3, 2.4, 0.16, maxX, 0, z, "#4fb6d8");
   b.box(0.3, 0.18, HALL_DOOR.w + 0.16, maxX, 2.3, HALL_DOOR.z, "#4fb6d8");
   // Pico's counter.
@@ -95,13 +118,28 @@ export function hall2Geometry(): THREE.BufferGeometry {
   const b = new PartBuilder(0.6);
   const { minX, maxX, minZ, maxZ, wallH } = HALL2;
   const t = 0.22;
-  const wall = "#9fd3ea";
-  const trim = "#1f6f9c";
+  const wall = HALL2_WALL.skin!;
+  const trim = HALL2_WALL.base;
   b.box(maxX - minX + t, wallH, t, (minX + maxX) / 2, 0, minZ - t / 2, wall);
   b.box(maxX - minX + t, 0.16, t + 0.04, (minX + maxX) / 2, 0, minZ - t / 2 + 0.02, trim);
   b.box(maxX - minX + t, 0.1, t + 0.06, (minX + maxX) / 2, wallH - 0.1, minZ - t / 2 + 0.03, trim);
   b.box(t, wallH, maxZ - minZ, maxX + t / 2, 0, (minZ + maxZ) / 2, wall);
-  b.box(t + 0.04, 0.16, maxZ - minZ, maxX + t / 2 - 0.02, 0, (minZ + maxZ) / 2, trim);
+  dressWall(b, maxX, -1, minZ, maxZ, { ...HALL2_WALL, skin: undefined }, wallH);
+  // The shared wall's Ocean-side face (the Hall 1 side is cream and teal).
+  const face = ROOM.maxX + t;
+  const hdA = HALL_DOOR.z - HALL_DOOR.w / 2;
+  const hdB = HALL_DOOR.z + HALL_DOOR.w / 2;
+  dressWall(b, face, 1, minZ, hdA, HALL2_WALL, wallH);
+  dressWall(b, face, 1, hdB, maxZ, HALL2_WALL, wallH);
+  b.box(0.02, wallH - 2.3, HALL_DOOR.w, face + 0.01, 2.3, HALL_DOOR.z, wall);
+  // A light wave band with bubble dots along the top of the side walls.
+  for (const [x, inward] of [[face, 1], [maxX, -1]] as const) {
+    b.box(0.03, 0.07, maxZ - minZ, x + inward * 0.015, wallH - 0.5, (minZ + maxZ) / 2, "#6cc6e8", 0);
+    for (let z = minZ + 0.3, i = 0; z < maxZ - 0.2; z += 0.42, i++) {
+      if (x === face && z > hdA - 0.1 && z < hdB + 0.1) continue;
+      b.sphere(i % 2 ? 0.05 : 0.08, x + inward * 0.02, wallH - (i % 2 ? 0.3 : 0.7), z, "#bfeeff", [0.3, 1, 1], 8);
+    }
+  }
   // Round portholes on the right wall.
   for (const z of [-1.8, 0.9]) {
     b.add(new THREE.TorusGeometry(0.45, 0.07, 6, 20), "#c9a227", [maxX - 0.03, 1.7, z], [0, Math.PI / 2, 0]);
@@ -172,6 +210,9 @@ export function tankShellGeometry(type: TankType): THREE.BufferGeometry {
   // The Ocean tank stands on blue stone; the others on wood.
   b.box(w + 0.12, STAND_H - 0.12, d + 0.1, 0, 0.08, 0, type === "ocean" ? "#6f8fa8" : WOOD);
   b.box(w + 0.18, 0.05, d + 0.16, 0, STAND_H - 0.05, 0, "#8f5a30");
+  // Brass trim under the top and above the plinth.
+  b.box(w + 0.14, 0.022, d + 0.12, 0, STAND_H - 0.075, 0, "#e3b53c");
+  b.box(w + 0.14, 0.018, d + 0.12, 0, 0.08, 0, "#e3b53c");
   for (const s of [-1, 1]) {
     b.box((w + 0.12) / 2 - 0.08, STAND_H - 0.28, 0.02, (s * (w + 0.12)) / 4, 0.16, d / 2 + 0.05, "#b57744");
     b.sphere(0.025, s * 0.07, STAND_H * 0.55, d / 2 + 0.07, "#ffcc33", [1, 1, 1], 8);

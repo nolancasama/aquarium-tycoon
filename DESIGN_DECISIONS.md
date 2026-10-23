@@ -545,3 +545,26 @@ saves (classes would lose their aquariums on update).
   fixed virtual frames to capture both halls, every species, decorations, puff,
   care states and pellets. Its mixed Ocean trio is explicitly a review tableau;
   normal saved habitats still separate turtles, seahorses and jellyfish.
+
+## 2026-10-24 — Hall visual polish (part 2)
+
+- Hall 1 stays warm and welcoming: cream walls with a teal wainscot, white rail
+  and dark-teal baseboard; pale tiles with a quiet per-tile tone shift, a soft
+  sheen and small sand-coloured corner insets. Stands gain brass trim strips.
+- The Ocean Hall is the earned expansion and must look different at a glance:
+  deep-blue walls, a light wave band with bubble dots, mid-blue tiles with a
+  pale wave mosaic, and a slow caustic shimmer on the floor near the tanks
+  (one shader term on the floor's Lambert material, driven by `shaderTime`).
+  The tanks stay the brightest, most saturated thing in either hall.
+- Wall dressing is one-sided (`dressWall` in `models/room.ts`), so the wall the
+  halls share is cream/teal on the Hall 1 side and deep blue on the Ocean side.
+- Grounding: one merged blob-shadow mesh per hall (counter, bench, pedestal,
+  plants) and one shared blob plane under each stand. +8–9 draw calls per hall
+  over the pre-polish baseline; no shadow maps.
+- The fish shader's wet/rim highlight is gated by the painted colour, not the
+  vertex colour, so dark markings (tang palette, clownfish band outlines) stay
+  dark. The tang's palette is solid; an inner blue loop read as a grey ring.
+- Lights unchanged: the fixed hemisphere + two directionals already separate
+  objects well once walls and floors had their own values. Rejected: per-hall
+  light rigs, postprocessing, image textures, navy stands in the Ocean Hall
+  (stands are per tank type, not per hall; brass-trimmed wood reads well in both).
