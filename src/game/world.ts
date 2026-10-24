@@ -26,6 +26,25 @@ export const DOOR_EAST: Vec2 = { x: 6.7, z: 1.5 };
 /** The bench where request visitors wait (they sit facing the room centre). */
 export const BENCH: Vec2 = { x: 4.4, z: 2.95 };
 export const BENCH_SEAT: Vec2 = { x: 4.3, z: 2.95 };
+/** Seat and backrest bounds from the room model; front is the -x side. */
+export const BENCH_FOOTPRINT = { minX: BENCH.x - 0.25, maxX: BENCH.x + 0.28, minZ: BENCH.z - 0.75, maxZ: BENCH.z + 0.75 };
+export const BENCH_FRONT: Vec2 = { x: BENCH.x - 0.95, z: BENCH_SEAT.z };
+export const BENCH_FACING = -Math.PI / 2;
+
+/** Keep walking outside the furniture; the final seat placement is a seated pose. */
+export function benchApproach(from: Vec2): Vec2[] {
+  return [...route(from, { x: BENCH_FRONT.x, z: ENTRY.z }), BENCH_FRONT];
+}
+
+/** A body-width inset avoids offering a visitor still passing through a wall. */
+export function insideRoom(p: Vec2): boolean {
+  const bounds = hallOfX(p.x) === 0 ? ROOM : HALL2;
+  return p.x >= bounds.minX + 0.4 && p.x <= bounds.maxX - 0.4 && p.z >= bounds.minZ + 0.4 && p.z <= bounds.maxZ - 0.4;
+}
+
+export function requestEligible(v: Vec2 & { request: unknown; helped: boolean; scripted: boolean; state: string }): boolean {
+  return Boolean(v.request) && !v.helped && !v.scripted && (v.state === "walk" || v.state === "sit") && insideRoom(v);
+}
 
 export const hallOfX = (x: number): 0 | 1 => (x > HALL_DOOR.x ? 1 : 0);
 

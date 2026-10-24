@@ -170,6 +170,12 @@ kbd {
   max-width: 330px;
 }
 
+.top-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -299,6 +305,57 @@ kbd {
   display: inline;
   margin-left: 6px;
 }
+
+.guide-next {
+  border-top: 2px solid var(--aqua-soft);
+  margin-top: 6px;
+  padding-top: 5px;
+  font-size: 16px;
+  line-height: 1.25;
+  color: var(--deep);
+}
+
+.guide-next .ja { font-size: 12px; }
+
+.help-btn {
+  pointer-events: auto;
+  gap: 6px;
+  min-width: 96px;
+  padding: 0 14px;
+  border: 3px solid #d19b00;
+  background: #fff1ac;
+  font-size: 18px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.help-btn small { font-size: 13px; }
+.help-btn > b { color: #866000; }
+.help-btn:disabled { opacity: 0.55; cursor: default; }
+.level-wrap { position: relative; }
+.topbar:has(.level-overview) { z-index: 35; }
+.level-overview {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: -100px;
+  width: min(450px, calc(100vw - 32px));
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 12px;
+  z-index: 30;
+}
+.level-overview header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.level-overview ol { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.level-overview li { display: flex; gap: 12px; padding: 8px; border-radius: 12px; background: #edf7fb; }
+.level-overview li[aria-current="step"] { background: #fff1ac; outline: 2px solid #d19b00; }
+.level-overview li > div { flex: 1; min-width: 0; }
+.level-overview li small { display: block; margin-top: 3px; }
+.level-state { width: 68px; flex: none; font-size: 13px; font-weight: 800; }
+.level-state svg { display: block; margin-bottom: 3px; }
+.button-reason { display: block; max-width: 110px; font-size: 11px; margin-top: 3px; line-height: 1.2; }
+button:focus-visible { outline: 4px solid var(--sea); outline-offset: 3px; }
 
 /* ------------------------------------------------------------ bottom bars */
 
@@ -596,7 +653,7 @@ kbd {
   font-weight: 900;
   font-size: 20px;
   max-width: 420px;
-  z-index: 12;
+  z-index: 26;
   animation: toastIn 0.3s ease-out;
 }
 
@@ -615,15 +672,50 @@ kbd {
 .request {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   padding: 8px 12px 8px 10px;
   border-color: var(--gold);
-  min-width: 360px;
+  min-width: 0;
   max-width: 640px;
 }
 
 .request .req-body {
   flex: 1;
+  min-width: 0;
+}
+
+.request > svg,
+.request > button {
+  flex: none;
+}
+
+.request > button {
+  min-width: 48px;
+  min-height: 48px;
+}
+
+.request-action {
+  display: block;
+  margin-top: 4px;
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 800;
+}
+
+.request-action .ja {
+  font-size: 13px;
+}
+
+.request-clue {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+
+.request-clue small {
+  font-size: 12px;
 }
 
 .request .who,
@@ -1062,6 +1154,10 @@ mark.key {
   width: min(720px, calc(100% - 24px));
   padding: 12px 16px 16px;
   z-index: 25;
+  max-height: calc(100% - 130px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .shop header,
@@ -1357,6 +1453,9 @@ mark.key {
   min-width: 380px;
   animation: cardIn 0.4s cubic-bezier(0.2, 1.4, 0.4, 1);
   border-color: var(--gold);
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
 }
 
 @keyframes cardIn {
@@ -1378,6 +1477,9 @@ mark.key {
   color: var(--ink-soft);
   font-size: 20px;
 }
+
+.next-level { text-align: center; font-size: 18px; max-width: 520px; }
+.next-level p { margin: 6px 0; font-size: 16px; }
 
 .burst {
   animation: spin 3s linear infinite;
@@ -1608,6 +1710,20 @@ mark.key {
   color: var(--ja);
 }
 
+.card.shop-recommended { border: 3px solid #d19b00; background: #fff8d9; }
+.shop-reason { display: block; color: #81451c; font-size: 14px; line-height: 1.3; font-weight: 800; }
+.shop-reason .ja { font-size: 12px; color: #81451c; }
+.tank-offer-title { font-size: 18px; line-height: 1.3; }
+.room-badge { align-self: start; width: fit-content; padding: 4px 8px; border-radius: 8px; background: #175ca3; color: #fff; font-size: 14px; }
+.room-badge span { display: block; font-size: 11px; }
+.card.hall-offer { grid-column: 1 / -1; order: -1; border-color: #2a78c5; background: #e8f5ff; }
+.card.hall-offer.shop-recommended { border-color: #d19b00; }
+.tank-info .hall-description { font-size: 15px; color: var(--deep); }
+.card.tank-offer .tank-info { min-width: 0; }
+.card.tank-offer .buy { flex: none; }
+.panel-tankShop .nudge, .panel-decorShop .nudge, .panel-upgrade .nudge { bottom: 12px; }
+.nudge.repeated { animation: none; }
+
 .upgrade-rows {
   display: grid;
   gap: 8px;
@@ -1643,9 +1759,21 @@ mark.key {
   justify-items: center;
 }
 
-/* The request banner sits below the top bar when the goal card is hidden. */
+/* A request uses the space freed by the goals, clear of the left HUD/status
+   and right settings. It stays above the close-up fish, in either hall. */
+.top-panels:has(.request) {
+  left: max(350px, calc((100% - 640px) / 2));
+  width: min(640px, calc(100% - 430px));
+  transform: none;
+  justify-items: stretch;
+}
+
 .view-tank .tank-status {
   top: 76px;
+}
+
+.app:has(.request) .tank-status {
+  top: 136px;
 }
 
 /* ------------------------------------------------------------ short screens (phones in landscape) */
@@ -1662,7 +1790,8 @@ mark.key {
   .goals li {
     font-size: 14px;
   }
-  .goals .g-text .ja {
+  .goals .g-text .ja,
+  .guide-next .ja {
     display: none;
   }
   .big-btn {

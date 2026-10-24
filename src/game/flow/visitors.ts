@@ -7,7 +7,7 @@ import { ITS_IDS, ITS_PHRASE, LIKE_COLOR_PHRASE, NUMBER_IDS, NUMBER_PHRASE, colo
 import { makeRng, shuffle } from "../logic/rng";
 import { SPECIES } from "../data/fish";
 import { TANKS } from "../data/tanks";
-import { BENCH_SEAT, ENTRY, OUTSIDE, lookSpot, route, tankOrigin } from "../world";
+import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, lookSpot, requestEligible, route, tankOrigin } from "../world";
 import { ask, fastMode, say, speak, wait } from "./ask";
 import { openTank } from "./actions";
 import { audio } from "../../audio/audio";
@@ -32,10 +32,12 @@ const WALK_SPEED: Record<VisitorType, number> = { child: 1.15, adult: 1.0, fan: 
 const exclaimed = new Set<string>();
 let lastExclaim = -100;
 const arrivals = new Map<string, () => void>();
+let activeRequest: string | null = null;
 
 /** A visitor stops working the request (or the judge's step) and is free again. */
 function syncWaiting() {
-  const w = rt.visitors.find((v) => v.request && !v.helped && v.state === "sit" && !v.scripted);
+  let w: VisitorRt | undefined;
+  if (!activeRequest) for (const v of rt.visitors) if (requestEligible(v)) { w = v; break; }
   const cur = getGame().waiting;
   if ((w?.id ?? null) !== (cur?.id ?? null)) setGame({ waiting: w ? { id: w.id, type: w.type } : null });
 }
@@ -71,9 +73,10 @@ export function spawnVisitor(type: VisitorType, request: Request | null, opts: {
     v.x = BENCH_SEAT.x;
     v.z = BENCH_SEAT.z;
     v.state = "sit";
+    v.yaw = BENCH_FACING;
     v.face = { x: BENCH_SEAT.x - 3, z: BENCH_SEAT.z };
   } else if (request) {
-    v.path = [ENTRY, BENCH_SEAT];
+    v.path = [ENTRY, ...benchApproach(ENTRY)];
   } else if (!opts.scripted) {
     v.path = [ENTRY];
   } else {
@@ -166,6 +169,7 @@ function nextLookOrLeave(v: VisitorRt) {
 /** Pay the tips for every tank looked at, then walk out. */
 export function leave(v: VisitorRt) {
   if (v.state === "leave" || v.state === "gone") return;
+  const seated = v.state === "sit";
   if (!v.helped && !v.scripted) {
     const m = model();
     const tips = v.seen.reduce((n, id) => {
@@ -182,6 +186,8 @@ export function leave(v: VisitorRt) {
   v.request = null;
   v.at = null;
   v.face = null;
+  // Stand in front of the seat before walking, never through the seat/backrest.
+  if (seated) { v.x = BENCH_FRONT.x; v.z = BENCH_FRONT.z; }
   v.path = [...route(v, ENTRY), OUTSIDE];
   syncWaiting();
 }
@@ -201,6 +207,9 @@ function arrive(v: VisitorRt) {
   }
   if (v.request && !v.helped) {
     v.state = "sit";
+    v.x = BENCH_SEAT.x;
+    v.z = BENCH_SEAT.z;
+    v.yaw = BENCH_FACING;
     v.face = { x: v.x - 3, z: v.z };
     syncWaiting();
     return;
@@ -256,6 +265,7 @@ export function stepVisitors(dt: number) {
     if (v.bubble && v.bubble !== "!" && rt.time - v.bubbleT0 > 2.5) v.bubble = null;
   }
   if (rt.visitors.some((v) => v.state === "gone")) rt.visitors = rt.visitors.filter((v) => v.state !== "gone");
+  syncWaiting();
 }
 
 // ------------------------------------------------------------------ spawning
@@ -543,10 +553,11 @@ export async function celebrate(v: VisitorRt, tankId: string | null) {
 
 /** Reward a helped request visitor (once), celebrate, and let them go. */
 export async function helped(v: VisitorRt, req: Request, tankId: string | null) {
+  if (v.helped) return;
+  v.helped = true;
   const t = tankId ? tankById(model(), tankId) : null;
   const amount = requestReward(req, t);
   updateModel((m) => helpVisitor(m, v.id, amount, req.kind === "whatsThis"));
-  v.helped = true;
   effect("coins", v.x, 2, v.z, Math.min(6, Math.round(amount / 3)));
   audio.play("coin");
   rt.sinceRequest = 0;
@@ -558,31 +569,41 @@ export async function helped(v: VisitorRt, req: Request, tankId: string | null) 
   }
 }
 
-/** Tap on a waiting visitor (or the HUD chip): hear the request and help. */
+/** Tap an eligible walking or seated visitor (or the HUD chip). */
 export async function openRequest(id: string) {
   const g = getGame();
-  if (g.mode !== "play" || g.request || g.prompt || g.placing || g.stageCard) return;
+  if (activeRequest || scripted.busy || g.mode !== "play" || g.request || g.prompt || g.placing || g.stageCard) return;
   const v = rt.visitors.find((x) => x.id === id);
-  if (!v || !v.request || v.helped || v.state !== "sit") return;
-  let req: Request | null = v.request;
-  if (!stillValid(model(), req)) req = makeRequest(model(), rand, { last: null });
-  if (!req) {
-    v.request = null;
-    await say(v.type, "What a nice aquarium!", "すてきな すいぞくかん!");
-    leave(v);
-    return;
-  }
-  v.request = req;
+  if (!v || !v.request || !requestEligible(v)) return;
+  activeRequest = v.id;
+  // Get up forward if seated; a walking visitor stops exactly where tapped.
+  if (v.state === "sit") { v.x = BENCH_FRONT.x; v.z = BENCH_FRONT.z; }
+  v.state = "help";
+  v.path = [];
+  v.moving = false;
+  v.face = { x: rt.camera.pos.x, z: rt.camera.pos.z };
+  v.yaw = Math.atan2(v.face.x - v.x, v.face.z - v.z);
   setGame({ waiting: null });
-  const out = await runRequest(v, req, { cancellable: true });
-  if (out.ok) {
-    await helped(v, req, out.tankId);
-  } else if (!v.helped) {
-    v.state = "sit";
-    v.bubble = "!";
-    v.x = BENCH_SEAT.x;
-    v.z = BENCH_SEAT.z;
-    v.face = { x: v.x - 3, z: v.z };
+  try {
+    let req: Request | null = v.request;
+    if (!stillValid(model(), req)) req = makeRequest(model(), rand, { last: null });
+    if (!req) {
+      v.request = null;
+      await say(v.type, "What a nice aquarium!", "すてきな すいぞくかん!");
+      leave(v);
+      return;
+    }
+    v.request = req;
+    const out = await runRequest(v, req, { cancellable: true });
+    if (out.ok) await helped(v, req, out.tankId);
+  } finally {
+    if (activeRequest === v.id) activeRequest = null;
+    if (!v.helped && v.request && v.state === "help") {
+      v.state = "walk";
+      v.face = null;
+      v.bubble = "!";
+      v.path = benchApproach(v);
+    }
     syncWaiting();
   }
 }
@@ -594,6 +615,7 @@ export function showTargets(t: TankRec): ShowTarget[] {
 
 /** Clear visitors (new game / title). */
 export function resetVisitors() {
+  activeRequest = null;
   arrivals.clear();
   exclaimed.clear();
   showWait = null;

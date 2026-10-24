@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { getGame } from "../game/store";
 import { rt, type VisitorRt } from "../game/runtime";
 import { SLOT_POS, TANKS } from "../game/data/tanks";
+import { requestEligible } from "../game/world";
 import { tapVisitor } from "../game/flow/actions";
 import { paletteCount, personModel } from "./models/people";
 import { bubbleTexture, shadowMaterial, smoothMat } from "./materials";
@@ -12,8 +13,7 @@ import { bubbleTexture, shadowMaterial, smoothMat } from "./materials";
 export function Visitors() {
   const [ids, setIds] = useState<string[]>([]);
   useFrame(() => {
-    const now = rt.visitors.map((v) => v.id);
-    if (now.length !== ids.length || now.some((id, i) => id !== ids[i])) setIds(now);
+    if (rt.visitors.length !== ids.length || rt.visitors.some((v, i) => v.id !== ids[i])) setIds(rt.visitors.map((v) => v.id));
   });
   return (
     <>
@@ -49,15 +49,34 @@ function Visitor({ id }: { id: string }) {
   const bubble = useRef<THREE.Sprite>(null);
   const bubbleMat = useMemo(() => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }), []);
   const shadow = useMemo(() => shadowMaterial(0.28), []);
-  useFrame(() => {
+  // Drawn position and sit blend: the hop between the bench front and the seat glides instead of snapping.
+  const shown = useRef({ x: NaN, z: NaN, lx: NaN, lz: NaN, sit: 0 });
+  useFrame((_, dt) => {
     const v = rt.visitors.find((x) => x.id === id);
     const r = root.current;
     if (!v || !r || !model) return;
     const t = rt.time;
-    r.position.set(v.x, 0, v.z);
+    const s = shown.current;
+    const dx = v.x - s.x;
+    const dz = v.z - s.z;
+    const dist = Math.hypot(dx, dz);
+    // Faster than the visitor's own walk (fast mode included), so a glide always catches up.
+    const walked = Math.hypot(v.x - s.lx, v.z - s.lz);
+    s.lx = v.x;
+    s.lz = v.z;
+    const glide = Math.max(Math.min(dt, 0.1) * 2.6, walked < 0.5 ? walked * 2 : 0);
+    if (!(dist < 1.6) || dist <= glide) {
+      s.x = v.x;
+      s.z = v.z;
+    } else {
+      s.x += (dx / dist) * glide;
+      s.z += (dz / dist) * glide;
+    }
+    if (Number.isNaN(dist)) s.sit = v.state === "sit" ? 1 : 0;
+    s.sit += Math.max(-1, Math.min(1, (v.state === "sit" ? 1 : 0) - s.sit)) * Math.min(1, Math.min(dt, 0.1) * 3.5);
+    r.position.set(s.x, 0, s.z);
     r.rotation.y = v.yaw;
     r.visible = !blocksCloseUp(v) && t - v.bornT > 0.05;
-    const sitting = v.state === "sit";
     let y = 0;
     let lean = 0;
     let tilt = 0;
@@ -77,10 +96,13 @@ function Visitor({ id }: { id: string }) {
       else if (a.kind === "wave" && k < 1.2) y += Math.abs(Math.sin(k * Math.PI * 3)) * 0.04;
       else if (k > 1.5) v.anim = null;
     }
-    if (sitting) {
-      // Hips on the bench (seat top 0.5 m), legs forward.
-      y = 0.5 - model.hip + Math.sin(t * 1.5) * 0.005;
-      swing = 0;
+    let legs = swing;
+    if (s.sit > 0) {
+      // Hips on the bench (seat top 0.5 m), legs forward; blended in and out.
+      const k = s.sit;
+      y += (0.5 - model.hip + Math.sin(t * 1.5) * 0.005 - y) * k;
+      swing *= 1 - k;
+      legs = swing + (-1.45 - swing) * k;
     }
     if (body.current) {
       body.current.position.y = y;
@@ -88,12 +110,12 @@ function Visitor({ id }: { id: string }) {
       body.current.rotation.z = tilt;
     }
     if (legL.current && legR.current) {
-      legL.current.rotation.x = sitting ? -1.45 : swing;
-      legR.current.rotation.x = sitting ? -1.45 : -swing;
+      legL.current.rotation.x = legs;
+      legR.current.rotation.x = legs - 2 * swing;
     }
     const b = bubble.current;
     if (b) {
-      b.visible = Boolean(v.bubble) && r.visible;
+      b.visible = Boolean(v.bubble) && r.visible && (v.bubble !== "!" || v.scripted || requestEligible(v));
       if (v.bubble) {
         const tex = bubbleTexture(v.bubble);
         if (bubbleMat.map !== tex) {
@@ -108,10 +130,9 @@ function Visitor({ id }: { id: string }) {
   });
   if (!v0 || !model) return null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
-    // Only a visitor waiting with a request takes the tap; anyone else (walking
-    // past, hidden in a close-up) lets it through to the tank behind them.
+    // Eligible requests take the tap while walking as well as on the bench.
     const v = rt.visitors.find((x) => x.id === id);
-    const waiting = Boolean(v && v.request && !v.helped && v.state === "sit");
+    const waiting = Boolean(v && requestEligible(v));
     if (e.delta > 8 || !waiting || !root.current?.visible || getGame().view !== "room") return;
     e.stopPropagation();
     tapVisitor(id);
@@ -130,7 +151,7 @@ function Visitor({ id }: { id: string }) {
           <mesh geometry={model.leg} material={smoothMat} />
         </group>
       </group>
-      <sprite ref={bubble} material={bubbleMat} visible={false} renderOrder={12} />
+      <sprite ref={bubble} material={bubbleMat} visible={false} renderOrder={12} onClick={onClick} />
       <mesh position={[0, model.height / 2 + 0.1, 0]} onClick={onClick}>
         <boxGeometry args={[0.9, model.height + 0.5, 0.9]} />
         <meshBasicMaterial visible={false} />

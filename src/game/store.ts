@@ -112,6 +112,10 @@ export interface Nudge extends Text {
   id: number;
   /** HUD element to point at (its data-testid). */
   target?: string;
+  /** Runtime guide tier and offer; never part of the saved model. */
+  tier?: 1 | 2;
+  shopItem?: string;
+  repeated?: boolean;
 }
 
 export interface GameState {

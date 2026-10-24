@@ -1,14 +1,25 @@
+import { useMemo } from "react";
 import { setGame, useGame } from "../game/store";
 import { ANIMAL_ORDER, FISH_ORDER, SPECIES } from "../game/data/fish";
 import { DECOR, DECOR_ORDER } from "../game/data/decor";
 import { HALL_PRICE, TANKS, TICKETS_PRICE } from "../game/data/tanks";
 import { homesFor, isSpeciesUnlocked, padsFor, tankById, UPGRADE_PRICE, type UpgradeKind } from "../game/logic/model";
+import { nextStep } from "../game/logic/guide";
 import type { SpeciesId } from "../game/types";
 import { buyDecorKind, buyHall, buyTankType, buyTankUpgrade, buyTicketGate, doneDecorate, openDecorShop, pickTrayItem, putAway } from "../game/flow/actions";
 import { Icon, type IconId } from "./icons";
 import { DecorPicture, FishPicture, LampPicture } from "./Portraits";
 import { Ja } from "./Talk";
-import { UI } from "./i18n";
+
+type ShopReason = { en: string; ja: string };
+const needCoins = (n: number): ShopReason => ({ en: `Need ${n} more coins`, ja: `コインが あと ${n} まい ひつよう` });
+const unlocksAt = (n: number): ShopReason => ({ en: `Unlocks at Level ${n}`, ja: `レベル ${n} で つかえるよ` });
+const hallFirst: ShopReason = { en: "Open Ocean Hall first", ja: "さきに うみの ホールを ひらこう" };
+const noSpace: ShopReason = { en: "No tank space", ja: "タンクの あきが ないよ" };
+
+function DisabledReason({ reason }: { reason: ShopReason | null }) {
+  return reason ? <small className="need shop-reason">{reason.en}<Ja>{reason.ja}</Ja></small> : null;
+}
 
 function Price({ n, short }: { n: number | string; short: boolean }) {
   return (
@@ -25,6 +36,7 @@ function Price({ n, short }: { n: number | string; short: boolean }) {
  */
 function AnimalCards({ list, testid }: { list: SpeciesId[]; testid: string }) {
   const model = useGame((s) => s.model);
+  const shopItem = useMemo(() => nextStep(model)?.shopItem, [model]);
   return (
     <div className="shop-strip ui" data-testid={testid}>
       {list.map((s) => {
@@ -32,26 +44,20 @@ function AnimalCards({ list, testid }: { list: SpeciesId[]; testid: string }) {
         const locked = !isSpeciesUnlocked(model, s);
         const short = model.coins < def.price;
         const homeless = !locked && homesFor(model, s) <= 0;
+        const reason = model.progress.stage < def.fromStage ? unlocksAt(def.fromStage)
+          : def.needsHall && !model.progress.hallOpen ? hallFirst
+            : homeless ? noSpace : short ? needCoins(def.price - model.coins) : null;
         return (
-          <div key={s} className={`card fish-card ${locked ? "locked" : ""} ${short || homeless ? "short" : ""}`} data-testid="shop-card" data-species={s}>
+          <div key={s} className={`card fish-card ${locked ? "locked" : ""} ${short || homeless ? "short" : ""} ${shopItem === s ? "guide shop-recommended" : ""}`} data-testid="shop-card" data-species={s} aria-disabled={Boolean(reason)}>
             <FishPicture species={s} size={110} />
             {locked ? (
               <span className="lockline">
-                <Icon id="lock" size={20} /> Lv {def.needsHall ? 6 : def.fromStage}
+                <Icon id="lock" size={20} />
               </span>
             ) : (
               <Price n={def.price} short={short} />
             )}
-            {!locked && short && (
-              <small className="need" lang="ja">
-                {UI.needCoins.ja}
-              </small>
-            )}
-            {!locked && homeless && !short && (
-              <small className="need" lang="ja">
-                {def.kind === "fish" ? UI.full.ja : "すめる タンクが ひつよう"}
-              </small>
-            )}
+            <DisabledReason reason={reason} />
           </div>
         );
       })}
@@ -93,6 +99,7 @@ export function DecorChoiceStrip() {
         <div key={String(v.variant)} className={`card fish-card ${coins < v.price ? "short" : ""}`}>
           <DecorPicture kind={kind} variant={v.variant} size={92} />
           <Price n={v.price} short={coins < v.price} />
+          <DisabledReason reason={coins < v.price ? needCoins(v.price - coins) : null} />
         </div>
       ))}
     </div>
@@ -101,8 +108,9 @@ export function DecorChoiceStrip() {
 
 export function DecorShop() {
   const panel = useGame((s) => s.panel);
-  const coins = useGame((s) => s.model.coins);
-  const stage = useGame((s) => s.model.progress.stage);
+  const model = useGame((s) => s.model);
+  const { coins, progress: { stage } } = model;
+  const shopItem = useMemo(() => nextStep(model)?.shopItem, [model]);
   const mode = useGame((s) => s.mode);
   if (panel !== "decorShop" || mode === "ask") return null;
   // Phase 2 decorations appear (locked) from Level 6, so there is something to look forward to.
@@ -125,10 +133,11 @@ export function DecorShop() {
           const min = Math.min(...prices);
           const short = coins < min;
           const locked = stage < def.fromStage;
+          const reason = locked ? unlocksAt(def.fromStage) : short ? needCoins(min - coins) : null;
           return (
             <button
               key={k}
-              className={`card decor-card ${short || locked ? "short" : ""} ${locked ? "locked" : ""}`}
+              className={`card decor-card ${short || locked ? "short" : ""} ${locked ? "locked" : ""} ${shopItem === k ? "guide shop-recommended" : ""}`}
               onClick={() => (locked ? undefined : void buyDecorKind(k))}
               data-testid="decor-card"
               data-kind={k}
@@ -141,11 +150,12 @@ export function DecorShop() {
               </span>
               {locked ? (
                 <span className="lockline">
-                  <Icon id="lock" size={20} /> Lv 8
+                  <Icon id="lock" size={20} />
                 </span>
               ) : (
                 <Price n={prices.length > 1 ? `${min}-${Math.max(...prices)}` : min} short={short} />
               )}
+              <DisabledReason reason={reason} />
               {def.bigOnly && !locked && (
                 <small className="need" lang="ja">
                   おおきな タンク
@@ -199,26 +209,34 @@ function TankPicture({ type }: { type: "big" | "tall" | "hall" | "tickets" }) {
 export function TankShop() {
   const panel = useGame((s) => s.panel);
   const m = useGame((s) => s.model);
+  const shopItem = useMemo(() => nextStep(m)?.shopItem, [m]);
   if (panel !== "tankShop") return null;
   const p = m.progress;
-  const offers: { id: string; pic: "big" | "tall" | "hall" | "tickets"; price: number; caps: [IconId, number][]; info?: string; locked: string | null; buy: () => void }[] = [];
-  offers.push({ id: "btn-buy-tank", pic: "big", price: TANKS.big.price, caps: [["fish", TANKS.big.capacity], ["decor", TANKS.big.slots.length]], locked: null, buy: () => buyTankType("big") });
+  const tankReason = (type: "big" | "tall"): ShopReason | null => {
+    if (p.stage < TANKS[type].fromStage) return unlocksAt(TANKS[type].fromStage);
+    if (padsFor(m, type).length - m.inv.tanks.length <= 0) return !p.hallOpen && p.stage >= TANKS.ocean.fromStage ? hallFirst : noSpace;
+    return null;
+  };
+  const offers: { id: string; pic: "big" | "tall" | "hall" | "tickets"; name: string; ja: string; price: number; caps: [IconId, number][]; info?: string; locked: ShopReason | null; buy: () => void }[] = [];
+  offers.push({ id: "btn-buy-tank", pic: "big", name: "Big Tank", ja: "おおきな タンク", price: TANKS.big.price, caps: [["fish", TANKS.big.capacity], ["decor", TANKS.big.slots.length]], locked: tankReason("big"), buy: () => buyTankType("big") });
   if (p.stage >= 6 && !p.hallOpen) {
-    offers.push({ id: "btn-buy-hall", pic: "hall", price: HALL_PRICE, caps: [["turtle", TANKS.ocean.capacity]], info: "うみの ホールと うみの タンク", locked: null, buy: buyHall });
+    offers.push({ id: "btn-buy-hall", pic: "hall", name: "Ocean Hall", ja: "うみの ホール", price: HALL_PRICE, caps: [["turtle", TANKS.ocean.capacity]], locked: null, buy: buyHall });
   }
   if (p.stage >= 6) {
     offers.push({
       id: "btn-buy-tall",
       pic: "tall",
+      name: "Tall Tank",
+      ja: "たかい タンク",
       price: TANKS.tall.price,
       caps: [["fish", TANKS.tall.capacity], ["decor", TANKS.tall.slots.length]],
       info: "タツノオトシゴ・クラゲ",
-      locked: p.stage < 7 ? "Lv 7" : !p.hallOpen && padsFor(m, "tall").length === 0 ? "うみの ホール" : null,
+      locked: tankReason("tall"),
       buy: () => buyTankType("tall")
     });
   }
   if (p.stage >= 8 && !p.tickets) {
-    offers.push({ id: "btn-buy-tickets", pic: "tickets", price: TICKETS_PRICE, caps: [["visitor", 4]], info: "おきゃくさんが ふえる", locked: null, buy: buyTicketGate });
+    offers.push({ id: "btn-buy-tickets", pic: "tickets", name: "Ticket Gate", ja: "チケットゲート", price: TICKETS_PRICE, caps: [["visitor", 4]], info: "おきゃくさんが ふえる", locked: null, buy: buyTicketGate });
   }
   return (
     <div className="panel shop tank-shop ui" data-testid="tank-shop" role="dialog">
@@ -234,12 +252,16 @@ export function TankShop() {
       <div className={`offers n${offers.length}`}>
         {offers.map((o) => {
           const short = m.coins < o.price;
+          const reason = o.locked ?? (short ? needCoins(o.price - m.coins) : null);
           return (
-            <div key={o.id} className={`card tank-offer ${o.locked ? "locked" : ""}`}>
+            <div key={o.id} className={`card tank-offer ${o.pic === "hall" ? "hall-offer" : ""} ${o.locked ? "locked" : ""} ${shopItem === o.pic ? "guide shop-recommended" : ""}`} data-shop-item={o.pic}>
               <span className="tank-pic">
                 <TankPicture type={o.pic} />
               </span>
               <div className="tank-info">
+                {o.pic === "hall" && <span className="room-badge">NEW ROOM <span lang="ja">あたらしい へや</span></span>}
+                <strong className="tank-offer-title">{o.name}<Ja>{o.ja}</Ja></strong>
+                {o.pic === "hall" && <small className="info hall-description">Opens a new room and includes an Ocean tank.<Ja>あたらしい へやと うみの タンクが ついてくるよ！</Ja></small>}
                 {o.caps.map(([icon, n]) => (
                   <span key={icon} className="cap">
                     <Icon id={icon} size={24} /> × {n}
@@ -250,15 +272,10 @@ export function TankShop() {
                     {o.info}
                   </small>
                 )}
-                {o.locked ? (
-                  <span className="lockline">
-                    <Icon id="lock" size={20} /> {o.locked}
-                  </span>
-                ) : (
-                  <Price n={o.price} short={short} />
-                )}
+                <Price n={o.price} short={short} />
+                <DisabledReason reason={reason} />
               </div>
-              <button className="primary buy" disabled={short || Boolean(o.locked)} onClick={() => o.buy()} data-testid={o.id}>
+              <button className="primary buy" disabled={Boolean(reason)} onClick={() => o.buy()} data-testid={o.id} aria-label={`Buy ${o.name}`}>
                 <Icon id="check" size={24} /> OK
               </button>
             </div>
@@ -273,7 +290,9 @@ export function TankShop() {
 export function UpgradePanel() {
   const panel = useGame((s) => s.panel);
   const tank = useGame((s) => (s.tankId ? tankById(s.model, s.tankId) : null));
-  const coins = useGame((s) => s.model.coins);
+  const model = useGame((s) => s.model);
+  const coins = model.coins;
+  const shopItem = useMemo(() => nextStep(model)?.shopItem, [model]);
   const mode = useGame((s) => s.mode);
   if (panel !== "upgrade" || !tank || mode !== "play") return null;
   const rows: { kind: UpgradeKind; icon: IconId; en: string; ja: string; owned: boolean; show: boolean }[] = [
@@ -299,7 +318,7 @@ export function UpgradePanel() {
             const price = UPGRADE_PRICE[r.kind];
             const short = coins < price;
             return (
-              <div key={r.kind} className={`upgrade-row ${r.owned ? "owned" : ""}`}>
+              <div key={r.kind} className={`upgrade-row ${r.owned ? "owned" : ""} ${shopItem === r.kind ? "guide shop-recommended" : ""}`}>
                 {r.kind === "lamp" ? <LampPicture size={48} /> : <Icon id={r.icon} size={44} />}
                 <span className="up-text">
                   {r.en}
@@ -312,6 +331,7 @@ export function UpgradePanel() {
                 ) : (
                   <>
                     <Price n={price} short={short} />
+                    <DisabledReason reason={short ? needCoins(price - coins) : null} />
                     <button className="primary" disabled={short} onClick={() => buyTankUpgrade(r.kind)} data-testid={`btn-up-${r.kind}`}>
                       <Icon id="check" size={22} /> OK
                     </button>
@@ -332,7 +352,7 @@ export function DecorTray() {
   const mode = useGame((s) => s.mode);
   const inv = useGame((s) => s.model.inv.decor);
   const placing = useGame((s) => s.placing);
-  const guide = useGame((s) => s.guide === "tray");
+  const guide = useGame((s) => s.guide === "tray" || s.nudge?.target === "tray");
   const tutorial = useGame((s) => s.model.progress.tutorial !== "done");
   if (panel !== "decorate" || view !== "tank" || mode !== "play") return null;
   const hint =

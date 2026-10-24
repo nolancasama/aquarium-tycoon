@@ -6,7 +6,7 @@ import { audio } from "../audio/audio";
 import { Icon } from "./icons";
 import { DecorPicture, FishPicture, PersonFace, PicoFace } from "./Portraits";
 import { Ja } from "./Talk";
-import { REWARD_TEXT, STAGE_NAMES } from "./i18n";
+import { REWARD_TEXT, STAGE_NAMES, STAGE_PREVIEWS } from "./i18n";
 
 function ModeSwitch() {
   const s = useGame((st) => st.settings);
@@ -102,6 +102,7 @@ export function StageCardModal() {
   if (!card) return null;
   const name = STAGE_NAMES[card.stage];
   const reward = REWARD_TEXT[card.reward];
+  const next = card.stage + 1;
   return (
     <div className="modal-back ui">
       <div className="panel stage-card" data-testid="stage-card" role="dialog">
@@ -109,7 +110,7 @@ export function StageCardModal() {
           <Icon id="star" size={64} />
         </div>
         <h2>
-          Level {card.stage} clear!
+          Level {card.stage} complete!
           <Ja>レベル{card.stage} クリア!</Ja>
         </h2>
         <p className="stage-name">{name.en}</p>
@@ -140,6 +141,11 @@ export function StageCardModal() {
             <Ja>{reward.ja}</Ja>
           </span>
         </div>
+        <div className="next-level">
+          <b>Next: Level {next} — {STAGE_NAMES[next].en}</b>
+          <Ja>つぎ：レベル {next} — {STAGE_NAMES[next].ja}</Ja>
+          <p>{STAGE_PREVIEWS[next].en}<Ja>{STAGE_PREVIEWS[next].ja}</Ja></p>
+        </div>
         <button className="primary big" onClick={() => closeStageCard()} data-testid="stage-ok">
           <Icon id="check" size={26} /> OK
         </button>
@@ -165,6 +171,15 @@ export function ResultsScreen() {
           {superStar ? "Super Aquarium Star!" : "Aquarium Star!"}
           <Ja>{superStar ? "スーパー アクアリウム スター!" : "アクアリウム スター!"}</Ja>
         </h1>
+        <div className="next-level" data-testid="results-progression">
+          <b>Level {superStar ? 8 : 5} complete!</b>
+          <Ja>レベル {superStar ? 8 : 5} クリア！</Ja>
+          {!superStar ? <>
+            <p><b>Level 6 — Ocean Hall is unlocked!</b><Ja>レベル 6 — うみの ホールが ひらけるよ！</Ja></p>
+            <b>Next: Level 6 — {STAGE_NAMES[6].en}</b>
+            <p>{STAGE_PREVIEWS[6].en}<Ja>{STAGE_PREVIEWS[6].ja}</Ja></p>
+          </> : <p>Free play — enjoy your aquarium!<Ja>じゆうに すいぞくかんを たのしもう！</Ja></p>}
+        </div>
         <div className="stats">
           <div className="stat" data-testid="stat-fish">
             <Icon id="fish" size={34} />

@@ -120,9 +120,15 @@ export function hall2Geometry(): THREE.BufferGeometry {
   const t = 0.22;
   const wall = HALL2_WALL.skin!;
   const trim = HALL2_WALL.base;
-  b.box(maxX - minX + t, wallH, t, (minX + maxX) / 2, 0, minZ - t / 2, wall);
-  b.box(maxX - minX + t, 0.16, t + 0.04, (minX + maxX) / 2, 0, minZ - t / 2 + 0.02, trim);
-  b.box(maxX - minX + t, 0.1, t + 0.06, (minX + maxX) / 2, wallH - 0.1, minZ - t / 2 + 0.03, trim);
+  // Meet Hall 1's back wall at the shared wall's outer face. Extending these
+  // pieces across that join duplicated the wall, baseboard and upper trim faces.
+  const backStart = ROOM.maxX + t;
+  const backEnd = maxX + t / 2;
+  const backWidth = backEnd - backStart;
+  const backX = (backStart + backEnd) / 2;
+  b.box(backWidth, wallH, t, backX, 0, minZ - t / 2, wall);
+  b.box(backWidth, 0.16, t + 0.04, backX, 0, minZ - t / 2 + 0.02, trim);
+  b.box(backWidth, 0.1, t + 0.06, backX, wallH - 0.1, minZ - t / 2 + 0.03, trim);
   b.box(t, wallH, maxZ - minZ, maxX + t / 2, 0, (minZ + maxZ) / 2, wall);
   dressWall(b, maxX, -1, minZ, maxZ, { ...HALL2_WALL, skin: undefined }, wallH);
   // The shared wall's Ocean-side face (the Hall 1 side is cream and teal).

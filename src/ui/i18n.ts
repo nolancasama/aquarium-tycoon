@@ -20,6 +20,11 @@ export const UI = {
   full: { en: "Full", ja: "いっぱい" },
   needCoins: { en: "More coins", ja: "もっと コインが ひつよう" },
   showMe: { en: "Show me!", ja: "みせてあげよう! タンクを ひらいて タップ" },
+  findFish: { en: "Find the fish the visitor wants!", ja: "おきゃくさんが ほしい さかなを さがそう！" },
+  findAnimal: { en: "Find the animal the visitor wants!", ja: "おきゃくさんが ほしい いきものを さがそう！" },
+  findThing: { en: "Find what the visitor wants!", ja: "おきゃくさんが ほしい ものを さがそう！" },
+  nameAnimal: { en: "Name the glowing animal!", ja: "ひかっている いきものの なまえを えいごで いおう！" },
+  countFish: { en: "Count the fish in this tank!", ja: "この タンクの さかなを かぞえて えいごで いおう！" },
   findGlow: { en: "Find the shiny tank!", ja: "もどって、ひかっている タンクを さがそう" }
 } satisfies Record<string, Text>;
 
@@ -32,6 +37,18 @@ export const STAGE_NAMES: Record<number, Text> = {
   6: { en: "Ocean Hall", ja: "うみの ホール" },
   7: { en: "Sea Friends", ja: "うみの なかま" },
   8: { en: "Super Aquarium", ja: "スーパー すいぞくかん" }
+};
+
+/** A small preview shared by completion cards and the level overview. */
+export const STAGE_PREVIEWS: Record<number, Text> = {
+  1: { en: "Get a fish, feed it, and help a visitor.", ja: "さかなを かって、えさを あげて、おきゃくさんを たすけよう。" },
+  2: { en: "Get two fish, count them, and clean.", ja: "さかなを 2ひきにして、かぞえて、そうじしよう。" },
+  3: { en: "Help three visitors with English.", ja: "えいごで おきゃくさんを 3にん たすけよう。" },
+  4: { en: "Fill and decorate a Big Tank.", ja: "おおきな タンクに さかなと かざりを いれよう。" },
+  5: { en: "Help visitors and make every tank happy.", ja: "おきゃくさんを たすけて、みんなを ハッピーにしよう。" },
+  6: { en: "Open a new room and get a sea turtle.", ja: "あたらしい へやを ひらいて、ウミガメを むかえよう。" },
+  7: { en: "Get a Tall Tank and name sea animals.", ja: "たかい タンクを おいて、いきものの なまえを いおう。" },
+  8: { en: "Try an upgrade and earn a crown.", ja: "アップグレードして、おうかんを めざそう。" }
 };
 
 export const REWARD_TEXT: Record<string, Text> = {

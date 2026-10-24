@@ -71,7 +71,7 @@ export function Room() {
       <mesh geometry={blobs} material={blobMat} />
       <mesh geometry={rope} material={smoothMat} />
       {/* The mural on the back wall, and the aquarium's name. */}
-      <mesh position={[0, 1.55, ROOM.minZ + 0.005]}>
+      <mesh position={[0, 1.55, ROOM.minZ + 0.015]}>
         <planeGeometry args={[w - 0.6, 2.7]} />
         <meshBasicMaterial map={muralTexture()} toneMapped={false} />
       </mesh>
@@ -115,11 +115,11 @@ function OceanHall() {
       </mesh>
       <mesh geometry={shell} material={flatMat} />
       <mesh geometry={blobs} material={blobMat} />
-      <mesh position={[(HALL2.minX + HALL2.maxX) / 2, 1.55, HALL2.minZ + 0.005]}>
+      <mesh position={[(HALL2.minX + HALL2.maxX) / 2, 1.55, HALL2.minZ + 0.015]}>
         <planeGeometry args={[w - 0.6, 2.7]} />
         <meshBasicMaterial map={oceanMuralTexture()} toneMapped={false} />
       </mesh>
-      <mesh position={[(HALL2.minX + HALL2.maxX) / 2, 2.86, HALL2.minZ + 0.02]}>
+      <mesh position={[(HALL2.minX + HALL2.maxX) / 2, 2.86, HALL2.minZ + 0.075]}>
         <planeGeometry args={[3.4, 0.62]} />
         <meshBasicMaterial map={signTexture("OCEAN HALL", "#0f5c8f", "#ffffff", 768, 140)} transparent />
       </mesh>
@@ -174,7 +174,7 @@ function Sign() {
   // Hidden in close-ups, where it showed cut off above the tank.
   const closeUp = useGame((s) => s.view === "tank");
   return (
-    <mesh position={[0, 2.86, ROOM.minZ + 0.02]} visible={!closeUp}>
+    <mesh position={[0, 2.86, ROOM.minZ + 0.075]} visible={!closeUp}>
       <planeGeometry args={[3.4, 0.62]} />
       <meshBasicMaterial map={signTexture(star ? "★ MY AQUARIUM ★" : "MY AQUARIUM", "#1f7ae0", "#ffffff", 768, 140)} transparent />
     </mesh>
@@ -186,8 +186,8 @@ function Photo() {
   const photo = useGame((s) => s.model.progress.photo);
   if (!photo) return null;
   return (
-    <group position={[0, 1.9, ROOM.minZ + 0.03]}>
-      <mesh position={[0, 0, -0.005]}>
+    <group position={[0, 1.9, ROOM.minZ + 0.05]}>
+      <mesh position={[0, 0, -0.01]}>
         <planeGeometry args={[1.25, 0.98]} />
         <meshLambertMaterial color="#ffcc33" />
       </mesh>
@@ -204,9 +204,30 @@ function trophyGeometry(): THREE.BufferGeometry {
   const gold = "#ffc933";
   b.cyl(0.18, 0.22, 0.08, 0, 0, 0, "#8a5a2b", 14);
   b.cyl(0.05, 0.1, 0.2, 0, 0.08, 0, gold, 12);
-  b.add(new THREE.CylinderGeometry(0.2, 0.08, 0.3, 16, 1, true), gold, [0, 0.43, 0]);
-  b.add(new THREE.SphereGeometry(0.08, 10, 8), gold, [0, 0.29, 0]);
-  for (const s of [-1, 1]) b.torus(0.08, 0.02, [s * 0.22, 0.45, 0], [0, 0, 0], gold);
+  // Trace the underside out from the axis, up the outer bowl, around the
+  // rounded lip, then down the inner bowl to its closed floor. The continuous
+  // profile gives the gold material outward-facing normals inside and outside.
+  const bowl = [
+    [0, 0.265], [0.055, 0.265], [0.08, 0.28], [0.11, 0.32],
+    [0.145, 0.39], [0.18, 0.49], [0.198, 0.555],
+    [0.2, 0.57], [0.196, 0.581], [0.187, 0.585],
+    [0.178, 0.581], [0.174, 0.57], [0.16, 0.50],
+    [0.125, 0.40], [0.09, 0.335], [0.05, 0.31], [0, 0.31]
+  ].map(([r, y]) => new THREE.Vector2(r, y));
+  b.add(new THREE.LatheGeometry(bowl, 24), gold, [0, 0, 0]);
+  // Both ends of each curved handle embed in the bowl wall; mirroring the
+  // curve keeps the silhouette symmetrical without detached rings or open ends.
+  for (const s of [-1, 1]) {
+    const handle = new THREE.CubicBezierCurve3(
+      new THREE.Vector3(s * 0.182, 0.53, 0),
+      new THREE.Vector3(s * 0.35, 0.59, 0),
+      new THREE.Vector3(s * 0.32, 0.31, 0),
+      new THREE.Vector3(s * 0.116, 0.34, 0)
+    );
+    b.add(new THREE.TubeGeometry(handle, 20, 0.018, 6, false), gold, [0, 0, 0]);
+  }
+  // Seat the existing star on a finial rising from the closed bowl floor.
+  b.cyl(0.018, 0.027, 0.34, 0, 0.305, 0, gold, 10);
   // The star on top.
   const star = new THREE.Shape();
   for (let i = 0; i < 10; i++) {

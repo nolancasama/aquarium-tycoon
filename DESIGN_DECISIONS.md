@@ -1,5 +1,46 @@
 # Design Decisions
 
+## 2026-10-24 — Persistent visitor requests and visible help
+
+- Keep the existing request state and hint ladder. Show requests stay in one
+  card across tanks, room views and halls, in the space freed by the hidden goal
+  card, clear of Help, the left HUD/status and the close-up fish area.
+- Always show the English request and a short bilingual action. The first wrong
+  pick emphasises its existing key word while speech replays; the second adds a
+  swatch or animal picture with a tiny English label; the third keeps the existing
+  world highlight. Visual clues and answer highlights retain their thresholds.
+  Japanese explains the action and never translates the target answer.
+- Counting and “What's this?” keep their existing question/prompt and ladder,
+  with a short action under the question. No second hint engine or saved state.
+
+## 2026-10-24 — A state-derived guide and visible progression
+
+- **What:** The first unfinished goal supplies a short bilingual “Next” action,
+  followed by a location hint (B) and exact instructions (C). Pico offers B after
+  45 quiet seconds and C after another 45; opening irrelevant panels twice also
+  advances a tier. A large Help / ヒント button advances the same ladder on
+  demand. Each tier animates once per goal; later Help presses reopen the exact
+  hint without replaying its animation. Runtime guidance is not saved.
+- **Why:** Beginners need a readable next action without sound. Deriving it from
+  existing goals, inventory, tank habitats and real prices prevents contradictory
+  instructions, including buying a turtle again when it is already in a bag.
+  Goals remain completable in any order. Rejected: a new linear tutorial or
+  independent progression flags, which could disagree with the goal card.
+- **What:** Tank offers show English and Japanese names and prices. The blue
+  Ocean Hall illustration has a NEW ROOM badge and explains that its Ocean tank
+  is included. Disabled offers give written reasons, and the relevant offer is
+  highlighted. The locked Animals control explains the hall prerequisite.
+- **Why:** A room purchase must be distinguishable from a tank purchase. Text
+  reasons explain the next practical action. Rejected: pictures and grey colour
+  alone. Fish and animal order activities still require the existing English.
+- **What:** Completion cards name the completed level, its reward, the next
+  level and its activity. The gold trophy explicitly unlocks Level 6. The level
+  chip opens a dismissable, keyboard-accessible list of all eight levels, with
+  icons and Done / Current / Locked text plus short previews.
+- **Why:** Children should see the path beyond the first trophy and understand
+  where they are. Rejected: “Free play” as the Level 5 destination and a separate
+  full-screen level menu, which hides ongoing progression or interrupts play.
+
 This file records meaningful product, UX, visual, architectural, or behavioral decisions for this project.
 
 For each significant decision, record:
@@ -568,3 +609,30 @@ saves (classes would lose their aquariums on update).
   objects well once walls and floors had their own values. Rejected: per-hall
   light rigs, postprocessing, image textures, navy stands in the Ocean Hall
   (stands are per tank type, not per hall; brass-trimmed wood reads well in both).
+
+## 2026-10-24 — Guidance layout, early visitor taps, bench, wall and trophy
+
+- **Help beside Settings, one-line Next.** Help / ヒント is a chip at the top
+  right, next to the gear, and the goal card gains only a single "Next:" line.
+  Why: a Help button inside the goal card made it tall enough to cover the big
+  tank (taps on tank B hit the card), and in the top-left row it covered the
+  close-up's care card. The goal card still hides while a request is active (the
+  request card uses that space). Rejected: pinning the goal card to the side
+  during requests. Tank offers show the price once (the coin chip), not also in
+  the title.
+- **Request visitors can be tapped while walking**, once 0.4 m inside a room.
+  They stop, face the camera and the existing request runs; if put off they walk
+  on to the bench. One conversation at a time, and `helped()` pays once.
+  Rejected: requiring the bench (felt unresponsive).
+- **Bench approach from the front.** Visitors walk to a point 0.95 m in front of
+  the seat, then glide onto it while the sitting pose blends in (and back out
+  when they stand). Why: the old path ended at the seat itself and crossed the
+  bench and backrest. The glide is render-only, faster than any walk, so the
+  drawn visitor never lags the simulated one. Rejected: pathfinding.
+- **Wall flicker** came from the Ocean Hall back wall, baseboard and top trim
+  running across the join into Hall 1's back wall (coplanar faces at x≈5.9–6.2);
+  they now start at the shared wall. Mural, signs and the photo sit a little
+  further off the wall. Rejected: render-order or polygon-offset hacks.
+- **Trophy** is one lathe profile (closed underside, outer bowl, rounded lip,
+  inner bowl, closed floor) with two mirrored tube handles that end inside the
+  bowl wall and a finial holding the star; about 1.4k triangles.

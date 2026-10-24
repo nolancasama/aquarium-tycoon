@@ -1,4 +1,4 @@
-import { commit, getGame, model, nudge, setGame, toast, updateModel, useGame, type Reward } from "../store";
+import { commit, getGame, model, nudge, setGame, toast, updateModel, useGame, type Panel, type Reward } from "../store";
 import { effect, resetRuntime, rt } from "../runtime";
 import type { StageId } from "../types";
 import { SPECIES } from "../data/fish";
@@ -9,7 +9,6 @@ import {
   finishSpecial,
   fishCount,
   giftFish,
-  goals,
   judgeReady,
   markCounted,
   needsGift,
@@ -17,10 +16,10 @@ import {
   setCare,
   setTutorial,
   stageDone,
-  type Goal,
   type Model,
   type TutorialStep
 } from "../logic/model";
+import { nextStep, type Step } from "../logic/guide";
 import { countableTanks, presentColors, type Request } from "../logic/requests";
 import { NUMBER_IDS, NUMBER_PHRASE } from "../logic/english";
 import { clearSave, encodeSave, rawSaveExists, readSave, writeSave } from "../logic/save";
@@ -55,6 +54,7 @@ export function saveNow() {
 
 export function installAutosave(): () => void {
   const unsub = useGame.subscribe((s, prev) => {
+    if (s.panel && s.panel !== prev.panel && s.screen === "game") noteGuidePanel(s.panel);
     if (s.model === prev.model || s.screen === "title") return;
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(saveNow, 800);
@@ -149,6 +149,7 @@ function enter(m: Model) {
   scripted.busy = false;
   resetRuntime();
   resetVisitors();
+  resetHints();
   lastSaved = "";
   setGame({
     screen: "game",
@@ -594,41 +595,108 @@ async function giftFlow(g: number) {
 // ------------------------------------------------------------------ watchers
 
 let checkClock = 0;
-let lastGoalKey = "";
+let hintKey = "";
+let hintTier: 0 | 1 | 2 = 0;
+let wrongPanels = 0;
+let pendingHint = false;
+let guideModel: Model | null = null;
+let guideStep: Step | null = null;
 
-const goalKey = (gs: Goal[]) => gs.map((x) => `${x.id}:${x.done ? 1 : 0}:${x.n ?? ""}`).join(",");
+function resetHints() {
+  hintKey = "";
+  hintTier = 0;
+  wrongPanels = 0;
+  pendingHint = false;
+  guideModel = null;
+  guideStep = null;
+  rt.idle = 0;
+}
 
-const NUDGES: Partial<Record<Goal["id"], { en: string; ja: string; target?: string }>> = {
-  twoFish: { en: "Let's get another fish!", ja: "もう 1ぴき さかなを かおう!", target: "btn-fish-shop" },
-  clean: { en: "Let's clean the tank!", ja: "タンクを ひらいて「そうじ」を おそう", target: "tank-A" },
-  help: { en: "Look! A visitor!", ja: "ベンチの おきゃくさんを タップしよう", target: "chip-visitor" },
-  placeBig: { en: "Let's get a big tank!", ja: "「タンク」で おおきな タンクを かおう", target: "btn-tank-shop" },
-  fishInBig: { en: "A fish for the big tank!", ja: "おおきな タンクに さかなを いれよう", target: "btn-fish-shop" },
-  decorBig: { en: "Decorate the big tank!", ja: "おおきな タンクに かざりを 2つ おこう", target: "tank-B" },
-  allHappy: { en: "Make your fish happy!", ja: "えさ・そうじ・かざりで さかなを ハッピーに しよう" },
-  openHall: { en: "A new hall!", ja: "「タンク」で うみの ホールを ひらこう!", target: "btn-tank-shop" },
-  turtle: { en: "A turtle, please!", ja: "「いきもの」で ウミガメを かって うみの タンクに いれよう", target: "btn-animal-shop" },
-  placeTall: { en: "A tall tank!", ja: "「タンク」で たかい タンクを かおう", target: "btn-tank-shop" },
-  tallAnimal: { en: "Seahorses and jellyfish!", ja: "「いきもの」で タツノオトシゴか クラゲを かおう", target: "btn-animal-shop" },
-  named: { en: "Look! A visitor!", ja: "ベンチの おきゃくさんを タップしよう", target: "chip-visitor" },
-  upgrade: { en: "Upgrade a tank!", ja: "タンクを ひらいて「アップ」で アップグレードしよう" }
-};
+/** Cache by immutable model identity; storyTick itself runs every frame. */
+function currentStep() {
+  const m = model();
+  if (guideModel !== m) {
+    guideModel = m;
+    guideStep = nextStep(m);
+  }
+  const key = guideStep ? `${m.progress.stage}:${guideStep.goal}` : "";
+  if (key !== hintKey) {
+    hintKey = key;
+    hintTier = 0;
+    wrongPanels = 0;
+    pendingHint = false;
+    rt.idle = 0;
+    if (getGame().nudge?.tier) setGame({ nudge: null });
+  }
+  return guideStep;
+}
+
+function noteGuidePanel(panel: Panel) {
+  const step = currentStep();
+  if (!step || model().progress.tutorial !== "done") return;
+  const expected: Partial<Record<string, Panel>> = {
+    "btn-tank-shop": "tankShop", "btn-fish-shop": "fishShop", "btn-animal-shop": "animalShop",
+    "btn-decor-shop": "decorShop", "btn-decorate": "decorate", "tray": "decorate", "btn-upgrade": "upgrade"
+  };
+  if (panel === expected[step.target ?? ""]) return;
+  if (panel === "upgrade" && (step.goal === "upgrade" || step.shopItem === "lamp")) return;
+  if (panel === "decorate" && (step.goal === "decorBig" || step.goal === "allHappy") && !step.shopItem) return;
+  wrongPanels++;
+  if (wrongPanels >= 2) {
+    wrongPanels = 0;
+    pendingHint = true;
+  }
+}
+
+/** Help and idle nudges share one ladder: A is the HUD, B and C are Pico. */
+export function showGuideHint() {
+  const g = getGame();
+  const step = currentStep();
+  if (!step || g.screen !== "game" || g.mode !== "play" || g.prompt || g.line || g.request || g.stageCard || g.settingsOpen) return;
+  // Help can reopen C; only the first appearance of each tier animates Pico.
+  const repeated = hintTier === 2;
+  hintTier = hintTier === 0 ? 1 : 2;
+  let text = hintTier === 1 ? step.where : step.exact;
+  let target = step.target;
+  if (g.view === "tank" && ["btn-fish-shop", "btn-animal-shop", "btn-decor-shop", "btn-tank-shop", "chip-box"].includes(target ?? "") && !g.panel) {
+    target = "btn-back";
+    text = { en: `Tap Back. ${text.en}`, ja: `「もどる」を おそう。${text.ja}` };
+  }
+  if (target?.startsWith("tank-")) {
+    const tank = g.model.tanks.find((t) => `tank-${t.slot}` === target);
+    const placingAnimal = ["buyFish", "twoFish", "fishInBig", "turtle", "tallAnimal", "count"].includes(step.goal) && g.model.inv.fish.length > 0;
+    if (g.view === "tank" && (tank?.id !== g.tankId || (placingAnimal && !g.placing))) target = "btn-back";
+    else if (g.view === "tank" && tank) {
+      if (step.goal === "feed") target = "btn-feed";
+      else if (step.goal === "clean") target = "btn-clean";
+      else if (step.goal === "decorBig") target = g.panel === "decorate" ? "tray" : "btn-decorate";
+      else if (step.goal === "upgrade" || step.shopItem === "lamp") target = "btn-upgrade";
+      else if (step.goal === "allHappy") target = tank.food < 90 ? "btn-feed" : tank.clean < 100 ? "btn-clean" : g.panel === "decorate" ? "tray" : "btn-decorate";
+    }
+    else if (g.view === "room" && tank && HALL_OF[tank.slot] !== g.hall) target = g.hall ? "btn-hall-prev" : "btn-hall-next";
+    else if (!g.placing && placingAnimal) target = "chip-bag";
+  }
+  rt.idle = 0;
+  if (!repeated) rt.pico.waveT0 = rt.time;
+  nudge({ ...text, target, tier: hintTier, shopItem: hintTier === 2 ? step.shopItem : undefined, repeated }, 12000);
+}
 
 export function storyTick(dt: number) {
   const g = getGame();
   if (busyFlow || g.screen !== "game") return;
   const m = g.model;
   // Idle time toward Pico's nudge.
-  const key = goalKey(goals(m));
-  if (key !== lastGoalKey) {
-    lastGoalKey = key;
-    rt.idle = 0;
-  }
-  const quiet = g.mode === "play" && !g.prompt && !g.request && !g.stageCard && !g.settingsOpen && !g.panel && !g.placing;
+  const step = currentStep();
+  const quiet = g.mode === "play" && !g.prompt && !g.request && !g.stageCard && !g.settingsOpen && !g.placing;
   if (quiet) rt.idle += dt;
   checkClock += dt;
   if (checkClock < 0.25) return;
   checkClock = 0;
+  if (m.progress.tutorial === "done" && quiet && (pendingHint || rt.idle > 45)) {
+    pendingHint = false;
+    rt.idle = 0;
+    if (hintTier < 2 && (step?.target !== "chip-visitor" || g.waiting)) showGuideHint();
+  }
   // Rewards may interrupt the decorating tray (the goal was just met there), never a carried item.
   const calm = g.mode === "play" && !g.prompt && !g.request && !g.stageCard && !g.settingsOpen && !g.placing && (!g.panel || g.panel === "decorate");
   if (!calm || m.progress.tutorial !== "done") return;
@@ -652,17 +720,6 @@ export function storyTick(dt: number) {
   if (m.progress.stage === 2 && !m.progress.counted && countableTanks(m).length) {
     void flow(picoCount);
     return;
-  }
-  if (rt.idle > 45) {
-    rt.idle = 0;
-    const next = goals(m).find((x) => !x.done);
-    let n = next ? NUDGES[next.id] : undefined;
-    if (next?.id === "help" && !g.waiting) n = undefined;
-    if (next?.id === "placeBig" && m.inv.tanks.length) n = { en: "Place the big tank!", ja: "はこの タンクを おこう", target: "chip-box" };
-    if (n) {
-      rt.pico.waveT0 = rt.time;
-      nudge({ en: n.en, ja: n.ja, target: n.target });
-    }
   }
 }
 

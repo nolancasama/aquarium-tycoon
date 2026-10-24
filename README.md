@@ -61,7 +61,11 @@ E2E specs: `loop` (whole game, Tap mode), `speech` (whole game spoken; wrong
 speech, hint ladder, interim results, accents and digits), `fallback` (blocked
 or missing microphone, silence, mode switch), `save` (autosave, continue,
 restored tanks/unlocks/settings, new game, corrupted save), `requests` ("show
-me" ladder, rewards once, waiting without a timer, counting clue), `layout`
+me" ladder, rewards once, waiting without a timer, counting clue; the card
+persists across tanks, halls and touch layouts), `guide` (Level 6 "Next" line
+and Help tiers, labelled Ocean Hall offer, carried turtle, level overview),
+`visitors` (tapping a request visitor while walking and after sitting, paid
+once), `layout`
 (HUD fits at 1366×768, 1280×800 touch and 1024×600 touch; touch shopping),
 `phase2` (Levels 6–8 from a starred save: Ocean Hall, habitats, tall tank,
 "What's this?", upgrades, the second judge; animal names by voice).

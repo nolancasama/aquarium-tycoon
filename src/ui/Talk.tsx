@@ -86,6 +86,16 @@ export function PromptPanel() {
             <span className="q-en" data-testid="prompt-question">
               {p.question.en}
             </span>
+            {p.question.en === "What's this?" && (
+              <span className="request-action" data-testid="request-action">
+                {UI.nameAnimal.en}<Ja>{UI.nameAnimal.ja}</Ja>
+              </span>
+            )}
+            {p.question.en === "How many fish?" && (
+              <span className="request-action" data-testid="request-action">
+                {UI.countFish.en}<Ja>{UI.countFish.ja}</Ja>
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -208,31 +218,38 @@ export function RequestBanner() {
   const model = useGame((s) => s.model);
   if (!r || (r.req.kind !== "show" && r.req.kind !== "showAnimal")) return null;
   const req = r.req;
-  const highlight = r.misses >= 2;
+  const highlight = r.misses >= 1;
   const words = r.line.split(/(\s+)/);
   const here = tankId ? tankById(model, tankId) : null;
   const wrongTank = r.misses >= 3 && view === "tank" && here !== null && !tankSatisfies(req, here);
   // The key word: the colour (with a swatch) or the animal (with its picture).
   const key = req.kind === "show" ? req.color : SPECIES[req.species].plural;
   const clue = req.kind === "show" ? <i className="swatch" style={{ background: SWATCH[req.color] }} /> : <FishPicture species={req.species} size={34} />;
+  const action = wrongTank ? UI.findGlow : req.kind === "showAnimal" ? UI.findAnimal : req.fishOnly ? UI.findFish : UI.findThing;
   return (
     <div className={`panel request ui ${r.status}`} data-testid="request" role="status">
-      <SpeakerFace by={r.by} size={58} />
+      <SpeakerFace by={r.by} size={44} />
       <div className="req-body">
         <span className="who">{speakerName(r.by)}</span>
         <p className="req-en" data-testid="request-line">
           {words.map((w, i) =>
             highlight && w.toLowerCase().replace(/[^a-z]/g, "") === key ? (
               <mark key={i} className="key">
-                {clue}
                 {w}
+                {r.misses >= 2 && (
+                  <span className="request-clue" data-testid="request-clue">
+                    {clue}<small>{req.kind === "show" ? req.color : SPECIES[req.species].word}</small>
+                  </span>
+                )}
               </mark>
             ) : (
               <Fragment key={i}>{w}</Fragment>
             )
           )}
         </p>
-        <Ja>{r.status === "wrong" ? UI.tryAgain.ja : wrongTank ? UI.findGlow.ja : UI.showMe.ja}</Ja>
+        <div className="request-action" data-testid="request-action">
+          {action.en}<Ja>{action.ja}</Ja>
+        </div>
       </div>
       <button className="speaker" onClick={() => replayRequest()} aria-label="Listen again" data-testid="request-replay">
         <Icon id="speaker" size={24} />
