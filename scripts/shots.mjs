@@ -67,7 +67,9 @@ const nextLines = async () => {
 
 try {
   await page.goto(`${base}?e2e=1&seed=2`);
-  await page.getByTestId("mode-tap").click();
+  await page.getByTestId("btn-title-settings").click();
+  await page.getByTestId("settings-tap").click();
+  await page.getByTestId("settings-close").click();
   await page.getByTestId("btn-new").click();
   await until("shop", (s) => s.prompt || s.line);
   await nextLines();

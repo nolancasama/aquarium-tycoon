@@ -7,7 +7,7 @@ import { ITS_IDS, ITS_PHRASE, LIKE_COLOR_PHRASE, NUMBER_IDS, NUMBER_PHRASE, colo
 import { makeRng, shuffle } from "../logic/rng";
 import { SPECIES } from "../data/fish";
 import { TANKS } from "../data/tanks";
-import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, lookSpot, requestEligible, route, tankOrigin } from "../world";
+import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, benchPose, lookSpot, requestEligible, route, tankOrigin } from "../world";
 import { ask, fastMode, say, speak, wait } from "./ask";
 import { openTank } from "./actions";
 import { audio } from "../../audio/audio";
@@ -56,6 +56,8 @@ export function spawnVisitor(type: VisitorType, request: Request | null, opts: {
     moving: false,
     path: [],
     state: "walk",
+    seat: 0,
+    seatTarget: 0,
     until: 0,
     plan: request || opts.scripted ? [] : plan,
     seen: [],
@@ -73,6 +75,8 @@ export function spawnVisitor(type: VisitorType, request: Request | null, opts: {
     v.x = BENCH_SEAT.x;
     v.z = BENCH_SEAT.z;
     v.state = "sit";
+    v.seat = 1;
+    v.seatTarget = 1;
     v.yaw = BENCH_FACING;
     v.face = { x: BENCH_SEAT.x - 3, z: BENCH_SEAT.z };
   } else if (request) {
@@ -169,7 +173,7 @@ function nextLookOrLeave(v: VisitorRt) {
 /** Pay the tips for every tank looked at, then walk out. */
 export function leave(v: VisitorRt) {
   if (v.state === "leave" || v.state === "gone") return;
-  const seated = v.state === "sit";
+  const seated = v.seat > 0 || v.seatTarget === 1;
   if (!v.helped && !v.scripted) {
     const m = model();
     const tips = v.seen.reduce((n, id) => {
@@ -187,8 +191,8 @@ export function leave(v: VisitorRt) {
   v.at = null;
   v.face = null;
   // Stand in front of the seat before walking, never through the seat/backrest.
-  if (seated) { v.x = BENCH_FRONT.x; v.z = BENCH_FRONT.z; }
-  v.path = [...route(v, ENTRY), OUTSIDE];
+  if (seated) v.seatTarget = 0;
+  v.path = [...route(seated ? BENCH_FRONT : v, ENTRY), OUTSIDE];
   syncWaiting();
 }
 
@@ -206,11 +210,8 @@ function arrive(v: VisitorRt) {
     return;
   }
   if (v.request && !v.helped) {
-    v.state = "sit";
-    v.x = BENCH_SEAT.x;
-    v.z = BENCH_SEAT.z;
-    v.yaw = BENCH_FACING;
-    v.face = { x: v.x - 3, z: v.z };
+    v.seatTarget = 1;
+    v.face = { x: BENCH_SEAT.x - 3, z: BENCH_SEAT.z };
     syncWaiting();
     return;
   }
@@ -226,6 +227,22 @@ export function stepVisitors(dt: number) {
   const speedUp = fastMode() ? 4 : 1;
   for (const v of rt.visitors) {
     if (v.state === "gone") continue;
+    if (v.seat !== v.seatTarget) {
+      // Turn at the clear approach point before bending and backing in.
+      let turn = BENCH_FACING - v.yaw;
+      while (turn > Math.PI) turn -= Math.PI * 2;
+      while (turn < -Math.PI) turn += Math.PI * 2;
+      v.yaw += turn * Math.min(1, dt * 8);
+      if (v.seat > 0 || Math.abs(turn) < 0.04) {
+        v.seat += Math.sign(v.seatTarget - v.seat) * Math.min(Math.abs(v.seatTarget - v.seat), dt / 1.1);
+        const pose = benchPose(v.seat, 0);
+        v.x = pose.x;
+        v.z = pose.z;
+      }
+      v.moving = false;
+      if (v.seat === 1) { v.state = "sit"; v.yaw = BENCH_FACING; }
+      continue;
+    }
     if (v.path.length) {
       const p = v.path[0];
       const dx = p.x - v.x;
@@ -336,8 +353,11 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
     const f = t?.fish.find((x) => x.id === req.fishId);
     if (!t || !f) return { ok: false, tankId: null };
     openTank(t.id);
-    v.state = "help";
     const spot = cornerSpot(t, -1);
+    // Close-up questions use a camera cut to place the visitor beside the tank.
+    v.seat = 0;
+    v.seatTarget = 0;
+    v.state = "help";
     v.x = spot.x;
     v.z = spot.z;
     v.path = [];
@@ -380,8 +400,11 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
     const t = tankById(model(), req.tankId);
     if (!t) return { ok: false, tankId: null };
     openTank(t.id);
-    v.state = "help";
     const spot = cornerSpot(t, -1);
+    // Close-up questions use a camera cut to place the visitor beside the tank.
+    v.seat = 0;
+    v.seatTarget = 0;
+    v.state = "help";
     v.x = spot.x;
     v.z = spot.z;
     v.path = [];
@@ -529,6 +552,10 @@ export async function celebrate(v: VisitorRt, tankId: string | null) {
     const o = tankOrigin(t.slot);
     const w = TANKS[t.type].w;
     const spot = cornerSpot(t, 1);
+    // The close-up celebration is a camera cut; finish any bench pose there.
+    v.seat = 0;
+    v.seatTarget = 0;
+    v.state = "help";
     v.x = spot.x;
     v.z = spot.z;
     v.path = [];
@@ -577,12 +604,13 @@ export async function openRequest(id: string) {
   if (!v || !v.request || !requestEligible(v)) return;
   activeRequest = v.id;
   // Get up forward if seated; a walking visitor stops exactly where tapped.
-  if (v.state === "sit") { v.x = BENCH_FRONT.x; v.z = BENCH_FRONT.z; }
+  const seated = v.seat > 0 || v.seatTarget === 1;
+  if (seated) v.seatTarget = 0;
   v.state = "help";
   v.path = [];
   v.moving = false;
   v.face = { x: rt.camera.pos.x, z: rt.camera.pos.z };
-  v.yaw = Math.atan2(v.face.x - v.x, v.face.z - v.z);
+  if (!seated) v.yaw = Math.atan2(v.face.x - v.x, v.face.z - v.z);
   setGame({ waiting: null });
   try {
     let req: Request | null = v.request;

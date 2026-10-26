@@ -5,11 +5,12 @@ import { seedSim } from "./sim";
 import { seedVisitors, spawnVisitor } from "./flow/visitors";
 import { decay, goals, happiness, latchHappy, setCare } from "./logic/model";
 import type { Request } from "./logic/requests";
-import { SAND_H, SLOT_POS, STAND_H, TANKS } from "./data/tanks";
+import { SLOT_POS, STAND_H, TANKS } from "./data/tanks";
 import { decorVersion } from "./data/decor";
 import { PICO } from "./world";
 import { project } from "../scene/CameraRig";
 import { dprState, perf } from "../scene/GameScene";
+import { sandSurfaceY, slotMarkerY } from "./logic/tankLayout";
 import type { SlotId, VisitorType } from "./types";
 
 /**
@@ -71,7 +72,7 @@ export function installE2eHook(seed: number) {
           : null,
         stageCard: g.stageCard,
         waiting: g.waiting,
-        visitors: rt.visitors.map((v) => ({ id: v.id, type: v.type, state: v.state, request: v.request?.kind ?? null, helped: v.helped })),
+        visitors: rt.visitors.map((v) => ({ id: v.id, type: v.type, state: v.state, request: v.request?.kind ?? null, helped: v.helped, x: v.x, z: v.z, yaw: v.yaw, seat: v.seat })),
         pellets: rt.pellets.length,
         countGlow: Boolean(rt.countGlow),
         glowFish: rt.glow.fish.size,
@@ -79,7 +80,7 @@ export function installE2eHook(seed: number) {
       };
     },
     /** Screen position of a thing: fish id, tank id, `tankId:slot` (decoration or slot), pad slot, visitor id, pico. */
-    where(kind: "fish" | "tank" | "decor" | "slot" | "pad" | "visitor" | "pico", id = "") {
+    where(kind: "fish" | "tank" | "badge" | "decor" | "slot" | "pad" | "visitor" | "pico", id = "") {
       const m = getGame().model;
       if (kind === "fish") {
         const f = rt.fish.get(id);
@@ -88,11 +89,13 @@ export function installE2eHook(seed: number) {
         const o = SLOT_POS[t.slot];
         return project(o.x + f.s.x, STAND_H + f.s.y, o.z + f.s.z);
       }
-      if (kind === "tank") {
+      if (kind === "tank" || kind === "badge") {
         const t = m.tanks.find((x) => x.id === id);
         if (!t) return null;
         const o = SLOT_POS[t.slot];
-        return project(o.x, STAND_H + TANKS[t.type].h * 0.5, o.z + TANKS[t.type].d / 2);
+        return kind === "badge"
+          ? project(o.x, STAND_H + TANKS[t.type].h + 0.5, o.z)
+          : project(o.x, STAND_H + TANKS[t.type].h * 0.5, o.z + TANKS[t.type].d / 2);
       }
       if (kind === "decor" || kind === "slot") {
         const [tankId, s] = id.split(":");
@@ -102,7 +105,7 @@ export function installE2eHook(seed: number) {
         const p = TANKS[t.type].slots[slot];
         const o = SLOT_POS[t.slot];
         const d = t.decor.find((x) => x.slot === slot);
-        const y = kind === "decor" && d ? STAND_H + SAND_H + decorVersion(d.kind, d.variant).height * TANKS[t.type].h * 0.5 : STAND_H + SAND_H + 0.1;
+        const y = kind === "decor" && d ? sandSurfaceY(TANKS[t.type], p.x, p.z) + decorVersion(d.kind, d.variant).height * TANKS[t.type].h * 0.5 : slotMarkerY(TANKS[t.type], p);
         return project(o.x + p.x, y, o.z + p.z);
       }
       if (kind === "pad") {

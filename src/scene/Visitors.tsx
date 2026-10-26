@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { getGame } from "../game/store";
 import { rt, type VisitorRt } from "../game/runtime";
 import { SLOT_POS, TANKS } from "../game/data/tanks";
-import { requestEligible } from "../game/world";
+import { benchPose, requestEligible } from "../game/world";
 import { tapVisitor } from "../game/flow/actions";
 import { paletteCount, personModel } from "./models/people";
 import { bubbleTexture, shadowMaterial, smoothMat } from "./materials";
@@ -46,35 +46,17 @@ function Visitor({ id }: { id: string }) {
   const body = useRef<THREE.Group>(null);
   const legL = useRef<THREE.Group>(null);
   const legR = useRef<THREE.Group>(null);
+  const kneeL = useRef<THREE.Group>(null);
+  const kneeR = useRef<THREE.Group>(null);
   const bubble = useRef<THREE.Sprite>(null);
   const bubbleMat = useMemo(() => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }), []);
   const shadow = useMemo(() => shadowMaterial(0.28), []);
-  // Drawn position and sit blend: the hop between the bench front and the seat glides instead of snapping.
-  const shown = useRef({ x: NaN, z: NaN, lx: NaN, lz: NaN, sit: 0 });
-  useFrame((_, dt) => {
+  useFrame(() => {
     const v = rt.visitors.find((x) => x.id === id);
     const r = root.current;
     if (!v || !r || !model) return;
     const t = rt.time;
-    const s = shown.current;
-    const dx = v.x - s.x;
-    const dz = v.z - s.z;
-    const dist = Math.hypot(dx, dz);
-    // Faster than the visitor's own walk (fast mode included), so a glide always catches up.
-    const walked = Math.hypot(v.x - s.lx, v.z - s.lz);
-    s.lx = v.x;
-    s.lz = v.z;
-    const glide = Math.max(Math.min(dt, 0.1) * 2.6, walked < 0.5 ? walked * 2 : 0);
-    if (!(dist < 1.6) || dist <= glide) {
-      s.x = v.x;
-      s.z = v.z;
-    } else {
-      s.x += (dx / dist) * glide;
-      s.z += (dz / dist) * glide;
-    }
-    if (Number.isNaN(dist)) s.sit = v.state === "sit" ? 1 : 0;
-    s.sit += Math.max(-1, Math.min(1, (v.state === "sit" ? 1 : 0) - s.sit)) * Math.min(1, Math.min(dt, 0.1) * 3.5);
-    r.position.set(s.x, 0, s.z);
+    r.position.set(v.x, 0, v.z);
     r.rotation.y = v.yaw;
     r.visible = !blocksCloseUp(v) && t - v.bornT > 0.05;
     let y = 0;
@@ -96,14 +78,14 @@ function Visitor({ id }: { id: string }) {
       else if (a.kind === "wave" && k < 1.2) y += Math.abs(Math.sin(k * Math.PI * 3)) * 0.04;
       else if (k > 1.5) v.anim = null;
     }
-    let legs = swing;
-    if (s.sit > 0) {
-      // Hips on the bench (seat top 0.5 m), legs forward; blended in and out.
-      const k = s.sit;
-      y += (0.5 - model.hip + Math.sin(t * 1.5) * 0.005 - y) * k;
-      swing *= 1 - k;
-      legs = swing + (-1.45 - swing) * k;
+    const pose = benchPose(v.seat, model.hip);
+    if (v.seat > 0) {
+      y = pose.bodyY;
+      lean = 0;
+      tilt = 0;
+      swing = 0;
     }
+    const legs = swing + pose.thigh;
     if (body.current) {
       body.current.position.y = y;
       body.current.rotation.x = lean;
@@ -112,6 +94,10 @@ function Visitor({ id }: { id: string }) {
     if (legL.current && legR.current) {
       legL.current.rotation.x = legs;
       legR.current.rotation.x = legs - 2 * swing;
+    }
+    if (kneeL.current && kneeR.current) {
+      kneeL.current.rotation.x = pose.knee;
+      kneeR.current.rotation.x = pose.knee;
     }
     const b = bubble.current;
     if (b) {
@@ -146,9 +132,15 @@ function Visitor({ id }: { id: string }) {
         <mesh geometry={model.body} material={smoothMat} />
         <group ref={legL} position={[-model.legX, model.hip, 0]}>
           <mesh geometry={model.leg} material={smoothMat} />
+          <group ref={kneeL} position={[0, -model.thigh, 0]}>
+            <mesh geometry={model.shin} material={smoothMat} />
+          </group>
         </group>
         <group ref={legR} position={[model.legX, model.hip, 0]}>
           <mesh geometry={model.leg} material={smoothMat} />
+          <group ref={kneeR} position={[0, -model.thigh, 0]}>
+            <mesh geometry={model.shin} material={smoothMat} />
+          </group>
         </group>
       </group>
       <sprite ref={bubble} material={bubbleMat} visible={false} renderOrder={12} onClick={onClick} />

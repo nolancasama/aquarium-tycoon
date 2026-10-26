@@ -625,7 +625,7 @@ export const muralTexture = () =>
 
 /** Painted sign text. */
 export function signTexture(text: string, bg: string, fg: string, w = 512, h = 128): THREE.CanvasTexture {
-  return cached(`sign-${text}-${bg}-${fg}-${w}`, () =>
+  return cached(`sign-${text}-${bg}-${fg}-${w}-${h}`, () =>
     canvasTex(w, h, (g) => {
       g.fillStyle = bg;
       g.beginPath();
@@ -642,6 +642,18 @@ export function signTexture(text: string, bg: string, fg: string, w = 512, h = 1
     })
   );
 }
+
+/** All rounded canvas signs must preserve the empty corner pixels' alpha. */
+export function signMaterial(text: string, bg: string, fg: string, w = 512, h = 128): THREE.MeshBasicMaterial {
+  const key = `sign-material-${text}-${bg}-${fg}-${w}-${h}`;
+  let material = signMaterials.get(key);
+  if (!material) {
+    material = new THREE.MeshBasicMaterial({ map: signTexture(text, bg, fg, w, h), transparent: true, alphaTest: 0.01 });
+    signMaterials.set(key, material);
+  }
+  return material;
+}
+const signMaterials = new Map<string, THREE.MeshBasicMaterial>();
 
 /** A framed poster of a fish (side walls) or the fish fan's photo. */
 export function posterTexture(kind: "clown" | "tang" | "photo"): THREE.CanvasTexture {

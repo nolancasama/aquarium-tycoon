@@ -195,6 +195,8 @@ test("a request can wait (no timer); counting shows its clue on the second miss"
   await waitFor(page, (x) => x.request?.kind === "show", 5_000, "request");
   await page.getByTestId("request-later").click();
   let s = await waitFor(page, (x) => !x.request && Boolean(x.waiting), 5_000, "back on the bench");
+  // Wait for the physical stand/return/sit sequence before checking patience.
+  await waitFor(page, (x) => x.visitors.some((v) => v.request === "show" && v.state === "sit"), 20_000, "visitor sits again");
   // Nobody leaves while waiting.
   await page.waitForTimeout(3000);
   s = await state(page);

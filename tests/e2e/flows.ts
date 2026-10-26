@@ -291,8 +291,16 @@ export async function stagesTwoToFive(page: Page) {
   expect(s.progress.star).toBe(true);
   await shot(page, "results");
   await expect(page.getByTestId("results-said")).toContainText("Feed the fish!");
+  await expect(page.getByTestId("btn-keep-playing")).toContainText("Continue");
+  await expect(page.getByTestId("btn-results-title")).toHaveCount(0);
+  const beforeContinue = s;
   await page.getByTestId("btn-keep-playing").click();
   s = await waitFor(page, (x) => x.screen === "game" && x.mode === "play", 10_000, "free play");
+  expect(s.stage).toBe(6);
+  expect(s.tanks.map(({ id, type, slot, fishIds, decor }) => ({ id, type, slot, fishIds, decor })))
+    .toEqual(beforeContinue.tanks.map(({ id, type, slot, fishIds, decor }) => ({ id, type, slot, fishIds, decor })));
+  expect(s.coins).toBeGreaterThanOrEqual(beforeContinue.coins);
+  expect(s.progress.hearts).toBe(beforeContinue.progress.hearts);
   expect(s.progress.freePlay).toBe(true);
   await shot(page, "free-play");
 }

@@ -1,5 +1,24 @@
 # Design Decisions
 
+## 2026-10-26 — Compact objectives and uninterrupted progression
+
+- Objectives start collapsed in the upper-left corner, showing the current
+  level and the existing state-derived Next action. A keyboard/touch toggle
+  reveals the checklist, counts and location hint; scripted interactions
+  collapse it and active visitor requests temporarily replace it. On narrow
+  screens it moves below the status row. This keeps tank happiness faces clear
+  while retaining the existing Help ladder and level overview.
+- Room requests use the same left column, with their replay/later controls
+  beneath the sentence. The Hall 1 arrow moves below an expanded checklist or
+  request, and beside it on short displays, clear of the inventory bag.
+- Coins, level and hearts are positioned at the viewport's horizontal centre,
+  independently of objective width and right-side controls. The tank care
+  panel sits on the right in close-ups to leave the objectives accessible.
+- Speak/Tap remains a persistent teacher setting in Settings; the title only
+  offers starting/resuming and Settings. Completion cards use one Continue
+  action; returning to title stays in Settings. Existing transitions, rewards,
+  save schema and input defaults are unchanged.
+
 ## 2026-10-24 — Persistent visitor requests and visible help
 
 - Keep the existing request state and hint ladder. Show requests stay in one

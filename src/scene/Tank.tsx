@@ -15,6 +15,7 @@ import { fishGeometry, turtleModel } from "./models/fish";
 import { decorModel } from "./models/decor";
 import { additiveSprite, algaeTexture, badgeTexture, flatMat, fishMaterial, glassTexture, glowTexture, shaderTime, shadowMaterial, surfaceMaterial, tankShellMaterial, waterMaterial } from "./materials";
 import { project, FOV } from "./CameraRig";
+import { sandSurfaceY, slotMarkerY, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
 
 /** Every placed tank. */
 export function Tanks() {
@@ -363,10 +364,7 @@ function ContactShadows({ tank }: { tank: TankRec }) {
       const p = g.attributes.position;
       for (let i = 0; i < p.count; i++) {
         const x = slot.x + p.getX(i), z = slot.z + p.getZ(i);
-        const radius = def.w * 0.32;
-        const k = 1 - ((x + def.w * 0.18) / radius) ** 2 - ((z + def.d * 0.18) / (radius * 0.55)) ** 2;
-        const dune = STAND_H + SAND_H - 0.01 + radius * 0.09 * Math.sqrt(Math.max(0, k));
-        p.setXYZ(i, x, Math.max(STAND_H + SAND_H, dune) + 0.002, z);
+        p.setXYZ(i, x, sandSurfaceY(def, x, z) + 0.002, z);
       }
       return g;
     });
@@ -407,7 +405,7 @@ function DecorMesh({ tank, d }: { tank: TankRec; d: PlacedDecor }) {
     const lifted = st.placing?.kind === "move" && st.placing.tankId === tank.id && st.placing.slot === d.slot;
     const age = rt.time - born.current;
     const pop = age < 0.35 ? 0.6 + 0.4 * Math.sin((age / 0.35) * Math.PI * 0.5) + Math.sin((age / 0.35) * Math.PI) * 0.15 : 1;
-    g.position.set(s.x, STAND_H + SAND_H - 0.004 + (lifted ? 0.06 + Math.sin(rt.time * 5) * 0.015 : 0), s.z);
+    g.position.set(s.x, sandSurfaceY(def, s.x, s.z) - 0.004 + (lifted ? 0.06 + Math.sin(rt.time * 5) * 0.015 : 0), s.z);
     g.scale.setScalar(scale * pop);
     if (lid.current) {
       // The chest opens now and then and lets a few bubbles out.
@@ -462,8 +460,8 @@ function SlotMarkers({ tank }: { tank: TankRec }) {
   return (
     <>
       {def.slots.map((s, i) => (
-        <mesh key={i} ref={(m) => void (refs.current[i] = m)} position={[s.x, STAND_H + SAND_H + 0.008, s.z]} rotation={[-Math.PI / 2, 0, 0]} material={mats[i]} renderOrder={6}>
-          <ringGeometry args={[0.1, 0.15, 24]} />
+        <mesh key={i} ref={(m) => void (refs.current[i] = m)} position={[s.x, slotMarkerY(def, s), s.z]} rotation={[-Math.PI / 2, 0, 0]} material={mats[i]}>
+          <ringGeometry args={[0.1, SLOT_MARKER_RADIUS, 32]} />
         </mesh>
       ))}
     </>

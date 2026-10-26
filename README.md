@@ -12,7 +12,7 @@ all models, textures and sounds are generated in the browser.
 
 ## For teachers
 
-- **Speak / Tap** (title screen and Settings): Speak uses the microphone; Tap
+- **Speak / Tap** (Settings): Speak uses the microphone; Tap
   shows two or three English buttons instead. Both complete the whole game. If
   the microphone is blocked, the game switches to buttons by itself.
 - After three missed tries, the buttons appear anyway as a rescue.
@@ -20,6 +20,12 @@ all models, textures and sounds are generated in the browser.
   never translated. Settings also has a slow voice and music/sound volumes.
 - Progress saves automatically on the device. **Continue** resumes; **New game**
   asks first. Settings are kept separately and survive a new game.
+- Objectives start collapsed at the upper left: read **Next**, then expand
+  **Objectives / もくひょう** for the checklist and location hint. Coins, level
+  and hearts stay centered. Tap the level to see Levels 1–8; **Help / ヒント**
+  still provides the progressive hints.
+- Level and trophy celebrations have one **Continue / つづける** button.
+  Settings keeps the save-and-return-to-title option.
 - A first playthrough (tutorial to Aquarium Star) should take roughly 20–30
   minutes (an estimate from the visitor timings, not yet timed with a class);
   afterwards free play continues.
@@ -55,6 +61,7 @@ npx vite --port 5320
 BASE_URL=http://127.0.0.1:5320 SHOTS=1 SHOTS_DIR=tap npx playwright test loop.spec.ts   # .tmp/shots/tap/
 node scripts/shots.mjs   # real-speed scenes (feeding, dirt, cleaning, celebration) -> .tmp/scenes/
 node scripts/peek.mjs    # Speak-mode prompt states -> .tmp/peek/
+node scripts/polish-review.mjs # title, HUD sizes, bench frames, markers, signs -> .tmp/polish-review/
 ```
 
 E2E specs: `loop` (whole game, Tap mode), `speech` (whole game spoken; wrong
@@ -66,7 +73,8 @@ persists across tanks, halls and touch layouts), `guide` (Level 6 "Next" line
 and Help tiers, labelled Ocean Hall offer, carried turtle, level overview),
 `visitors` (tapping a request visitor while walking and after sitting, paid
 once), `layout`
-(HUD fits at 1366×768, 1280×800 touch and 1024×600 touch; touch shopping),
+(viewport-centered status and collapsible objectives at 1366×768, 1280×720,
+1024×768 and 844×390; existing touch shopping layouts),
 `phase2` (Levels 6–8 from a starred save: Ocean Hall, habitats, tall tank,
 "What's this?", upgrades, the second judge; animal names by voice).
 

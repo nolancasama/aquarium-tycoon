@@ -3,6 +3,7 @@ import { SAND_H, SLOT_POS, STAND_H, TANKS } from "./data/tanks";
 import { DECOR, decorVersion } from "./data/decor";
 import type { TankRec } from "./logic/model";
 import type { Column } from "./logic/swim";
+import { sandSurfaceY } from "./logic/tankLayout";
 
 /**
  * Room layout and tank geometry in world space (metres). The room's front
@@ -25,11 +26,27 @@ export const DOOR_WEST: Vec2 = { x: 5.3, z: 1.5 };
 export const DOOR_EAST: Vec2 = { x: 6.7, z: 1.5 };
 /** The bench where request visitors wait (they sit facing the room centre). */
 export const BENCH: Vec2 = { x: 4.4, z: 2.95 };
-export const BENCH_SEAT: Vec2 = { x: 4.3, z: 2.95 };
+export const BENCH_SEAT: Vec2 = { x: 4.22, z: 2.95 };
+export const BENCH_SEAT_H = 0.5;
 /** Seat and backrest bounds from the room model; front is the -x side. */
 export const BENCH_FOOTPRINT = { minX: BENCH.x - 0.25, maxX: BENCH.x + 0.28, minZ: BENCH.z - 0.75, maxZ: BENCH.z + 0.75 };
 export const BENCH_FRONT: Vec2 = { x: BENCH.x - 0.95, z: BENCH_SEAT.z };
 export const BENCH_FACING = -Math.PI / 2;
+
+/** Bend the knees before backing onto the seat; stand by retracing this path. */
+export function benchPose(progress: number, hip: number) {
+  const ease = (x: number) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
+  const bend = ease(progress / 0.45);
+  const slide = ease((progress - 0.45) / 0.55);
+  const radius = hip * (0.075 / 0.74);
+  return {
+    x: BENCH_FRONT.x + (BENCH_SEAT.x - BENCH_FRONT.x) * slide,
+    z: BENCH_SEAT.z,
+    bodyY: (BENCH_SEAT_H + radius - hip) * slide,
+    thigh: -Math.PI / 2 * bend,
+    knee: Math.PI / 2 * bend
+  };
+}
 
 /** Keep walking outside the furniture; the final seat placement is a seated pose. */
 export function benchApproach(from: Vec2): Vec2[] {
@@ -108,7 +125,7 @@ export function columnsOf(t: TankRec): Column[] {
     x: slots[d.slot].x,
     z: slots[d.slot].z,
     r: decorRadius(d.kind, d.variant),
-    top: decorTop(t, d.kind, d.variant)
+    top: decorTop(t, d.kind, d.variant) + sandSurfaceY(TANKS[t.type], slots[d.slot].x, slots[d.slot].z) - STAND_H - SAND_H
   }));
 }
 

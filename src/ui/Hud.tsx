@@ -112,13 +112,17 @@ function GoalRow({ g }: { g: Goal }) {
 function GoalCard() {
   const model = useGame((s) => s.model);
   const request = useGame((s) => s.request);
+  const interrupted = useGame((s) => Boolean(s.prompt || s.line || s.stageCard));
+  const [expanded, setExpanded] = useState(false);
   const step = useMemo(() => nextStep(model), [model]);
+  // Start each level compact and clear an expanded list for scripted interactions.
+  useEffect(() => setExpanded(false), [model.progress.stage, interrupted, Boolean(request)]);
   if (request) return null;
   const p = model.progress;
   const list = goals(model);
   const name = STAGE_NAMES[p.stage];
   return (
-    <div className="panel goals ui" data-testid="goals">
+    <div className={`panel goals ui ${expanded ? "expanded" : ""}`} data-testid="goals">
       <header>
         {p.star && list.length === 0 ? (
           <>
@@ -130,12 +134,20 @@ function GoalCard() {
           </>
         )}
       </header>
-      {list.length > 0 && <ul>{list.map((g) => <GoalRow key={g.id} g={g} />)}</ul>}
       {step && (
         <div className="guide-next" data-testid="guide-next" aria-live="polite">
           <b>Next: {step.title.en}</b> <Ja>{step.title.ja}</Ja>
         </div>
       )}
+      {list.length > 0 && <>
+        <button className="objectives-toggle" data-testid="btn-objectives" aria-expanded={expanded} aria-controls="objective-details" onClick={() => setExpanded((open) => !open)} onKeyDown={(e) => { if (e.code === "Space") e.stopPropagation(); }}>
+          <span aria-hidden="true">{expanded ? "▴" : "▾"}</span> Objectives <Ja>もくひょう</Ja>
+        </button>
+        {expanded && <div id="objective-details" className="objective-details" role="region" aria-label="Current objectives" tabIndex={0} onKeyDown={(e) => { if (["Space", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(e.code)) e.stopPropagation(); }}>
+          <ul>{list.map((g) => <GoalRow key={g.id} g={g} />)}</ul>
+          {step && <p className="objective-guidance">{step.where.en}<Ja>{step.where.ja}</Ja></p>}
+        </div>}
+      </>}
     </div>
   );
 }
@@ -148,7 +160,7 @@ function HelpButton() {
   if (request) return null;
   return (
     <button className="chip help-btn ui" onClick={showGuideHint} disabled={!canHelp} data-testid="btn-help">
-      <b aria-hidden="true">?</b> Help <small lang="ja">ヒント</small>
+      <b aria-hidden="true">?</b> <span className="help-label">Help <small lang="ja">ヒント</small></span>
     </button>
   );
 }
@@ -159,7 +171,8 @@ function TopBar() {
   const hearts = useGame((s) => s.model.progress.hearts);
   return (
     <div className="topbar">
-      <div className="top-left">
+      <GoalCard />
+      <div className="player-status" data-testid="player-status">
         <Coins />
         <LevelOverview stage={stage} star={star} />
         <div className="chip hearts" data-testid="hearts" data-value={hearts}>
@@ -167,7 +180,6 @@ function TopBar() {
           <b>{hearts}</b>
         </div>
       </div>
-      <GoalCard />
       <div className="top-right">
         <HelpButton />
         <button className="round settings-btn ui" onClick={() => setGame({ settingsOpen: true })} aria-label="Settings" data-testid="btn-settings">

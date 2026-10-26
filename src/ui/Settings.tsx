@@ -59,11 +59,11 @@ export function SettingsModal() {
           <span>
             Answers <Ja>こたえかた</Ja>
           </span>
-          <div className="mode-switch small">
-            <button className={s.mic ? "on" : ""} onClick={() => set({ mic: true })} data-testid="settings-speak">
+          <div className="mode-switch small" role="group" aria-label="Answer mode">
+            <button className={s.mic ? "on" : ""} aria-pressed={s.mic} onClick={() => set({ mic: true })} data-testid="settings-speak">
               <Icon id="mic" size={22} /> Speak
             </button>
-            <button className={!s.mic ? "on" : ""} onClick={() => set({ mic: false })} data-testid="settings-tap">
+            <button className={!s.mic ? "on" : ""} aria-pressed={!s.mic} onClick={() => set({ mic: false })} data-testid="settings-tap">
               <Icon id="check" size={20} /> Tap
             </button>
           </div>

@@ -55,6 +55,7 @@ function useCameraGestures(ref: React.RefObject<HTMLDivElement | null>) {
       if (pointers.size < 2) pinch = 0;
     };
     const wheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest(".ui, button, input, .modal")) return;
       if (!roomView()) return;
       rt.camera.zoom = Math.min(1.25, Math.max(0.8, rt.camera.zoom * (e.deltaY > 0 ? 0.94 : 1.06)));
     };

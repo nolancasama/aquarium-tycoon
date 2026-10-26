@@ -9,7 +9,7 @@ import type { SlotId, TankType } from "../game/types";
 import { tapHallDoor, tapPad } from "../game/flow/actions";
 import { PartBuilder } from "./partBuilder";
 import { hall2Geometry, roomGeometry, ropeGeometry, tankShellGeometry } from "./models/room";
-import { flatMat, floorTexture, muralTexture, oceanFloorMaterial, oceanMuralTexture, padIconTexture, posterTexture, shadowMaterial, signTexture, smoothMat } from "./materials";
+import { flatMat, floorTexture, muralTexture, oceanFloorMaterial, oceanMuralTexture, padIconTexture, posterTexture, shadowMaterial, signMaterial, smoothMat } from "./materials";
 
 /** Soft contact blobs under furniture: [x, z, width, depth], merged into one mesh. */
 function blobGeometry(blobs: [number, number, number, number][]): THREE.BufferGeometry {
@@ -86,7 +86,7 @@ export function Room() {
       </mesh>
       <mesh position={[ROOM.minX + 0.13, 2.62, DOOR.z]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[1.5, 0.38]} />
-        <meshBasicMaterial map={signTexture("WELCOME", "#ff8a3d", "#ffffff", 512, 128)} />
+        <primitive object={signMaterial("WELCOME", "#ff8a3d", "#ffffff", 512, 128)} attach="material" />
       </mesh>
       <Photo />
       <Trophy />
@@ -121,7 +121,7 @@ function OceanHall() {
       </mesh>
       <mesh position={[(HALL2.minX + HALL2.maxX) / 2, 2.86, HALL2.minZ + 0.075]}>
         <planeGeometry args={[3.4, 0.62]} />
-        <meshBasicMaterial map={signTexture("OCEAN HALL", "#0f5c8f", "#ffffff", 768, 140)} transparent />
+        <primitive object={signMaterial("OCEAN HALL", "#0f5c8f", "#ffffff", 768, 140)} attach="material" />
       </mesh>
     </group>
   );
@@ -157,11 +157,14 @@ function HallDoor() {
           <>
             <mesh position={[-0.05, 2.0, HALL_DOOR.w / 2]} rotation={[0, -Math.PI / 2, 0]}>
               <planeGeometry args={[1.5, 0.36]} />
-              <meshBasicMaterial map={signTexture("OCEAN HALL", "#0f5c8f", "#ffffff", 512, 128)} />
+              <primitive object={signMaterial("OCEAN HALL", "#0f5c8f", "#ffffff", 512, 128)} attach="material" />
             </mesh>
-            <sprite position={[-0.25, 0.9, HALL_DOOR.w / 2]} scale={[0.5, 0.5, 1]}>
-              <spriteMaterial map={padIconTexture("lock")} transparent depthWrite={false} />
-            </sprite>
+            {/* Door-aligned plaque: a billboard's near corner crossed the leaf
+                as the camera turned. The whole plane now clears its -x face. */}
+            <mesh position={[-0.06, 0.9, HALL_DOOR.w / 2]} rotation={[0, -Math.PI / 2, 0]}>
+              <planeGeometry args={[0.5, 0.5]} />
+              <meshBasicMaterial map={padIconTexture("lock")} transparent alphaTest={0.01} />
+            </mesh>
           </>
         )}
       </group>
@@ -176,7 +179,7 @@ function Sign() {
   return (
     <mesh position={[0, 2.86, ROOM.minZ + 0.075]} visible={!closeUp}>
       <planeGeometry args={[3.4, 0.62]} />
-      <meshBasicMaterial map={signTexture(star ? "★ MY AQUARIUM ★" : "MY AQUARIUM", "#1f7ae0", "#ffffff", 768, 140)} transparent />
+      <primitive object={signMaterial(star ? "★ MY AQUARIUM ★" : "MY AQUARIUM", "#1f7ae0", "#ffffff", 768, 140)} attach="material" />
     </mesh>
   );
 }

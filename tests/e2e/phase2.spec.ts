@@ -155,8 +155,17 @@ test("Phase 2: the Ocean Hall, a turtle, a tall tank of jellyfish, upgrades, the
   expect(s.progress.superStar).toBe(true);
   await expect(page.getByTestId("results")).toContainText("Super Aquarium Star");
   await shot(page, "super-results");
+  await expect(page.getByTestId("btn-keep-playing")).toContainText("Continue");
+  await expect(page.getByTestId("btn-results-title")).toHaveCount(0);
+  const beforeContinue = s;
   await page.getByTestId("btn-keep-playing").click();
   s = await waitFor(page, (x) => x.screen === "game" && x.mode === "play", 10_000, "free play");
+  expect(s.stage).toBe(8);
+  expect(s.progress.superStar).toBe(true);
+  expect(s.tanks.map(({ id, type, slot, fishIds, decor }) => ({ id, type, slot, fishIds, decor })))
+    .toEqual(beforeContinue.tanks.map(({ id, type, slot, fishIds, decor }) => ({ id, type, slot, fishIds, decor })));
+  expect(s.coins).toBeGreaterThanOrEqual(beforeContinue.coins);
+  expect(s.progress.hearts).toBe(beforeContinue.progress.hearts);
   expect(s.goals).toEqual([]);
   expect(errors).toEqual([]);
 });

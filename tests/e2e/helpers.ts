@@ -63,9 +63,12 @@ export async function waitFor(page: Page, pred: (s: AtState) => boolean, timeout
   return s;
 }
 
-/** Choose the answer mode on the title and start a new game. */
+/** Choose the answer mode in Settings and start a new game. */
 export async function startNew(page: Page, mode: "tap" | "speak") {
-  await page.getByTestId(mode === "tap" ? "mode-tap" : "mode-speak").click();
+  await expect(page.getByTestId("title").getByRole("radiogroup", { name: "Answer mode" })).toHaveCount(0);
+  await page.getByTestId("btn-title-settings").click();
+  await page.getByTestId(mode === "tap" ? "settings-tap" : "settings-speak").click();
+  await page.getByTestId("settings-close").click();
   await page.getByTestId("btn-new").click();
   await waitFor(page, (s) => s.screen === "game", 10_000, "game screen");
 }
@@ -111,6 +114,8 @@ export async function settle(page: Page, ms = 900) {
 /** Close a stage card when it shows. */
 export async function stageOk(page: Page, stage: number) {
   await waitFor(page, (s) => s.stageCard?.stage === stage, 30_000, `stage ${stage} card`);
+  await expect(page.getByTestId("stage-ok")).toContainText("Continue");
+  await expect(page.getByTestId("stage-card").getByRole("button")).toHaveCount(1);
   await shot(page, `stage-${stage}-card`);
   await page.getByTestId("stage-ok").click();
 }

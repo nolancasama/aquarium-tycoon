@@ -3,8 +3,8 @@ import { buyFish, newModel, placeFish } from "../logic/model";
 import { requestReward, type Request } from "../logic/requests";
 import { resetRuntime, rt } from "../runtime";
 import { getGame, model, setGame } from "../store";
-import { BENCH_FACING, BENCH_SEAT, ENTRY } from "../world";
-import { answerShow, cancelShow, helped, openRequest, resetVisitors, scripted, spawnVisitor, stepVisitors } from "./visitors";
+import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY } from "../world";
+import { answerShow, cancelShow, helped, openRequest, leave, resetVisitors, scripted, spawnVisitor, stepVisitors } from "./visitors";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn() } }));
 vi.mock("./actions", () => ({ openTank: vi.fn() }));
@@ -118,5 +118,40 @@ describe("walking visitor request lifecycle", () => {
     expect(getGame().request).toBeNull();
     expect(getGame().waiting).toBeNull();
     expect(model().stats.helped).toBe(0);
+  });
+});
+
+
+describe("first tutorial visitor bench movement", () => {
+  it("walks in, turns, bends, and sits without a position jump; stands forward before leaving", () => {
+    // New-game model and the tutorial's exact child/show-request spawn path.
+    const v = spawnVisitor("child", request);
+    let previous = { x: v.x, z: v.z };
+    let bentBeforeSliding = false;
+    for (let i = 0; i < 2000 && v.state !== "sit"; i++) {
+      stepVisitors(1 / 60);
+      expect(Math.hypot(v.x - previous.x, v.z - previous.z)).toBeLessThan(0.04);
+      if (v.seat > 0 && v.seat < 0.45) {
+        expect(v.x).toBe(BENCH_FRONT.x);
+        expect(v.z).toBe(BENCH_FRONT.z);
+        bentBeforeSliding = true;
+      }
+      previous = { x: v.x, z: v.z };
+    }
+    expect(bentBeforeSliding).toBe(true);
+    expect(v.state).toBe("sit");
+    expect(v.seat).toBe(1);
+    expect(v.x).toBe(BENCH_SEAT.x);
+    expect(v.request).toEqual(request);
+    leave(v);
+    // Setting up departure also preserves the actual seated position.
+    expect(v.x).toBe(BENCH_SEAT.x);
+    while (v.seat > 0) {
+      stepVisitors(1 / 60);
+      expect(Math.hypot(v.x - previous.x, v.z - previous.z)).toBeLessThan(0.04);
+      previous = { x: v.x, z: v.z };
+    }
+    expect(v.x).toBe(BENCH_FRONT.x);
+    expect(v.z).toBe(BENCH_FRONT.z);
   });
 });

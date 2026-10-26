@@ -1,5 +1,41 @@
 # Current State
 
+## UI layout, collision and visual polish (2026-10-26)
+
+- Compact, collapsible objectives at the upper left; independently centered
+  coins/level/hearts; Help and Settings on the right. Requests replace the
+  objectives in room views. Narrow/short layouts preserve happiness faces,
+  hall arrows, inventory, keyboard expansion and checklist scrolling.
+- Title answer mode selection moved entirely to Settings. Stage and trophy
+  screens use Continue / つづける; returning to title remains in Settings.
+  Existing Levels 1–8 transitions, hints, saves, rewards and input defaults remain.
+- Visitors turn and bend their knees before backing onto the bench, and
+  reverse that continuous motion to stand. Articulated shins and pelvis
+  clearance keep all six visitor models outside the seat and backrest.
+- Sand-aware marker/decor heights preserve normal depth testing and slot IDs;
+  fish clearance follows the same decoration heights. Upper wall caps no
+  longer share exposed planes. Door lock is attached to the leaf; all rounded
+  signs use a shared alpha-aware material.
+
+Visual evidence: `node scripts/polish-review.mjs <preview-url>` writes
+`.tmp/polish-review/final/`: 80 frames, no browser errors or recorded face
+occlusions at 1366×768, 1280×720, 1024×768 and 844×390. Includes both halls,
+collapsed/expanded objectives, requests with clues, every tank's marker rings
+at two pulse phases, signs/walls/door angles, transition screens and the actual
+first New Game visitor's approach and seated pose. SwiftShader evidence;
+Claude retains final aesthetic review. Real Chromebook GPU testing is outstanding.
+
+Unit tests: 132 pass, including sampled body/leg triangles through all bench
+poses, continuous tutorial movement, full marker-footprint sand/edge clearance
+and raycasts of wall caps. Production build passes. The complete production
+Playwright suite passes 28/28 (10.3 min), including the new face-visibility,
+objective expansion/keyboard and viewport-centering checks, existing touch
+layouts, saves, mic fallback, both spoken/tapped playthroughs and Levels 6–8.
+The full-loop performance check measures 60 draw calls / 39.7k triangles.
+
+On this Windows host, Playwright's automatic preview-server shutdown can stall.
+Run the production preview separately and set `BASE_URL` for the browser suite.
+
 ## Status
 **Phase 1 (the vertical slice) is complete and tested.** A new player can start,
 buy a fish with English, place it, feed and clean, decorate, help visitors,
@@ -100,7 +136,6 @@ approach frames, the trophy from front/side/rear.
 - Real speech recognition, TTS voices, audio levels and real Chromebook GPU
   performance are untested (stubs and SwiftShader only).
 - `THREE.Clock` deprecation warning from R3F (harmless).
-- In the big tank's close-up the back-wall sign shows, cut off, at the top left.
 - Playtime (~20–30 min to the trophy) is an estimate, not measured with children.
 - Visual polish judged from SwiftShader screenshots only; fps on a real
   Chromebook after the pass is unmeasured. Rocks and coral are still faceted
@@ -110,8 +145,8 @@ approach frames, the trophy from front/side/rear.
   out in clicks and timed waits; run the suite on an idle machine. Two specs
   (`guide` wrong-shop tiers, `layout` 1366 decor click) each failed once on an
   idle run and passed 3/3 on repeat — watch for a real intermittent hang there.
-- The bench glide and early visitor taps were checked in 0.8 s screenshot steps,
-  not by eye in real time.
+- Bench movement is verified with sampled geometry and 100 ms rendered frames;
+  real-time movement and visual performance on school hardware remain unmeasured.
 
 ## Next Steps
 1. Play it on a real school Chromebook with a class: speech acceptance, whether

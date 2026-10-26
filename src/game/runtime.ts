@@ -54,6 +54,9 @@ export interface VisitorRt {
   moving: boolean;
   path: Vec2[];
   state: VisitorState;
+  /** Bench pose 0..1 and its target; transient, never part of a saved model. */
+  seat: number;
+  seatTarget: 0 | 1;
   /** The current look ends at this rt.time. */
   until: number;
   /** Tank ids still to look at. */

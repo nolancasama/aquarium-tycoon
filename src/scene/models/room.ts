@@ -3,6 +3,7 @@ import { PartBuilder } from "../partBuilder";
 import { BENCH, DOOR, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../../game/world";
 import { SAND_H, SLOT_POS, STAND_H, TANKS } from "../../game/data/tanks";
 import type { TankType } from "../../game/types";
+import { sandDune } from "../../game/logic/tankLayout";
 
 /** The room shell and furniture (one merged mesh), and the tank stand/frame per tank type. */
 
@@ -44,9 +45,11 @@ export function roomGeometry(): THREE.BufferGeometry {
   const { minX, maxX, minZ, maxZ, wallH } = ROOM;
   const t = 0.22;
   // Back wall (the mural is a separate textured plane in front of it).
-  b.box(maxX - minX + t * 2, wallH, t, 0, 0, minZ - t / 2, WALL);
+  // The cap replaces the upper wall strip. Its top stands slightly proud of
+  // the side walls, so their top faces cannot fight at the corner joins.
+  b.box(maxX - minX + t * 2, wallH - 0.1, t, 0, 0, minZ - t / 2, WALL);
   b.box(maxX - minX + t * 2, 0.16, t + 0.04, 0, 0, minZ - t / 2 + 0.02, TRIM);
-  b.box(maxX - minX + t * 2, 0.1, t + 0.06, 0, wallH - 0.1, minZ - t / 2 + 0.03, TRIM);
+  b.box(maxX - minX + t * 2, 0.12, t + 0.06, 0, wallH - 0.1, minZ - t / 2 + 0.03, TRIM);
   // Left wall with the entrance opening.
   const doorA = DOOR.z - DOOR.w / 2;
   const doorB = DOOR.z + DOOR.w / 2;
@@ -126,9 +129,9 @@ export function hall2Geometry(): THREE.BufferGeometry {
   const backEnd = maxX + t / 2;
   const backWidth = backEnd - backStart;
   const backX = (backStart + backEnd) / 2;
-  b.box(backWidth, wallH, t, backX, 0, minZ - t / 2, wall);
+  b.box(backWidth, wallH - 0.1, t, backX, 0, minZ - t / 2, wall);
   b.box(backWidth, 0.16, t + 0.04, backX, 0, minZ - t / 2 + 0.02, trim);
-  b.box(backWidth, 0.1, t + 0.06, backX, wallH - 0.1, minZ - t / 2 + 0.03, trim);
+  b.box(backWidth, 0.12, t + 0.06, backX, wallH - 0.1, minZ - t / 2 + 0.03, trim);
   b.box(t, wallH, maxZ - minZ, maxX + t / 2, 0, (minZ + maxZ) / 2, wall);
   dressWall(b, maxX, -1, minZ, maxZ, { ...HALL2_WALL, skin: undefined }, wallH);
   // The shared wall's Ocean-side face (the Hall 1 side is cream and teal).
@@ -256,7 +259,8 @@ export function tankShellGeometry(type: TankType): THREE.BufferGeometry {
     seed = (seed * 16807) % 2147483647;
     return (seed - 1) / 2147483646;
   };
-  b.sphere(w * 0.32, -w * 0.18, y0 + SAND_H - 0.01, -d * 0.18, "#e6cf94", [1, 0.09, 0.55], 16);
+  const dune = sandDune(t);
+  b.sphere(dune.radius, dune.x, dune.y, dune.z, "#e6cf94", [1, 0.09, 0.55], 16);
   const pebble = ["#f2b5c6", "#a9d8f5", "#ffe08a", "#c3e8b8", "#ffffff"];
   for (let i = 0; i < (type === "big" ? 34 : 24); i++) {
     b.add(new THREE.IcosahedronGeometry(0.014 + r() * 0.01, 0), pebble[i % pebble.length], [(r() - 0.5) * (w - 0.08), y0 + SAND_H, (r() - 0.5) * (d - 0.08)], [r(), r(), r()], [1, 0.6, 1]);

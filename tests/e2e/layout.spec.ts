@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { boot, click3d, playing, state, waitFor } from "./helpers";
+import { boot, click3d, hook, playing, shot, state, waitFor } from "./helpers";
 
 const SAVE = {
   v: 1,
@@ -17,7 +17,21 @@ const SAVE = {
   }
 };
 
-async function seed(page: Page, mic: boolean) {
+const OCEAN_SAVE = {
+  v: 2,
+  model: {
+    ...SAVE.model,
+    tanks: [...SAVE.model.tanks,
+      { id: "t11", type: "ocean", slot: "C", fish: [{ id: "f12", species: "turtle" }], decor: [], food: 100, clean: 100 },
+      { id: "t13", type: "tall", slot: "D", fish: [{ id: "f14", species: "seahorse" }], decor: [], food: 100, clean: 100 },
+      { id: "t15", type: "tall", slot: "E", fish: [{ id: "f16", species: "jellyfish" }], decor: [], food: 100, clean: 100 }
+    ],
+    progress: { ...SAVE.model.progress, stage: 6, hallOpen: true, star: true, freePlay: true },
+    nextId: 17
+  }
+};
+
+async function seed(page: Page, mic: boolean, ocean = false) {
   await page.addInitScript(
     ([save, m]) => {
       if (sessionStorage.getItem("seeded")) return;
@@ -25,11 +39,103 @@ async function seed(page: Page, mic: boolean) {
       localStorage.setItem("at.save.v1", JSON.stringify(save));
       localStorage.setItem("at.settings.v1", JSON.stringify({ mic: m, music: 0, sfx: 0, japanese: true, slowVoice: false }));
     },
-    [SAVE, mic] as const
+    [ocean ? OCEAN_SAVE : SAVE, mic] as const
   );
 }
 
+for (const size of [
+  { width: 1366, height: 768 },
+  { width: 1280, height: 720 },
+  { width: 1024, height: 768 },
+  { width: 844, height: 390 }
+]) {
+  test.describe(`centered HUD ${size.width}x${size.height}`, () => {
+    test.use({ viewport: size });
+
+    test("objectives collapse independently of viewport-centered status and controls", async ({ page }) => {
+      await seed(page, false, true);
+      const errors = await boot(page);
+      await page.getByTestId("btn-continue").click();
+      await playing(page);
+      await hook(page, "visitors", false);
+      const toggle = page.getByTestId("btn-objectives");
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(toggle).toHaveAttribute("aria-controls", "objective-details");
+      await expect(page.getByTestId("guide-next")).toBeVisible();
+
+      const center = async () => {
+        const box = (await page.getByTestId("player-status").boundingBox())!;
+        expect(Math.abs(box.x + box.width / 2 - size.width / 2)).toBeLessThanOrEqual(1);
+        return box.x + box.width / 2;
+      };
+      const before = await center();
+      await checkLayout(page, ["player-status", "goals", "btn-help", "btn-settings"], "collapsed HUD");
+      await shot(page, `hud-${size.width}x${size.height}-collapsed`);
+
+      // Keyboard interaction must expose all goals without moving status.
+      await toggle.focus();
+      await page.keyboard.press("Space");
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      const details = page.locator("#objective-details");
+      await expect(details).toBeVisible();
+      for (const goal of (await state(page)).goals) {
+        await expect(page.getByTestId(`goal-${goal.id}`)).toBeVisible();
+      }
+      expect(await center()).toBeCloseTo(before, 1);
+      await checkLayout(page, ["player-status", "goals", "btn-help", "btn-settings"], "expanded HUD");
+      await shot(page, `hud-${size.width}x${size.height}-expanded`);
+      await toggle.click();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(details).toBeHidden();
+      expect(await center()).toBeCloseTo(before, 1);
+
+      // Level Overview remains accessible from the centered level indicator.
+      await page.getByTestId("level").click();
+      await expect(page.getByTestId("level-overview")).toBeVisible();
+      expect(await center()).toBeCloseTo(before, 1);
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("level-overview")).toBeHidden();
+
+      // The aquarium itself is the reason for the layout: include all three
+      // Ocean Hall tanks, with both objective states and an active request.
+      for (const hall of [0, 1]) {
+        if ((await state(page)).hall !== hall) {
+          await page.getByTestId(hall ? "btn-hall-next" : "btn-hall-prev").click();
+          await page.waitForTimeout(1200);
+        }
+        for (const expanded of [false, true]) {
+          if ((await toggle.getAttribute("aria-expanded")) !== String(expanded)) await toggle.click();
+          await checkTankFaces(page, hall);
+          await center();
+          await checkLayout(page, ["goals", hall ? "btn-hall-prev" : "btn-hall-next", "player-status", "btn-help", "btn-settings", "chip-bag"], "hall HUD");
+        }
+        await hook(page, "requestVisitor", "adult", { kind: "show", color: "blue", fishOnly: true });
+        await page.getByTestId("chip-visitor").click();
+        await expect(page.getByTestId("request")).toBeVisible();
+        await checkTankFaces(page, hall);
+        await page.getByTestId("request-later").click();
+        await expect(page.getByTestId("request")).toBeHidden();
+      }
+      expect(errors).toEqual([]);
+    });
+  });
+}
+
 type Box = { id: string; x: number; y: number; w: number; h: number };
+
+async function checkTankFaces(page: Page, hall: number) {
+  const s = await state(page);
+  for (const tank of s.tanks.filter((t) => (["C", "D", "E"].includes(t.slot) ? 1 : 0) === hall)) {
+    const p = await hook<{ x: number; y: number }>(page, "where", "badge", tank.id);
+    for (const id of ["goals", "request", "player-status", "btn-help", "btn-settings"]) {
+      const control = page.getByTestId(id);
+      if (!(await control.isVisible())) continue;
+      const b = (await control.boundingBox())!;
+      const covered = p.x + 24 > b.x && p.x - 24 < b.x + b.width && p.y + 24 > b.y && p.y - 24 < b.y + b.height;
+      expect(covered, `${id} covers tank ${tank.slot}'s happiness face`).toBe(false);
+    }
+  }
+}
 
 /** Every listed HUD element is on screen, big enough, and no two overlap. */
 async function checkLayout(page: Page, ids: string[], label: string) {

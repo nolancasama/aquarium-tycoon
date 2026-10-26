@@ -154,23 +154,24 @@ kbd {
   top: 12px;
   left: 14px;
   right: 14px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  height: 0;
   pointer-events: none;
   z-index: 10;
 }
 
-.top-left {
+.player-status {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
-  max-width: 330px;
+  width: max-content;
 }
 
 .top-right {
+  position: absolute;
+  right: 0;
   display: flex;
   gap: 10px;
   align-items: center;
@@ -234,18 +235,19 @@ kbd {
 }
 
 .goals {
-  padding: 8px 16px 10px;
-  min-width: 280px;
-  max-width: 440px;
-  pointer-events: none;
+  position: absolute;
+  left: 0;
+  width: clamp(160px, 18vw, 240px);
+  padding: 8px 12px 4px;
+  pointer-events: auto;
 }
 
 .goals header {
   font-weight: 900;
-  font-size: 18px;
+  font-size: 16px;
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
@@ -258,8 +260,35 @@ kbd {
 }
 
 .goals header .ja {
-  display: inline;
+  flex-basis: 100%;
+  font-size: 11px;
 }
+
+.objectives-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  width: 100%;
+  padding: 4px 0;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--sea-dark);
+}
+
+.objectives-toggle .ja { font-size: 11px; }
+
+.objective-details {
+  max-height: clamp(60px, calc(100dvh - 430px), 330px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  border-top: 2px solid var(--aqua-soft);
+  padding-bottom: 8px;
+}
+
+.objective-guidance { margin: 10px 0 0; font-size: 14px; }
 
 .goals ul {
   list-style: none;
@@ -337,7 +366,8 @@ kbd {
 .level-overview {
   position: absolute;
   top: calc(100% + 10px);
-  left: -100px;
+  left: 50%;
+  transform: translateX(-50%);
   width: min(450px, calc(100vw - 32px));
   max-height: calc(100vh - 100px);
   overflow-y: auto;
@@ -1329,9 +1359,9 @@ mark.key {
 }
 
 .title-card {
-  padding: 22px 34px 18px;
+  padding: 28px 34px 22px;
   display: grid;
-  gap: 14px;
+  gap: 18px;
   justify-items: center;
   max-width: calc(100% - 24px);
 }
@@ -1672,6 +1702,13 @@ mark.key {
   display: block;
 }
 
+.app:has(.goals.expanded) .hall-arrow.left,
+.app:has(.request) .hall-arrow.left {
+  top: auto;
+  bottom: 124px;
+  transform: none;
+}
+
 .offers {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -1759,21 +1796,63 @@ mark.key {
   justify-items: center;
 }
 
-/* A request uses the space freed by the goals, clear of the left HUD/status
-   and right settings. It stays above the close-up fish, in either hall. */
+/* Requests occupy the next row beneath the centered status, clear of care. */
 .top-panels:has(.request) {
-  left: max(350px, calc((100% - 640px) / 2));
-  width: min(640px, calc(100% - 430px));
-  transform: none;
+  top: 76px;
+  left: 50%;
+  width: min(640px, calc(100% - 32px));
+  transform: translateX(-50%);
   justify-items: stretch;
 }
 
+/* In the room, requests replace objectives in the left column so the
+   happiness faces above all three Ocean Hall tanks stay exposed. */
+.view-room .top-panels:has(.request) {
+  top: 12px;
+  left: 14px;
+  width: clamp(160px, 18vw, 240px);
+  transform: none;
+}
+.view-room .request {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 44px;
+  gap: 6px;
+  padding: 8px;
+}
+.view-room .request .req-body { grid-column: 1 / -1; grid-row: 1; }
+.view-room .request > svg { grid-column: 1; grid-row: 2; width: 28px; height: 28px; }
+.view-room .request > .speaker { grid-column: 2; grid-row: 2; }
+.view-room .request > .close, .view-room .request > .good { grid-column: 3; grid-row: 2; }
+.view-room .request > button { min-width: 44px; min-height: 44px; }
+.view-room .request .req-en { font-size: 21px; }
+.view-room .request-action { font-size: 14px; }
+
 .view-tank .tank-status {
-  top: 76px;
+  left: auto;
+  right: 14px;
+  top: 84px;
 }
 
 .app:has(.request) .tank-status {
-  top: 136px;
+  top: 192px;
+}
+
+@media (max-width: 900px) {
+  .goals { top: 72px; }
+  .player-status { gap: 5px; }
+  .player-status .chip { padding: 0 10px 0 7px; font-size: 21px; }
+  .top-right { gap: 8px; }
+  .help-btn { padding: 0 10px; }
+}
+
+@media (max-width: 700px) {
+  .topbar { left: 8px; right: 8px; }
+  .player-status .chip { gap: 4px; padding: 0 7px; font-size: 18px; height: 46px; }
+  .player-status svg { width: 23px; height: 23px; }
+  .help-label { font-size: 0; }
+  .help-btn { min-width: 44px; width: 44px; height: 46px; padding: 0; justify-content: center; }
+  .help-btn .help-label small { display: none; }
+  .top-right .settings-btn { width: 46px; height: 46px; }
 }
 
 /* ------------------------------------------------------------ short screens (phones in landscape) */
@@ -1784,8 +1863,19 @@ mark.key {
     font-size: 19px;
   }
   .goals {
-    min-width: 220px;
-    padding: 6px 12px 8px;
+    padding: 6px 8px 8px;
+  }
+  .goals header { font-size: 14px; gap: 4px; }
+  .goals header .lv { font-size: 12px; padding: 1px 5px; }
+  .guide-next { font-size: 14px; }
+  .objective-details { max-height: 60px; }
+  .hall-arrow.left {
+    top: auto;
+    bottom: 110px;
+    left: calc(clamp(160px, 18vw, 240px) + 28px);
+    transform: none;
+    border-left: 3px solid var(--aqua-soft);
+    border-radius: 24px;
   }
   .goals li {
     font-size: 14px;
@@ -1816,6 +1906,7 @@ mark.key {
   .view-tank .tank-status {
     top: 64px;
   }
+  .app:has(.request) .tank-status { top: 162px; }
   .sentence,
   .q-en,
   .line-en,

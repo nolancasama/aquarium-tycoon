@@ -10,6 +10,8 @@ import type { VisitorType } from "../../game/types";
 export interface PersonModel {
   body: THREE.BufferGeometry;
   leg: THREE.BufferGeometry;
+  shin: THREE.BufferGeometry;
+  thigh: number;
   /** Hip height (leg pivot). */
   hip: number;
   /** Leg x offset from the centre. */
@@ -112,7 +114,7 @@ export function personModel(type: VisitorType, variant: number): PersonModel {
     for (const x of [-1, 1]) b.add(new THREE.TorusGeometry(hr * 0.2, hr * 0.035, 5, 14), "#5a4632", [x * hr * 0.36, hy + hr * 0.06, hr * 0.98], [0, 0, 0]);
     b.box(hr * 0.2, hr * 0.04, hr * 0.04, 0, hy + hr * 0.08, hr * 1.0, "#5a4632");
     for (let i = 0; i < 3; i++) b.sphere(0.018, 0, hip + 0.18 + i * 0.12, 0.215, "#ffffff", [1, 1, 0.5], 6);
-    b.box(0.18, 0.15, 0.08, -0.3, hip - 0.08, 0.04, p.extra);
+    b.box(0.18, 0.15, 0.08, -0.3, hip - 0.07, 0.04, p.extra);
     b.torus(0.06, 0.012, [-0.3, hip + 0.1, 0.04], [0, 0, 0], p.extra);
   } else if (type === "explorer") {
     // A wide safari hat and binoculars on the chest.
@@ -133,10 +135,14 @@ export function personModel(type: VisitorType, variant: number): PersonModel {
   }
   const body = b.build();
   const lb = new PartBuilder(0.2);
-  // A leg hangs from its hip pivot (y = 0) down to the shoe.
-  lb.add(new THREE.CylinderGeometry(0.075 * s, 0.065 * s, hip - 0.06, 8), p.pants, [0, -(hip - 0.06) / 2, 0]);
-  lb.sphere(0.085 * s, 0, -hip + 0.05, 0.04 * s, type === "judge" ? "#111111" : "#f1f3f5", [1, 0.6, 1.5], 8);
-  const model: PersonModel = { body, leg: lb.build(), hip, legX: 0.1 * s, height: hy + hr * (type === "fan" ? 1.6 : type === "explorer" ? 1.5 : 1.2) };
+  const sb = new PartBuilder(0.2);
+  const thigh = hip / 2;
+  // The knee articulates: thighs rest above the seat, shins hang in front.
+  lb.add(new THREE.CylinderGeometry(0.075 * s, 0.07 * s, thigh, 8), p.pants, [0, -thigh / 2, 0]);
+  lb.sphere(0.07 * s, 0, -thigh, 0, p.pants, [1, 1, 1], 8);
+  sb.add(new THREE.CylinderGeometry(0.07 * s, 0.065 * s, hip - thigh - 0.06, 8), p.pants, [0, -(hip - thigh - 0.06) / 2, 0]);
+  sb.sphere(0.085 * s, 0, -hip + thigh + 0.05, 0.04 * s, type === "judge" ? "#111111" : "#f1f3f5", [1, 0.6, 1.5], 8);
+  const model: PersonModel = { body, leg: lb.build(), shin: sb.build(), thigh, hip, legX: 0.1 * s, height: hy + hr * (type === "fan" ? 1.6 : type === "explorer" ? 1.5 : 1.2) };
   cache.set(key, model);
   return model;
 }

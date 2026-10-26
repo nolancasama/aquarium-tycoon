@@ -39,9 +39,12 @@ test("Level 6 guide: hints, the labelled Ocean Hall, a carried turtle, then visi
   const errors = await continueLevelSix(page);
   const next = page.getByTestId("guide-next");
   await expect(next).toContainText("Open the Ocean Hall!");
+  await expect(page.getByTestId("btn-objectives")).toHaveAttribute("aria-expanded", "false");
+  await page.getByTestId("btn-objectives").click();
   await expect(page.getByTestId("goal-openHall")).toBeVisible();
   await expect(page.getByTestId("goal-turtle")).toBeVisible();
   await expect(page.getByTestId("goal-help")).toBeVisible();
+  await page.getByTestId("btn-objectives").click();
 
   // Help advances from where to the exact action, including its real price.
   const help = page.getByTestId("btn-help");
@@ -90,6 +93,8 @@ test("Level 6 guide: hints, the labelled Ocean Hall, a carried turtle, then visi
   s = await waitFor(page, (x) => x.tanks.find((t) => t.id === ocean)!.fish.includes("turtle"), 5_000, "turtle placed");
   expect(s.inv.fish).toBe(0);
   await expect(next).toContainText(/Help visitors:\s*0\s*\/\s*2/);
+  await expect(page.getByTestId("btn-objectives")).toHaveAttribute("aria-expanded", "false");
+  await page.getByTestId("btn-objectives").click();
   await expect(page.getByTestId("goal-openHall")).toHaveAttribute("data-done", "true");
   await expect(page.getByTestId("goal-turtle")).toHaveAttribute("data-done", "true");
   await shot(page, "guide-next-visitors");

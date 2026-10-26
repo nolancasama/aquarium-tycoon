@@ -45,7 +45,9 @@ const speak = async (text, slow = 0) => {
 await page.goto(`${base}?e2e=1&seed=1`);
 await page.waitForTimeout(1500);
 await shot("1-title");
-await page.getByTestId("mode-speak").click();
+await page.getByTestId("btn-title-settings").click();
+await page.getByTestId("settings-speak").click();
+await page.getByTestId("settings-close").click();
 await page.getByTestId("btn-new").click();
 await until((s) => s.prompt || s.line);
 for (let i = 0; i < 6 && (await state()).line; i++) {

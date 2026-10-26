@@ -1,5 +1,5 @@
-import { saveSettings, setGame, useGame } from "../game/store";
-import { closeStageCard, continueGame, keepPlaying, newGame, toTitle } from "../game/flow/story";
+import { setGame, useGame } from "../game/store";
+import { closeStageCard, continueGame, keepPlaying, newGame } from "../game/flow/story";
 import { PHRASES } from "../game/logic/english";
 import { fishCount } from "../game/logic/model";
 import { audio } from "../audio/audio";
@@ -7,27 +7,6 @@ import { Icon } from "./icons";
 import { DecorPicture, FishPicture, PersonFace, PicoFace } from "./Portraits";
 import { Ja } from "./Talk";
 import { REWARD_TEXT, STAGE_NAMES, STAGE_PREVIEWS } from "./i18n";
-
-function ModeSwitch() {
-  const s = useGame((st) => st.settings);
-  const set = (mic: boolean) => {
-    const next = { ...s, mic };
-    saveSettings(next);
-    setGame({ settings: next });
-    audio.unlock();
-    audio.play("tick");
-  };
-  return (
-    <div className="mode-switch" role="radiogroup" aria-label="Answer mode">
-      <button className={s.mic ? "on" : ""} onClick={() => set(true)} role="radio" aria-checked={s.mic} data-testid="mode-speak">
-        <Icon id="mic" size={26} /> Speak <Ja>はなす</Ja>
-      </button>
-      <button className={!s.mic ? "on" : ""} onClick={() => set(false)} role="radio" aria-checked={!s.mic} data-testid="mode-tap">
-        <Icon id="check" size={24} /> Tap <Ja>タップ</Ja>
-      </button>
-    </div>
-  );
-}
 
 export function TitleScreen() {
   const screen = useGame((s) => s.screen);
@@ -88,7 +67,6 @@ export function TitleScreen() {
             </div>
           </div>
         )}
-        <ModeSwitch />
         <button className="link" onClick={() => setGame({ settingsOpen: true })} data-testid="btn-title-settings">
           <Icon id="gear" size={22} /> Settings <Ja>せってい</Ja>
         </button>
@@ -147,7 +125,7 @@ export function StageCardModal() {
           <p>{STAGE_PREVIEWS[next].en}<Ja>{STAGE_PREVIEWS[next].ja}</Ja></p>
         </div>
         <button className="primary big" onClick={() => closeStageCard()} data-testid="stage-ok">
-          <Icon id="check" size={26} /> OK
+          <Icon id="check" size={26} /> Continue <Ja>つづける</Ja>
         </button>
       </div>
     </div>
@@ -208,10 +186,7 @@ export function ResultsScreen() {
         )}
         <div className="title-buttons">
           <button className="primary big" onClick={() => keepPlaying()} data-testid="btn-keep-playing">
-            ▶ Keep playing <Ja>あそびつづける</Ja>
-          </button>
-          <button className="secondary" onClick={() => toTitle()} data-testid="btn-results-title">
-            Title <Ja>タイトル</Ja>
+            ▶ Continue <Ja>つづける</Ja>
           </button>
         </div>
       </div>
