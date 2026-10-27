@@ -154,6 +154,87 @@ export const bubbleTexture = (kind: "!" | "heart" | "hmm" | "wow") =>
 
 export type BadgeMood = "happy" | "okay" | "sad";
 
+export const MOOD_COLOR: Record<BadgeMood, string> = { happy: "#4cd27a", okay: "#ffcf3f", sad: "#6aa7ff" };
+
+/** The happiness face used by badges and tip tags (radius 30 at scale 1). */
+function drawFace(g: CanvasRenderingContext2D, x: number, y: number, mood: BadgeMood, s = 1) {
+  g.fillStyle = MOOD_COLOR[mood];
+  g.beginPath();
+  g.arc(x, y, 30 * s, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = "#22313f";
+  g.beginPath();
+  g.arc(x - 10 * s, y - 6 * s, 4.5 * s, 0, Math.PI * 2);
+  g.arc(x + 10 * s, y - 6 * s, 4.5 * s, 0, Math.PI * 2);
+  g.fill();
+  g.strokeStyle = "#22313f";
+  g.lineWidth = 4 * s;
+  g.lineCap = "round";
+  g.beginPath();
+  if (mood === "happy") g.arc(x, y + 2 * s, 12 * s, 0.15 * Math.PI, 0.85 * Math.PI);
+  else if (mood === "okay") {
+    g.moveTo(x - 10 * s, y + 12 * s);
+    g.lineTo(x + 10 * s, y + 12 * s);
+  } else g.arc(x, y + 22 * s, 11 * s, 1.2 * Math.PI, 1.8 * Math.PI);
+  g.stroke();
+}
+
+function drawCoin(g: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  g.beginPath();
+  g.arc(x, y, r, 0, Math.PI * 2);
+  g.fillStyle = "#ffc93c";
+  g.fill();
+  g.lineWidth = r * 0.18;
+  g.strokeStyle = "#d18a00";
+  g.stroke();
+  g.fillStyle = "#d18a00";
+  g.font = `bold ${Math.round(r * 1.1)}px system-ui, sans-serif`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText("★", x + 1, y + r * 0.1);
+}
+
+/** A tank's tip tag: its face, then "+N" and a coin, on a pill tinted by mood. */
+export const tipTexture = (mood: BadgeMood, n: number) =>
+  cached(`tip-${mood}-${n}`, () =>
+    canvasTex(256, 96, (g) => {
+      g.fillStyle = "rgba(255,255,255,0.95)";
+      g.strokeStyle = MOOD_COLOR[mood];
+      g.lineWidth = 7;
+      g.beginPath();
+      g.roundRect(10, 10, 236, 76, 38);
+      g.fill();
+      g.stroke();
+      drawFace(g, 50, 48, mood, 0.9);
+      g.fillStyle = "#7a4b00";
+      g.font = "900 50px system-ui, sans-serif";
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      g.fillText(`+${n}`, 92, 51);
+      drawCoin(g, 202, 48, 24);
+    })
+  );
+
+/** A visitor's total over several tanks: a gold pill "+N". */
+export const tipTotalTexture = (n: number) =>
+  cached(`tip-total-${n}`, () =>
+    canvasTex(256, 112, (g) => {
+      g.fillStyle = "#ffd23f";
+      g.strokeStyle = "#b57a00";
+      g.lineWidth = 7;
+      g.beginPath();
+      g.roundRect(10, 10, 236, 92, 46);
+      g.fill();
+      g.stroke();
+      drawCoin(g, 62, 56, 30);
+      g.fillStyle = "#5a3300";
+      g.font = "900 62px system-ui, sans-serif";
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      g.fillText(`+${n}`, 104, 60);
+    })
+  );
+
 /** Tank status badge: a face, plus food / sponge icons when hungry or dirty. */
 export const badgeTexture = (mood: BadgeMood, hungry: boolean, dirty: boolean) =>
   cached(`badge-${mood}-${hungry}-${dirty}`, () =>
@@ -169,27 +250,7 @@ export const badgeTexture = (mood: BadgeMood, hungry: boolean, dirty: boolean) =
       g.fill();
       g.stroke();
       let x = x0 + 48;
-      // Face.
-      const face = mood === "happy" ? "#4cd27a" : mood === "okay" ? "#ffcf3f" : "#6aa7ff";
-      g.fillStyle = face;
-      g.beginPath();
-      g.arc(x, 48, 30, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = "#22313f";
-      g.beginPath();
-      g.arc(x - 10, 42, 4.5, 0, Math.PI * 2);
-      g.arc(x + 10, 42, 4.5, 0, Math.PI * 2);
-      g.fill();
-      g.strokeStyle = "#22313f";
-      g.lineWidth = 4;
-      g.lineCap = "round";
-      g.beginPath();
-      if (mood === "happy") g.arc(x, 50, 12, 0.15 * Math.PI, 0.85 * Math.PI);
-      else if (mood === "okay") {
-        g.moveTo(x - 10, 60);
-        g.lineTo(x + 10, 60);
-      } else g.arc(x, 70, 11, 1.2 * Math.PI, 1.8 * Math.PI);
-      g.stroke();
+      drawFace(g, x, 48, mood);
       if (hungry) {
         x += 80;
         // A food shaker.

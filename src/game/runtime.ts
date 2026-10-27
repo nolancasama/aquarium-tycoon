@@ -1,6 +1,7 @@
 import type { SpeciesId, Vec2, Vec3, VisitorType } from "./types";
 import type { SwimState } from "./logic/swim";
 import type { Request } from "./logic/requests";
+import type { Mood } from "./logic/model";
 
 /**
  * Mutable per-frame state shared by the scene, the per-frame step and the
@@ -83,7 +84,7 @@ export interface CameraShot {
   target: Vec3;
 }
 
-export type EffectKind = "hearts" | "coins" | "sparkle" | "splash" | "confetti" | "flash" | "poof";
+export type EffectKind = "hearts" | "coins" | "sparkle" | "splash" | "confetti" | "flash" | "poof" | "tip" | "tipTotal";
 
 export interface Effect {
   id: number;
@@ -93,6 +94,8 @@ export interface Effect {
   z: number;
   t0: number;
   n: number;
+  /** "tip" tags: the mood of the tank that paid. */
+  tone?: Mood;
 }
 
 export const rt = {
@@ -132,13 +135,25 @@ export const rt = {
   /** Accumulated care time not yet committed to the model. */
   decayAcc: 0,
   /** Pico's waving and talking. */
-  pico: { talking: false, waveT0: -10 }
+  pico: { talking: false, waveT0: -10 },
+  /** Earliest start for the next tip tag above each tank (tags queue, never overlap). */
+  tipLane: new Map<string, number>(),
+  /** Ordinary visitors' tips paid this session (Pico explains tips after the first). */
+  tipsPaid: 0,
+  /** When the latest tip tags finish (Pico's lesson waits for them). */
+  tipsShownUntil: -1e9,
+  /** Last happiness seen per tank, and its latest rise (badge pop). */
+  moods: new Map<string, { h: number; mood: Mood }>(),
+  cheer: new Map<string, { t0: number; level: "up" | "okay" | "happy" }>(),
+  /** Tanks that already showed "Happy fish earn more coins!" this session. */
+  happyToasted: new Set<string>(),
+  lastCoachT: -1e9
 };
 
 let effectId = 1;
-export function effect(kind: EffectKind, x: number, y: number, z: number, n = 1) {
-  rt.effects.push({ id: effectId++, kind, x, y, z, t0: rt.time, n });
-  if (rt.effects.length > 16) rt.effects.shift();
+export function effect(kind: EffectKind, x: number, y: number, z: number, n = 1, opts: { tone?: Mood; delay?: number } = {}) {
+  rt.effects.push({ id: effectId++, kind, x, y, z, t0: rt.time + (opts.delay ?? 0), n, tone: opts.tone });
+  if (rt.effects.length > 24) rt.effects.shift();
 }
 
 export function clearGlow() {
@@ -166,4 +181,7 @@ export function resetRuntime() {
   rt.nextSpawn = 6;
   rt.idle = 0;
   rt.decayAcc = 0;
+  rt.tipLane.clear();
+  rt.moods.clear();
+  rt.cheer.clear();
 }

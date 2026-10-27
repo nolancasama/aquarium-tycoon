@@ -180,6 +180,25 @@ export function PromptPanel() {
   );
 }
 
+/** Pico's tips lesson: each face earns its coins from every visitor who looks. */
+function TipsPicture() {
+  return (
+    <div className="tips-picture" data-testid="tips-picture">
+      {(["sad", "okay", "happy"] as const).map((md, i) => (
+        <span key={md} className={`tips-step ${md}`}>
+          <Icon id={md} size={40} />
+          <span className="tips-arrow">→</span>
+          <span className="tips-coins">
+            {Array.from({ length: i + 1 }, (_, k) => (
+              <Icon key={k} id="coin" size={26} />
+            ))}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** A line of dialogue (Pico, a visitor, a fish). */
 export function DialoguePanel() {
   const line = useGame((s) => s.line);
@@ -194,6 +213,7 @@ export function DialoguePanel() {
           {line.en}
         </p>
         {!line.target && <Ja>{line.ja}</Ja>}
+        {line.visual === "tips" && <TipsPicture />}
       </div>
       <button
         className="next"

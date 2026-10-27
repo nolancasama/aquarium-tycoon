@@ -1149,6 +1149,51 @@ mark.key {
   flex: 1;
 }
 
+/* Pico's tips lesson: sad → 1 coin, okay → 2, happy → 3. */
+.tips-picture {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 8px;
+}
+.tips-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 24px;
+  background: #f4f8fb;
+}
+.tips-step.happy {
+  background: #e3f8ea;
+  animation: tipsGlow 1.6s ease-in-out infinite;
+}
+.tips-arrow {
+  font-weight: 900;
+  color: var(--ink-soft);
+}
+.tips-coins {
+  display: inline-flex;
+  gap: 1px;
+}
+@keyframes tipsGlow {
+  50% { transform: scale(1.06); box-shadow: 0 0 0 3px #8fe3a8; }
+}
+
+/* Happiness rose: the bar's face bounces and the fill brightens once. */
+.bar.rise svg {
+  animation: barFace 0.7s ease-out;
+}
+.bar.rise .fill {
+  animation: barFill 0.7s ease-out;
+}
+@keyframes barFace {
+  35% { transform: scale(1.35) rotate(-8deg); }
+}
+@keyframes barFill {
+  35% { filter: brightness(1.3); }
+}
+
 .line-en {
   margin: 0;
   font-size: 30px;

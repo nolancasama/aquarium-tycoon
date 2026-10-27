@@ -25,13 +25,31 @@ function step(goal: Goal["id"], title: Line, where: Line, exact: Line, target?: 
 function purchase(m: Model, price: number, action: Step): Step {
   if (m.coins >= price) return action;
   const missing = Math.ceil(price - m.coins);
+  // Tips follow happiness (1 / 2 / 3 coins a tank), so point at the least happy tank.
+  const unhappy = m.tanks
+    .map((t) => ({ t, h: happiness(t) }))
+    .filter((x): x is { t: TankRec; h: number } => x.h !== null && x.h < HAPPY)
+    .sort((a, b) => a.h - b.h)[0]?.t;
+  const title = line(`Need ${missing} more coins!`, `あと ${missing} コイン あつめよう！`);
+  if (unhappy) {
+    return {
+      ...action,
+      title,
+      where: line("Help visitors and make your fish happy: better tips!", "おきゃくさんを たすけて、さかなを ハッピーに して、コインを ふやそう！"),
+      exact: line(
+        `Tank ${unhappy.slot} is not happy yet. Feed, clean or decorate it: a happy tank gets 3 coins from each visitor. Then save ${price} coins.`,
+        `タンク ${unhappy.slot} を えさ・そうじ・かざりで ハッピーに しよう。ハッピーな タンクは おきゃくさん 1にんに 3コイン！${price} コイン ためよう！`
+      ),
+      target: "chip-visitor"
+    };
+  }
   return {
     ...action,
-    title: line(`Need ${missing} more coins!`, `あと ${missing} コイン あつめよう！`),
-    where: line("Help visitors and care for your fish.", "おきゃくさんを たすけて、さかなの おせわを しよう！"),
+    title,
+    where: line("Your fish are happy! Help visitors to earn more.", "さかなは ハッピー！おきゃくさんを たすけて コインを ふやそう！"),
     exact: line(
-      `Help a visitor with a !. Feed and clean your tanks for tips. Then save ${price} coins for this item.`,
-      `「！」の おきゃくさんを たすけよう。えさと そうじで コインも ふえるよ。${price} コイン ためよう！`
+      `Help a visitor with a !. Happy tanks give 3 coins a visitor. Then save ${price} coins for this item.`,
+      `「！」の おきゃくさんを たすけよう。ハッピーな タンクは 3コイン ずつ。${price} コイン ためよう！`
     ),
     target: "chip-visitor"
   };

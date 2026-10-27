@@ -1,12 +1,12 @@
-import { getGame, model, setGame, updateModel } from "../store";
+import { getGame, model, nudge, setGame, updateModel } from "../store";
 import { clearGlow, effect, rt, type VisitorRt } from "../runtime";
 import type { SlotId, Vec2, VisitorType } from "../types";
-import { award, fishCount, happiness, helpVisitor, mood, tankById, tipFor, type TankRec } from "../logic/model";
+import { award, fishCount, happiness, helpVisitor, mood, tankById, tipBreakdown, type TankRec } from "../logic/model";
 import { makeRequest, matchesShow, requestLine, requestReward, stillValid, tankSatisfies, targetsIn, type Request, type ShowTarget } from "../logic/requests";
 import { ITS_IDS, ITS_PHRASE, LIKE_COLOR_PHRASE, NUMBER_IDS, NUMBER_PHRASE, colorOfPhrase, type PhraseId } from "../logic/english";
 import { makeRng, shuffle } from "../logic/rng";
 import { SPECIES } from "../data/fish";
-import { TANKS } from "../data/tanks";
+import { SLOT_POS, STAND_H, TANKS } from "../data/tanks";
 import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, benchPose, lookSpot, requestEligible, route, tankOrigin } from "../world";
 import { ask, fastMode, say, speak, wait } from "./ask";
 import { openTank } from "./actions";
@@ -174,18 +174,7 @@ function nextLookOrLeave(v: VisitorRt) {
 export function leave(v: VisitorRt) {
   if (v.state === "leave" || v.state === "gone") return;
   const seated = v.seat > 0 || v.seatTarget === 1;
-  if (!v.helped && !v.scripted) {
-    const m = model();
-    const tips = v.seen.reduce((n, id) => {
-      const t = tankById(m, id);
-      return n + (t ? tipFor(t) : 0);
-    }, 0);
-    if (tips > 0) {
-      updateModel((mm) => award(mm, tips, `tip:${v.id}`));
-      effect("coins", v.x, 1.9, v.z, tips);
-      audio.play("coin");
-    }
-  }
+  if (!v.helped && !v.scripted) payTips(v);
   v.state = "leave";
   v.request = null;
   v.at = null;
@@ -194,6 +183,39 @@ export function leave(v: VisitorRt) {
   if (seated) v.seatTarget = 0;
   v.path = [...route(seated ? BENCH_FRONT : v, ENTRY), OUTSIDE];
   syncWaiting();
+}
+
+/** A seated-out visitor's tips: one tag per tank (its own amount and mood), one total at the visitor. */
+function payTips(v: VisitorRt) {
+  const m = model();
+  const parts = tipBreakdown(m, v.seen);
+  const tips = parts.reduce((n, p) => n + p.tip, 0);
+  if (tips <= 0) return;
+  const before = m.coins;
+  updateModel((mm) => award(mm, tips, `tip:${v.id}`));
+  // The tags show exactly what reached the balance (a repeated payment adds nothing and shows nothing).
+  if (model().coins - before !== tips) return;
+  let first = Infinity;
+  for (const p of parts) {
+    const t = tankById(m, p.tankId);
+    if (!t) continue;
+    const o = SLOT_POS[t.slot];
+    // Tags above one tank queue rather than stack when visitors leave together.
+    const start = Math.max(rt.time, rt.tipLane.get(t.id) ?? 0);
+    rt.tipLane.set(t.id, start + 0.8);
+    first = Math.min(first, start - rt.time);
+    effect("tip", o.x, STAND_H + TANKS[t.type].h + 0.85, o.z, p.tip, { tone: p.mood, delay: start - rt.time });
+  }
+  effect("coins", v.x, 1.9, v.z, tips);
+  if (parts.length > 1) effect("tipTotal", v.x, 2.3, v.z, tips, { delay: first + 0.35 });
+  audio.play("coin");
+  rt.tipsPaid++;
+  rt.tipsShownUntil = Math.max(rt.tipsShownUntil, rt.time + first + 2.4);
+  // After Pico's lesson, now and then coach a sad tank (never more than every two minutes).
+  if (m.progress.tipsTaught && parts.some((p) => p.mood === "sad") && rt.time - rt.lastCoachT > 120 && !getGame().nudge) {
+    rt.lastCoachT = rt.time;
+    nudge({ en: "Sad fish: only 1 coin. Make them happy!", ja: "えさや そうじで ハッピーに しよう！" }, 4500);
+  }
 }
 
 function arrive(v: VisitorRt) {

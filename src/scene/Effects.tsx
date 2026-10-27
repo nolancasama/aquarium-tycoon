@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { rt, type Effect } from "../game/runtime";
-import { additiveSprite, coinTexture, heartTexture } from "./materials";
+import { additiveSprite, coinTexture, heartTexture, tipTexture, tipTotalTexture } from "./materials";
 
 /** One-shot effects from rt.effects (hearts, coins, sparkles, splashes, confetti, a camera flash). */
 export function Effects() {
@@ -28,6 +28,9 @@ export function Effects() {
             return <Confetti key={e.id} e={e} />;
           case "flash":
             return <Flash key={e.id} e={e} />;
+          case "tip":
+          case "tipTotal":
+            return <TipTag key={e.id} e={e} />;
         }
         return null;
       })}
@@ -76,6 +79,33 @@ function Floaters({ e, tex }: { e: Effect; tex: "heart" | "coin" }) {
       ))}
     </>
   );
+}
+
+/** "+N" tags: one per tank a visitor tipped (face = that tank's mood), and a gold total. */
+function TipTag({ e }: { e: Effect }) {
+  const total = e.kind === "tipTotal";
+  const mat = useMemo(
+    () => new THREE.SpriteMaterial({ map: total ? tipTotalTexture(e.n) : tipTexture(e.tone ?? "okay", e.n), transparent: true, depthWrite: false, depthTest: false }),
+    [e.n, e.tone, total]
+  );
+  const ref = useRef<THREE.Sprite>(null);
+  const w = total ? 1.1 : 1.05;
+  const aspect = total ? 112 / 256 : 96 / 256;
+  useFrame(() => {
+    const s = ref.current;
+    if (!s) return;
+    const k = rt.time - e.t0;
+    const life = total ? 2.0 : 1.7;
+    s.visible = k > 0 && k < life;
+    if (!s.visible) return;
+    // Pop in with a small overshoot, drift up, fade out at the end.
+    const u = Math.min(1, k / 0.3) - 1;
+    const size = w * (1 + 2.70158 * u * u * u + 1.70158 * u * u);
+    s.scale.set(size, size * aspect, 1);
+    s.position.set(e.x, e.y + 0.3 * Math.min(1, k / life), e.z);
+    mat.opacity = Math.min(1, (life - k) / 0.4);
+  });
+  return <sprite ref={ref} material={mat} visible={false} renderOrder={21} />;
 }
 
 function Sparkles({ e }: { e: Effect }) {

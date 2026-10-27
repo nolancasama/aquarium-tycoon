@@ -151,6 +151,15 @@ export function installE2eHook(seed: number) {
     requestVisitor(type: VisitorType, req: Request) {
       return spawnVisitor(type, req, { atBench: true }).id;
     },
+    /** An ordinary visitor who has looked at these tanks leaves now (pays the real tips). */
+    tipVisitor(seen: string[], x = 0, z = 1.5) {
+      const v = spawnVisitor("adult", null);
+      v.x = x;
+      v.z = z;
+      v.seen = [...seen];
+      leave(v);
+      return v.id;
+    },
     /** Send a visitor home (a seated one stands up first). */
     leaveVisitor(id: string) {
       const v = rt.visitors.find((x) => x.id === id);

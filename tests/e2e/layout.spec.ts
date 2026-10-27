@@ -191,7 +191,17 @@ for (const size of [
       await page.waitForTimeout(900);
       await checkLayout(page, ["coins", "goals", "btn-settings", "status", "btn-back", "btn-feed", "btn-clean", "btn-decorate"], "tank");
       // The status panel stands just right of the glass, its top level with the tank's.
-      const glass = (await hook<{ left: number; right: number; top: number }>(page, "glass", "t1"))!;
+      // The camera eases its lens shift in; measure once the glass has stopped moving.
+      let glass = (await hook<{ left: number; right: number; top: number }>(page, "glass", "t1"))!;
+      await expect
+        .poll(async () => {
+          const now = (await hook<{ left: number; right: number; top: number }>(page, "glass", "t1"))!;
+          const still = Math.abs(now.right - glass.right) < 0.5 && Math.abs(now.top - glass.top) < 0.5;
+          glass = now;
+          return still;
+        }, { intervals: [250], timeout: 10_000 })
+        .toBe(true);
+      await page.waitForTimeout(500);
       const status = (await page.getByTestId("status").boundingBox())!;
       expect(status.x - glass.right, "gap right of glass").toBeGreaterThan(8);
       expect(status.x - glass.right, "gap right of glass").toBeLessThan(48);

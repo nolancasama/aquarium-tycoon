@@ -328,11 +328,11 @@ function WaitingChip({ id, type }: { id: string; type: VisitorType }) {
   );
 }
 
-function Bar({ value, icon, id }: { value: number; icon: IconId; id: string }) {
+function Bar({ value, icon, id, pulse = 0 }: { value: number; icon: IconId; id: string; pulse?: number }) {
   const v = Math.round(value);
   const tone = v >= 70 ? "good" : v >= 40 ? "ok" : "low";
   return (
-    <div className={`bar ${tone}`} data-testid={id} data-value={v}>
+    <div className={`bar ${tone} ${pulse ? "rise" : ""}`} data-testid={id} data-value={v} key={pulse}>
       <Icon id={icon} size={30} />
       <div className="track">
         <div className="fill" style={{ width: `${Math.max(4, v)}%` }} />
@@ -346,17 +346,28 @@ function TankStatus() {
   if (!tank) return null;
   const def = TANKS[tank.type];
   const h = happiness(tank);
+  return <TankStatusPanel key={tank.id} name={def.name} fish={tank.fish.length} capacity={def.capacity} food={tank.fish.length ? tank.food : 100} clean={tank.clean} happy={h} />;
+}
+
+/** The close-up card; the happiness bar pulses when the value rises (not on opening). */
+function TankStatusPanel({ name, fish, capacity, food, clean, happy }: { name: string; fish: number; capacity: number; food: number; clean: number; happy: number | null }) {
+  const prev = useRef(happy);
+  const [pulse, setPulse] = useState(0);
+  useEffect(() => {
+    if (happy !== null && prev.current !== null && happy > prev.current) setPulse((n) => n + 1);
+    prev.current = happy;
+  }, [happy]);
   return (
     <div className="panel tank-status ui" data-testid="status" ref={(el) => void (tankStatusEl.current = el)}>
       <header>
-        {def.name}
+        {name}
         <span className="fishcount" data-testid="fish-count">
-          <Icon id="fish" size={22} /> {tank.fish.length}/{def.capacity}
+          <Icon id="fish" size={22} /> {fish}/{capacity}
         </span>
       </header>
-      <Bar value={tank.fish.length ? tank.food : 100} icon="food" id="bar-food" />
-      <Bar value={tank.clean} icon="sponge" id="bar-clean" />
-      <Bar value={h ?? 0} icon="happy" id="bar-happy" />
+      <Bar value={food} icon="food" id="bar-food" />
+      <Bar value={clean} icon="sponge" id="bar-clean" />
+      <Bar value={happy ?? 0} icon="happy" id="bar-happy" pulse={pulse} />
     </div>
   );
 }

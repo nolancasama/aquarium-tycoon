@@ -31,6 +31,17 @@ describe("save", () => {
     expect(back).toEqual(m);
   });
 
+  it("keeps the tips lesson flag, and older saves without it load as not yet shown", () => {
+    const m = played();
+    const taught = { ...m, progress: { ...m.progress, tipsTaught: true } };
+    expect(decodeSave(encodeSave(taught))!.model.progress.tipsTaught).toBe(true);
+    const raw = JSON.parse(encodeSave(m));
+    delete raw.model.progress.tipsTaught;
+    const old = decodeSave(JSON.stringify(raw))!.model;
+    expect(old.progress.tipsTaught).toBe(false);
+    expect(old.progress.stage).toBe(m.progress.stage);
+  });
+
   it("discards corrupted, foreign and outdated saves", () => {
     expect(decodeSave(null)).toBeNull();
     expect(decodeSave("{not json")).toBeNull();

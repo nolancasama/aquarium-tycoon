@@ -690,3 +690,34 @@ saves (classes would lose their aquariums on update).
   request card, and above the prompt stack. Rejected: shrinking the close-up
   (the shift alone fits every tank at 1024–1366 px wide), and the old fixed
   top-right spot.
+
+## 2026-10-27 — Making happiness-based tips visible
+
+Economy unchanged: `tipFor()` still pays 1 / 2 / 3 coins (below 40, 40–69,
+70+) for each tank a visitor looked at, once per visitor (`tip:<id>`).
+
+- **One tag per tank, one total.** `tipBreakdown()` lists each tank's own tip
+  and mood. Each tank gets a "+N" pill with its face, and a visitor who tipped
+  more than one tank also gets a gold "+total" at the visitor. The tags play
+  only if the balance rose by exactly that total, so a repeated payment shows
+  nothing. Tags above one tank queue 0.8 s apart when visitors leave together.
+  Rejected: a toast per visitor (ordinary visitors leave every few seconds,
+  which would be clutter) and showing the full total at every tank.
+- **Pico's tips lesson, once per save** (`progress.tipsTaught`; older saves
+  load it as false and see it once). The line "Happy fish earn more coins!"
+  shows sad → 1, okay → 2 and happy → 3 coins. It plays after the first
+  ordinary tips of a session, once their tags have finished, and only when no
+  level event is pending. Rejected: putting it in the opening tutorial.
+- **Rises are celebrated, never paid.** Care is the only thing that raises
+  happiness, and time only lowers it. Any rise bounces the room badge and
+  pulses the close-up's happiness bar. Reaching okay sparkles; reaching happy
+  shows hearts. First sight of a tank (a load or its first animal) is silent.
+  "Happy fish earn more coins!" plays once per tank per session in Pico's
+  bottom-left bubble, which never replaces a showing hint. A toast was
+  rejected because it covered the very badge that was celebrating.
+- **Sad-tank coaching** ("Sad fish: only 1 coin. Make them happy!") only after
+  the lesson, at most every two minutes, in the same bubble.
+- **Coin-shortfall hints follow happiness.** The title stays "Need N more
+  coins!" with the visitor chip as its target. The Help tiers name the least
+  happy tank and say a happy tank earns 3 coins a visitor, or that the fish
+  are already happy and visitors are the way forward.

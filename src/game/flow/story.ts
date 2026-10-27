@@ -11,6 +11,7 @@ import {
   giftFish,
   judgeReady,
   markCounted,
+  markTipsTaught,
   needsGift,
   newModel,
   setCare,
@@ -28,6 +29,7 @@ import { backToRoom, openTank, orderFish, startPlacingFish } from "./actions";
 import { celebrate, leave, numberSlots, numbersAround, resetVisitors, runRequest, helped, scripted, spawnVisitor, walkTo } from "./visitors";
 import { ENTRY, PEDESTAL, lookSpot, route } from "../world";
 import { HALL_OF } from "../data/tanks";
+import { watchHappiness } from "./cheer";
 import { audio } from "../../audio/audio";
 import { tts } from "../../audio/tts";
 import { recognition, requestMicPermission } from "../../audio/recognition";
@@ -426,6 +428,13 @@ async function picoCount(g: number) {
   await say("pico", "Yes! Good counting!", "せいかい! よく かぞえたね");
 }
 
+/** After the first ordinary tips: happier tanks get bigger tips (one line, once per save). */
+async function tipsLesson(g: number) {
+  await say("pico", "Happy fish earn more coins!", "えさや そうじで ハッピーに しよう！", { visual: "tips" });
+  alive(g);
+  updateModel(markTipsTaught);
+}
+
 /** Stage 5: the judge inspects three things; it cannot be failed. */
 async function judgeVisit(g: number) {
   scripted.busy = true;
@@ -683,6 +692,7 @@ export function showGuideHint() {
 
 export function storyTick(dt: number) {
   const g = getGame();
+  if (g.screen === "game") watchHappiness(g.model);
   if (busyFlow || g.screen !== "game") return;
   const m = g.model;
   // Idle time toward Pico's nudge.
@@ -719,6 +729,10 @@ export function storyTick(dt: number) {
   }
   if (m.progress.stage === 2 && !m.progress.counted && countableTanks(m).length) {
     void flow(picoCount);
+    return;
+  }
+  if (!m.progress.tipsTaught && rt.tipsPaid > 0 && rt.time > rt.tipsShownUntil && !g.panel) {
+    void flow(tipsLesson);
     return;
   }
 }

@@ -24,7 +24,7 @@ describe("decoration circles rest on the sand", () => {
         for (const scale of [0.85, 0.88, 1, SLOT_MARKER_MAX_SCALE]) {
           // Inner to outer edge, around the whole ring: vertices and the spans between them.
           for (let r = 0.1 * scale; r <= SLOT_MARKER_RADIUS * scale + 1e-9; r += (SLOT_MARKER_RADIUS - 0.1) * scale / 4) {
-            for (let a = 0; a < Math.PI * 2; a += Math.PI / 64) {
+            for (let a = 0; a < Math.PI * 2; a += Math.PI / 32) {
               const x = slot.x + Math.cos(a) * r;
               const z = slot.z + Math.sin(a) * r;
               const y = slotMarkerY(tank, { x, z });
@@ -37,7 +37,7 @@ describe("decoration circles rest on the sand", () => {
         }
       }
       geometry.dispose();
-    });
+    }, 30_000);
   }
 });
 

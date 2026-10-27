@@ -21,6 +21,8 @@ export type IconId =
   | "visitor"
   | "shop"
   | "happy"
+  | "okay"
+  | "sad"
   | "trophy"
   | "turtle"
   | "up"
@@ -195,6 +197,24 @@ export function Icon({ id, size = 24, className }: { id: IconId; size?: number; 
           <circle cx="17" cy="20" r="2.6" fill="#22313f" />
           <circle cx="31" cy="20" r="2.6" fill="#22313f" />
           <path d="M15 28a10 10 0 0 0 18 0" fill="none" stroke="#22313f" strokeWidth="3.5" strokeLinecap="round" />
+        </svg>
+      );
+    case "okay":
+      return (
+        <svg {...p}>
+          <circle cx="24" cy="24" r="19" fill="#ffcf3f" />
+          <circle cx="17" cy="20" r="2.6" fill="#22313f" />
+          <circle cx="31" cy="20" r="2.6" fill="#22313f" />
+          <path d="M17 31h14" fill="none" stroke="#22313f" strokeWidth="3.5" strokeLinecap="round" />
+        </svg>
+      );
+    case "sad":
+      return (
+        <svg {...p}>
+          <circle cx="24" cy="24" r="19" fill="#6aa7ff" />
+          <circle cx="17" cy="20" r="2.6" fill="#22313f" />
+          <circle cx="31" cy="20" r="2.6" fill="#22313f" />
+          <path d="M16 34a10 10 0 0 1 16 0" fill="none" stroke="#22313f" strokeWidth="3.5" strokeLinecap="round" />
         </svg>
       );
     case "turtle":

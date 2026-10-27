@@ -1,5 +1,23 @@
 # Current State
 
+## Happiness-based tips made visible (2026-10-27)
+
+- Leaving visitors show "+N" tags above each tank they tipped (face = mood) and
+  a gold total, drawn from `tipBreakdown()` in `src/game/logic/model.ts` and
+  `payTips()` in `src/game/flow/visitors.ts`. Amounts are unchanged.
+- `src/game/flow/cheer.ts` watches happiness rises: badge bounce, close-up bar
+  pulse, sparkle at okay, hearts at happy, and "Happy fish earn more coins!"
+  once per tank per session via Pico's nudge.
+- Pico's one-time tips lesson (`progress.tipsTaught`, saved; old saves default
+  to false). The coin-shortfall Help tiers point at the least happy tank.
+- Tests: `src/game/flow/tips.test.ts`. It was shown to fail when tags played
+  without payment. A save test covers the flag. Unit 148/148 (run with
+  `--testTimeout=60000` while other sessions loaded the machine); Playwright
+  28/28 (10.4 min); loop budget unchanged at 60 draw calls / 40.1k triangles.
+- Evidence: `node scripts/tips-review.mjs <preview-url>` writes
+  `.tmp/tips-review/`: tags and lesson at 1366×768 and 1024×768 (the paid
+  amount matched the tags, +4), close-up and room rises, and the hint tiers.
+
 ## Sitting, door lock, sand rings and close-up stats (2026-10-27)
 
 - Visitors sit back over planted feet in one motion (lean, hips back and down,

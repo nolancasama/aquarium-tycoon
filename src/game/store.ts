@@ -82,6 +82,8 @@ export interface Line {
   ja?: string;
   /** Target English (to understand): never glossed in Japanese. */
   target?: boolean;
+  /** A picture under the line: "tips" = sad 1, okay 2, happy 3 coins. */
+  visual?: "tips";
 }
 
 export interface RequestUi {

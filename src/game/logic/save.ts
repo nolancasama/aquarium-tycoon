@@ -128,6 +128,7 @@ function readProgress(raw: unknown, version: number): Progress {
   p.tickets = src.tickets === true && p.stage >= 8;
   p.upgraded = src.upgraded === true && p.stage >= 8;
   p.superStar = src.superStar === true && p.stage === 8;
+  p.tipsTaught = src.tipsTaught === true;
   p.said = [...new Set(arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES))];
   return p;
 }

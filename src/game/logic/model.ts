@@ -89,6 +89,8 @@ export interface Progress {
   upgraded: boolean;
   /** Level 8: the judge's second visit (the crown). */
   superStar: boolean;
+  /** Pico has explained that happy tanks earn bigger tips (shown once). */
+  tipsTaught: boolean;
   /** Distinct sentences said or chosen (results card). */
   said: PhraseId[];
 }
@@ -149,6 +151,7 @@ export function newProgress(): Progress {
     tickets: false,
     upgraded: false,
     superStar: false,
+    tipsTaught: false,
     said: []
   };
 }
@@ -270,6 +273,19 @@ export function tipFor(t: TankRec): number {
   const h = happiness(t);
   if (h === null) return 0;
   return 1 + (h >= OKAY ? 1 : 0) + (h >= HAPPY ? 1 : 0);
+}
+
+/** One visitor's tips, tank by tank (tanks without animals or since sold pay nothing). */
+export function tipBreakdown(m: Model, seen: string[]): { tankId: string; tip: number; mood: Mood }[] {
+  return seen.flatMap((id) => {
+    const t = tankById(m, id);
+    const tip = t ? tipFor(t) : 0;
+    return t && tip > 0 ? [{ tankId: id, tip, mood: mood(happiness(t)) }] : [];
+  });
+}
+
+export function markTipsTaught(m: Model): Model {
+  return m.progress.tipsTaught ? m : { ...m, progress: { ...m.progress, tipsTaught: true } };
 }
 
 // ---------------------------------------------------------------- purchases

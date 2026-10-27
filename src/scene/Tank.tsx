@@ -672,6 +672,9 @@ function Upgrades({ tank }: { tank: TankRec }) {
 
 // ------------------------------------------------------------------ status
 
+// The badge texture is 256x96 with the pill centred; scale so the pill keeps its proportions.
+const BADGE_W = 1.2;
+
 function Badge({ tank }: { tank: TankRec }) {
   const def = TANKS[tank.type];
   const h = happiness(tank);
@@ -691,11 +694,15 @@ function Badge({ tank }: { tank: TankRec }) {
     s.visible = tank.fish.length > 0 && g.view === "room" && !rt.camera.shot;
     const urgent = hungry || dirty;
     s.position.y = STAND_H + def.h + 0.5 + Math.sin(rt.time * (urgent ? 5 : 2)) * (urgent ? 0.05 : 0.02);
+    // Happiness went up: a short bounce, bigger on reaching okay and biggest on happy.
+    const c = rt.cheer.get(tank.id);
+    const k = c ? (rt.time - c.t0) / 0.7 : 1;
+    const amp = c ? (c.level === "happy" ? 0.35 : c.level === "okay" ? 0.22 : 0.1) : 0;
+    const pop = k < 1 ? 1 + amp * Math.sin(k * Math.PI) * (1 - k * 0.5) : 1;
+    s.scale.set(BADGE_W * pop, BADGE_W * (96 / 256) * pop, 1);
   });
-  // The texture is 256x96 with the pill centred; scale so the pill keeps its proportions.
-  const w = 1.2;
   void icons;
-  return <sprite ref={ref} material={mat} scale={[w, w * (96 / 256), 1]} renderOrder={10} />;
+  return <sprite ref={ref} material={mat} scale={[BADGE_W, BADGE_W * (96 / 256), 1]} renderOrder={10} />;
 }
 
 /** The "show me" rescue in the room view: a golden glow behind the tank. */
