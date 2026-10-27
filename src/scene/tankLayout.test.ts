@@ -1,25 +1,42 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { TANKS } from "../game/data/tanks";
-import { hall2Geometry, roomGeometry } from "./models/room";
-import { sandSurfaceY, slotMarkerY, SLOT_MARKER_MAX_SCALE, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
+import { SAND_H, STAND_H, TANKS } from "../game/data/tanks";
+import { hall2Geometry, roomGeometry, tankShellGeometry } from "./models/room";
+import { slotMarkerY, SLOT_MARKER_MAX_SCALE, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
 
-describe("decoration circle clearance", () => {
+describe("decoration circles rest on the sand", () => {
   for (const tank of Object.values(TANKS)) {
-    it(`${tank.type}: every full-size pulsing circle clears sand and walls`, () => {
-      const radius = SLOT_MARKER_RADIUS * SLOT_MARKER_MAX_SCALE;
+    it(`${tank.type}: every draped, pulsing circle sits just above the rendered sand`, () => {
+      const geometry = tankShellGeometry(tank.type);
+      const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+      mesh.updateMatrixWorld();
+      const ray = new THREE.Raycaster();
+      const down = new THREE.Vector3(0, -1, 0);
+      const sandTop = (x: number, z: number) => {
+        ray.set(new THREE.Vector3(x, STAND_H + SAND_H + 0.2, z), down);
+        const hit = ray.intersectObject(mesh).find((h) => h.point.y < STAND_H + SAND_H + 0.1);
+        return hit ? hit.point.y : -Infinity;
+      };
       for (const slot of tank.slots) {
-        expect(tank.w / 2 - Math.abs(slot.x) - radius).toBeGreaterThanOrEqual(0.025);
-        expect(tank.d / 2 - Math.abs(slot.z) - radius).toBeGreaterThanOrEqual(0.025);
-        const y = slotMarkerY(tank, slot);
-        // Include the interior of the animated ring's footprint, so a dune
-        // crest between two rim vertices cannot hide a piece of the circle.
-        for (let r = 0; r <= radius; r += radius / 8) {
-          for (let a = 0; a < Math.PI * 2; a += Math.PI / 32) {
-            expect(y - sandSurfaceY(tank, slot.x + Math.cos(a) * r, slot.z + Math.sin(a) * r)).toBeGreaterThan(0.007);
+        const outer = SLOT_MARKER_RADIUS * SLOT_MARKER_MAX_SCALE;
+        expect(tank.w / 2 - Math.abs(slot.x) - outer).toBeGreaterThanOrEqual(0.025);
+        expect(tank.d / 2 - Math.abs(slot.z) - outer).toBeGreaterThanOrEqual(0.025);
+        for (const scale of [0.85, 0.88, 1, SLOT_MARKER_MAX_SCALE]) {
+          // Inner to outer edge, around the whole ring: vertices and the spans between them.
+          for (let r = 0.1 * scale; r <= SLOT_MARKER_RADIUS * scale + 1e-9; r += (SLOT_MARKER_RADIUS - 0.1) * scale / 4) {
+            for (let a = 0; a < Math.PI * 2; a += Math.PI / 64) {
+              const x = slot.x + Math.cos(a) * r;
+              const z = slot.z + Math.sin(a) * r;
+              const y = slotMarkerY(tank, { x, z });
+              const gap = y - sandTop(x, z);
+              const where = JSON.stringify({ slot, scale, r, a });
+              expect(gap, `visible above sand/pebbles ${where}`).toBeGreaterThan(0.002);
+              expect(gap, `resting, not floating ${where}`).toBeLessThan(0.014);
+            }
           }
         }
       }
+      geometry.dispose();
     });
   }
 });

@@ -14,14 +14,16 @@ export function sandSurfaceY(tank: TankDef, x: number, z: number): number {
 export const SLOT_MARKER_RADIUS = 0.15;
 export const SLOT_MARKER_MAX_SCALE = 1.12;
 
-/** A level circle clears the whole dune beneath its largest animated footprint. */
-export function slotMarkerY(tank: TankDef, slot: { x: number; z: number }): number {
-  const dune = sandDune(tank);
-  const radius = SLOT_MARKER_RADIUS * SLOT_MARKER_MAX_SCALE;
-  // The nearest point in the enclosing square gives a conservative dune peak:
-  // every point on the pulsing circle is at or below this height.
-  const x = Math.max(slot.x - radius, Math.min(dune.x, slot.x + radius));
-  const z = Math.max(slot.z - radius, Math.min(dune.z, slot.z + radius));
-  // Pebbles can protrude 0.0144 m above the flat sand.
-  return Math.max(sandSurfaceY(tank, x, z), STAND_H + SAND_H + 0.015) + 0.008;
+/** Rings hover this far above the sand: clear of the contact shadows (+0.002), too little to read as floating. */
+export const SLOT_MARKER_LIFT = 0.005;
+/** Pebbles (up to 0.024 m) are kept this far from a slot centre so the draped ring never meets one. */
+export const PEBBLE_CLEAR_RADIUS = SLOT_MARKER_RADIUS * SLOT_MARKER_MAX_SCALE + 0.03;
+
+/** Height of a ring vertex at tank-local (x, z): rings follow the sand's contour. */
+export function slotMarkerY(tank: TankDef, p: { x: number; z: number }): number {
+  return sandSurfaceY(tank, p.x, p.z) + SLOT_MARKER_LIFT;
+}
+
+export function clearOfSlots(tank: TankDef, x: number, z: number): boolean {
+  return tank.slots.every((s) => Math.hypot(x - s.x, z - s.z) > PEBBLE_CLEAR_RADIUS);
 }

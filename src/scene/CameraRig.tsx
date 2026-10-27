@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { rt } from "../game/runtime";
 import { getGame } from "../game/store";
 import { TANKS } from "../game/data/tanks";
-import { HALL_X, PEDESTAL, waterCentre } from "../game/world";
+import { HALL_X, PEDESTAL, tankOrigin, waterCentre } from "../game/world";
 import { tankById } from "../game/logic/model";
 
 /** The live camera, for projecting world points to the screen (picking, tests). */
@@ -12,6 +12,9 @@ export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current:
 
 /** Height (px) of the prompt / dialogue stack at the bottom of the screen, kept by the UI. */
 export const bottomPanel = { height: 0 };
+
+/** The tank close-up's status panel; the rig places it beside the glass (no React state per frame). */
+export const tankStatusEl: { current: HTMLDivElement | null } = { current: null };
 
 export const FOV = 35;
 const TAN = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
@@ -38,6 +41,69 @@ export function tankView(tankId: string, aspect: number) {
   const dh = (def.h + 0.32) / (0.66 * 2 * TAN);
   const d = Math.max(dw, dh) + def.d / 2;
   return { pos: new THREE.Vector3(c.x, c.y + 0.12, c.z + d), target: new THREE.Vector3(c.x, c.y + 0.02, c.z) };
+}
+
+const STATUS_GAP = 18;
+const STATUS_EDGE = 14;
+/** Below the coins/level/hearts and Help/Settings row. */
+const STATUS_TOP = 76;
+const scratch = new THREE.PerspectiveCamera(FOV);
+const corner = new THREE.Vector3();
+
+/**
+ * Where the status panel sits in a close-up: just right of the glass, its top
+ * level with the tank's top, in the camera's final framing (pos/look, lens
+ * shift y). Returns the horizontal lens shift that makes room for it.
+ */
+function besideTank(tankId: string, pos: THREE.Vector3, look: THREE.Vector3, width: number, height: number, shiftY: number) {
+  const t = tankById(getGame().model, tankId);
+  const el = tankStatusEl.current;
+  if (!t || !el) return 0;
+  const def = TANKS[t.type];
+  const o = tankOrigin(t.slot);
+  scratch.aspect = width / Math.max(1, height);
+  scratch.updateProjectionMatrix();
+  scratch.position.copy(pos);
+  scratch.lookAt(look);
+  scratch.updateMatrixWorld();
+  let left = Infinity;
+  let right = -Infinity;
+  let top = Infinity;
+  // The front glass edges are the outermost on screen.
+  for (const sx of [-1, 1]) {
+    for (const y of [o.y, o.y + def.h + 0.02]) {
+      corner.set(o.x + sx * (def.w / 2 + 0.03), y, o.z + def.d / 2).project(scratch);
+      const px = ((corner.x + 1) / 2) * width;
+      left = Math.min(left, px);
+      right = Math.max(right, px);
+      top = Math.min(top, ((1 - corner.y) / 2) * height);
+    }
+  }
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  const need = STATUS_GAP + w + STATUS_EDGE;
+  // Slide the view left only as far as the panel needs, never off the left edge.
+  const shift = Math.max(0, Math.min(right + need - width, left - STATUS_EDGE));
+  const fits = right - shift + need <= width + 0.5;
+  const x = fits ? right - shift + STATUS_GAP : width - w - STATUS_EDGE;
+  const topMin = height <= 560 ? 60 : STATUS_TOP;
+  let y = Math.max(topMin, top - shiftY);
+  // Stay clear of a request card above and the prompt stack below.
+  const req = document.querySelector<HTMLElement>("[data-testid=request]")?.getBoundingClientRect();
+  if (req && req.right > x && req.left < x + w) y = Math.max(y, req.bottom + 10);
+  const floor = height - bottomPanel.height - h - 8;
+  if (bottomPanel.height > 0 && floor >= topMin) y = Math.min(y, floor);
+  const transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+  if (el.style.transform !== transform) {
+    // The first placement is instant; later moves (prompt opens, resize) ease.
+    if (!el.dataset.placed) {
+      el.dataset.placed = "1";
+      el.style.transition = "none";
+      el.style.visibility = "visible";
+    } else if (el.style.transition === "none") el.style.transition = "";
+    el.style.transform = transform;
+  } else if (el.style.transition === "none") el.style.transition = "";
+  return shift;
 }
 
 export function CameraRig() {
@@ -101,7 +167,13 @@ export function CameraRig() {
     const wantShift = g.screen === "game" && bottomPanel.height > 0 ? Math.min(bottomPanel.height * 0.5, h * 0.3) : 0;
     shift.current += (wantShift - shift.current) * Math.min(1, dt * 5);
     // Results: the trophy sits in the left part of a wide screen, beside the card.
-    const wantX = g.screen === "results" && aspect > 1.2 ? size.width * 0.24 : 0;
+    // Close-ups: the tank slides left just enough for its status panel.
+    const wantX =
+      g.screen === "results" && aspect > 1.2
+        ? size.width * 0.24
+        : g.screen === "game" && g.view === "tank" && g.tankId && !c.shot
+          ? besideTank(g.tankId, want.current, wantLook.current, size.width, h, wantShift)
+          : 0;
     shiftX.current += (wantX - shiftX.current) * Math.min(1, dt * 5);
     if (Math.abs(shift.current) > 0.5 || Math.abs(shiftX.current) > 0.5) cam.setViewOffset(size.width, h, shiftX.current, shift.current, size.width, h);
     else if (cam.view) cam.clearViewOffset();

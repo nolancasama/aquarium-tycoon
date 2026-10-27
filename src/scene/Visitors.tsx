@@ -44,6 +44,7 @@ function Visitor({ id }: { id: string }) {
   const model = useMemo(() => (v0 ? personModel(v0.type, variant) : null), [v0, variant]);
   const root = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
+  const torso = useRef<THREE.Group>(null);
   const legL = useRef<THREE.Group>(null);
   const legR = useRef<THREE.Group>(null);
   const kneeL = useRef<THREE.Group>(null);
@@ -91,6 +92,7 @@ function Visitor({ id }: { id: string }) {
       body.current.rotation.x = lean;
       body.current.rotation.z = tilt;
     }
+    if (torso.current) torso.current.rotation.x = v.seat > 0 ? pose.lean : 0;
     if (legL.current && legR.current) {
       legL.current.rotation.x = legs;
       legR.current.rotation.x = legs - 2 * swing;
@@ -129,7 +131,10 @@ function Visitor({ id }: { id: string }) {
         <planeGeometry args={[0.8, 0.8]} />
       </mesh>
       <group ref={body}>
-        <mesh geometry={model.body} material={smoothMat} />
+        {/* The torso bends at the hips when sitting and standing; the legs do not. */}
+        <group ref={torso} position={[0, model.hip, 0]}>
+          <mesh geometry={model.body} material={smoothMat} position={[0, -model.hip, 0]} />
+        </group>
         <group ref={legL} position={[-model.legX, model.hip, 0]}>
           <mesh geometry={model.leg} material={smoothMat} />
           <group ref={kneeL} position={[0, -model.thigh, 0]}>

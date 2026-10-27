@@ -123,22 +123,26 @@ describe("walking visitor request lifecycle", () => {
 
 
 describe("first tutorial visitor bench movement", () => {
-  it("walks in, turns, bends, and sits without a position jump; stands forward before leaving", () => {
+  it("walks in, turns, and sits back in one continuous motion; stands forward before leaving", () => {
     // New-game model and the tutorial's exact child/show-request spawn path.
     const v = spawnVisitor("child", request);
     let previous = { x: v.x, z: v.z };
-    let bentBeforeSliding = false;
+    let sitFrames = 0;
     for (let i = 0; i < 2000 && v.state !== "sit"; i++) {
+      const seatBefore = v.seat;
       stepVisitors(1 / 60);
       expect(Math.hypot(v.x - previous.x, v.z - previous.z)).toBeLessThan(0.04);
-      if (v.seat > 0 && v.seat < 0.45) {
-        expect(v.x).toBe(BENCH_FRONT.x);
+      if (v.seat > 0 && v.seat < 1) {
+        // Already facing away from the seat, and the hips move back from the first frame.
+        expect(Math.abs(v.yaw - BENCH_FACING)).toBeLessThan(0.04);
         expect(v.z).toBe(BENCH_FRONT.z);
-        bentBeforeSliding = true;
+        if (seatBefore > 0) expect(v.x).toBeGreaterThanOrEqual(previous.x);
+        if (seatBefore > 0 && v.seat < 0.6) expect(v.x).toBeGreaterThan(previous.x);
+        sitFrames++;
       }
       previous = { x: v.x, z: v.z };
     }
-    expect(bentBeforeSliding).toBe(true);
+    expect(sitFrames).toBeGreaterThan(30);
     expect(v.state).toBe("sit");
     expect(v.seat).toBe(1);
     expect(v.x).toBe(BENCH_SEAT.x);

@@ -2,7 +2,7 @@ import { getGame, setGame, updateModel } from "./store";
 import { rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
 import { seedSim } from "./sim";
-import { seedVisitors, spawnVisitor } from "./flow/visitors";
+import { leave, seedVisitors, spawnVisitor } from "./flow/visitors";
 import { decay, goals, happiness, latchHappy, setCare } from "./logic/model";
 import type { Request } from "./logic/requests";
 import { SLOT_POS, STAND_H, TANKS } from "./data/tanks";
@@ -118,6 +118,18 @@ export function installE2eHook(seed: number) {
       }
       return project(PICO.x, 0.6, PICO.z + 0.48);
     },
+    /** Screen box of a tank's front glass (layout checks beside the close-up). */
+    glass(tankId: string) {
+      const t = getGame().model.tanks.find((x) => x.id === tankId);
+      if (!t) return null;
+      const o = SLOT_POS[t.slot];
+      const def = TANKS[t.type];
+      const pts = [-1, 1].flatMap((sx) => [STAND_H, STAND_H + def.h].map((y) => project(o.x + sx * def.w / 2, y, o.z + def.d / 2)));
+      if (pts.some((p) => !p)) return null;
+      const xs = pts.map((p) => p!.x);
+      const ys = pts.map((p) => p!.y);
+      return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys) };
+    },
     /** Fish hold still (clicking a moving fish under SwiftShader's 5 fps is flaky). */
     freezeFish(on: boolean) {
       rt.freezeFish = on;
@@ -138,6 +150,11 @@ export function installE2eHook(seed: number) {
     /** A request visitor already sitting on the bench. */
     requestVisitor(type: VisitorType, req: Request) {
       return spawnVisitor(type, req, { atBench: true }).id;
+    },
+    /** Send a visitor home (a seated one stands up first). */
+    leaveVisitor(id: string) {
+      const v = rt.visitors.find((x) => x.id === id);
+      if (v) leave(v);
     },
     set(patch: Record<string, unknown>) {
       setGame(patch as never);

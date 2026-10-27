@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
-import { BENCH, DOOR, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../../game/world";
+import { BENCH, BENCH_SEAT_H, DOOR, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../../game/world";
 import { SAND_H, SLOT_POS, STAND_H, TANKS } from "../../game/data/tanks";
 import type { TankType } from "../../game/types";
-import { sandDune } from "../../game/logic/tankLayout";
+import { clearOfSlots, sandDune } from "../../game/logic/tankLayout";
 
 /** The room shell and furniture (one merged mesh), and the tank stand/frame per tank type. */
 
@@ -87,9 +87,9 @@ export function roomGeometry(): THREE.BufferGeometry {
     b.cyl(0.075, 0.075, 0.03, PICO.x - 0.35 + i * 0.12, 1.09, PICO.z - 0.45, "#ffffff", 10);
   }
   // The bench (the seat runs along z; visitors sit facing −x).
-  b.box(0.5, 0.08, 1.5, BENCH.x, 0.42, BENCH.z, WOOD);
-  b.box(0.08, 0.5, 1.5, BENCH.x + 0.24, 0.46, BENCH.z, WOOD);
-  for (const dz of [-0.6, 0.6]) b.box(0.45, 0.42, 0.08, BENCH.x, 0, BENCH.z + dz, "#8a5a33");
+  b.box(0.5, 0.08, 1.5, BENCH.x, BENCH_SEAT_H - 0.08, BENCH.z, WOOD);
+  b.box(0.08, 0.5, 1.5, BENCH.x + 0.24, BENCH_SEAT_H - 0.04, BENCH.z, WOOD);
+  for (const dz of [-0.6, 0.6]) b.box(0.45, BENCH_SEAT_H - 0.08, 0.08, BENCH.x, 0, BENCH.z + dz, "#8a5a33");
   // The trophy pedestal.
   b.cyl(0.36, 0.42, 0.12, PEDESTAL.x, 0, PEDESTAL.z, "#e9eef2", 18);
   b.cyl(0.3, 0.32, 0.78, PEDESTAL.x, 0.12, PEDESTAL.z, "#f6f8fa", 18);
@@ -260,10 +260,16 @@ export function tankShellGeometry(type: TankType): THREE.BufferGeometry {
     return (seed - 1) / 2147483646;
   };
   const dune = sandDune(t);
-  b.sphere(dune.radius, dune.x, dune.y, dune.z, "#e6cf94", [1, 0.09, 0.55], 16);
+  // Fine enough that rings and shadows draped on the analytic dune stay within millimetres of it.
+  b.sphere(dune.radius, dune.x, dune.y, dune.z, "#e6cf94", [1, 0.09, 0.55], 24);
   const pebble = ["#f2b5c6", "#a9d8f5", "#ffe08a", "#c3e8b8", "#ffffff"];
   for (let i = 0; i < (type === "big" ? 34 : 24); i++) {
-    b.add(new THREE.IcosahedronGeometry(0.014 + r() * 0.01, 0), pebble[i % pebble.length], [(r() - 0.5) * (w - 0.08), y0 + SAND_H, (r() - 0.5) * (d - 0.08)], [r(), r(), r()], [1, 0.6, 1]);
+    // Draw every value so the remaining pebbles keep their places; none sit under a slot ring.
+    const size = 0.014 + r() * 0.01;
+    const x = (r() - 0.5) * (w - 0.08);
+    const z = (r() - 0.5) * (d - 0.08);
+    const spin: [number, number, number] = [r(), r(), r()];
+    if (clearOfSlots(t, x, z)) b.add(new THREE.IcosahedronGeometry(size, 0), pebble[i % pebble.length], [x, y0 + SAND_H, z], spin, [1, 0.6, 1]);
   }
   return b.build();
 }

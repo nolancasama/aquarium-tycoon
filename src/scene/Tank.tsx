@@ -434,35 +434,54 @@ function DecorMesh({ tank, d }: { tank: TankRec; d: PlacedDecor }) {
 }
 
 /** Decorate mode: rings on the sand for every slot. */
+/** Flat ring template (x/z about the slot centre); each frame drapes a scaled copy over the sand. */
+const ringTemplate = (() => {
+  const g = new THREE.RingGeometry(0.1, SLOT_MARKER_RADIUS, 32, 2);
+  g.rotateX(-Math.PI / 2);
+  return g;
+})();
+
 function SlotMarkers({ tank }: { tank: TankRec }) {
   const on = useGame((s) => s.panel === "decorate" && s.tankId === tank.id);
   const def = TANKS[tank.type];
-  const refs = useRef<(THREE.Mesh | null)[]>([]);
   const mats = useMemo(() => def.slots.map(() => new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.8, depthWrite: false })), [def.slots]);
+  const geos = useMemo(() => def.slots.map(() => ringTemplate.clone()), [def.slots]);
+  const scales = useRef<number[]>([]);
+  useEffect(() => () => geos.forEach((g) => g.dispose()), [geos]);
   useFrame(() => {
     if (!on) return;
     const g = getGame();
     const p = g.placing;
-    def.slots.forEach((_, i) => {
-      const m = refs.current[i];
+    const base = ringTemplate.attributes.position;
+    def.slots.forEach((s, i) => {
       const mat = mats[i];
-      if (!m) return;
       const taken = tank.decor.some((d) => d.slot === i);
       const picked = p?.kind === "move" && p.tankId === tank.id && p.slot === i;
       const active = (p?.kind === "decor" && !taken) || (p?.kind === "move" && !picked);
-      const pulse = 1 + Math.sin(rt.time * 5 + i) * 0.12;
-      m.scale.setScalar(active ? pulse : 0.85);
+      const scale = active ? 1 + Math.sin(rt.time * 5 + i) * 0.12 : 0.85;
       mat.color.set(picked ? "#ff9f1c" : active ? "#7dffb0" : taken ? "#ffffff" : "#bff3ff");
       mat.opacity = active ? 0.95 : taken ? 0.35 : 0.6;
+      if (scales.current[i] === scale) return;
+      scales.current[i] = scale;
+      // Pulse the radius and re-drape every vertex, so the ring hugs dunes at any size.
+      const pos = geos[i].attributes.position;
+      for (let v = 0; v < pos.count; v++) {
+        const x = base.getX(v) * scale;
+        const z = base.getZ(v) * scale;
+        pos.setXYZ(v, x, slotMarkerY(def, { x: s.x + x, z: s.z + z }), z);
+      }
+      pos.needsUpdate = true;
+      geos[i].computeBoundingSphere();
     });
   });
+  useEffect(() => {
+    if (!on) scales.current = [];
+  }, [on]);
   if (!on) return null;
   return (
     <>
       {def.slots.map((s, i) => (
-        <mesh key={i} ref={(m) => void (refs.current[i] = m)} position={[s.x, slotMarkerY(def, s), s.z]} rotation={[-Math.PI / 2, 0, 0]} material={mats[i]}>
-          <ringGeometry args={[0.1, SLOT_MARKER_RADIUS, 32]} />
-        </mesh>
+        <mesh key={i} position={[s.x, 0, s.z]} geometry={geos[i]} material={mats[i]} />
       ))}
     </>
   );

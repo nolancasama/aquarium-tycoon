@@ -1827,14 +1827,13 @@ mark.key {
 .view-room .request .req-en { font-size: 21px; }
 .view-room .request-action { font-size: 14px; }
 
+/* The camera rig places the close-up panel beside the glass, top level with
+   the tank's top (CameraRig besideTank); hidden until its first placement. */
 .view-tank .tank-status {
-  left: auto;
-  right: 14px;
-  top: 84px;
-}
-
-.app:has(.request) .tank-status {
-  top: 192px;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  transition: transform 0.35s ease;
 }
 
 @media (max-width: 900px) {
@@ -1903,10 +1902,6 @@ mark.key {
     padding: 6px 10px 8px;
     gap: 4px;
   }
-  .view-tank .tank-status {
-    top: 64px;
-  }
-  .app:has(.request) .tank-status { top: 162px; }
   .sentence,
   .q-en,
   .line-en,

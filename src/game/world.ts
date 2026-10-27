@@ -27,24 +27,70 @@ export const DOOR_EAST: Vec2 = { x: 6.7, z: 1.5 };
 /** The bench where request visitors wait (they sit facing the room centre). */
 export const BENCH: Vec2 = { x: 4.4, z: 2.95 };
 export const BENCH_SEAT: Vec2 = { x: 4.22, z: 2.95 };
-export const BENCH_SEAT_H = 0.5;
+/** Seat top: low enough that a seated adult's feet reach the floor with level thighs. */
+export const BENCH_SEAT_H = 0.32;
 /** Seat and backrest bounds from the room model; front is the -x side. */
 export const BENCH_FOOTPRINT = { minX: BENCH.x - 0.25, maxX: BENCH.x + 0.28, minZ: BENCH.z - 0.75, maxZ: BENCH.z + 0.75 };
-export const BENCH_FRONT: Vec2 = { x: BENCH.x - 0.95, z: BENCH_SEAT.z };
+/** Where visitors stand to sit: feet stay here while the hips go back onto the seat. */
+export const BENCH_FRONT: Vec2 = { x: BENCH_SEAT.x - 0.38, z: BENCH_SEAT.z };
 export const BENCH_FACING = -Math.PI / 2;
 
-/** Bend the knees before backing onto the seat; stand by retracing this path. */
+const ease = (x: number) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
+
+const overreachCache = new Map<number, number>();
+/** 0 when the planted foot stays in reach along the whole sit, 1 when it is clearly out of reach. */
+function overreach(hip: number): number {
+  let r = overreachCache.get(hip);
+  if (r === undefined) {
+    let worst = 0;
+    for (let i = 0; i <= 20; i++) {
+      const p = i / 20;
+      const f = (BENCH_SEAT.x - BENCH_FRONT.x) * ease(p / 0.7);
+      const h = hip + (BENCH_SEAT_H + hip * (0.075 / 0.74) - hip) * ease((p - 0.12) / 0.88);
+      worst = Math.max(worst, Math.hypot(f, h) - hip);
+    }
+    r = ease(worst / 0.03);
+    overreachCache.set(hip, r);
+  }
+  return r;
+}
+
+/**
+ * One continuous sit (progress 0 → 1; standing retraces it): the torso leans
+ * forward over planted feet while the hips travel back, then down onto the
+ * seat, then the legs settle into the seated pose. Leg angles come from
+ * two-bone IK to the planted foot. `hip` is the model's leg-pivot height
+ * (thigh and shin are each half of it); `lean` rotates the torso about the hips.
+ */
 export function benchPose(progress: number, hip: number) {
-  const ease = (x: number) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
-  const bend = ease(progress / 0.45);
-  const slide = ease((progress - 0.45) / 0.55);
+  const back = ease(progress / 0.7);
+  const down = ease((progress - 0.12) / 0.88);
+  let settle = ease((progress - 0.65) / 0.35);
   const radius = hip * (0.075 / 0.74);
+  const x = BENCH_FRONT.x + (BENCH_SEAT.x - BENCH_FRONT.x) * back;
+  const bodyY = (BENCH_SEAT_H + radius - hip) * down;
+  let thigh = 0;
+  let knee = 0;
+  if (hip > 0) {
+    // Hip-to-foot vector in the body frame (forward is +z, foot on the floor);
+    // equal thigh and shin lengths make the knee bend symmetric.
+    const f = x - BENCH_FRONT.x;
+    const h = hip + bodyY;
+    const d = Math.min(Math.hypot(f, h), hip - 1e-6);
+    // Short legs (children) cannot keep the foot planted, so they scoot back and lift them early.
+    settle = Math.max(settle, overreach(hip) * ease((progress - 0.15) / 0.75));
+    const line = Math.atan2(f, h);
+    const bend = Math.acos(d / hip);
+    thigh = -line - bend;
+    knee = 2 * bend;
+  }
   return {
-    x: BENCH_FRONT.x + (BENCH_SEAT.x - BENCH_FRONT.x) * slide,
+    x,
     z: BENCH_SEAT.z,
-    bodyY: (BENCH_SEAT_H + radius - hip) * slide,
-    thigh: -Math.PI / 2 * bend,
-    knee: Math.PI / 2 * bend
+    bodyY,
+    thigh: thigh + (-Math.PI / 2 - thigh) * settle,
+    knee: knee + (Math.PI / 2 - knee) * settle,
+    lean: 0.32 * Math.sin(Math.PI * ease(progress / 0.85))
   };
 }
 

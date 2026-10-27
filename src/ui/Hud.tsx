@@ -22,6 +22,7 @@ import {
   tapBack
 } from "../game/flow/actions";
 import { openRequest } from "../game/flow/visitors";
+import { tankStatusEl } from "../scene/CameraRig";
 import { Icon, type IconId } from "./icons";
 import { PicoFace, PersonFace } from "./Portraits";
 import { Ja } from "./Talk";
@@ -346,7 +347,7 @@ function TankStatus() {
   const def = TANKS[tank.type];
   const h = happiness(tank);
   return (
-    <div className="panel tank-status ui" data-testid="status">
+    <div className="panel tank-status ui" data-testid="status" ref={(el) => void (tankStatusEl.current = el)}>
       <header>
         {def.name}
         <span className="fishcount" data-testid="fish-count">

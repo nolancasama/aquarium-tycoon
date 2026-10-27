@@ -190,6 +190,14 @@ for (const size of [
       await waitFor(page, (x) => x.view === "tank", 5_000, "close-up");
       await page.waitForTimeout(900);
       await checkLayout(page, ["coins", "goals", "btn-settings", "status", "btn-back", "btn-feed", "btn-clean", "btn-decorate"], "tank");
+      // The status panel stands just right of the glass, its top level with the tank's.
+      const glass = (await hook<{ left: number; right: number; top: number }>(page, "glass", "t1"))!;
+      const status = (await page.getByTestId("status").boundingBox())!;
+      expect(status.x - glass.right, "gap right of glass").toBeGreaterThan(8);
+      expect(status.x - glass.right, "gap right of glass").toBeLessThan(48);
+      expect(Math.abs(status.y - glass.top), "top aligned with tank").toBeLessThan(20);
+      expect(status.x + status.width).toBeLessThanOrEqual(size.w);
+      expect(glass.left).toBeGreaterThanOrEqual(0);
       await minButton(page, ".big-btn", 64);
       // A prompt (decoration shop, "Big or small?") with its pictures and buttons.
       await press("btn-decorate");

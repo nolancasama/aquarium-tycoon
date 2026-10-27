@@ -1,5 +1,28 @@
 # Current State
 
+## Sitting, door lock, sand rings and close-up stats (2026-10-27)
+
+- Visitors sit back over planted feet in one motion (lean, hips back and down,
+  legs settle on contact) onto a lower 0.32 m seat, and stand up by reversing
+  it. `benchPose()` in `src/game/world.ts`; sampled clearance, planted-feet and
+  seated-contact tests live in `src/scene/models/people.test.ts`.
+- The Ocean Hall lock is the pad-lock sprite with the same bob, floating clear
+  of the door; it is tappable and disappears when the hall is bought.
+- Decoration rings follow the sand surface vertex by vertex at every pulse
+  size, with no pebbles under them. `tankLayout.test.ts` raycasts the rendered
+  sand: rings stay 2–14 mm above it. The test was shown to fail with pebbles
+  allowed back under the rings and with a floating lift.
+- The close-up status panel sits right of the glass, top level with the tank,
+  placed by `besideTank()` in `CameraRig.tsx` (lens shift plus a direct DOM
+  transform). `layout.spec.ts` asserts the gap and alignment.
+- Unit 141/141, build, and Playwright 28/28 (10.2 min) pass; loop budget
+  60 draw calls / 40.1k triangles.
+- Evidence: `node scripts/sit-review.mjs <preview-url> [stats|markers|sit|stand]`
+  writes `.tmp/sit-review/`. The 48-case layout matrix (1366×768, 1280×720,
+  1024×768, 844×390; four tanks; plain, request and prompt) shows no overlap
+  of glass, request or prompt. Sit, stand, ring and lock frames were reviewed
+  by eye (SwiftShader).
+
 ## UI layout, collision and visual polish (2026-10-26)
 
 - Compact, collapsible objectives at the upper left; independently centered
@@ -9,12 +32,11 @@
 - Title answer mode selection moved entirely to Settings. Stage and trophy
   screens use Continue / つづける; returning to title remains in Settings.
   Existing Levels 1–8 transitions, hints, saves, rewards and input defaults remain.
-- Visitors turn and bend their knees before backing onto the bench, and
-  reverse that continuous motion to stand. Articulated shins and pelvis
-  clearance keep all six visitor models outside the seat and backrest.
-- Sand-aware marker/decor heights preserve normal depth testing and slot IDs;
+- Articulated shins and pelvis clearance keep all six visitor models outside
+  the seat and backrest (motion superseded 2026-10-27, above).
+- Sand-aware decor heights preserve normal depth testing and slot IDs;
   fish clearance follows the same decoration heights. Upper wall caps no
-  longer share exposed planes. Door lock is attached to the leaf; all rounded
+  longer share exposed planes. All rounded
   signs use a shared alpha-aware material.
 
 Visual evidence: `node scripts/polish-review.mjs <preview-url>` writes

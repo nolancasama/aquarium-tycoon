@@ -228,13 +228,13 @@ export function stepVisitors(dt: number) {
   for (const v of rt.visitors) {
     if (v.state === "gone") continue;
     if (v.seat !== v.seatTarget) {
-      // Turn at the clear approach point before bending and backing in.
+      // Turn at the spot in front of the seat, then sit back onto it over planted feet.
       let turn = BENCH_FACING - v.yaw;
       while (turn > Math.PI) turn -= Math.PI * 2;
       while (turn < -Math.PI) turn += Math.PI * 2;
       v.yaw += turn * Math.min(1, dt * 8);
       if (v.seat > 0 || Math.abs(turn) < 0.04) {
-        v.seat += Math.sign(v.seatTarget - v.seat) * Math.min(Math.abs(v.seatTarget - v.seat), dt / 1.1);
+        v.seat += Math.sign(v.seatTarget - v.seat) * Math.min(Math.abs(v.seatTarget - v.seat), dt / 1.3);
         const pose = benchPose(v.seat, 0);
         v.x = pose.x;
         v.z = pose.z;

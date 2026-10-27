@@ -655,3 +655,38 @@ saves (classes would lose their aquariums on update).
 - **Trophy** is one lathe profile (closed underside, outer bowl, rounded lip,
   inner bowl, closed floor) with two mirrored tube handles that end inside the
   bowl wall and a finial holding the star; about 1.4k triangles.
+
+## 2026-10-27 — Natural sitting, floating door lock, draped slot rings, stats beside the tank
+
+- **Sitting over planted feet, on a lower bench.** The old pose fully bent the
+  knees 0.77 m in front of the seat, then slid the body back, so visitors looked
+  seated in midair. Visitors now turn 0.38 m in front of the seat and, in one
+  1.3 s timeline, lean forward about the hips while the hips travel back and
+  down. Two-bone IK keeps the feet planted, and the legs settle level just as
+  the hips touch. Standing replays it in reverse. The seat top drops from
+  0.50 m to 0.32 m because the models' shins (half the 0.74 m hip height) can't
+  reach the floor from a 0.5 m seat with level thighs. Children, whose feet
+  can't stay planted, lift their legs during the move. Rejected: keeping the
+  0.5 m seat and fudging the leg angles (that's what produced the float), and a
+  hop or teleport onto the seat.
+- **Ocean Hall lock uses the pad-lock sprite and bob** (0.7 scale, 2 rad/s,
+  ±0.05 m, shared `iconBob`). Its centre floats 0.4 m in front of the door
+  leaf, more than half the sprite's width, so the sprite can't cross the door
+  from any orbit angle. That crossing was the reason for the earlier flat
+  plaque, which read as a sliver from the room camera. The lock is tappable
+  and unmounts when the hall opens.
+- **Slot rings drape on the sand.** Each ring's vertices sit 5 mm above the
+  analytic sand surface at their own x/z and are re-draped as the pulse changes
+  the radius. Pebbles are no longer placed under a ring footprint; the same
+  random draws are still taken, so every other pebble keeps its place. The
+  dune sphere goes from 16 to 24 segments so its facets stay within a few mm
+  of the analytic surface. Rejected: a level ring at the dune's peak height
+  (floated up to ~4 cm) and lowering the level ring (buried it again).
+- **Close-up status panel beside the glass.** The camera rig projects the
+  tank's front-glass corners in the final close-up framing and applies a
+  horizontal lens shift just large enough for the panel to fit 18 px right of
+  the glass. It then writes the panel's transform directly to the DOM (no
+  React state per frame), with its top level with the tank top, below any
+  request card, and above the prompt stack. Rejected: shrinking the close-up
+  (the shift alone fits every tank at 1024–1366 px wide), and the old fixed
+  top-right spot.

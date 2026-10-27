@@ -159,16 +159,30 @@ function HallDoor() {
               <planeGeometry args={[1.5, 0.36]} />
               <primitive object={signMaterial("OCEAN HALL", "#0f5c8f", "#ffffff", 512, 128)} attach="material" />
             </mesh>
-            {/* Door-aligned plaque: a billboard's near corner crossed the leaf
-                as the camera turned. The whole plane now clears its -x face. */}
-            <mesh position={[-0.06, 0.9, HALL_DOOR.w / 2]} rotation={[0, -Math.PI / 2, 0]}>
-              <planeGeometry args={[0.5, 0.5]} />
-              <meshBasicMaterial map={padIconTexture("lock")} transparent alphaTest={0.01} />
-            </mesh>
+            <DoorLock onClick={onClick} />
           </>
         )}
       </group>
     </group>
+  );
+}
+
+/** The pad icons' gentle float, shared so every lock bobs alike. */
+function iconBob(): number {
+  return Math.sin(rt.time * 2) * 0.05;
+}
+
+/** The pad locks' sprite, floating in front of the door. Its centre is 0.4 m off the
+ * leaf, more than the sprite's half-width, so no camera angle makes it cross the door. */
+function DoorLock({ onClick }: { onClick: (e: ThreeEvent<MouseEvent>) => void }) {
+  const ref = useRef<THREE.Sprite>(null);
+  useFrame(() => {
+    if (ref.current) ref.current.position.y = 0.9 + iconBob();
+  });
+  return (
+    <sprite ref={ref} position={[-0.4, 0.9, HALL_DOOR.w / 2]} scale={[0.7, 0.7, 1]} onClick={onClick}>
+      <spriteMaterial map={padIconTexture("lock")} transparent depthWrite={false} />
+    </sprite>
   );
 }
 
@@ -302,7 +316,7 @@ function PadIcon({ locked }: { locked: boolean }) {
   const ref = useRef<THREE.Group>(null);
   useFrame(() => {
     if (ref.current) {
-      ref.current.position.y = 0.55 + Math.sin(rt.time * 2) * 0.05;
+      ref.current.position.y = 0.55 + iconBob();
       ref.current.visible = !getGame().placing;
     }
   });
