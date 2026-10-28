@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
-import { BENCH, BENCH_SEAT_H, DOOR, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../../game/world";
+import { BENCH, BENCH_SEAT_H, DOOR, GALLERY, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../../game/world";
+import { DOOR_W, DOOR_Z } from "../../game/data/rooms";
 import { SLOT_POS, TANKS } from "../../game/data/tanks";
 
 /** The room shell and furniture (one merged mesh), and the tank stand/frame per tank type. */
@@ -38,7 +39,9 @@ const ROPE_POSTS: [number, number][] = [
 const TRIM = "#3f9cc4";
 const WOOD = "#c58a55";
 
-export function roomGeometry(): THREE.BufferGeometry {
+type RoomSection = "all" | "walls" | "extras";
+
+export function roomGeometry(section: RoomSection = "all"): THREE.BufferGeometry {
   const b = new PartBuilder(0.6);
   const { minX, maxX, minZ, maxZ, wallH } = ROOM;
   const t = 0.22;
@@ -74,6 +77,8 @@ export function roomGeometry(): THREE.BufferGeometry {
   for (const z of [hdA, hdB]) b.box(0.3, 2.4, 0.16, maxX, 0, z, "#4fb6d8");
   b.box(0.3, 0.18, HALL_DOOR.w + 0.16, maxX, 2.3, HALL_DOOR.z, "#4fb6d8");
   // Pico's counter.
+  if (section === "walls") return b.build();
+  if (section === "extras") b.build().dispose();
   b.box(1.2, 0.85, 0.6, PICO.x, 0, PICO.z - 0.35, "#2fb3c9");
   b.box(1.3, 0.08, 0.7, PICO.x, 0.85, PICO.z - 0.35, "#ffffff");
   b.box(0.9, 0.5, 0.02, PICO.x, 0.18, PICO.z - 0.04, "#7fd8e6");
@@ -115,7 +120,9 @@ export function roomGeometry(): THREE.BufferGeometry {
 
 /** Velvet ropes between the posts (a separate thin mesh, sagging). */
 /** The Ocean Hall's walls, furniture and ropes (the floor and mural are separate textured planes). */
-export function hall2Geometry(): THREE.BufferGeometry {
+export const HALL2_PORTHOLE_Z = [-2.3, -0.6];
+
+export function hall2Geometry(section: RoomSection = "all"): THREE.BufferGeometry {
   const b = new PartBuilder(0.6);
   const { minX, maxX, minZ, maxZ, wallH } = HALL2;
   const t = 0.22;
@@ -130,8 +137,15 @@ export function hall2Geometry(): THREE.BufferGeometry {
   b.box(backWidth, wallH - 0.1, t, backX, 0, minZ - t / 2, wall);
   b.box(backWidth, 0.16, t + 0.04, backX, 0, minZ - t / 2 + 0.02, trim);
   b.box(backWidth, 0.12, t + 0.06, backX, wallH - 0.1, minZ - t / 2 + 0.03, trim);
-  b.box(t, wallH, maxZ - minZ, maxX + t / 2, 0, (minZ + maxZ) / 2, wall);
-  dressWall(b, maxX, -1, minZ, maxZ, { ...HALL2_WALL, skin: undefined }, wallH);
+  const gdA = DOOR_Z - DOOR_W / 2;
+  const gdB = DOOR_Z + DOOR_W / 2;
+  for (const [a, c] of [[minZ, gdA], [gdB, maxZ]]) {
+    b.box(t, wallH, c - a, maxX + t / 2, 0, (a + c) / 2, wall);
+    dressWall(b, maxX, -1, a, c, { ...HALL2_WALL, skin: undefined }, wallH);
+  }
+  b.box(t, wallH - 2.3, DOOR_W, maxX + t / 2, 2.3, DOOR_Z, wall);
+  for (const z of [gdA, gdB]) b.box(0.3, 2.4, 0.16, maxX, 0, z, "#4fb6d8");
+  b.box(0.3, 0.18, DOOR_W + 0.16, maxX, 2.3, DOOR_Z, "#4fb6d8");
   // The shared wall's Ocean-side face (the Hall 1 side is cream and teal).
   const face = ROOM.maxX + t;
   const hdA = HALL_DOOR.z - HALL_DOOR.w / 2;
@@ -148,11 +162,14 @@ export function hall2Geometry(): THREE.BufferGeometry {
     }
   }
   // Round portholes on the right wall.
-  for (const z of [-1.8, 0.9]) {
+  for (const z of HALL2_PORTHOLE_Z) {
     b.add(new THREE.TorusGeometry(0.45, 0.07, 6, 20), "#c9a227", [maxX - 0.03, 1.7, z], [0, Math.PI / 2, 0]);
     b.add(new THREE.CircleGeometry(0.42, 20), "#2a7fbf", [maxX - 0.06, 1.7, z], [0, -Math.PI / 2, 0]);
   }
   // Kelp pots in the corners and a low bench for grown-ups.
+  if (section === "walls") return b.build();
+  // Keep the same part-colour random sequence as the unsplit geometry.
+  if (section === "extras") b.build().dispose();
   for (const [x, z] of [
     [minX + 0.6, minZ + 0.5],
     [maxX - 0.6, minZ + 0.5],
@@ -183,6 +200,57 @@ export function hall2Geometry(): THREE.BufferGeometry {
       const yb = 0.6 - Math.sin(((i + 1) / n) * Math.PI) * 0.1;
       b.add(new THREE.CylinderGeometry(0.022, 0.022, Math.hypot(xb - xa, yb - ya), 6), "#c92a4a", [(xa + xb) / 2, (ya + yb) / 2, -1.4], [0, 0, Math.PI / 2 + Math.atan2(yb - ya, xb - xa)], [1, 1, 1], { vary: false });
     }
+  }
+  return b.build();
+}
+
+/** Decorative kreisel displays, kept on the side walls away from the tank pads. */
+export const GALLERY_PORTHOLES = [
+  { x: GALLERY.minX + 0.30, y: 1.85, z: -2.3, rotationY: Math.PI / 2 },
+  { x: GALLERY.maxX - 0.09, y: 1.85, z: -2.3, rotationY: -Math.PI / 2 },
+  { x: GALLERY.maxX - 0.09, y: 1.85, z: -0.6, rotationY: -Math.PI / 2 }
+];
+
+/** One unlit, vertex-coloured mesh per section; no real-time light rig. */
+export function galleryGeometry(section: RoomSection = "all"): THREE.BufferGeometry {
+  const b = new PartBuilder(0.5);
+  const { minX, maxX, minZ, maxZ, wallH } = GALLERY;
+  const style: WallStyle = { skin: "#10162e", low: "#090e20", rail: "#51b9d6", base: "#060c19" };
+  const backStart = minX + 0.22;
+  const backWidth = maxX + 0.11 - backStart;
+  const backX = backStart + backWidth / 2;
+  b.box(backWidth, wallH, 0.22, backX, 0, minZ - 0.11, "#101c39");
+  b.box(backWidth, 1.05, 0.035, backX, 0, minZ + 0.0175, style.low);
+  b.box(backWidth, 0.045, 0.06, backX, 1.02, minZ + 0.03, style.rail);
+  b.box(backWidth, 0.12, 0.07, backX, 0, minZ + 0.035, style.base);
+  b.box(0.22, wallH, maxZ - minZ, maxX + 0.11, 0, 0, "#201332");
+  dressWall(b, maxX, -1, minZ, maxZ, { ...style, skin: undefined }, wallH);
+  const face = minX + 0.22;
+  for (const [a, c] of [[minZ, DOOR_Z - DOOR_W / 2], [DOOR_Z + DOOR_W / 2, maxZ]]) {
+    dressWall(b, face, 1, a, c, style, wallH);
+  }
+  b.box(0.02, wallH - 2.3, DOOR_W, face + 0.01, 2.3, DOOR_Z, style.skin!);
+  for (const p of GALLERY_PORTHOLES) {
+    b.add(new THREE.TorusGeometry(0.48, 0.055, 6, 28), "#5cb4c8", [p.x, p.y, p.z], [0, p.rotationY, 0]);
+  }
+  if (section === "walls") return b.build();
+  if (section === "extras") b.build().dispose();
+  // Low bench beyond the visitor lane and well forward of the tanks.
+  b.box(1.8, 0.08, 0.5, 28.5, BENCH_SEAT_H - 0.08, 3.35, "#243250");
+  b.box(1.8, 0.42, 0.07, 28.5, BENCH_SEAT_H, 3.57, "#253454");
+  for (const x of [27.8, 29.2]) b.box(0.09, BENCH_SEAT_H - 0.08, 0.42, x, 0, 3.35, "#10182c");
+  for (const slot of ["F", "G", "H"] as const) {
+    const p = SLOT_POS[slot];
+    for (const x of [p.x - 1, p.x + 1]) {
+      b.cyl(0.04, 0.07, 0.6, x, 0, -1.15, "#314f70", 8);
+      b.sphere(0.065, x, 0.63, -1.15, "#80cfe1", [1, 1, 1], 8);
+    }
+    const curve = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(p.x - 1, 0.59, -1.15),
+      new THREE.Vector3(p.x, 0.35, -1.15),
+      new THREE.Vector3(p.x + 1, 0.59, -1.15)
+    );
+    b.add(new THREE.TubeGeometry(curve, 10, 0.022, 5, false), "#8560af", [0, 0, 0]);
   }
   return b.build();
 }
