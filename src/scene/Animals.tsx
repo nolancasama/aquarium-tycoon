@@ -8,8 +8,15 @@ import { isHungry, type TankRec } from "../game/logic/model";
 import type { SpeciesId } from "../game/types";
 import { fishGeometry, turtleModel } from "./models/fish";
 import { fishMaterial } from "./materials";
+import { animalGeometry } from "./models/animals";
+import { animalMaterial } from "./animalMaterials";
 
 /** Every animal's mesh and its per-frame pose (positions come from rt.fish, set by the sim). */
+
+function tankFor(tankId: string): TankRec | undefined {
+  for (const tank of getGame().model.tanks) if (tank.id === tankId) return tank;
+  return undefined;
+}
 
 // ------------------------------------------------------------------ fish
 
@@ -29,8 +36,85 @@ function glowFor(id: string, tank: TankRec | undefined, t: number): number {
 export function FishMesh({ id, species, tankId }: { id: string; species: SpeciesId; tankId: string }) {
   const body = SPECIES[species].body;
   if (body === "turtle") return <TurtleMesh id={id} tankId={tankId} />;
-  if (body === "jelly") return <JellyMesh id={id} tankId={tankId} />;
+  if (body === "jelly" && species === "jellyfish") return <JellyMesh id={id} tankId={tankId} />;
+  if (body === "school") return <SchoolMesh id={id} species={species} tankId={tankId} />;
+  if (body === "eel" || body === "octopus" || body === "crab" || body === "ray" || body === "jelly" || species === "angelfish" || species === "goby") {
+    return <ExpansionMesh id={id} species={species} tankId={tankId} />;
+  }
   return <BendingFish id={id} species={species} tankId={tankId} />;
+}
+
+/** A merged, vertex-animated animal: one draw call including eyes and markings. */
+function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId; tankId: string }) {
+  const ref = useRef<THREE.Mesh>(null);
+  const def = SPECIES[species];
+  const mat = useMemo(() => animalMaterial(species), [species]);
+  useEffect(() => () => mat.dispose(), [mat]);
+  const glow = useRef(0);
+  useFrame((_, dt) => {
+    const f = rt.fish.get(id);
+    const mesh = ref.current;
+    if (!f || !mesh) return;
+    const t = rt.time;
+    const ht = t - f.happyT0;
+    const tt = t - f.tapT0;
+    const et = t - f.eatT0;
+    const ground = def.body === "crab" || def.body === "octopus" || (def.movement === "perch" && f.mode === "rest");
+    const happy = ht >= 0 && ht < 1.2 ? Math.sin(ht / 1.2 * Math.PI) : 0;
+    const tap = tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0;
+    const eat = et >= 0 && et < 0.35 ? Math.sin(et / 0.35 * Math.PI) : 0;
+    const motion = Math.min(1.5, Math.hypot(f.s.vx, f.s.vy, f.s.vz) / def.speed);
+    mesh.position.set(f.s.x, f.s.y + (ground ? 0 : happy * 0.035 + tap * 0.025), f.s.z);
+    // Ground animals acknowledge taps by rocking their shell/mantle above planted feet.
+    const roll = ground ? 0 : f.bank + happy * 0.18;
+    const pitch = ground ? (happy + tap) * 0.08 : f.pitch * 0.7;
+    mesh.rotation.set(roll, f.yaw, pitch, "YZX");
+    mesh.scale.setScalar(1 + eat * 0.07);
+    mat.userData.uPhase.value = def.movement === "drift" ? f.pulsePhase ?? f.phase : f.phase;
+    mat.userData.uMotion.value = motion + happy * 0.5 + tap * 0.5;
+    mat.userData.uColour.value = f.colourPhase ?? 0;
+    const tank = tankFor(tankId);
+    glow.current += (glowFor(id, tank, t) - glow.current) * Math.min(1, dt * 10);
+    mat.emissive.setRGB(glow.current * 0.6, glow.current * 0.5, glow.current * 0.12);
+  });
+  return <mesh ref={ref} geometry={animalGeometry(species)} material={mat} renderOrder={def.body === "jelly" ? 1 : 0} dispose={null} />;
+}
+
+/** Six chromis share geometry, material and one instanced draw call. */
+function SchoolMesh({ id, species, tankId }: { id: string; species: SpeciesId; tankId: string }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const def = SPECIES[species];
+  const geometry = animalGeometry(species);
+  const mat = useMemo(() => animalMaterial(species), [species]);
+  const pose = useMemo(() => new THREE.Object3D(), []);
+  const glow = useRef(0);
+  useEffect(() => {
+    ref.current?.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    return () => mat.dispose();
+  }, [mat]);
+  useFrame((_, dt) => {
+    const f = rt.fish.get(id);
+    const mesh = ref.current;
+    if (!f || !mesh) return;
+    const ht = rt.time - f.happyT0;
+    const tt = rt.time - f.tapT0;
+    const response = Math.max(ht >= 0 && ht < 1 ? Math.sin(ht * Math.PI) : 0, tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0);
+    for (let i = 0; i < (def.school ?? 1); i++) {
+      const s = i === 0 ? f.s : f.members?.[i - 1] ?? f.s;
+      const heading = Math.hypot(s.vx, s.vz) > 0.01 ? Math.atan2(-s.vz, s.vx) : f.yaw;
+      pose.position.set(s.x, s.y + response * 0.02, s.z);
+      pose.rotation.set(f.bank + response * 0.15, heading, f.pitch * 0.5, "YZX");
+      pose.updateMatrix();
+      mesh.setMatrixAt(i, pose.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mat.userData.uPhase.value = f.phase;
+    mat.userData.uMotion.value = 1 + response;
+    const tank = tankFor(tankId);
+    glow.current += (glowFor(id, tank, rt.time) - glow.current) * Math.min(1, dt * 10);
+    mat.emissive.setRGB(glow.current * 0.6, glow.current * 0.5, glow.current * 0.12);
+  });
+  return <instancedMesh ref={ref} args={[geometry, mat, def.school ?? 1]} frustumCulled={false} dispose={null} />;
 }
 
 function BendingFish({ id, species, tankId }: { id: string; species: SpeciesId; tankId: string }) {
@@ -101,7 +185,7 @@ function JellyMesh({ id, tankId }: { id: string; tankId: string }) {
     const m = ref.current;
     if (!f || !m) return;
     const t = rt.time;
-    const p = Math.sin(f.phase);
+    const p = Math.sin(f.pulsePhase ?? f.phase);
     const happy = t - f.happyT0 < 1.2 || t - f.tapT0 < 1.2;
     m.position.set(f.s.x, f.s.y + p * 0.02, f.s.z);
     m.rotation.set(Math.sin(t * 0.7 + f.phase * 0.01) * 0.1, f.yaw * 0.3, Math.cos(t * 0.6) * 0.08);
