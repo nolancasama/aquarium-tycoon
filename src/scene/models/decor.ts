@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import type { DecorKind, DecorVariant } from "../../game/types";
 import { flatMat, smoothMat, swayMat } from "../materials";
+import { DECOR } from "../../game/data/decor";
 
 /**
  * Decorations, built for a 1 m tall tank with the base at y = 0 (the scene
@@ -350,6 +351,127 @@ function shipwreck(): DecorModel {
   return { geo: painted(b.build(), "shipwreck"), mat: finishMaterial("shipwreck") };
 }
 
+type HabitatDecor = "kelp" | "arch" | "cave" | "driftwood";
+
+/** New models use the exact clearance height and put their lowest vertex on sand. */
+function habitatModel(b: PartBuilder, kind: HabitatDecor, finish: DecorFinish, mat: THREE.Material): DecorModel {
+  const geo = b.build();
+  geo.computeBoundingBox();
+  const bounds = geo.boundingBox!;
+  const height = bounds.max.y - bounds.min.y;
+  geo.translate(0, -bounds.min.y, 0);
+  geo.scale(1, DECOR[kind].versions[0].height / height, 1);
+  return { geo: painted(geo, finish), mat };
+}
+
+// Kelp's long blades need less displacement than the short, broad classic plants.
+// At the tallest fitting tank (1.5 m), blades including sway stay inside 0.12 m.
+const kelpMaterial = (() => {
+  const mat = swayMat.clone();
+  mat.side = THREE.DoubleSide;
+  mat.onBeforeCompile = (shader, renderer) => {
+    swayMat.onBeforeCompile(shader, renderer);
+    shader.vertexShader = shader.vertexShader
+      .replace("* 0.18 * sw * sw", "* 0.014 * sw * sw")
+      .replace("* 0.08 * sw * sw", "* 0.009 * sw * sw");
+  };
+  mat.customProgramCacheKey = () => "kelp-sway-v1";
+  return mat;
+})();
+
+function kelp(): DecorModel {
+  const b = new PartBuilder(0.1);
+  const greens = ["#297b4a", "#43ad57", "#74c65b", "#3b9450", "#8bc86b"];
+  for (let blade = 0; blade < 5; blade++) {
+    const angle = blade * Math.PI * 2 / 5;
+    const height = blade === 0 ? 0.85 : 0.57 + blade * 0.055;
+    const vertices: number[] = [];
+    const indices: number[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const t = i / 8;
+      const spread = 0.012 + 0.026 * Math.sin(t * Math.PI * 0.8 + blade * 0.5);
+      const x = Math.cos(angle) * spread + Math.sin(t * Math.PI * 2.5 + blade) * 0.009 * t;
+      const z = Math.sin(angle) * spread;
+      const width = 0.014 * Math.sin(Math.PI * (0.08 + t * 0.92));
+      for (const side of [-1, 1]) vertices.push(x + Math.cos(angle + Math.PI / 2) * width * side, height * t, z + Math.sin(angle + Math.PI / 2) * width * side);
+      if (i < 8) {
+        const p = i * 2;
+        indices.push(p, p + 1, p + 2, p + 1, p + 3, p + 2);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    b.add(geo, greens[blade], [0, 0, 0]);
+  }
+  b.add(new THREE.IcosahedronGeometry(0.035, 0), "#887953", [0, 0.012, 0], [0, 0.3, 0], [1, 0.4, 1]);
+  return habitatModel(b, "kelp", "plant", kelpMaterial);
+}
+
+function coralArch(): DecorModel {
+  const b = new PartBuilder(0.1);
+  const pink = "#eb779b";
+  // Two planted legs and a continuous open arch, rather than a solid pink slab.
+  for (const x of [-0.13, 0.13]) {
+    b.cyl(0.025, 0.035, 0.245, x, 0, 0, pink, 7);
+    b.add(new THREE.IcosahedronGeometry(0.034, 0), "#d05b87", [x, 0.023, 0], [0.2, 0, 0.1], [1, 0.7, 1]);
+  }
+  b.add(new THREE.TorusGeometry(0.13, 0.026, 6, 12, Math.PI), pink, [0, 0.245, 0]);
+  // Short coral fingers and pale polyps follow the bridge's upper surface.
+  for (let i = 1; i <= 5; i++) {
+    const a = i * Math.PI / 6;
+    const x = Math.cos(a) * 0.13;
+    const y = 0.245 + Math.sin(a) * 0.13;
+    b.cyl(0.007, 0.012, 0.018, x, y, 0, "#f59bb6", 5);
+    b.sphere(0.01, x, y + 0.018, 0, "#ffd4d5", [1, 1, 1], 5);
+  }
+  return habitatModel(b, "arch", "coral", smoothMat);
+}
+
+function rockCave(): DecorModel {
+  const b = new PartBuilder(0.16);
+  // A recessed charcoal back is visible through the open, stone-lined mouth.
+  const opening = new THREE.Shape();
+  opening.moveTo(-0.073, 0);
+  opening.lineTo(0.073, 0);
+  opening.lineTo(0.073, 0.19);
+  opening.absellipse(0, 0.19, 0.073, 0.078, 0, Math.PI, false, 0);
+  opening.closePath();
+  b.add(new THREE.ShapeGeometry(opening, 7), "#17232b", [0, 0, -0.045], [0, 0, 0], [1, 1, 1], { vary: false, flatAo: true });
+  const greys = ["#657780", "#84918e", "#75858d", "#9b9e8e"];
+  for (const side of [-1, 1]) {
+    for (let layer = 0; layer < 3; layer++) {
+      b.add(new THREE.IcosahedronGeometry(1, 0), greys[(layer + (side > 0 ? 1 : 0)) % 4], [side * (0.105 - layer * 0.008), 0.064 + layer * 0.101, 0], [0, side * 0.2, 0], [0.047, 0.073, 0.075]);
+    }
+  }
+  b.add(new THREE.IcosahedronGeometry(1, 0), greys[2], [0, 0.337, -0.005], [0, 0.1, 0], [0.15, 0.083, 0.08]);
+  b.add(new THREE.IcosahedronGeometry(1, 0), greys[3], [-0.025, 0.388, -0.018], [0, 0.25, 0], [0.087, 0.034, 0.058]);
+  return habitatModel(b, "cave", "rock", finishMaterial("rock"));
+}
+
+function driftwood(): DecorModel {
+  const b = new PartBuilder(0.08);
+  const up = new THREE.Vector3(0, 1, 0);
+  const branch = (from: [number, number, number], to: [number, number, number], radius: number, color: string) => {
+    const start = new THREE.Vector3(...from);
+    const end = new THREE.Vector3(...to);
+    const direction = end.clone().sub(start);
+    const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(up, direction.clone().normalize()));
+    const middle = start.add(end).multiplyScalar(0.5);
+    b.add(new THREE.CylinderGeometry(radius * 0.65, radius, direction.length(), 7), color, [middle.x, middle.y, middle.z], [e.x, e.y, e.z]);
+    b.sphere(radius * 0.68, ...to, "#c2a77c", [1, 0.8, 1], 6);
+  };
+  branch([-0.095, 0.024, -0.006], [0.095, 0.04, 0.014], 0.025, "#8d795d");
+  branch([-0.035, 0.03, 0], [-0.085, 0.115, 0.045], 0.014, "#ab9472");
+  branch([0.018, 0.034, 0], [0.078, 0.18, -0.033], 0.012, "#9a8264");
+  branch([0.055, 0.038, 0.01], [0.105, 0.08, 0.035], 0.012, "#b09b79");
+  // Splintered roots and a dark knot make the branching log read as old wood.
+  branch([-0.065, 0.026, 0], [-0.103, 0.025, -0.044], 0.009, "#77674e");
+  b.sphere(0.013, -0.032, 0.045, 0.015, "#5a4e3b", [1.4, 0.7, 0.5], 6);
+  return habitatModel(b, "driftwood", "shipwreck", finishMaterial("shipwreck"));
+}
+
 const cache = new Map<string, DecorModel>();
 
 export function decorModel(kind: DecorKind, variant: DecorVariant): DecorModel {
@@ -383,6 +505,18 @@ export function decorModel(kind: DecorKind, variant: DecorVariant): DecorModel {
         break;
       case "shipwreck":
         m = shipwreck();
+        break;
+      case "kelp":
+        m = kelp();
+        break;
+      case "arch":
+        m = coralArch();
+        break;
+      case "cave":
+        m = rockCave();
+        break;
+      case "driftwood":
+        m = driftwood();
         break;
       default:
         m = bubbler();
