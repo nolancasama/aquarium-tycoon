@@ -1,5 +1,6 @@
 import type { SpeciesId, Vec2, Vec3, VisitorType } from "./types";
 import type { SwimState } from "./logic/swim";
+import type { BehaviorState } from "./logic/behavior";
 import type { Request } from "./logic/requests";
 import type { Mood } from "./logic/model";
 
@@ -8,7 +9,7 @@ import type { Mood } from "./logic/model";
  * game flow. Kept out of React so 60 fps updates never re-render components.
  */
 
-export interface FishRt {
+export interface FishRt extends BehaviorState {
   id: string;
   tankId: string;
   species: SpeciesId;
