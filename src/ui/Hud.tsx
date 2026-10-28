@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { setGame, toast, useGame } from "../game/store";
 import { nextStep } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
-import { canLive, goals, happiness, hasSpace, padsFor, tankById, type Goal } from "../game/logic/model";
+import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, type Goal } from "../game/logic/model";
 import { HALL_OF, TANKS } from "../game/data/tanks";
 import { ROOMS, roomOpen } from "../game/data/rooms";
 import type { VisitorType } from "../game/types";
@@ -17,6 +17,7 @@ import {
   openFishShop,
   openTankShop,
   openUpgrades,
+  openLights,
   switchHall,
   takeBaggedFish,
   takeBoxedTank,
@@ -260,6 +261,10 @@ function HallSwitch() {
     targets = f ? model.tanks.filter((t) => hasSpace(t, f.species) && canLive(f.species, t)).map((t) => HALL_OF[t.slot]) : [];
   }
   if (placing?.kind === "tank") targets = padsFor(model, placing.type).map((s) => HALL_OF[s]);
+  if (placing?.kind === "remodel") targets = model.tanks.filter((t) => {
+    const p = remodelPlan(model, t.id, placing.type);
+    return !p.reason || p.reason === "habitat" || p.reason === "full";
+  }).map((t) => HALL_OF[t.slot]);
   const away = targets.length > 0 && targets.every((r) => r !== hall);
   const guideNext = (away && targets.every((r) => r > hall)) || hintTarget === "btn-hall-next";
   const guidePrev = (away && targets.every((r) => r < hall)) || hintTarget === "btn-hall-prev";
@@ -381,6 +386,10 @@ function TankStatusPanel({ name, fish, capacity, food, clean, happy }: { name: s
 
 function TankBar() {
   const stage = useGame((s) => s.model.progress.stage);
+  const lights = useGame((s) => {
+    const tank = s.tankId ? tankById(s.model, s.tankId) : null;
+    return Boolean(tank && TANKS[tank.type].lights);
+  });
   const step = useGame((s) => s.model.progress.tutorial);
   const tutorial = step !== "done";
   return (
@@ -393,6 +402,7 @@ function TankBar() {
         {!tutorial && <Big id="btn-clean" icon="sponge" label="" ja="そうじ" onClick={() => void cleanTank()} />}
         {!tutorial && <Big id="btn-decorate" icon="decor" label="" ja="かざる" onClick={openDecorate} locked={stage < 2} />}
         {stage >= 8 && <Big id="btn-upgrade" icon="up" label="" ja="アップ" onClick={openUpgrades} />}
+        {stage >= 8 && lights && <Big id="btn-lights" icon="lamp" label="Lights" ja="ライト" onClick={() => void openLights()} />}
       </div>
       <div className="chips-right" />
     </div>
@@ -403,7 +413,16 @@ function PlacingBanner() {
   const placing = useGame((s) => s.placing);
   const step = useGame((s) => s.model.progress.tutorial);
   const view = useGame((s) => s.view);
+  const panel = useGame((s) => s.panel);
   if (!placing || view !== "room") return null;
+  if (placing.kind === "remodel") {
+    if (panel === "remodel") return null;
+    return <div className="panel placing ui" data-testid="placing">
+      <Icon id="tank" size={40} />
+      <span>Tap a tank to remodel!<Ja>かえる タンクを タップしよう!</Ja></span>
+      <button className="secondary" onClick={cancelPlacing} data-testid="btn-cancel-remodel">Cancel<Ja>やめる</Ja></button>
+    </div>;
+  }
   if (placing.kind === "fish") {
     return (
       <div className="panel placing ui" data-testid="placing">

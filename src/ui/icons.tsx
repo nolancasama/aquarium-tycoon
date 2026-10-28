@@ -26,11 +26,17 @@ export type IconId =
   | "trophy"
   | "turtle"
   | "up"
+  | "lamp"
   | "crown";
 
 export function Icon({ id, size = 24, className }: { id: IconId; size?: number; className?: string }) {
   const p = { width: size, height: size, viewBox: "0 0 48 48", className, "aria-hidden": true } as const;
   switch (id) {
+    case "lamp":
+      return <svg {...p}>
+        <path d="M13 20a11 11 0 1 1 22 0c0 6-6 8-6 15H19c0-7-6-9-6-15z" fill="#ffe482" stroke="#cf9445" strokeWidth="3" />
+        <path d="M20 35h8m-8 5h8M24 3V0M7 8l4 4M37 12l4-4M2 22h6m32 0h6" fill="none" stroke="#cf9445" strokeWidth="3" strokeLinecap="round" />
+      </svg>;
     case "coin":
       return (
         <svg {...p}>
