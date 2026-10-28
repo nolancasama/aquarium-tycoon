@@ -4,7 +4,8 @@ import * as THREE from "three";
 import { getGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
-import { canLive, hasSpace } from "../game/logic/model";
+import { canLive, hasSpace, remodelPlan } from "../game/logic/model";
+import { HALL_OF } from "../game/data/tanks";
 
 /**
  * Bobbing golden arrows over what to tap in the room view: the tank to put a
@@ -28,7 +29,7 @@ export function Markers() {
       const tanks = g.model.tanks;
       const add = (id: string) => {
         const t = tanks.find((x) => x.id === id);
-        if (!t || spots.length >= MAX) return;
+        if (!t || HALL_OF[t.slot] !== g.hall || spots.length >= MAX) return;
         const p = SLOT_POS[t.slot];
         spots.push({ x: p.x, y: STAND_H + TANKS[t.type].h + 0.95, z: p.z });
       };
@@ -36,7 +37,13 @@ export function Markers() {
         // Only tanks the carried animal can live in.
         const fishId = g.placing.fishId;
         const carried = g.model.inv.fish.find((f) => f.id === fishId);
-        for (const t of tanks) if (hasSpace(t) && (!carried || canLive(carried.species, t))) add(t.id);
+        for (const t of tanks) if (hasSpace(t, carried?.species) && (!carried || canLive(carried.species, t))) add(t.id);
+      }
+      if (g.placing?.kind === "remodel") {
+        for (const t of tanks) {
+          const p = remodelPlan(g.model, t.id, g.placing.type);
+          if (!p.reason || p.reason === "habitat" || p.reason === "full") add(t.id);
+        }
       }
       for (const id of rt.glow.tanks) add(id);
       const guide = g.guide ?? g.nudge?.target ?? null;

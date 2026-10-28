@@ -56,6 +56,7 @@ function Sentence({ id, text, highlight }: { id: PhraseId; text: string; highlig
 export function PromptPanel() {
   const p = useGame((s) => s.prompt);
   const touch = useGame((s) => s.touch);
+  const expansion = useGame((s) => s.model.progress.stage >= 8);
   useGame((s) => s.micState); // re-render when the mic gets blocked
   if (!p) return null;
   const mic = micUsable();
@@ -77,7 +78,7 @@ export function PromptPanel() {
               ? UI.choose
               : speakHint;
   return (
-    <div className={`panel prompt ui ${p.status}`} data-testid="prompt" role="dialog" aria-label="English">
+    <div className={`panel prompt ui ${p.status} ${expansion ? "expansion-prompt" : ""}`} data-testid="prompt" role="dialog" aria-label="English">
       {p.question && (
         <div className="prompt-question">
           <SpeakerFace by={p.question.by} size={54} />
@@ -89,6 +90,11 @@ export function PromptPanel() {
             {p.question.en === "What's this?" && (
               <span className="request-action" data-testid="request-action">
                 {UI.nameAnimal.en}<Ja>{UI.nameAnimal.ja}</Ja>
+              </span>
+            )}
+            {p.question.en === "What color is it?" && (
+              <span className="request-action" data-testid="request-action">
+                Look at the glowing animal.<Ja>ひかる いきものの いろを いおう!</Ja>
               </span>
             )}
             {p.question.en === "How many fish?" && (

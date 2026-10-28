@@ -6,6 +6,7 @@ import {
   completeStage,
   earnStar,
   earnSuperStar,
+  EXPANSION_FROM,
   finishSpecial,
   fishCount,
   giftFish,
@@ -85,6 +86,8 @@ export function saveIsLost(): boolean {
 /** Bumped when the game is left: running scripts stop at their next wait. */
 let gen = 0;
 let busyFlow = false;
+/** Runtime only: a continued or new game gets one expansion introduction. */
+let expansionIntroduced = false;
 
 class Abort extends Error {}
 
@@ -148,6 +151,7 @@ async function beginAudio() {
 function enter(m: Model) {
   gen++;
   busyFlow = false;
+  expansionIntroduced = false;
   scripted.busy = false;
   resetRuntime();
   resetVisitors();
@@ -729,6 +733,13 @@ export function storyTick(dt: number) {
   }
   if (m.progress.stage === 2 && !m.progress.counted && countableTanks(m).length) {
     void flow(picoCount);
+    return;
+  }
+  if (!expansionIntroduced && st >= EXPANSION_FROM && !g.line && !g.panel && !scripted.busy) {
+    expansionIntroduced = true;
+    void flow(async () => {
+      await say("pico", "New tanks and animals!", "あたらしい タンクと いきものが かえるよ!");
+    });
     return;
   }
   if (!m.progress.tipsTaught && rt.tipsPaid > 0 && rt.time > rt.tipsShownUntil && !g.panel) {

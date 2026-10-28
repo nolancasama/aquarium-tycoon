@@ -45,6 +45,7 @@ export function installE2eHook(seed: number) {
           id: t.id,
           slot: t.slot,
           type: t.type,
+          light: t.light,
           fish: t.fish.map((f) => f.species),
           fishIds: t.fish.map((f) => f.id),
           decor: t.decor.map((d) => ({ slot: d.slot, kind: d.kind, variant: d.variant })),
@@ -52,7 +53,7 @@ export function installE2eHook(seed: number) {
           clean: Math.round(t.clean),
           happy: happiness(t)
         })),
-        inv: { fish: m.inv.fish.length, decor: m.inv.decor.map((d) => ({ id: d.id, kind: d.kind, variant: d.variant })), tanks: m.inv.tanks.length },
+        inv: { fish: m.inv.fish.length, species: m.inv.fish.map((f) => f.species), decor: m.inv.decor.map((d) => ({ id: d.id, kind: d.kind, variant: d.variant })), tanks: m.inv.tanks.length },
         prompt: g.prompt
           ? {
               id: g.prompt.id,

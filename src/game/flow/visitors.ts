@@ -1,9 +1,9 @@
 import { getGame, model, nudge, setGame, updateModel } from "../store";
 import { clearGlow, effect, rt, type VisitorRt } from "../runtime";
 import type { SlotId, Vec2, VisitorType } from "../types";
-import { award, fishCount, happiness, helpVisitor, mood, tankById, tipBreakdown, type TankRec } from "../logic/model";
+import { award, EXPANSION_FROM, fishCount, happiness, helpVisitor, mood, tankById, tipBreakdown, type TankRec } from "../logic/model";
 import { makeRequest, matchesShow, requestLine, requestReward, stillValid, tankSatisfies, targetsIn, type Request, type ShowTarget } from "../logic/requests";
-import { ITS_IDS, ITS_PHRASE, LIKE_COLOR_PHRASE, NUMBER_IDS, NUMBER_PHRASE, colorOfPhrase, type PhraseId } from "../logic/english";
+import { IT_COLOR_IDS, IT_COLOR_PHRASE, ITS_IDS, ITS_IDS_BASE, ITS_PHRASE, LIKE_COLOR_PHRASE, NUMBER_IDS, NUMBER_PHRASE, colorOfPhrase, type PhraseId } from "../logic/english";
 import { makeRng, shuffle } from "../logic/rng";
 import { SPECIES } from "../data/fish";
 import { SLOT_POS, STAND_H, TANKS } from "../data/tanks";
@@ -366,11 +366,18 @@ export function numberSlots(n: number): PhraseId[] {
   return NUMBER_IDS.slice(0, Math.max(5, Math.min(10, n + 2)));
 }
 
+/** One matching colour and two different colours, in a fresh order. */
+export function whatColorChoices(color: ColorId, random: () => number = rand): PhraseId[] {
+  const answer = IT_COLOR_PHRASE[color];
+  const others = shuffle(IT_COLOR_IDS.filter((id) => id !== answer), random).slice(0, 2);
+  return shuffle([answer, ...others], random);
+}
+
 /** Run one request with its visitor. Resolves when helped (ok) or put off (not ok). */
 export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable: boolean }): Promise<RequestOutcome> {
   const line = requestLine(req);
   v.bubble = null;
-  if (req.kind === "whatsThis") {
+  if (req.kind === "whatsThis" || req.kind === "whatColor") {
     const t = tankById(model(), req.tankId);
     const f = t?.fish.find((x) => x.id === req.fishId);
     if (!t || !f) return { ok: false, tankId: null };
@@ -386,27 +393,28 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
     v.face = { x: tankOrigin(t.slot).x, z: tankOrigin(t.slot).z };
     // The animal glows: that is "this".
     rt.glow.fish.add(f.id);
-    const answer = ITS_PHRASE[f.species];
-    const others = shuffle(
-      ITS_IDS.filter((p) => p !== answer),
-      rand
-    ).slice(0, 2);
+    const colorQuestion = req.kind === "whatColor";
+    const answer = colorQuestion ? IT_COLOR_PHRASE[SPECIES[f.species].color] : ITS_PHRASE[f.species];
+    const animalAnswers = model().progress.stage >= EXPANSION_FROM ? ITS_IDS : ITS_IDS_BASE;
     // Shown in a shuffled order: the right sentence is not always first.
-    const three = shuffle([answer, ...others], rand);
+    const three = colorQuestion
+      ? whatColorChoices(SPECIES[f.species].color)
+      : shuffle([answer, ...shuffle(animalAnswers.filter((p) => p !== answer), rand).slice(0, 2)], rand);
     const id = await ask({
       kind: "command",
       options: [answer],
-      judge: ITS_IDS,
+      judge: colorQuestion ? IT_COLOR_IDS : ITS_IDS,
       show: three,
       choices: three,
       question: { en: line, by: v.type },
       readQuestion: true,
       cancellable: opts.cancellable,
-      help: "ひかっている いきものは なに? えいごで いおう"
+      help: colorQuestion ? "ひかっている いきものは なにいろ? えいごで いおう" : "ひかっている いきものは なに? えいごで いおう"
     });
     rt.glow.fish.delete(f.id);
     if (!id) return { ok: false, tankId: null };
-    await say(v.type, `A ${SPECIES[f.species].word}! I like ${SPECIES[f.species].plural}!`, "ありがとう!");
+    const animal = SPECIES[f.species];
+    await say(v.type, colorQuestion ? `It's ${animal.color}!` : `${/^[aeiou]/i.test(animal.word) ? "An" : "A"} ${animal.word}! I like ${animal.plural}!`, "ありがとう!");
     return { ok: true, tankId: t.id };
   }
   if (req.kind === "show" || req.kind === "showAnimal") {
