@@ -18,10 +18,12 @@ export type Request =
   | { kind: "count"; tankId: string }
   /** "What's this?" about one animal, which glows (Phase 2). */
   | { kind: "whatsThis"; tankId: string; fishId: string }
-  /** "Do you like fish?" → "Yes, I do." / "No, I don't." */
-  | { kind: "chatLike" }
+  /** "Do you like fish?" (or, from Level 8, "Do you like jellyfish?" about an animal in the aquarium) → "Yes, I do." / "No, I don't." */
+  | { kind: "chatLike"; species?: SpeciesId }
   /** "What color do you like?" → "I like ___." */
-  | { kind: "chatColor" };
+  | { kind: "chatColor" }
+  /** Level 8: "What color is it?" about one animal, which glows → "It's blue." */
+  | { kind: "whatColor"; tankId: string; fishId: string };
 
 export type RequestKind = Request["kind"];
 
@@ -33,8 +35,9 @@ export function colorOf(t: ShowTarget): ColorId | null {
 
 const isFish = (s: SpeciesId) => SPECIES[s].kind === "fish";
 
+/** "I like jellyfish!" is answered by any kind of jellyfish: animals match by their word. */
 export function matchesShow(req: Extract<Request, { kind: "show" | "showAnimal" }>, t: ShowTarget): boolean {
-  if (req.kind === "showAnimal") return t.type === "fish" && t.species === req.species;
+  if (req.kind === "showAnimal") return t.type === "fish" && SPECIES[t.species].word === SPECIES[req.species].word;
   if (req.fishOnly && (t.type !== "fish" || !isFish(t.species))) return false;
   return colorOf(t) === req.color;
 }
@@ -64,14 +67,19 @@ export function presentColors(m: Model, fishOnly: boolean): ColorId[] {
   return [...out];
 }
 
-/** Sea animals (not fish) in the aquarium. */
+/** Sea animals (not fish) in the aquarium, one per word (all jellyfish are "jellyfish"). */
 export function presentAnimals(m: Model): SpeciesId[] {
-  return [...new Set(m.tanks.flatMap((t) => t.fish.map((f) => f.species)).filter((s) => !isFish(s)))];
+  const byWord = new Map<string, SpeciesId>();
+  for (const t of m.tanks) for (const f of t.fish) if (!isFish(f.species) && !byWord.has(SPECIES[f.species].word)) byWord.set(SPECIES[f.species].word, f.species);
+  return [...byWord.values()];
 }
 
-/** Tanks a visitor can ask "How many fish?" about: 2–8 animals, all of them fish. */
+/** A fish that is counted as one: a school's record shows several fish, so a tank with a school is not countable. */
+const countable = (s: SpeciesId) => isFish(s) && !SPECIES[s].school;
+
+/** Tanks a visitor can ask "How many fish?" about: 2–8 animals, all of them single fish. */
 export function countableTanks(m: Model): TankRec[] {
-  return m.tanks.filter((t) => t.fish.length >= 2 && t.fish.length <= 8 && t.fish.every((f) => isFish(f.species)));
+  return m.tanks.filter((t) => t.fish.length >= 2 && t.fish.length <= 8 && t.fish.every((f) => countable(f.species)));
 }
 
 export interface RequestOptions {
@@ -98,6 +106,8 @@ export function makeRequest(m: Model, rand: () => number, opts: RequestOptions):
   if (m.tanks.some((t) => t.fish.length)) {
     options.push({ kind: "chatLike", weight: 10 });
     options.push({ kind: "chatColor", weight: 12 });
+    // Level 8 (Expansion 1): "What color is it?" about one glowing animal.
+    if (stage >= 8) options.push({ kind: "whatColor", weight: 18 });
   }
   const pool = options.filter((o) => o.kind !== opts.last);
   const list = pool.length ? pool : options;
@@ -126,6 +136,14 @@ export function makeRequest(m: Model, rand: () => number, opts: RequestOptions):
       const f = pick(t.fish.filter((x) => !isFish(x.species)));
       return { kind: "whatsThis", tankId: t.id, fishId: f.id };
     }
+    case "whatColor": {
+      const t = pick(m.tanks.filter((x) => x.fish.length));
+      return { kind: "whatColor", tankId: t.id, fishId: pick(t.fish).id };
+    }
+    case "chatLike":
+      // From Level 8 the question can be about a sea animal in the aquarium ("Do you like octopuses?").
+      if (stage >= 8 && animals.length && rand() < 0.5) return { kind: "chatLike", species: pick(animals) };
+      return { kind: "chatLike" };
     default:
       return { kind };
   }
@@ -143,9 +161,11 @@ export function requestLine(req: Request): string {
     case "whatsThis":
       return "What's this?";
     case "chatLike":
-      return "Do you like fish?";
+      return `Do you like ${req.species ? SPECIES[req.species].plural : "fish"}?`;
     case "chatColor":
       return "What color do you like?";
+    case "whatColor":
+      return "What color is it?";
   }
 }
 
@@ -159,12 +179,12 @@ export function requestReward(req: Request, tank: TankRec | null): number {
 /** Is this request still possible (animals can be added or moved while a visitor waits)? */
 export function stillValid(m: Model, req: Request): boolean {
   if (req.kind === "show") return presentColors(m, req.fishOnly).includes(req.color);
-  if (req.kind === "showAnimal") return presentAnimals(m).includes(req.species);
+  if (req.kind === "showAnimal") return m.tanks.some((t) => t.fish.some((f) => SPECIES[f.species].word === SPECIES[req.species].word));
   if (req.kind === "count") {
     const t = m.tanks.find((x) => x.id === req.tankId);
-    return Boolean(t && t.fish.length >= 1 && t.fish.length <= 8 && t.fish.every((f) => isFish(f.species)));
+    return Boolean(t && t.fish.length >= 1 && t.fish.length <= 8 && t.fish.every((f) => countable(f.species)));
   }
-  if (req.kind === "whatsThis") {
+  if (req.kind === "whatsThis" || req.kind === "whatColor") {
     const t = m.tanks.find((x) => x.id === req.tankId);
     return Boolean(t && t.fish.some((f) => f.id === req.fishId));
   }

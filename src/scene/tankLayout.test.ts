@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { SAND_H, STAND_H, TANKS } from "../game/data/tanks";
-import { hall2Geometry, roomGeometry, tankShellGeometry } from "./models/room";
+import { hall2Geometry, roomGeometry } from "./models/room";
+import { tankShellGeometry } from "./models/tankShell";
 import { slotMarkerY, SLOT_MARKER_MAX_SCALE, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
 
 describe("decoration circles rest on the sand", () => {

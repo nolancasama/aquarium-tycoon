@@ -1,20 +1,26 @@
-import type { DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
+import type { ColorId, DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
 import { SPECIES } from "../data/fish";
 import { DECOR, decorFits } from "../data/decor";
-import { PAD_TYPES, SLOT_ORDER, TANKS } from "../data/tanks";
+import { BUILT_IN_PADS, HALL_OF, PAD_TYPES, SLOT_ORDER, TANKS } from "../data/tanks";
+import { roomOpen } from "../data/rooms";
 import { PHRASES, type PhraseId } from "./english";
-import { canLive, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep } from "./model";
+import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep } from "./model";
 
 /**
- * Versioned save. Version 1 (Phase 1) saves are migrated; a save of an unknown
- * version, or one that does not parse, is discarded whole, never half-loaded.
- * Every field is re-validated: an edited or corrupted save cannot overfill a
- * tank, put a turtle in a small tank, put two decorations in one slot, or hold
- * something its level has not unlocked.
+ * Versioned save. Version 1 (Phase 1) and 2 (Phase 2) saves are migrated; a
+ * save of an unknown version, or one that does not parse, is discarded whole,
+ * never half-loaded. Every field is re-validated: an edited or corrupted save
+ * cannot overfill a tank, put a turtle in a small tank, put two decorations in
+ * one slot, or hold something its level has not unlocked.
+ *
+ * Version 3 (Expansion 1) only adds: the special tank types and new species and
+ * decorations, pads F–H, `progress.galleryOpen` and `tank.light`. A version 2
+ * save reads exactly as before (its ids, tanks, pads and animals are kept);
+ * the new fields take their defaults.
  */
 
 export const SAVE_KEY = "at.save.v1";
-export const VERSION = 2;
+export const VERSION = 3;
 
 export interface SaveData {
   v: number;
@@ -60,11 +66,12 @@ function readDecor(raw: unknown, ids: Set<string>): DecorRec | null {
 /** Is this tank type on this pad possible at this level? */
 function tankAllowed(type: TankType, slot: SlotId, p: Progress): boolean {
   if (!PAD_TYPES[slot].includes(type)) return false;
-  if (slot !== "A" && slot !== "B" && !p.hallOpen) return false;
-  if (type === "big") return p.stage >= 4;
-  if (type === "tall") return p.stage >= 7;
-  return true;
+  if (!roomOpen(HALL_OF[slot], p)) return false;
+  if (type === "small" || type === "ocean") return true;
+  return p.stage >= TANKS[type].fromStage;
 }
+
+const isColor = (v: unknown): v is ColorId => typeof v === "string" && (LIGHT_COLORS as string[]).includes(v);
 
 function readTank(raw: unknown, ids: Set<string>, used: Set<SlotId>, p: Progress): TankRec | null {
   if (!isObj(raw)) return null;
@@ -78,7 +85,7 @@ function readTank(raw: unknown, ids: Set<string>, used: Set<SlotId>, p: Progress
   // Animals one by one, so habitat rules hold for the whole tank.
   for (const f of arr(raw.fish)) {
     const rec = readFish(f, ids);
-    if (rec && tank.fish.length < def.capacity && canLive(rec.species, tank)) tank.fish.push(rec);
+    if (rec && hasSpace(tank, rec.species) && canLive(rec.species, tank)) tank.fish.push(rec);
   }
   const slots = new Set<number>();
   const decor: PlacedDecor[] = [];
@@ -94,6 +101,7 @@ function readTank(raw: unknown, ids: Set<string>, used: Set<SlotId>, p: Progress
   tank.clean = pct(raw.clean);
   const up = isObj(raw.upgrades) ? raw.upgrades : {};
   tank.upgrades = { filter: up.filter === true && p.stage >= 8, lamp: up.lamp === true && p.stage >= 8 };
+  tank.light = def.lights && isColor(raw.light) ? raw.light : null;
   return tank;
 }
 
@@ -129,6 +137,7 @@ function readProgress(raw: unknown, version: number): Progress {
   p.upgraded = src.upgraded === true && p.stage >= 8;
   p.superStar = src.superStar === true && p.stage === 8;
   p.tipsTaught = src.tipsTaught === true;
+  p.galleryOpen = src.galleryOpen === true && p.stage >= 8 && p.hallOpen;
   p.said = [...new Set(arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES))];
   return p;
 }
@@ -141,7 +150,7 @@ export function decodeSave(text: string | null): SaveData | null {
   } catch {
     return null;
   }
-  if (!isObj(raw) || (raw.v !== 1 && raw.v !== 2) || !isObj(raw.model)) return null;
+  if (!isObj(raw) || (raw.v !== 1 && raw.v !== 2 && raw.v !== 3) || !isObj(raw.model)) return null;
   const version = raw.v;
   const src = raw.model;
   const m = newModel();
@@ -160,9 +169,16 @@ export function decodeSave(text: string | null): SaveData | null {
     tanks.push(newTank(`t${900 + n}`, "ocean", "C"));
     ids.add(`t${900 + n}`);
   }
+  // An open Gallery always has a tank on its middle pad.
+  if (m.progress.galleryOpen && !tanks.some((t) => t.slot === "G")) {
+    let n = 1;
+    while (ids.has(`t${950 + n}`)) n++;
+    tanks.push(newTank(`t${950 + n}`, "cylinder", "G"));
+    ids.add(`t${950 + n}`);
+  }
   m.tanks = tanks;
   const inv = isObj(src.inv) ? src.inv : {};
-  const freePads = SLOT_ORDER.filter((s) => !used.has(s) && (s === "A" || s === "B" || m.progress.hallOpen) && s !== "C").length;
+  const freePads = SLOT_ORDER.filter((s) => !tanks.some((t) => t.slot === s) && roomOpen(HALL_OF[s], m.progress) && !BUILT_IN_PADS.includes(s)).length;
   m.inv = {
     fish: arr(inv.fish)
       .map((f) => readFish(f, ids))
@@ -171,7 +187,7 @@ export function decodeSave(text: string | null): SaveData | null {
       .map((d) => readDecor(d, ids))
       .filter((d): d is DecorRec => Boolean(d)),
     tanks: arr(inv.tanks)
-      .filter((t): t is TankType => (t === "big" && m.progress.stage >= 4) || (t === "tall" && m.progress.stage >= 7))
+      .filter((t): t is TankType => isTankType(t) && t !== "small" && t !== "ocean" && m.progress.stage >= TANKS[t].fromStage)
       .slice(0, freePads)
   };
   m.coins = Math.max(0, Math.min(99999, Math.floor(num(src.coins, 0))));

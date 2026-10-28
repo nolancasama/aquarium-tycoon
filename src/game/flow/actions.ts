@@ -4,6 +4,7 @@ import type { DecorKind, DecorVariant, SlotId, SpeciesId, TankType } from "../ty
 import { ANIMAL_ORDER, FISH_ORDER, SPECIES, SPECIES_BY_COLOR } from "../data/fish";
 import { DECOR } from "../data/decor";
 import { HALL_OF, PAD_TYPES, TANKS } from "../data/tanks";
+import { roomOpen } from "../data/rooms";
 import {
   buyDecor,
   buyFish,
@@ -83,10 +84,10 @@ export function tapHallDoor() {
   openTankShop();
 }
 
-/** The arrows at the screen edges: show the other hall. */
-export function switchHall(hall: 0 | 1) {
+/** The arrows at the screen edges: show the neighbouring room (open rooms only). */
+export function switchHall(hall: number) {
   const g = getGame();
-  if (g.screen !== "game" || g.view !== "room" || (hall === 1 && !g.model.progress.hallOpen)) return;
+  if (g.screen !== "game" || g.view !== "room" || !roomOpen(hall, g.model.progress)) return;
   audio.play("tick");
   setGame({ hall });
 }

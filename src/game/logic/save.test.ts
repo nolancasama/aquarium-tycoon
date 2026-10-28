@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { decodeSave, encodeSave } from "./save";
-import { buyDecor, buyFish, buyTank, buyTickets, buyUpgrade, newModel, openHall, placeDecor, placeFish, placeTank, type Model, type Result } from "./model";
+import { decodeSave, encodeSave, VERSION } from "./save";
+import { buyDecor, buyFish, buyTank, buyTickets, buyUpgrade, newModel, openGallery, openHall, placeDecor, placeFish, placeTank, remodelTank, setLight, type Model, type Result } from "./model";
 
 type M = Model & { lastId?: string };
 
@@ -46,7 +46,7 @@ describe("save", () => {
     expect(decodeSave(null)).toBeNull();
     expect(decodeSave("{not json")).toBeNull();
     expect(decodeSave(JSON.stringify({ v: 0, model: played() }))).toBeNull();
-    expect(decodeSave(JSON.stringify({ v: 3, model: played() }))).toBeNull();
+    expect(decodeSave(JSON.stringify({ v: 4, model: played() }))).toBeNull();
     expect(decodeSave(JSON.stringify([1, 2]))).toBeNull();
     expect(decodeSave(JSON.stringify({ v: 1, model: { tanks: [] } }))).toBeNull();
   });
@@ -112,7 +112,7 @@ describe("save version 2 (Phase 2)", () => {
 
   it("migrates a version 1 save: everything kept, the star opens Level 6", () => {
     const back = decodeSave(JSON.stringify(V1_STARRED))!;
-    expect(back.v).toBe(2);
+    expect(back.v).toBe(VERSION);
     const m = back.model;
     expect(m.coins).toBe(140);
     expect(m.progress).toMatchObject({ stage: 6, star: true, freePlay: true, photo: true, hallOpen: false, superStar: false, helpedInStage: 0 });
@@ -161,5 +161,96 @@ describe("save version 2 (Phase 2)", () => {
     raw.model.progress.hallOpen = true;
     const open = decodeSave(JSON.stringify(raw))!.model;
     expect(open.tanks.filter((t) => t.type === "ocean").map((t) => t.slot)).toEqual(["C"]);
+  });
+});
+
+describe("save version 3 (Expansion 1)", () => {
+  /** A Level 8 Phase 2 save exactly as version 2 wrote it (no light, no galleryOpen). */
+  const V2_LEVEL8 = {
+    v: 2,
+    model: {
+      coins: 512,
+      tanks: [
+        { id: "t1", type: "big", slot: "A", fish: [{ id: "f2", species: "clownfish" }, { id: "f3", species: "pufferfish" }], decor: [{ id: "d4", kind: "coral", variant: "blue", slot: 2 }], food: 71.5, clean: 64, upgrades: { filter: true, lamp: false } },
+        { id: "t5", type: "small", slot: "B", fish: [{ id: "f6", species: "bluetang" }], decor: [{ id: "d7", kind: "shell", variant: null, slot: 0 }], food: 90, clean: 88, upgrades: { filter: false, lamp: false } },
+        { id: "t8", type: "ocean", slot: "C", fish: [{ id: "f9", species: "turtle" }], decor: [{ id: "d10", kind: "shipwreck", variant: null, slot: 3 }], food: 55, clean: 47, upgrades: { filter: false, lamp: true } },
+        { id: "t11", type: "tall", slot: "D", fish: [{ id: "f12", species: "jellyfish" }, { id: "f13", species: "jellyfish" }], decor: [], food: 80, clean: 80, upgrades: { filter: false, lamp: true } },
+        { id: "t14", type: "tall", slot: "E", fish: [{ id: "f15", species: "seahorse" }], decor: [{ id: "d16", kind: "plant", variant: "big", slot: 1 }], food: 66, clean: 70, upgrades: { filter: false, lamp: false } }
+      ],
+      inv: { fish: [{ id: "f17", species: "yellowfish" }], decor: [{ id: "d18", kind: "starfish", variant: "pink" }], tanks: [] },
+      progress: { stage: 8, tutorial: "done", firstFish: "clownfish", fedOnce: true, cleanedOnce: true, counted: true, allHappy: false, helpedInStage: 1, namedInStage: 0, hearts: 22, specialPending: false, photo: true, star: true, freePlay: true, hallOpen: true, tickets: true, upgraded: true, superStar: false, tipsTaught: true, said: ["feedFish", "itsTurtle"] },
+      stats: { coinsEarned: 900, helped: 22, fishBought: 9, seconds: 3600 },
+      nextId: 19,
+      paid: ["judge"]
+    }
+  };
+
+  it("migrates a version 2 save without changing anything it had", () => {
+    const back = decodeSave(JSON.stringify(V2_LEVEL8))!;
+    expect(back.v).toBe(3);
+    const m = back.model;
+    const src = V2_LEVEL8.model;
+    expect(m.coins).toBe(src.coins);
+    expect(m.nextId).toBe(src.nextId);
+    expect(m.tanks.map((t) => ({ id: t.id, type: t.type, slot: t.slot, fish: t.fish, decor: t.decor, food: t.food, clean: t.clean, upgrades: t.upgrades }))).toEqual(src.tanks);
+    expect(m.inv).toEqual(src.inv);
+    expect(m.progress).toMatchObject(src.progress);
+    // New fields take their defaults; the Gallery is not open and nothing was moved.
+    expect(m.progress.galleryOpen).toBe(false);
+    expect(m.tanks.every((t) => t.light === null)).toBe(true);
+    // Written back as version 3, it reads the same again.
+    expect(decodeSave(encodeSave(m))!.model).toEqual(m);
+  });
+
+  it("round-trips the Gallery, special tanks, new animals, lights and a remodel", () => {
+    let m: M = { ...newModel(), coins: 5000, progress: { ...newModel().progress, stage: 8, star: true, freePlay: true, tutorial: "done" } };
+    m = ok(openHall(m));
+    m = ok(openGallery(m));
+    const column = m.lastId!;
+    m = ok(setLight(m, column, "pink"));
+    m = ok(buyFish(m, "moonjelly"));
+    m = ok(placeFish(m, m.lastId!, column));
+    m = ok(buyTank(m, "cave"));
+    m = ok(placeTank(m, "cave", "D"));
+    const cave = m.lastId!;
+    m = ok(buyFish(m, "octopus"));
+    m = ok(placeFish(m, m.lastId!, cave));
+    m = ok(buyTank(m, "panorama"));
+    m = ok(placeTank(m, "panorama", "E"));
+    const pano = m.lastId!;
+    m = ok(buyFish(m, "chromis"));
+    m = ok(placeFish(m, m.lastId!, pano));
+    m = ok(buyFish(m, "stingray"));
+    m = ok(placeFish(m, m.lastId!, pano));
+    m = ok(remodelTank(m, "t1", "hex"));
+    const { lastId: _drop, ...model } = m;
+    void _drop;
+    expect(model.progress.galleryOpen).toBe(true);
+    expect(decodeSave(encodeSave(model))!.model).toEqual(model);
+  });
+
+  it("repairs Expansion 1 impossibilities", () => {
+    const raw = JSON.parse(JSON.stringify(V2_LEVEL8));
+    raw.v = 3;
+    raw.model.progress.galleryOpen = true;
+    // An eel in a big tank, a sea nettle with fish, a light on a big tank, a panorama on pad A's neighbour B.
+    raw.model.tanks[0].fish.push({ id: "f30", species: "eel" });
+    raw.model.tanks[0].light = "pink";
+    raw.model.tanks[1] = { id: "t5", type: "panorama", slot: "B", fish: [], decor: [], food: 100, clean: 100 };
+    raw.model.tanks.push({ id: "t31", type: "cylinder", slot: "F", fish: [{ id: "f32", species: "seanettle" }, { id: "f33", species: "clownfish" }], decor: [], food: 100, clean: 100, light: "orange" });
+    const m = decodeSave(JSON.stringify(raw))!.model;
+    expect(m.tanks[0].fish.map((f) => f.species)).toEqual(["clownfish", "pufferfish"]);
+    expect(m.tanks[0].light).toBeNull();
+    expect(m.tanks.some((t) => t.slot === "B")).toBe(false);
+    const f = m.tanks.find((t) => t.slot === "F")!;
+    expect(f.fish.map((x) => x.species)).toEqual(["seanettle"]);
+    expect(f.light).toBe("orange");
+    // An open Gallery always has its middle tank.
+    expect(m.tanks.find((t) => t.slot === "G")?.type).toBe("cylinder");
+    // A Gallery saved before Level 8 is not open, and its tanks are not kept.
+    raw.model.progress.stage = 7;
+    const early = decodeSave(JSON.stringify(raw))!.model;
+    expect(early.progress.galleryOpen).toBe(false);
+    expect(early.tanks.some((t) => ["F", "G", "H"].includes(t.slot))).toBe(false);
   });
 });

@@ -55,7 +55,26 @@ export type PhraseId =
   | "likeOrange"
   | "likePink"
   | "likePurple"
-  | "likeWhite";
+  | "likeWhite"
+  // Expansion 1: new fish colours, sea animals by name, "It's ___." and "What color is it?".
+  | "greenPlease"
+  | "purplePlease"
+  | "eelPlease"
+  | "octopusPlease"
+  | "crabPlease"
+  | "stingrayPlease"
+  | "itsEel"
+  | "itsOctopus"
+  | "itsCrab"
+  | "itsStingray"
+  | "itRed"
+  | "itBlue"
+  | "itYellow"
+  | "itGreen"
+  | "itOrange"
+  | "itPink"
+  | "itPurple"
+  | "itWhite";
 
 const YES = ["yes", "yeah", "yep", "yup", "yea", "yas", "yess", "yesh", "jess", "ies", "guess", "okay", "ok", "sure"];
 const NO = ["no", "nope", "nah", "know", "noh", "nou", "nor", "not", "don't", "dont"];
@@ -81,8 +100,12 @@ export const COLOR_WORDS: Record<ColorId, string[]> = {
 const TURTLE = ["turtle", "turtles", "turtle's", "tuttle", "tertle", "tattle", "turtl", "tatoru", "kurtle"];
 const SEAHORSE = ["seahorse", "seahorses", "seahorse's", "seahose", "shehorse", "sihorse", "horse", "horses"];
 const JELLYFISH = ["jellyfish", "jellyfishes", "jellyfish's", "jerryfish", "jelly", "jellies", "jerry", "zeryfish"];
-/** "It's a fish." must not also match "jelly fish", "sea horse" or "turtle". */
-const NOT_FISH = ["jelly", "jellyfish", "jerry", "jerryfish", "seahorse", "horse", "turtle", "turtles"];
+const EEL = ["eel", "eels", "eel's", "eal", "iel", "moray", "morays", "eeru", "iiru"];
+const OCTOPUS = ["octopus", "octopuses", "octopi", "octopus's", "octopuss", "octapus", "oktopus", "okutopasu", "tako"];
+const CRAB = ["crab", "crabs", "crab's", "krab", "crabb", "kurabu", "grab"];
+const STINGRAY = ["stingray", "stingrays", "stingray's", "sting", "ray", "rays", "sutingurei", "stingrey"];
+/** "It's a fish." must not also match "jelly fish", "sea horse", "turtle" or the other sea animals. */
+const NOT_FISH = ["jelly", "jellyfish", "jerry", "jerryfish", "seahorse", "horse", "turtle", "turtles", "eel", "moray", "octopus", "crab", "stingray", "ray"];
 
 const BIG = ["big", "bigger", "biggest", "bigg", "bigu", "biggu", "beg", "bag", "big's"];
 const SMALL = ["small", "smaller", "smallest", "smol", "smal", "smoll", "smalls", "sumo", "sumooru", "small's"];
@@ -114,17 +137,27 @@ export const SHOP_COLOR_PHRASE: Partial<Record<ColorId, PhraseId>> = {
   yellow: "yellowPlease",
   red: "redPlease",
   white: "whitePlease",
-  pink: "pinkPlease"
+  pink: "pinkPlease",
+  green: "greenPlease",
+  purple: "purplePlease"
 };
 
-/** Sea animals are ordered by name ("A turtle, please!"). */
+/**
+ * Sea animals are ordered by name ("A turtle, please!"). Every kind of
+ * jellyfish is ordered as "A jellyfish, please!" (then by colour once there
+ * is more than one kind): the phrase maps to the original jellyfish.
+ */
 export const ANIMAL_PHRASE: Partial<Record<SpeciesId, PhraseId>> = {
   turtle: "turtlePlease",
   seahorse: "seahorsePlease",
-  jellyfish: "jellyfishPlease"
+  jellyfish: "jellyfishPlease",
+  eel: "eelPlease",
+  octopus: "octopusPlease",
+  crab: "crabPlease",
+  stingray: "stingrayPlease"
 };
 
-/** "What's this?" answers. */
+/** "What's this?" answers: every fish is "a fish", every jellyfish "a jellyfish". */
 export const ITS_PHRASE: Record<SpeciesId, PhraseId> = {
   clownfish: "itsFish",
   bluetang: "itsFish",
@@ -132,7 +165,29 @@ export const ITS_PHRASE: Record<SpeciesId, PhraseId> = {
   pufferfish: "itsFish",
   turtle: "itsTurtle",
   seahorse: "itsSeahorse",
-  jellyfish: "itsJellyfish"
+  jellyfish: "itsJellyfish",
+  angelfish: "itsFish",
+  goby: "itsFish",
+  chromis: "itsFish",
+  eel: "itsEel",
+  octopus: "itsOctopus",
+  crab: "itsCrab",
+  stingray: "itsStingray",
+  moonjelly: "itsJellyfish",
+  spottedjelly: "itsJellyfish",
+  seanettle: "itsJellyfish"
+};
+
+/** "What color is it?" answers ("It's blue."). */
+export const IT_COLOR_PHRASE: Record<ColorId, PhraseId> = {
+  red: "itRed",
+  blue: "itBlue",
+  yellow: "itYellow",
+  green: "itGreen",
+  orange: "itOrange",
+  pink: "itPink",
+  purple: "itPurple",
+  white: "itWhite"
 };
 
 export const LIKE_COLOR_PHRASE: Record<ColorId, PhraseId> = {
@@ -150,6 +205,7 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 const please = (id: PhraseId, c: ColorId): Phrase => ({ id, en: `${cap(c)}, please!`, keys: [COLOR_WORDS[c]], key: cap(c) });
 const like = (id: PhraseId, c: ColorId): Phrase => ({ id, en: `I like ${c}.`, keys: [COLOR_WORDS[c]], key: c });
+const itColor = (id: PhraseId, c: ColorId): Phrase => ({ id, en: `It's ${c}.`, keys: [COLOR_WORDS[c]], key: c });
 const animal = (id: PhraseId, en: string, keys: string[], key: string): Phrase => ({ id, en, keys: [keys], key });
 const num = (n: number): Phrase => ({
   id: NUMBER_PHRASE[n],
@@ -196,14 +252,36 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   likeOrange: like("likeOrange", "orange"),
   likePink: like("likePink", "pink"),
   likePurple: like("likePurple", "purple"),
-  likeWhite: like("likeWhite", "white")
+  likeWhite: like("likeWhite", "white"),
+  greenPlease: please("greenPlease", "green"),
+  purplePlease: please("purplePlease", "purple"),
+  eelPlease: animal("eelPlease", "An eel, please!", EEL, "eel"),
+  octopusPlease: animal("octopusPlease", "An octopus, please!", OCTOPUS, "octopus"),
+  crabPlease: animal("crabPlease", "A crab, please!", CRAB, "crab"),
+  stingrayPlease: animal("stingrayPlease", "A stingray, please!", STINGRAY, "stingray"),
+  itsEel: animal("itsEel", "It's an eel.", EEL, "eel"),
+  itsOctopus: animal("itsOctopus", "It's an octopus.", OCTOPUS, "octopus"),
+  itsCrab: animal("itsCrab", "It's a crab.", CRAB, "crab"),
+  itsStingray: animal("itsStingray", "It's a stingray.", STINGRAY, "stingray"),
+  itRed: itColor("itRed", "red"),
+  itBlue: itColor("itBlue", "blue"),
+  itYellow: itColor("itYellow", "yellow"),
+  itGreen: itColor("itGreen", "green"),
+  itOrange: itColor("itOrange", "orange"),
+  itPink: itColor("itPink", "pink"),
+  itPurple: itColor("itPurple", "purple"),
+  itWhite: itColor("itWhite", "white")
 };
 
 export const PHRASE_IDS = Object.keys(PHRASES) as PhraseId[];
 
 export const NUMBER_IDS: PhraseId[] = ["n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8", "n9", "n10"];
 
-export const ITS_IDS: PhraseId[] = ["itsTurtle", "itsSeahorse", "itsJellyfish", "itsFish"];
+/** "What's this?" answers before Level 8 (distractors stay among animals the class has met). */
+export const ITS_IDS_BASE: PhraseId[] = ["itsTurtle", "itsSeahorse", "itsJellyfish", "itsFish"];
+/** Every "What's this?" answer (the judge hears them all). */
+export const ITS_IDS: PhraseId[] = [...ITS_IDS_BASE, "itsEel", "itsOctopus", "itsCrab", "itsStingray"];
+export const IT_COLOR_IDS: PhraseId[] = Object.values(IT_COLOR_PHRASE);
 
 export function numberOf(id: PhraseId): number | null {
   const i = NUMBER_IDS.indexOf(id);
@@ -218,5 +296,6 @@ export function speciesOfPhrase(id: PhraseId): SpeciesId | null {
 export function colorOfPhrase(id: PhraseId): ColorId | null {
   for (const [c, p] of Object.entries(SHOP_COLOR_PHRASE)) if (p === id) return c as ColorId;
   for (const [c, p] of Object.entries(LIKE_COLOR_PHRASE)) if (p === id) return c as ColorId;
+  for (const [c, p] of Object.entries(IT_COLOR_PHRASE)) if (p === id) return c as ColorId;
   return null;
 }

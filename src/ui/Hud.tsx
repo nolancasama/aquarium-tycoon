@@ -4,6 +4,7 @@ import { nextStep } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
 import { canLive, goals, happiness, hasSpace, padsFor, tankById, type Goal } from "../game/logic/model";
 import { HALL_OF, TANKS } from "../game/data/tanks";
+import { ROOMS, roomOpen } from "../game/data/rooms";
 import type { VisitorType } from "../game/types";
 import {
   cancelPlacing,
@@ -242,39 +243,45 @@ function LevelOverview({ stage, star }: { stage: number; star: boolean }) {
   );
 }
 
-/** The arrows at the screen edges between the halls (once the Ocean Hall is open). */
+/** The arrows at the screen edges to the neighbouring rooms (open rooms only). */
 function HallSwitch() {
-  const open = useGame((s) => s.model.progress.hallOpen);
+  const progress = useGame((s) => s.model.progress);
   const hall = useGame((s) => s.hall);
   const model = useGame((s) => s.model);
   const placing = useGame((s) => s.placing);
   const hintTarget = useGame((s) => s.nudge?.target);
-  if (!open) return null;
-  // Guide: the carried animal can only live in the other hall.
-  let guide = false;
+  const prev = hall > 0 && roomOpen(hall - 1, progress) ? hall - 1 : null;
+  const next = roomOpen(hall + 1, progress) ? hall + 1 : null;
+  if (prev === null && next === null) return null;
+  // Guide: the carried animal (or tank) only fits in rooms on one side.
+  let targets: number[] = [];
   if (placing?.kind === "fish") {
     const f = model.inv.fish.find((x) => x.id === placing.fishId);
-    const homes = f ? model.tanks.filter((t) => hasSpace(t) && canLive(f.species, t)) : [];
-    guide = homes.length > 0 && homes.every((t) => HALL_OF[t.slot] !== hall);
+    targets = f ? model.tanks.filter((t) => hasSpace(t, f.species) && canLive(f.species, t)).map((t) => HALL_OF[t.slot]) : [];
   }
-  if (placing?.kind === "tank") {
-    const pads = padsFor(model, placing.type);
-    guide = pads.length > 0 && pads.every((s) => HALL_OF[s] !== hall);
-  }
-  return hall === 0 ? (
-    <button className={`hall-arrow right ui ${guide || hintTarget === "btn-hall-next" ? "guide" : ""}`} onClick={() => switchHall(1)} data-testid="btn-hall-next" aria-label="Ocean Hall">
-      <span>
-        Ocean Hall <Ja>うみの ホール</Ja>
-      </span>
-      <b>▶</b>
-    </button>
-  ) : (
-    <button className={`hall-arrow left ui ${guide || hintTarget === "btn-hall-prev" ? "guide" : ""}`} onClick={() => switchHall(0)} data-testid="btn-hall-prev" aria-label="First hall">
-      <b>◀</b>
-      <span>
-        Hall 1 <Ja>はじめの ホール</Ja>
-      </span>
-    </button>
+  if (placing?.kind === "tank") targets = padsFor(model, placing.type).map((s) => HALL_OF[s]);
+  const away = targets.length > 0 && targets.every((r) => r !== hall);
+  const guideNext = (away && targets.every((r) => r > hall)) || hintTarget === "btn-hall-next";
+  const guidePrev = (away && targets.every((r) => r < hall)) || hintTarget === "btn-hall-prev";
+  return (
+    <>
+      {prev !== null && (
+        <button className={`hall-arrow left ui ${guidePrev ? "guide" : ""}`} onClick={() => switchHall(prev)} data-testid="btn-hall-prev" aria-label={ROOMS[prev].name}>
+          <b>◀</b>
+          <span>
+            {ROOMS[prev].name} <Ja>{ROOMS[prev].ja}</Ja>
+          </span>
+        </button>
+      )}
+      {next !== null && (
+        <button className={`hall-arrow right ui ${guideNext ? "guide" : ""}`} onClick={() => switchHall(next)} data-testid="btn-hall-next" aria-label={ROOMS[next].name}>
+          <span>
+            {ROOMS[next].name} <Ja>{ROOMS[next].ja}</Ja>
+          </span>
+          <b>▶</b>
+        </button>
+      )}
+    </>
   );
 }
 

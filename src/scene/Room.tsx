@@ -8,7 +8,8 @@ import { PAD_TYPES, SLOT_ORDER, SLOT_POS, STAND_H, TANKS } from "../game/data/ta
 import type { SlotId, TankType } from "../game/types";
 import { tapHallDoor, tapPad } from "../game/flow/actions";
 import { PartBuilder } from "./partBuilder";
-import { hall2Geometry, roomGeometry, ropeGeometry, tankShellGeometry } from "./models/room";
+import { hall2Geometry, roomGeometry, ropeGeometry } from "./models/room";
+import { tankShellGeometry, waterGeometry } from "./models/tankShell";
 import { flatMat, floorTexture, muralTexture, oceanFloorMaterial, oceanMuralTexture, padIconTexture, posterTexture, shadowMaterial, signMaterial, smoothMat } from "./materials";
 
 /** Soft contact blobs under furniture: [x, z, width, depth], merged into one mesh. */
@@ -332,13 +333,13 @@ function PadIcon({ locked }: { locked: boolean }) {
 /** A see-through tank showing where the new one will stand. */
 function Preview({ type }: { type: TankType }) {
   const geo = useMemo(() => tankShellGeometry(type), [type]);
+  const water = useMemo(() => waterGeometry(type), [type]);
   const mat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: 0.45, depthWrite: false }), []);
   const def = TANKS[type];
   return (
     <group>
       <mesh geometry={geo} material={mat} />
-      <mesh position={[0, STAND_H + def.h / 2, 0]}>
-        <boxGeometry args={[def.w, def.h, def.d]} />
+      <mesh position={[0, STAND_H + def.h / 2, 0]} geometry={water}>
         <meshBasicMaterial color="#7fe0ff" transparent opacity={0.3} depthWrite={false} />
       </mesh>
     </group>

@@ -124,8 +124,8 @@ export interface GameState {
   screen: Screen;
   mode: Mode;
   view: View;
-  /** Which hall the management view shows (1: the Ocean Hall). */
-  hall: 0 | 1;
+  /** Which room the management view shows (index into ROOMS: 1 the Ocean Hall, 2 the Jellyfish Gallery). */
+  hall: number;
   tankId: string | null;
   panel: Panel;
   placing: Placing;

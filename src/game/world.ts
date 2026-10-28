@@ -1,29 +1,35 @@
 import type { SlotId, TankType, Vec2, Vec3 } from "./types";
 import { SAND_H, SLOT_POS, STAND_H, TANKS } from "./data/tanks";
 import { DECOR, decorVersion } from "./data/decor";
+import { DOOR_W, DOOR_Z, ROOMS, ROOM_CENTER_X, doorX, roomAtX } from "./data/rooms";
 import type { TankRec } from "./logic/model";
 import type { Column } from "./logic/swim";
 import { sandSurfaceY } from "./logic/tankLayout";
 
 /**
  * Room layout and tank geometry in world space (metres). The room's front
- * (+z) faces the management camera; tanks stand along the back.
+ * (+z) faces the management camera; tanks stand along the back. Rooms come
+ * from data/rooms.ts; the named constants below are the first rooms' bounds.
  */
 
-export const ROOM = { minX: -6, maxX: 6, minZ: -4, maxZ: 4, wallH: 3.2 };
+export const ROOM = ROOMS[0].bounds;
 /** The Ocean Hall (Phase 2), right of the first hall, sharing its right wall. */
-export const HALL2 = { minX: 6, maxX: 18, minZ: -4, maxZ: 4, wallH: 3.2 };
-/** Management-view centre of each hall. */
-export const HALL_X = [0, 12] as const;
+export const HALL2 = ROOMS[1].bounds;
+/** The Jellyfish Gallery (Expansion 1), right of the Ocean Hall. */
+export const GALLERY = ROOMS[2].bounds;
+/** Management-view centre of each room. */
+export const HALL_X = ROOM_CENTER_X;
 
 /** The entrance is in the left wall, toward the front. */
 export const DOOR = { x: -6, z: 1.5, w: 1.8 };
 export const ENTRY: Vec2 = { x: -5.3, z: 1.5 };
 export const OUTSIDE: Vec2 = { x: -7.4, z: 1.5 };
 /** The doorway between the halls (in the shared wall), and the points either side of it. */
-export const HALL_DOOR = { x: 6, z: 1.5, w: 1.8 };
-export const DOOR_WEST: Vec2 = { x: 5.3, z: 1.5 };
-export const DOOR_EAST: Vec2 = { x: 6.7, z: 1.5 };
+export const HALL_DOOR = { x: doorX(1), z: DOOR_Z, w: DOOR_W };
+export const DOOR_WEST: Vec2 = { x: doorX(1) - 0.7, z: DOOR_Z };
+export const DOOR_EAST: Vec2 = { x: doorX(1) + 0.7, z: DOOR_Z };
+/** The doorway between the Ocean Hall and the Jellyfish Gallery. */
+export const GALLERY_DOOR = { x: doorX(2), z: DOOR_Z, w: DOOR_W };
 /** The bench where request visitors wait (they sit facing the room centre). */
 export const BENCH: Vec2 = { x: 4.4, z: 2.95 };
 export const BENCH_SEAT: Vec2 = { x: 4.22, z: 2.95 };
@@ -101,7 +107,7 @@ export function benchApproach(from: Vec2): Vec2[] {
 
 /** A body-width inset avoids offering a visitor still passing through a wall. */
 export function insideRoom(p: Vec2): boolean {
-  const bounds = hallOfX(p.x) === 0 ? ROOM : HALL2;
+  const bounds = ROOMS[hallOfX(p.x)].bounds;
   return p.x >= bounds.minX + 0.4 && p.x <= bounds.maxX - 0.4 && p.z >= bounds.minZ + 0.4 && p.z <= bounds.maxZ - 0.4;
 }
 
@@ -109,14 +115,22 @@ export function requestEligible(v: Vec2 & { request: unknown; helped: boolean; s
   return Boolean(v.request) && !v.helped && !v.scripted && (v.state === "walk" || v.state === "sit") && insideRoom(v);
 }
 
-export const hallOfX = (x: number): 0 | 1 => (x > HALL_DOOR.x ? 1 : 0);
+/** Which room (index into ROOMS) world x is in. */
+export const hallOfX = (x: number): number => roomAtX(x);
 
-/** A walking route from a point to a point, through the doorway when they are in different halls. */
+/** The doorway into room i (from room i-1): the points 0.7 m either side of it. */
+export const doorWest = (i: number): Vec2 => ({ x: doorX(i) - 0.7, z: DOOR_Z });
+export const doorEast = (i: number): Vec2 => ({ x: doorX(i) + 0.7, z: DOOR_Z });
+
+/** A walking route from a point to a point, through each doorway between their rooms in turn. */
 export function route(from: Vec2, to: Vec2): Vec2[] {
   const a = hallOfX(from.x);
   const b = hallOfX(to.x);
   if (a === b) return [to];
-  return a === 0 ? [DOOR_WEST, DOOR_EAST, to] : [DOOR_EAST, DOOR_WEST, to];
+  const path: Vec2[] = [];
+  if (a < b) for (let i = a + 1; i <= b; i++) path.push(doorWest(i), doorEast(i));
+  else for (let i = a; i > b; i--) path.push(doorEast(i), doorWest(i));
+  return [...path, to];
 }
 /** The trophy pedestal by the entrance. */
 export const PEDESTAL: Vec2 = { x: -4.7, z: -0.3 };
@@ -157,6 +171,10 @@ export function decorRadius(kind: string, variant: string | null): number {
   if (kind === "castle") return variant === "big" ? 0.18 : 0.13;
   if (kind === "shipwreck") return 0.26;
   if (kind === "anemone") return 0.13;
+  if (kind === "kelp") return 0.12;
+  if (kind === "arch") return 0.24;
+  if (kind === "cave") return 0.22;
+  if (kind === "driftwood") return 0.18;
   return 0.1;
 }
 
@@ -164,15 +182,17 @@ export function decorTop(t: TankRec, kind: keyof typeof DECOR, variant: TankRec[
   return SAND_H + decorVersion(kind, variant).height * TANKS[t.type].h;
 }
 
-/** Decorations as columns the fish swim over. */
+/** Decorations, and the tank's built-in rock formations, as columns the fish swim over. */
 export function columnsOf(t: TankRec): Column[] {
-  const slots = TANKS[t.type].slots;
-  return t.decor.map((d) => ({
+  const def = TANKS[t.type];
+  const slots = def.slots;
+  const placed = t.decor.map((d) => ({
     x: slots[d.slot].x,
     z: slots[d.slot].z,
     r: decorRadius(d.kind, d.variant),
-    top: decorTop(t, d.kind, d.variant) + sandSurfaceY(TANKS[t.type], slots[d.slot].x, slots[d.slot].z) - STAND_H - SAND_H
+    top: decorTop(t, d.kind, d.variant) + sandSurfaceY(def, slots[d.slot].x, slots[d.slot].z) - STAND_H - SAND_H
   }));
+  return def.rocks ? [...placed, ...def.rocks] : placed;
 }
 
 /** Where a visitor stands to look into this tank. */

@@ -1,4 +1,5 @@
 import type { SpeciesDef } from "../data/fish";
+import type { TankDef } from "../data/tanks";
 import type { Vec3 } from "../types";
 
 /**
@@ -11,6 +12,39 @@ import type { Vec3 } from "../types";
 export interface Bounds {
   min: Vec3;
   max: Vec3;
+  /** Round and six-sided tanks: the body centre stays within this horizontal radius of the tank axis. */
+  round?: number;
+  /** Bowed front glass: the front limit grows by up to this much toward x = 0 (a parabola reaching 0 at ±halfW). */
+  bulge?: number;
+  halfW?: number;
+}
+
+/** Front (largest z) limit at x: max.z, plus the bow of a curved front. */
+export function frontAt(b: Bounds, x: number): number {
+  if (!b.bulge || !b.halfW) return b.max.z;
+  const k = 1 - (x / b.halfW) ** 2;
+  return b.max.z + b.bulge * Math.max(0, k);
+}
+
+/**
+ * Bounds for an animal in a tank of any shape: the box inset by the body, a
+ * radius for round and six-sided glass (the inscribed circle), the bow of a
+ * curved front, and the cave's rockwork along the back.
+ */
+export function tankFishBounds(tank: Pick<TankDef, "w" | "d" | "h" | "shape" | "bulge" | "backRock">, sand: number, def: Pick<SpeciesDef, "length" | "radius">): Bounds {
+  const b = fishBounds(tank.w, tank.d, tank.h, sand, def);
+  const side = def.length * 0.5 + 0.04;
+  if (tank.shape === "round" || tank.shape === "hex") {
+    // The hex is measured flat to flat along z: its inscribed circle has radius d/2.
+    const inner = (tank.shape === "round" ? tank.w : tank.d) / 2;
+    b.round = Math.max(0.02, inner - side);
+  }
+  if (tank.shape === "bow" && tank.bulge) {
+    b.bulge = tank.bulge;
+    b.halfW = tank.w / 2;
+  }
+  if (tank.backRock) b.min.z = Math.min(b.max.z, -tank.d / 2 + tank.backRock + side);
+  return b;
 }
 
 /** A decoration as a column the fish swim over, not through. */
@@ -78,9 +112,25 @@ export function clampToBounds(s: SwimState, b: Bounds, columns: readonly Column[
     s.x = clamp(s.x, b.min.x, b.max.x);
     s.vx *= -0.3;
   }
-  if (s.z < b.min.z || s.z > b.max.z) {
-    s.z = clamp(s.z, b.min.z, b.max.z);
+  const front = frontAt(b, s.x);
+  if (s.z < b.min.z || s.z > front) {
+    s.z = clamp(s.z, b.min.z, front);
     s.vz *= -0.3;
+  }
+  if (b.round !== undefined) {
+    const r = Math.hypot(s.x, s.z);
+    if (r > b.round) {
+      // Back onto the circle, and turn the outward part of the velocity back in.
+      const nx = s.x / r;
+      const nz = s.z / r;
+      s.x = nx * b.round;
+      s.z = nz * b.round;
+      const out = s.vx * nx + s.vz * nz;
+      if (out > 0) {
+        s.vx -= 1.3 * out * nx;
+        s.vz -= 1.3 * out * nz;
+      }
+    }
   }
   const floor = floorAt(s.x, s.z, b, columns, radius);
   if (s.y < floor) {
@@ -102,7 +152,15 @@ export function pickTarget(s: SwimState, def: SpeciesDef, env: SwimEnv, rand: ()
   let tx = b.min.x + rand() * (b.max.x - b.min.x);
   if (Math.abs(tx - s.x) < (b.max.x - b.min.x) * 0.25) tx = s.x > 0 ? b.min.x + rand() * (b.max.x - b.min.x) * 0.4 : b.max.x - rand() * (b.max.x - b.min.x) * 0.4;
   s.tx = tx;
-  s.tz = b.min.z + rand() * (b.max.z - b.min.z);
+  s.tz = b.min.z + rand() * (frontAt(b, tx) - b.min.z);
+  if (b.round !== undefined) {
+    // Round tanks: a target inside the circle (pulled in along its radius).
+    const r = Math.hypot(s.tx, s.tz);
+    if (r > b.round) {
+      s.tx *= b.round / r;
+      s.tz *= b.round / r;
+    }
+  }
   s.ty = Math.max(floorAt(s.tx, s.tz, b, env.columns, def.radius), b.min.y + h * (lo + rand() * (hi - lo)));
   s.wait = def.wander[0] + rand() * (def.wander[1] - def.wander[0]);
   if (def.burst > 0 && rand() < def.burst * 0.5) s.burst = 0.35 + rand() * 0.35;

@@ -1,7 +1,8 @@
-import type { DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
-import { SPECIES, SPECIES_ORDER } from "../data/fish";
+import type { ColorId, DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
+import { SPECIES, SPECIES_ORDER, spaceOf, type HomeNeed } from "../data/fish";
 import { DECOR, decorFits, decorVersion } from "../data/decor";
-import { HALL_PRICE, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
+import { BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
+import { roomOpen } from "../data/rooms";
 import type { PhraseId } from "./english";
 
 /**
@@ -46,6 +47,8 @@ export interface TankRec {
   food: number;
   clean: number;
   upgrades: TankUpgrades;
+  /** Display-light colour of a tank with `lights` (the jelly column); null until chosen. */
+  light: ColorId | null;
 }
 
 export interface Inventory {
@@ -91,6 +94,8 @@ export interface Progress {
   superStar: boolean;
   /** Pico has explained that happy tanks earn bigger tips (shown once). */
   tipsTaught: boolean;
+  /** Expansion 1: the Jellyfish Gallery is open. */
+  galleryOpen: boolean;
   /** Distinct sentences said or chosen (results card). */
   said: PhraseId[];
 }
@@ -152,12 +157,13 @@ export function newProgress(): Progress {
     upgraded: false,
     superStar: false,
     tipsTaught: false,
+    galleryOpen: false,
     said: []
   };
 }
 
 export function newTank(id: string, type: TankType, slot: SlotId): TankRec {
-  return { id, type, slot, fish: [], decor: [], food: 100, clean: 100, upgrades: { filter: false, lamp: false } };
+  return { id, type, slot, fish: [], decor: [], food: 100, clean: 100, upgrades: { filter: false, lamp: false }, light: null };
 }
 
 export function newModel(): Model {
@@ -183,36 +189,61 @@ export function tankOfFish(m: Model, fishId: string): TankRec | null {
   return m.tanks.find((t) => t.fish.some((f) => f.id === fishId)) ?? null;
 }
 
-export const hasSpace = (t: TankRec) => t.fish.length < TANKS[t.type].capacity;
+/** Capacity places taken by the animals in a tank (a school or a stingray takes two). */
+export const usedSpace = (t: TankRec) => t.fish.reduce((n, f) => n + spaceOf(f.species), 0);
+/** Is there room for one more animal of one place (or of this species)? */
+export const hasSpace = (t: TankRec, species?: SpeciesId) => usedSpace(t) + (species ? spaceOf(species) : 1) <= TANKS[t.type].capacity;
+
+/** Why an animal cannot move into a tank, in the student's terms. */
+export type HomeReason = HomeNeed | "jellyOnly" | "notSafe" | "noMix" | "full";
 
 /**
- * Can this animal live in this tank? Its habitat must include the tank type,
- * and jellyfish live only with jellyfish (and nothing else with them).
+ * Why this animal cannot live in this tank, or null if it can. Checked in
+ * order: the tank type (a jelly column takes only jellyfish, the cave only its
+ * rock animals), tank-mates (jellyfish sting everything but jellyfish), space.
+ */
+export function homeReason(species: SpeciesId, t: TankRec): HomeReason | null {
+  const def = SPECIES[species];
+  const jelly = def.group === "jelly";
+  if (!def.habitat.includes(t.type)) {
+    if (t.type === "cylinder" && !jelly) return "jellyOnly";
+    if (t.type === "cave") return "notSafe";
+    return def.needs;
+  }
+  if (jelly && t.fish.some((f) => SPECIES[f.species].group !== "jelly")) return "noMix";
+  if (!jelly && t.fish.some((f) => SPECIES[f.species].group === "jelly")) return "jellyOnly";
+  return hasSpace(t, species) ? null : "full";
+}
+
+/**
+ * Can this animal live in this tank (space aside)? Its habitat must include
+ * the tank type, and jellyfish live only with jellyfish.
  */
 export function canLive(species: SpeciesId, t: TankRec): boolean {
-  const def = SPECIES[species];
-  if (!def.habitat.includes(t.type)) return false;
-  if (def.solitary) return t.fish.every((f) => f.species === species);
-  return !t.fish.some((f) => SPECIES[f.species].solitary);
+  const r = homeReason(species, t);
+  return r === null || r === "full";
 }
 
 /** Places for this animal in placed tanks, after the bagged animals that would need the same places. */
 export function homesFor(m: Model, species: SpeciesId): number {
   const homes = m.tanks.filter((t) => canLive(species, t));
-  const free = homes.reduce((n, t) => n + TANKS[t.type].capacity - t.fish.length, 0);
-  const waiting = m.inv.fish.filter((f) => homes.some((t) => canLive(f.species, t))).length;
-  return free - waiting;
+  const free = homes.reduce((n, t) => n + TANKS[t.type].capacity - usedSpace(t), 0);
+  const waiting = m.inv.fish.filter((f) => homes.some((t) => canLive(f.species, t))).reduce((n, f) => n + spaceOf(f.species), 0);
+  return free - waiting - (spaceOf(species) - 1);
 }
 
 /** Fish places left in placed tanks, after the fish already waiting in bags (any animal). */
 export function freeSpace(m: Model): number {
   const cap = m.tanks.reduce((n, t) => n + TANKS[t.type].capacity, 0);
-  return cap - fishCount(m) - m.inv.fish.length;
+  return cap - m.tanks.reduce((n, t) => n + usedSpace(t), 0) - m.inv.fish.reduce((n, f) => n + spaceOf(f.species), 0);
 }
 
-/** Pads with no tank (the Ocean Hall's only once it is open). */
+/** Is the room holding this pad open? */
+export const padOpen = (m: Model, s: SlotId) => roomOpen(HALL_OF[s], m.progress);
+
+/** Pads with no tank in open rooms (the pads that come with a tank never count). */
 export function freeSlots(m: Model): SlotId[] {
-  return SLOT_ORDER.filter((s) => !tankAt(m, s) && (m.progress.hallOpen || (s !== "C" && s !== "D" && s !== "E")));
+  return SLOT_ORDER.filter((s) => !tankAt(m, s) && padOpen(m, s) && !BUILT_IN_PADS.includes(s));
 }
 
 /** Free pads that take this tank type. */
@@ -232,6 +263,9 @@ export const tanksUnlocked = (m: Model) => m.progress.stage >= 4;
 export const upgradesUnlocked = (m: Model) => m.progress.stage >= UPGRADES_FROM;
 export const isDecorUnlocked = (m: Model, kind: DecorKind) => m.progress.stage >= DECOR[kind].fromStage;
 export const isTankUnlocked = (m: Model, type: TankType) => type !== "ocean" && type !== "small" && m.progress.stage >= TANKS[type].fromStage;
+/** Expansion 1 content (special tanks, new animals and decorations, the Gallery) opens at Level 8. */
+export const EXPANSION_FROM: StageId = 8;
+export const galleryUnlocked = (m: Model) => m.progress.stage >= EXPANSION_FROM && m.progress.hallOpen;
 
 export function cheapestFish(m: Model): number {
   return Math.min(...unlockedSpecies(m).map((s) => SPECIES[s].price));
@@ -239,15 +273,18 @@ export function cheapestFish(m: Model): number {
 
 // --------------------------------------------------------------- happiness
 
+/** A jelly column's chosen display light counts like a decoration (it has only two small slots). */
+export const LIGHT_JOY = 15;
+
 export function decorJoy(t: TankRec): number {
-  return t.decor.reduce((n, d) => n + decorVersion(d.kind, d.variant).joy, 0);
+  return t.decor.reduce((n, d) => n + decorVersion(d.kind, d.variant).joy, 0) + (t.light ? LIGHT_JOY : 0);
 }
 
-/** Share of the animals whose favourite decoration (or the lamp) is in the tank (0–1). */
+/** Share of the animals whose favourite decoration (or the lamp, or a display light) is in the tank (0–1). */
 export function likedShare(t: TankRec): number {
   if (!t.fish.length) return 0;
   const kinds = new Set<string>(t.decor.map((d) => d.kind));
-  if (t.upgrades.lamp) kinds.add("lamp");
+  if (t.upgrades.lamp || t.light) kinds.add("lamp");
   return t.fish.filter((f) => kinds.has(SPECIES[f.species].likes)).length / t.fish.length;
 }
 
@@ -300,6 +337,8 @@ export function buyFish(m: Model, species: SpeciesId): Result {
   if (!isSpeciesUnlocked(m, species)) return fail("locked");
   if (!m.tanks.some((t) => def.habitat.includes(t.type))) return fail("habitat");
   if (homesFor(m, species) <= 0) return fail("full");
+  // A two-place animal needs two places in one tank.
+  if (spaceOf(species) > 1 && !m.tanks.some((t) => canLive(species, t) && hasSpace(t, species))) return fail("full");
   if (m.coins < def.price) return fail("coins");
   const id = `f${m.nextId}`;
   const progress = m.progress.firstFish ? m.progress : { ...m.progress, firstFish: species };
@@ -322,7 +361,7 @@ export function placeFish(m: Model, fishId: string, tankId: string): Result {
   const tank = tankById(m, tankId);
   if (!fish || !tank) return fail("missing");
   if (!canLive(fish.species, tank)) return fail("habitat");
-  if (!hasSpace(tank)) return fail("full");
+  if (!hasSpace(tank, fish.species)) return fail("full");
   const placed = { ...m, inv: { ...m.inv, fish: m.inv.fish.filter((f) => f.id !== fishId) } };
   // An empty tank starts fresh when its first animal arrives.
   return {
@@ -428,6 +467,116 @@ export function openHall(m: Model): Result {
       progress: { ...m.progress, hallOpen: true }
     }
   };
+}
+
+/** Level 8: the Jellyfish Gallery opens (through the Ocean Hall), with a Jelly column on its middle pad. */
+export function openGallery(m: Model): Result {
+  if (!galleryUnlocked(m)) return fail("locked");
+  if (m.progress.galleryOpen) return fail("owned");
+  if (m.coins < GALLERY_PRICE) return fail("coins");
+  const id = `t${m.nextId}`;
+  return {
+    ok: true,
+    id,
+    m: {
+      ...m,
+      coins: m.coins - GALLERY_PRICE,
+      nextId: m.nextId + 1,
+      tanks: [...m.tanks, newTank(id, "cylinder", "G")],
+      progress: { ...m.progress, galleryOpen: true }
+    }
+  };
+}
+
+// ---------------------------------------------------------------- remodelling
+
+/** What remodelling a placed tank into another type would do (nothing is changed). */
+export interface RemodelPlan {
+  /** null: it can be done (coins aside). */
+  reason: null | "locked" | "same" | "pad" | "habitat" | "full";
+  /** Animals that cannot live in the new tank: move them (to the bag) first. */
+  blockers: FishRec[];
+  /** Decorations that stay, in their new slots. */
+  keep: PlacedDecor[];
+  /** Decorations that go back to the tray (too big, or no slot left). */
+  toTray: DecorRec[];
+  /** Half the old tank's price comes back. */
+  tradeIn: number;
+  cost: number;
+}
+
+export function remodelPlan(m: Model, tankId: string, type: TankType): RemodelPlan {
+  const t = tankById(m, tankId);
+  const tradeIn = t ? Math.floor(TANKS[t.type].price / 2) : 0;
+  const cost = Math.max(0, TANKS[type].price - tradeIn);
+  const plan: RemodelPlan = { reason: null, blockers: [], keep: [], toTray: [], tradeIn, cost };
+  if (!t || t.type === "ocean" || !isTankUnlocked(m, type) || m.progress.stage < EXPANSION_FROM) return { ...plan, reason: "locked" };
+  if (t.type === type) return { ...plan, reason: "same" };
+  if (!PAD_TYPES[t.slot].includes(type)) return { ...plan, reason: "pad" };
+  plan.blockers = t.fish.filter((f) => !SPECIES[f.species].habitat.includes(type));
+  if (plan.blockers.length) plan.reason = "habitat";
+  else if (usedSpace(t) > TANKS[type].capacity) plan.reason = "full";
+  // Decorations keep their slot number where they can, else take the next free one.
+  const slots = TANKS[type].slots.length;
+  const used = new Set<number>();
+  const fitting = [...t.decor].sort((a, b) => a.slot - b.slot);
+  for (const d of fitting) {
+    if (!decorFits(d.kind, type)) continue;
+    if (d.slot < slots && !used.has(d.slot)) used.add(d.slot);
+  }
+  for (const d of fitting) {
+    const rec: DecorRec = { id: d.id, kind: d.kind, variant: d.variant };
+    if (!decorFits(d.kind, type)) {
+      plan.toTray.push(rec);
+      continue;
+    }
+    if (d.slot < slots && plan.keep.every((k) => k.slot !== d.slot)) {
+      plan.keep.push({ ...rec, slot: d.slot });
+      continue;
+    }
+    let free = -1;
+    for (let i = 0; i < slots; i++) if (!used.has(i)) { free = i; break; }
+    if (free < 0) plan.toTray.push(rec);
+    else {
+      used.add(free);
+      plan.keep.push({ ...rec, slot: free });
+    }
+  }
+  return plan;
+}
+
+/** Remodel a placed tank: same pad, animals and care levels; unfitting decorations go to the tray. */
+export function remodelTank(m: Model, tankId: string, type: TankType): Result {
+  const plan = remodelPlan(m, tankId, type);
+  if (plan.reason) return fail(plan.reason === "same" ? "owned" : plan.reason === "pad" ? "locked" : plan.reason);
+  if (m.coins < plan.cost) return fail("coins");
+  const paid = { ...m, coins: m.coins - plan.cost, inv: { ...m.inv, decor: [...m.inv.decor, ...plan.toTray] } };
+  return {
+    ok: true,
+    id: tankId,
+    m: mapTank(paid, tankId, (t) => ({ ...t, type, decor: plan.keep, light: TANKS[type].lights ? t.light : null }))
+  };
+}
+
+/** Take an animal out of its tank and back into the bag (to move it, or to make room for a remodel). */
+export function bagAnimal(m: Model, fishId: string): Result {
+  const t = tankOfFish(m, fishId);
+  const f = t?.fish.find((x) => x.id === fishId);
+  if (!t || !f) return fail("missing");
+  const out = mapTank(m, t.id, (x) => ({ ...x, fish: x.fish.filter((y) => y.id !== fishId) }));
+  return { ok: true, id: fishId, m: { ...out, inv: { ...out.inv, fish: [...out.inv.fish, f] } } };
+}
+
+/** Display-light colours a jelly column can show ("Pink, please!"). */
+export const LIGHT_COLORS: ColorId[] = ["blue", "purple", "pink", "green", "orange", "white"];
+
+/** Choose a display tank's light colour (free; the first light makes the jellyfish happy). */
+export function setLight(m: Model, tankId: string, color: ColorId): Result {
+  const t = tankById(m, tankId);
+  if (!t) return fail("missing");
+  if (!TANKS[t.type].lights || !LIGHT_COLORS.includes(color)) return fail("locked");
+  if (t.light === color) return fail("owned");
+  return { ok: true, m: mapTank(m, tankId, (x) => ({ ...x, light: color })) };
 }
 
 /** Small-tank slots 0, 1, 2 land on big-tank slots 0, 2, 4 when the tank grows. */

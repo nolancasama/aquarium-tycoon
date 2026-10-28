@@ -682,7 +682,7 @@ export function showGuideHint() {
       else if (step.goal === "upgrade" || step.shopItem === "lamp") target = "btn-upgrade";
       else if (step.goal === "allHappy") target = tank.food < 90 ? "btn-feed" : tank.clean < 100 ? "btn-clean" : g.panel === "decorate" ? "tray" : "btn-decorate";
     }
-    else if (g.view === "room" && tank && HALL_OF[tank.slot] !== g.hall) target = g.hall ? "btn-hall-prev" : "btn-hall-next";
+    else if (g.view === "room" && tank && HALL_OF[tank.slot] !== g.hall) target = HALL_OF[tank.slot] < g.hall ? "btn-hall-prev" : "btn-hall-next";
     else if (!g.placing && placingAnimal) target = "chip-bag";
   }
   rt.idle = 0;

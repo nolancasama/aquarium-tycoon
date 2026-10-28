@@ -20,8 +20,8 @@ export const FOV = 35;
 const TAN = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
 
 /** Management view: the whole hall from the front, a little above. */
-export function roomView(aspect: number, orbit: number, zoom: number, hall: 0 | 1 = 0) {
-  const target = new THREE.Vector3(HALL_X[hall], 0.6, -0.8);
+export function roomView(aspect: number, orbit: number, zoom: number, hall = 0) {
+  const target = new THREE.Vector3(HALL_X[hall] ?? HALL_X[0], 0.6, -0.8);
   const dist = (13.2 / zoom) * Math.max(1, 1.72 / aspect);
   const pitch = 0.6;
   const h = dist * Math.cos(pitch);

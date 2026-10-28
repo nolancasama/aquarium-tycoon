@@ -721,3 +721,72 @@ Economy unchanged: `tipFor()` still pays 1 / 2 / 3 coins (below 40, 40–69,
   coins!" with the visitor chip as its target. The Help tiers name the least
   happy tank and say a happy tank earns 3 coins a visitor, or that the fish
   are already happy and visitors are the way forward.
+
+## 2026-10-29 — Expansion 1: special tanks, new animals, Jellyfish Gallery (frozen)
+
+Brief: "Aquarium Expansion, New Tank Designs, and Animal Variety". Accepted with
+these changes and decisions.
+
+- **Everything new opens at Level 8** (`EXPANSION_FROM`): special tanks, the new
+  animals and decorations, remodelling and the Gallery. Levels 1–7 keep their
+  shops, goals, prices and request mix unchanged. Rejected: unlocking special
+  tanks earlier. At Level 4 a hexagon tank on pad B would take the pad that the
+  "place the big tank" goal needs, and the guide assumes classic tanks.
+- **Rooms are data** (`data/rooms.ts`): bounds, pads and the progress flag that
+  opens each room. Rooms tile +x, and each shares a doorway at z = 1.5 with the
+  room before it. Routes, hall arrows, camera framing and `HALL_OF` all read the
+  list. `GameState.hall` is now a room index. Rejected: a graph of rooms with
+  arbitrary doors (not needed yet; the row keeps routes trivial).
+- **Tank shapes are data** (`TankDef.shape`: box, hex, round, bow) plus
+  `decorSize`, `bulge`, `backRock`, `dens`, built-in `rocks`, `lights` and
+  `current`. Swim bounds (`tankFishBounds`) honour the inscribed circle of
+  round and six-sided glass, a bowed front and the cave rockwork.
+- **Four special tanks.** Hexagon (4 places, freestanding, smaller reef fish
+  and seahorses). Panorama (7 places, bowed front, schools and rays; Ocean
+  Hall pads only). Jelly column (round, jellyfish only, a colour display light,
+  a circulating current). Rocky cave (rockwork with three dens, for eels,
+  octopuses, crabs and gobies; reef fish are "not safe" there).
+- **Pads.** Hall 1 (A, B) takes small, big, tall, hex and cave, which keeps its
+  small-aquarium feel. Ocean Hall D/E also take the panorama and the jelly
+  column. Gallery F/G/H take jelly columns, tall and hex tanks; G comes with a
+  jelly column (like C with the Ocean tank).
+- **Animals.** Angelfish (purple) and goby (red, perches on the sand) are sold
+  at the fish counter by colour. Green chromis replace the brief's sardines:
+  a reef schooling fish, and green keeps the counter's "What color?" English.
+  One chromis purchase is a school of six and takes two places, so "How many
+  fish?" never asks about a tank with a school. Moray eel, octopus, crab and
+  stingray are ordered by name ("An eel, please!", "An octopus, please!"). The
+  stingray takes two places. Moon, spotted and sea nettle jellyfish are
+  ordered as "A jellyfish, please!" and then "What color?" (white, blue,
+  orange; the original jellyfish is purple), so one name covers every
+  jellyfish, as in English.
+- **The butterflyfish already exists.** The Yellow Fish is drawn as a longnose
+  butterflyfish, so it is now named "Butterflyfish" (id `yellowfish`
+  unchanged) instead of adding a duplicate.
+- **Habitat reasons.** `homeReason()` gives "Needs a bigger tank!", "Needs a
+  rocky home!", "Needs a jellyfish tank!", "Needs the Ocean tank!", "Needs a
+  tall tank!", "Jellyfish only!", "Not safe here!", "Jellyfish live alone!"
+  and "Full!", each with Japanese. Jellyfish of different kinds may share a
+  tank; nothing else may share with jellyfish. Every old habitat is kept.
+- **Remodel, never replace.** A placed tank can become another type its pad
+  takes. Animals, care levels and upgrades stay. Decorations keep their slot
+  where they fit, else take the next free slot, else go to the tray. Half the
+  old tank's price comes back (a trade-in shown before paying). Animals that
+  could not live in the new tank block the remodel by name, and each can be
+  put back in the bag (`bagAnimal`). The Ocean tank is never remodelled. A
+  tank shop offer with no free pad offers "Remodel" instead of being
+  unplaceable. Rejected: keeping the old tank in the box (all pads are full,
+  so it could never be placed).
+- **Display light.** A jelly column's light is chosen with "What color?" →
+  "Pink, please!", is free, and counts as a 15-joy decoration plus the
+  jellyfish's favourite thing (lamp). It has only two small slots.
+- **New decorations** (Level 8): kelp, coral arch, rock cave, driftwood.
+  `bigOnly` became size classes (small, medium, large).
+- **English.** "What's this?" adds "It's an eel. / an octopus. / a crab. / a
+  stingray." (articles checked by test). Distractors before Level 8 stay among
+  the four Phase 2 answers. Level 8 adds "What color is it?" → "It's blue."
+  about a glowing animal, and "Do you like octopuses?" style chat. "I like
+  jellyfish!" is answered by any jellyfish.
+- **Save v3.** Adds only pads F–H, the new types, `galleryOpen` and
+  `tank.light`. Version 2 saves read unchanged (ids, pads, animals, decor;
+  test `save.test.ts` "migrates a version 2 save without changing anything").

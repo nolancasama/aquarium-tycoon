@@ -3,7 +3,7 @@ import { rt, type FishRt, type Pellet } from "./runtime";
 import { SPECIES } from "./data/fish";
 import { SAND_H, TANKS } from "./data/tanks";
 import { decay, happiness, latchHappy, mood, type TankRec } from "./logic/model";
-import { fishBounds, newSwimState, stepSwim, type Bounds, type SwimEnv } from "./logic/swim";
+import { newSwimState, stepSwim, tankFishBounds, type Bounds, type SwimEnv } from "./logic/swim";
 import { makeRng } from "./logic/rng";
 import { columnsOf, feedSpot } from "./world";
 import { stepVisitors, visitorsTick } from "./flow/visitors";
@@ -27,8 +27,7 @@ function boundsFor(type: TankType, species: SpeciesId): Bounds {
   const key = `${type}:${species}`;
   let b = boundsCache.get(key);
   if (!b) {
-    const t = TANKS[type];
-    b = fishBounds(t.w, t.d, t.h, SAND_H, SPECIES[species]);
+    b = tankFishBounds(TANKS[type], SAND_H, SPECIES[species]);
     boundsCache.set(key, b);
   }
   return b;

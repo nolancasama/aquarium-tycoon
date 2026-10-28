@@ -156,7 +156,7 @@ export function DecorShop() {
                 <Price n={prices.length > 1 ? `${min}-${Math.max(...prices)}` : min} short={short} />
               )}
               <DisabledReason reason={reason} />
-              {def.bigOnly && !locked && (
+              {def.size === "large" && !locked && (
                 <small className="need" lang="ja">
                   おおきな タンク
                 </small>
