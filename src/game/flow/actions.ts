@@ -84,6 +84,17 @@ export function tapHallDoor() {
   openTankShop();
 }
 
+/** The Gallery's door in the Ocean Hall: its offer is in the tank shop (from Level 8). */
+export function tapGalleryDoor() {
+  if (!allowed("tankShop")) return;
+  if (model().progress.stage < 8) {
+    audio.play("error");
+    toast({ en: "Level 8!", ja: "レベル8で クラゲの ギャラリーが ひらけるよ", tone: "info" });
+    return;
+  }
+  openTankShop();
+}
+
 /** The arrows at the screen edges: show the neighbouring room (open rooms only). */
 export function switchHall(hall: number) {
   const g = getGame();

@@ -12,7 +12,8 @@ export type Screen = "title" | "game" | "results";
  */
 export type Mode = "play" | "ask" | "talk" | "busy";
 export type View = "room" | "tank";
-export type Panel = null | "fishShop" | "animalShop" | "decorShop" | "tankShop" | "decorate" | "upgrade";
+/** "remodel": the remodel confirmation for `placing` (a chosen tank). "lights": a display tank's light colours (close-up). */
+export type Panel = null | "fishShop" | "animalShop" | "decorShop" | "tankShop" | "decorate" | "upgrade" | "remodel" | "lights";
 
 export type Placing =
   | null
@@ -23,7 +24,9 @@ export type Placing =
   /** A placed decoration picked up: tap another slot, or put it away. */
   | { kind: "move"; tankId: string; slot: number }
   /** A boxed tank: tap a free pad, then confirm. */
-  | { kind: "tank"; type: TankType; slot: SlotId | null };
+  | { kind: "tank"; type: TankType; slot: SlotId | null }
+  /** Remodel into this type: tap a tank whose pad takes it (tankId once chosen), then confirm. */
+  | { kind: "remodel"; type: TankType; tankId: string | null };
 
 export interface Settings {
   /** Speak into the microphone (off = Tap mode). A teacher setting. */
