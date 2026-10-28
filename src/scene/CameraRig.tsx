@@ -6,6 +6,7 @@ import { getGame } from "../game/store";
 import { TANKS } from "../game/data/tanks";
 import { HALL_X, PEDESTAL, tankOrigin, waterCentre } from "../game/world";
 import { tankById } from "../game/logic/model";
+import { footprintPoints } from "../game/logic/tankLayout";
 
 /** The live camera, for projecting world points to the screen (picking, tests). */
 export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current: null };
@@ -38,8 +39,9 @@ export function tankView(tankId: string, aspect: number) {
   const def = TANKS[t.type];
   const c = waterCentre(t.slot, t.type);
   const dw = (def.w + 0.3) / (0.72 * 2 * TAN * aspect);
-  const dh = (def.h + 0.32) / (0.66 * 2 * TAN);
-  const d = Math.max(dw, dh) + def.d / 2;
+  const dh = (def.h + (def.group === "special" ? 0.4 : 0.32)) / (0.66 * 2 * TAN);
+  // Measure from the nearest glass: the panorama's centre extends beyond its sides.
+  const d = Math.max(dw, dh) + def.d / 2 + (def.bulge ?? 0);
   return { pos: new THREE.Vector3(c.x, c.y + 0.12, c.z + d), target: new THREE.Vector3(c.x, c.y + 0.02, c.z) };
 }
 
@@ -49,6 +51,13 @@ const STATUS_EDGE = 14;
 const STATUS_TOP = 76;
 const scratch = new THREE.PerspectiveCamera(FOV);
 const corner = new THREE.Vector3();
+// A curved glass silhouette can be widest between its front corners. Cache all
+// footprint samples once, then project them without allocating during a frame.
+const glassEdges = new Map(
+  Object.values(TANKS).map((tank) => [tank.type, tank.group === "special"
+    ? footprintPoints(tank).map((edge) => ({ x: edge.x + Math.sign(edge.x) * 0.03, z: edge.z }))
+    : [{ x: -(tank.w / 2 + 0.03), z: tank.d / 2 }, { x: tank.w / 2 + 0.03, z: tank.d / 2 }]])
+);
 
 /**
  * Where the status panel sits in a close-up: just right of the glass, its top
@@ -69,10 +78,12 @@ function besideTank(tankId: string, pos: THREE.Vector3, look: THREE.Vector3, wid
   let left = Infinity;
   let right = -Infinity;
   let top = Infinity;
-  // The front glass edges are the outermost on screen.
-  for (const sx of [-1, 1]) {
-    for (const y of [o.y, o.y + def.h + 0.02]) {
-      corner.set(o.x + sx * (def.w / 2 + 0.03), y, o.z + def.d / 2).project(scratch);
+  // Classic entries retain their original two front corners; special entries
+  // include the cylinder sides and every sample of the panorama's bowed face.
+  for (const edge of glassEdges.get(t.type)!) {
+    for (let level = 0; level < 2; level++) {
+      const y = o.y + level * (def.h + (def.group === "special" ? 0.04 : 0.02));
+      corner.set(o.x + edge.x, y, o.z + edge.z).project(scratch);
       const px = ((corner.x + 1) / 2) * width;
       left = Math.min(left, px);
       right = Math.max(right, px);

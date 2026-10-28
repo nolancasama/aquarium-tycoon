@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -8,12 +8,15 @@ import { decorVersion } from "../game/data/decor";
 import { SAND_H, SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
 import { happiness, isDirty, isHungry, mood, type PlacedDecor, type TankRec } from "../game/logic/model";
 import { tapDecor, tapFish, tapSlot, tapTank } from "../game/flow/actions";
-import { tankShellGeometry, waterGeometry } from "./models/tankShell";
+import { glassGeometry, surfaceGeometry, tankShellGeometry, waterGeometry } from "./models/tankShell";
 import { FishMesh } from "./Animals";
 import { decorModel } from "./models/decor";
 import { additiveSprite, algaeTexture, badgeTexture, flatMat, glassTexture, glowTexture, shaderTime, shadowMaterial, surfaceMaterial, tankShellMaterial, waterMaterial } from "./materials";
 import { project, FOV } from "./CameraRig";
-import { sandSurfaceY, slotMarkerY, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
+import { footprintContains, sandSurfaceY, slotMarkerY, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
+import type { TankType } from "../game/types";
+import { PartBuilder } from "./partBuilder";
+import { currentMaterial, displayGlowMaterial, displayRingMaterial, shapedWaterMaterial } from "./tankMaterials";
 
 /** Every placed tank. */
 export function Tanks() {
@@ -78,22 +81,43 @@ function pickInTank(tank: TankRec, sx: number, sy: number) {
 }
 
 function Tank({ tank }: { tank: TankRec }) {
-  const def = TANKS[tank.type];
   const o = SLOT_POS[tank.slot];
+  const ref = useRef<THREE.Group>(null);
+  const [visible, setVisible] = useState(() => Math.abs(o.x - rt.camera.target.x) <= 13);
+  const showing = useRef(visible);
+  useFrame(() => {
+    const next = Math.abs(o.x - rt.camera.target.x) <= 13;
+    if (ref.current) ref.current.visible = next;
+    if (next !== showing.current) {
+      showing.current = next;
+      // Only a room-boundary change schedules React work. The model and sim live outside this tree.
+      setVisible(next);
+    }
+  }, -1);
+  return <group ref={ref} position={[o.x, 0, o.z]} visible={visible}>{visible && <TankContents tank={tank} />}</group>;
+}
+
+function TankContents({ tank }: { tank: TankRec }) {
+  const def = TANKS[tank.type];
+  const special = def.group === "special";
+  const bulge = def.bulge ?? 0;
   const shell = useMemo(() => tankShellGeometry(tank.type), [tank.type]);
   const waterGeo = useMemo(() => waterGeometry(tank.type), [tank.type]);
-  useEffect(() => () => waterGeo.dispose(), [waterGeo]);
-  const water = useMemo(() => waterMaterial(def.h), [def.h]);
+  const overlayGeo = useMemo(() => special ? glassGeometry(tank.type, 0.012) : null, [tank.type, special]);
+  const algaeGeo = useMemo(() => special ? glassGeometry(tank.type, 0.006) : null, [tank.type, special]);
+  const surfaceGeo = useMemo(() => special ? surfaceGeometry(tank.type) : null, [tank.type, special]);
+  useEffect(() => () => {
+    shell.dispose(); waterGeo.dispose(); overlayGeo?.dispose(); algaeGeo?.dispose(); surfaceGeo?.dispose();
+  }, [shell, waterGeo, overlayGeo, algaeGeo, surfaceGeo]);
+  const water = useMemo(() => special ? shapedWaterMaterial(def.h) : waterMaterial(def.h), [def.h, special]);
   const surface = useMemo(() => surfaceMaterial(), []);
   const dirt = useRef(dirtOf(tank.clean));
   const cleanRef = useRef(tank.clean);
   cleanRef.current = tank.clean;
   const murk = useRef<THREE.MeshBasicMaterial>(null);
   const algae = useRef<THREE.MeshBasicMaterial>(null);
-  useEffect(() => () => {
-    water.dispose();
-    surface.dispose();
-  }, [water, surface]);
+  useEffect(() => () => water.dispose(), [water]);
+  useEffect(() => () => surface.dispose(), [surface]);
 
   useFrame((_, dt) => {
     const target = dirtOf(cleanRef.current);
@@ -119,9 +143,9 @@ function Tank({ tank }: { tank: TankRec }) {
 
   const yMid = STAND_H + def.h / 2;
   return (
-    <group position={[o.x, 0, o.z]}>
+    <group>
       <mesh geometry={shell} material={tankShellMaterial} />
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0.04]} scale={[def.w + 0.9, def.d + 0.7, 1]} geometry={unitPlane} material={standShadowMat} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0.04 + bulge / 2]} scale={[def.w + 0.9, def.d + bulge + 0.7, 1]} geometry={unitPlane} material={standShadowMat} />
       <ContactShadows tank={tank} />
       <mesh position={[0, yMid, 0]} material={water} geometry={waterGeo} />
       <Decorations tank={tank} />
@@ -131,34 +155,44 @@ function Tank({ tank }: { tank: TankRec }) {
         ))}
         <Pellets tankId={tank.id} />
         <Bubbles tank={tank} />
-        <Particles tankId={tank.id} w={def.w} d={def.d} h={def.h} dirt={dirt} />
-        <Sponge tankId={tank.id} w={def.w} d={def.d} h={def.h} />
+        <Particles tankId={tank.id} type={tank.type} dirt={dirt} />
+        <Sponge tankId={tank.id} type={tank.type} />
+        {def.lights && <JellyDisplay tank={tank} />}
       </group>
       {/* Cloudy water and algae (in front of everything inside). */}
-      <mesh position={[0, yMid, def.d / 2 - 0.012]} renderOrder={2}>
-        <planeGeometry args={[def.w - 0.01, def.h - 0.01]} />
+      <mesh position={[0, yMid, special ? 0 : def.d / 2 - 0.012]} geometry={overlayGeo ?? undefined} renderOrder={2}>
+        {!special && <planeGeometry args={[def.w - 0.01, def.h - 0.01]} />}
         <meshBasicMaterial ref={murk} color="#74864a" transparent opacity={0} depthWrite={false} />
       </mesh>
-      <mesh position={[0, yMid, def.d / 2 - 0.004]} renderOrder={3}>
-        <planeGeometry args={[def.w - 0.01, def.h - 0.01]} />
+      <mesh position={[0, yMid, special ? 0 : def.d / 2 - 0.004]} geometry={algaeGeo ?? undefined} renderOrder={3}>
+        {!special && <planeGeometry args={[def.w - 0.01, def.h - 0.01]} />}
         <meshBasicMaterial ref={algae} map={algaeTexture()} transparent opacity={0} depthWrite={false} />
       </mesh>
       {/* The surface, seen from above. */}
-      <mesh position={[0, STAND_H + def.h - 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]} material={surface} renderOrder={4}>
-        <planeGeometry args={[def.w - 0.01, def.d - 0.01]} />
+      <mesh position={[0, STAND_H + def.h - 0.03, 0]} rotation={[special ? 0 : -Math.PI / 2, 0, 0]} geometry={surfaceGeo ?? undefined} material={surface} renderOrder={4}>
+        {!special && <planeGeometry args={[def.w - 0.01, def.d - 0.01]} />}
       </mesh>
-      <Glass w={def.w} d={def.d} h={def.h} />
+      {special ? <ShapedGlass type={tank.type} /> : <Glass w={def.w} d={def.d} h={def.h} />}
       <Upgrades tank={tank} />
       <Badge tank={tank} />
-      <TankGlow tankId={tank.id} w={def.w} d={def.d} />
+      <TankGlow tankId={tank.id} w={def.w} d={def.d + bulge} z={bulge / 2} />
       {/* Tap target: the whole tank and stand. */}
-      <mesh position={[0, (STAND_H + def.h + 0.1) / 2, 0.02]} onClick={onClick}>
-        <boxGeometry args={[def.w + 0.2, STAND_H + def.h + 0.1, def.d + 0.16]} />
+      <mesh position={[0, (STAND_H + def.h + 0.1) / 2, 0.02 + bulge / 2]} onClick={onClick}>
+        <boxGeometry args={[def.w + 0.2, STAND_H + def.h + 0.1, def.d + bulge + 0.16]} />
         <meshBasicMaterial visible={false} />
       </mesh>
       <SlotMarkers tank={tank} />
     </group>
   );
+}
+
+let shapedGlassMat: THREE.MeshBasicMaterial | undefined;
+function ShapedGlass({ type }: { type: TankType }) {
+  const geo = useMemo(() => glassGeometry(type), [type]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  // All six panes / the complete open tube share one draw call and the classic glass texture.
+  shapedGlassMat ??= new THREE.MeshBasicMaterial({ map: glassTexture(), color: "#e8fbff", transparent: true, opacity: 0.34, depthWrite: false });
+  return <mesh geometry={geo} material={shapedGlassMat} position={[0, STAND_H + TANKS[type].h / 2, 0]} renderOrder={5} />;
 }
 
 function Glass({ w, d, h }: { w: number; d: number; h: number }) {
@@ -174,6 +208,7 @@ function Glass({ w, d, h }: { w: number; d: number; h: number }) {
     []
   );
   const side = useMemo(() => new THREE.MeshBasicMaterial({ map: glassTexture(), color: "#d9f6ff", transparent: true, opacity: 0.22, depthWrite: false }), []);
+  useEffect(() => () => { mat.dispose(); side.dispose(); }, [mat, side]);
   const y = STAND_H + h / 2;
   return (
     <group renderOrder={5}>
@@ -207,7 +242,11 @@ function ContactShadows({ tank }: { tank: TankRec }) {
       g.rotateX(-Math.PI / 2);
       const p = g.attributes.position;
       for (let i = 0; i < p.count; i++) {
-        const x = slot.x + p.getX(i), z = slot.z + p.getZ(i);
+        let dx = p.getX(i), dz = p.getZ(i);
+        if (def.group === "special") {
+          while (!footprintContains(def, slot.x + dx, slot.z + dz, 0.012)) { dx *= 0.9; dz *= 0.9; }
+        }
+        const x = slot.x + dx, z = slot.z + dz;
         p.setXYZ(i, x, sandSurfaceY(def, x, z) + 0.002, z);
       }
       return g;
@@ -235,11 +274,29 @@ function DecorMesh({ tank, d }: { tank: TankRec; d: PlacedDecor }) {
   const def = TANKS[tank.type];
   const s = def.slots[d.slot];
   const model = decorModel(d.kind, d.variant);
+  const grounded = useMemo(() => {
+    if (d.kind !== "kelp" && d.kind !== "arch" && d.kind !== "cave" && d.kind !== "driftwood") return null;
+    // Drape only the feet / roots over the actual dune. A wide arch must plant
+    // both legs, even when the centre of its slot is higher than either foot.
+    const geo = model.geo.clone();
+    const p = geo.getAttribute("position");
+    const floor = sandSurfaceY(def, s.x, s.z);
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+      const dy = (sandSurfaceY(def, s.x + x * def.h, s.z + z * def.h) - floor) / def.h;
+      p.setY(i, y + dy * (1 - THREE.MathUtils.smoothstep(y, 0, 0.1)));
+    }
+    geo.computeVertexNormals();
+    geo.computeBoundingSphere();
+    return geo;
+  }, [d.kind, model.geo, def, s]);
+  useEffect(() => () => grounded?.dispose(), [grounded]);
   const group = useRef<THREE.Group>(null);
   const lid = useRef<THREE.Group>(null);
   const glow = useRef<THREE.Sprite>(null);
   const born = useRef(rt.time);
   const glowMat = useMemo(() => additiveSprite("#fff19a", 0), []);
+  useEffect(() => () => glowMat.dispose(), [glowMat]);
   const key = `${tank.id}:${d.slot}`;
   const scale = def.h;
   useFrame(() => {
@@ -266,7 +323,7 @@ function DecorMesh({ tank, d }: { tank: TankRec; d: PlacedDecor }) {
   const top = decorVersion(d.kind, d.variant).height;
   return (
     <group ref={group}>
-      <mesh geometry={model.geo} material={model.mat} />
+      <mesh geometry={grounded ?? model.geo} material={model.mat} />
       {model.lid && (
         <group ref={lid} position={model.lid.hinge}>
           <mesh geometry={model.lid.geo} material={flatMat} />
@@ -292,6 +349,7 @@ function SlotMarkers({ tank }: { tank: TankRec }) {
   const geos = useMemo(() => def.slots.map(() => ringTemplate.clone()), [def.slots]);
   const scales = useRef<number[]>([]);
   useEffect(() => () => geos.forEach((g) => g.dispose()), [geos]);
+  useEffect(() => () => mats.forEach((m) => m.dispose()), [mats]);
   useFrame(() => {
     if (!on) return;
     const g = getGame();
@@ -386,6 +444,51 @@ const bubbleMat = (scale: { value: number }, h: number) =>
       }`
   });
 
+/** The jelly column's bands, interior glow and slow current cost three draws. */
+function JellyDisplay({ tank }: { tank: TankRec }) {
+  const def = TANKS[tank.type];
+  const { size } = useThree();
+  const scale = useMemo(() => ({ value: 600 }), []);
+  scale.value = size.height / (2 * Math.tan(THREE.MathUtils.degToRad(FOV / 2)));
+  const rings = useMemo(() => {
+    const b = new PartBuilder(0);
+    // Outside the rim so the opaque cap cannot hide the luminous band.
+    for (const y of [0.025, def.h + 0.022]) {
+      b.add(new THREE.TorusGeometry(def.w / 2 + 0.029, 0.018, 4, 32), "#ffffff", [0, y, 0], [Math.PI / 2, 0, 0], [1, 1, 1], { vary: false });
+    }
+    return b.build();
+  }, [def.w, def.h]);
+  const glow = useMemo(() => {
+    const b = new PartBuilder(0);
+    for (const angle of [0, Math.PI / 2]) {
+      b.add(new THREE.PlaneGeometry(def.w * 0.78, def.h - 0.12), "#ffffff", [0, def.h / 2 + 0.02, 0], [0, angle, 0]);
+    }
+    return b.build();
+  }, [def.w, def.h]);
+  const particles = useMemo(() => {
+    const n = 40;
+    const g = new THREE.BufferGeometry();
+    const seeds = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      seeds[i * 3] = i * 2.39996;
+      seeds[i * 3 + 1] = (i * 0.618034) % 1;
+      seeds[i * 3 + 2] = def.w * (0.18 + (i % 7) * 0.034);
+    }
+    g.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 3));
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, def.h / 2, 0), def.h);
+    return g;
+  }, [def.w, def.h]);
+  const current = useMemo(() => currentMaterial(def.h, def.current ?? 0.06, tank.light, scale), [def.h, def.current, tank.light, scale]);
+  useEffect(() => () => { rings.dispose(); glow.dispose(); particles.dispose(); }, [rings, glow, particles]);
+  useEffect(() => () => current.dispose(), [current]);
+  return <>
+    <mesh geometry={rings} material={displayRingMaterial(tank.light)} />
+    <mesh geometry={glow} material={displayGlowMaterial(tank.light)} renderOrder={1} />
+    <points geometry={particles} material={current} renderOrder={1} />
+  </>;
+}
+
 function Bubbles({ tank }: { tank: TankRec }) {
   const def = TANKS[tank.type];
   const { size } = useThree();
@@ -395,7 +498,10 @@ function Bubbles({ tank }: { tank: TankRec }) {
   const sources = tank.decor.filter((d) => d.kind === "bubbler" || d.kind === "chest").map((d) => ({ x: def.slots[d.slot].x, z: def.slots[d.slot].z, strong: d.kind === "bubbler" }));
   const key = sources.map((s) => `${s.x},${s.z},${s.strong}`).join("|");
   const geo = useMemo(() => {
-    const list = [{ x: def.w / 2 - 0.07, z: -def.d / 2 + 0.05, strong: true }, ...sources];
+    const filter = def.shape === "round" || def.shape === "hex"
+      ? { x: def.w * 0.20, z: -def.d * 0.24, strong: true }
+      : { x: def.w / 2 - 0.07, z: -def.d / 2 + 0.05, strong: true };
+    const list = [filter, ...sources];
     const n = 14 + sources.length * 14;
     const arr = new Float32Array(n * 4);
     let seed = 3;
@@ -416,13 +522,15 @@ function Bubbles({ tank }: { tank: TankRec }) {
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, def.h / 2, 0), def.w);
     return g;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, def.w, def.d, def.h]);
+  }, [key, def.w, def.d, def.h, def.shape]);
   useEffect(() => () => geo.dispose(), [geo]);
   useEffect(() => () => mat.dispose(), [mat]);
   return <points geometry={geo} material={mat} renderOrder={1} />;
 }
 
-function Particles({ tankId, w, d, h, dirt }: { tankId: string; w: number; d: number; h: number; dirt: React.MutableRefObject<number> }) {
+function Particles({ tankId, type, dirt }: { tankId: string; type: TankType; dirt: React.MutableRefObject<number> }) {
+  const def = TANKS[type];
+  const { w, d, h } = def;
   const mat = useMemo(() => new THREE.PointsMaterial({ color: "#8f9a5a", size: 0.018, transparent: true, opacity: 0, depthWrite: false }), []);
   const geo = useMemo(() => {
     const n = 50;
@@ -436,11 +544,20 @@ function Particles({ tankId, w, d, h, dirt }: { tankId: string; w: number; d: nu
       arr[i * 3] = (r() - 0.5) * (w - 0.1);
       arr[i * 3 + 1] = SAND_H + 0.05 + r() * (h - 0.15);
       arr[i * 3 + 2] = (r() - 0.5) * (d - 0.1);
+      if (def.group === "special") {
+        // Leave room for the slow 2 cm drift, including at slanted / curved glass.
+        while (!footprintContains(def, arr[i * 3], arr[i * 3 + 2], 0.065)) {
+          arr[i * 3] = (r() - 0.5) * (w - 0.13);
+          arr[i * 3 + 2] = -d / 2 + 0.065 + r() * (d + (def.bulge ?? 0) - 0.13);
+        }
+      }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(arr, 3));
     return g;
-  }, [tankId, w, d, h]);
+  }, [tankId, w, d, h, def]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  useEffect(() => () => mat.dispose(), [mat]);
   const ref = useRef<THREE.Points>(null);
   useFrame(() => {
     mat.opacity = THREE.MathUtils.clamp(dirt.current * 1.6, 0, 0.85);
@@ -454,7 +571,9 @@ function Particles({ tankId, w, d, h, dirt }: { tankId: string; w: number; d: nu
 }
 
 /** The cleaning sponge sweeping the inside of the front glass. */
-function Sponge({ tankId, w, d, h }: { tankId: string; w: number; d: number; h: number }) {
+function Sponge({ tankId, type }: { tankId: string; type: TankType }) {
+  const def = TANKS[type];
+  const { w, d, h } = def;
   const ref = useRef<THREE.Mesh>(null);
   useFrame(() => {
     const m = ref.current;
@@ -465,6 +584,21 @@ function Sponge({ tankId, w, d, h }: { tankId: string; w: number; d: number; h: 
     if (!on) return;
     const u = t / 1.6;
     m.position.set(-w / 2 + 0.12 + (w - 0.24) * u, SAND_H + 0.15 + Math.abs(Math.sin(u * Math.PI * 5)) * (h - 0.4), d / 2 - 0.05);
+    m.rotation.y = 0;
+    if (def.shape === "round") {
+      const r = w / 2 - 0.085;
+      const x = (u * 2 - 1) * r * 0.72;
+      const z = Math.sqrt(r * r - x * x);
+      m.position.x = x; m.position.z = z;
+      m.rotation.y = Math.atan2(x, z);
+    } else if (def.shape === "hex") {
+      // The visitor-facing hex pane is flat, between the two front corners.
+      m.position.x = (u * 2 - 1) * (w / 4 - 0.09);
+    } else if (def.shape === "bow") {
+      const x = m.position.x;
+      m.position.z += (def.bulge ?? 0) * (1 - (2 * x / w) ** 2) - 0.02;
+      m.rotation.y = Math.atan(8 * (def.bulge ?? 0) * x / (w * w));
+    }
     m.rotation.z = Math.sin(t * 20) * 0.2;
   });
   return (
@@ -480,6 +614,10 @@ function Upgrades({ tank }: { tank: TankRec }) {
   const def = TANKS[tank.type];
   const glowMat = useMemo(() => additiveSprite("#fff1b0", 0.5), []);
   const ref = useRef<THREE.Sprite>(null);
+  const narrow = def.shape === "round" || def.shape === "hex";
+  const lampW = def.w * (narrow ? 0.42 : 0.86);
+  const lampZ = narrow ? -def.d * 0.22 : -def.d / 2 + 0.07;
+  useEffect(() => () => glowMat.dispose(), [glowMat]);
   useFrame(() => {
     if (ref.current) glowMat.opacity = 0.35 + Math.sin(rt.time * 1.5) * 0.08;
   });
@@ -487,15 +625,15 @@ function Upgrades({ tank }: { tank: TankRec }) {
     <>
       {tank.upgrades.lamp && (
         <>
-          <mesh position={[0, STAND_H + def.h + 0.085, -def.d / 2 + 0.07]}>
-            <boxGeometry args={[def.w * 0.86, 0.03, 0.09]} />
+          <mesh position={[0, STAND_H + def.h + 0.085, lampZ]}>
+            <boxGeometry args={[lampW, 0.03, 0.09]} />
             <meshBasicMaterial color="#fff6c8" />
           </mesh>
-          <sprite ref={ref} material={glowMat} position={[0, STAND_H + def.h * 0.75, 0]} scale={[def.w * 1.1, def.h * 0.8, 1]} renderOrder={3} />
+          <sprite ref={ref} material={glowMat} position={[0, STAND_H + def.h * 0.75, (def.bulge ?? 0) / 2]} scale={[def.w * (narrow ? 0.75 : 1.1), def.h * 0.8, 1]} renderOrder={3} />
         </>
       )}
       {tank.upgrades.filter && (
-        <group position={[def.w / 2 + 0.16, STAND_H, -def.d / 2 + 0.12]}>
+        <group position={[def.w / 2 + 0.16, STAND_H, narrow ? 0 : -def.d / 2 + 0.12]}>
           <mesh position={[0, 0.22, 0]}>
             <cylinderGeometry args={[0.07, 0.08, 0.44, 12]} />
             <meshLambertMaterial color="#4aa3ff" />
@@ -521,6 +659,7 @@ const BADGE_W = 1.2;
 
 function Badge({ tank }: { tank: TankRec }) {
   const def = TANKS[tank.type];
+  const width = def.group === "special" ? Math.min(BADGE_W, def.w * 0.9) : BADGE_W;
   const h = happiness(tank);
   const md = mood(h);
   const hungry = isHungry(tank);
@@ -529,6 +668,7 @@ function Badge({ tank }: { tank: TankRec }) {
   const icons = 1 + (hungry ? 1 : 0) + (dirty ? 1 : 0);
   const ref = useRef<THREE.Sprite>(null);
   const mat = useMemo(() => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }), []);
+  useEffect(() => () => mat.dispose(), [mat]);
   mat.map = tex;
   mat.needsUpdate = true;
   useFrame(() => {
@@ -543,23 +683,24 @@ function Badge({ tank }: { tank: TankRec }) {
     const k = c ? (rt.time - c.t0) / 0.7 : 1;
     const amp = c ? (c.level === "happy" ? 0.35 : c.level === "okay" ? 0.22 : 0.1) : 0;
     const pop = k < 1 ? 1 + amp * Math.sin(k * Math.PI) * (1 - k * 0.5) : 1;
-    s.scale.set(BADGE_W * pop, BADGE_W * (96 / 256) * pop, 1);
+    s.scale.set(width * pop, width * (96 / 256) * pop, 1);
   });
   void icons;
-  return <sprite ref={ref} material={mat} scale={[BADGE_W, BADGE_W * (96 / 256), 1]} renderOrder={10} />;
+  return <sprite ref={ref} material={mat} position={[0, 0, (def.bulge ?? 0) / 2]} scale={[width, width * (96 / 256), 1]} renderOrder={10} />;
 }
 
 /** The "show me" rescue in the room view: a golden glow behind the tank. */
-function TankGlow({ tankId, w, d }: { tankId: string; w: number; d: number }) {
+function TankGlow({ tankId, w, d, z }: { tankId: string; w: number; d: number; z: number }) {
   const ref = useRef<THREE.Mesh>(null);
   const mat = useMemo(() => new THREE.MeshBasicMaterial({ map: glowTexture(), color: "#ffd84a", transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }), []);
+  useEffect(() => () => mat.dispose(), [mat]);
   useFrame(() => {
     const on = rt.glow.tanks.has(tankId) && getGame().view === "room";
     mat.opacity = on ? 0.55 + Math.sin(rt.time * 5) * 0.25 : 0;
     if (ref.current) ref.current.visible = on;
   });
   return (
-    <mesh ref={ref} position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} material={mat} visible={false}>
+    <mesh ref={ref} position={[0, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]} material={mat} visible={false}>
       <planeGeometry args={[w + 1.6, d + 1.6]} />
     </mesh>
   );
