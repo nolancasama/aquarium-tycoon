@@ -1,14 +1,16 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { getGame, useGame } from "../game/store";
 import { rt } from "../game/runtime";
-import { BENCH, DOOR, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../game/world";
-import { PAD_TYPES, SLOT_ORDER, SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
+import { BENCH, DOOR, GALLERY, GALLERY_DOOR, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../game/world";
+import { BUILT_IN_PADS, HALL_OF, PAD_TYPES, SLOT_ORDER, SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
+import { ROOMS, ROOM_CENTER_X, roomOpen } from "../game/data/rooms";
 import type { SlotId, TankType } from "../game/types";
-import { tapHallDoor, tapPad } from "../game/flow/actions";
+import { tapGalleryDoor, tapHallDoor, tapPad } from "../game/flow/actions";
 import { PartBuilder } from "./partBuilder";
-import { hall2Geometry, roomGeometry, ropeGeometry } from "./models/room";
+import { GALLERY_PORTHOLES, galleryGeometry, hall2Geometry, roomGeometry, ropeGeometry } from "./models/room";
+import { galleryFloorTexture, galleryJellyTexture, galleryShaftTexture, galleryWallMaterial } from "./galleryMaterials";
 import { tankShellGeometry, waterGeometry } from "./models/tankShell";
 import { flatMat, floorTexture, muralTexture, oceanFloorMaterial, oceanMuralTexture, padIconTexture, posterTexture, shadowMaterial, signMaterial, smoothMat } from "./materials";
 
@@ -48,13 +50,16 @@ const HALL2_BLOBS: [number, number, number, number][] = [
 ];
 
 export function Room() {
-  const shell = useMemo(() => roomGeometry(), []);
+  const walls = useMemo(() => roomGeometry("walls"), []);
+  const shell = useMemo(() => roomGeometry("extras"), []);
   const rope = useMemo(() => ropeGeometry(), []);
   const blobs = useMemo(() => blobGeometry(HALL1_BLOBS), []);
   const w = ROOM.maxX - ROOM.minX;
   const d = ROOM.maxZ - ROOM.minZ;
   return (
     <group>
+      <mesh geometry={walls} material={flatMat} />
+      <NearbyRoom index={0}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, (ROOM.minZ + ROOM.maxZ) / 2]}>
         <planeGeometry args={[w, d]} />
         <meshLambertMaterial map={floorTexture()} />
@@ -91,8 +96,10 @@ export function Room() {
       </mesh>
       <Photo />
       <Trophy />
+      </NearbyRoom>
       <HallDoor />
       <OceanHall />
+      <Gallery />
       {SLOT_ORDER.map((s) => (
         <Pad key={s} slot={s} />
       ))}
@@ -100,16 +107,29 @@ export function Room() {
   );
 }
 
+/** Scenery follows the registry centre, without React updates during camera moves.
+ * Walls and doors stay outside this group so shared boundaries never pop. */
+function NearbyRoom({ index, children }: { index: number; children: ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  const nearby = () => Math.abs(ROOM_CENTER_X[index] - rt.camera.target.x) <= 14;
+  useFrame(() => { if (ref.current) ref.current.visible = nearby(); });
+  return <group ref={ref} visible={nearby()}>{children}</group>;
+}
+
 /** The Ocean Hall (Phase 2): drawn once it is open. */
 function OceanHall() {
   const open = useGame((s) => s.model.progress.hallOpen);
-  const shell = useMemo(() => (open ? hall2Geometry() : null), [open]);
+  const walls = useMemo(() => (open ? hall2Geometry("walls") : null), [open]);
+  const shell = useMemo(() => (open ? hall2Geometry("extras") : null), [open]);
   const blobs = useMemo(() => blobGeometry(HALL2_BLOBS), []);
   if (!open || !shell) return null;
   const w = HALL2.maxX - HALL2.minX;
   const d = HALL2.maxZ - HALL2.minZ;
   return (
     <group>
+      <mesh geometry={walls!} material={flatMat} />
+      <HallDoor gallery />
+      <NearbyRoom index={1}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(HALL2.minX + HALL2.maxX) / 2, 0, (HALL2.minZ + HALL2.maxZ) / 2]}>
         <planeGeometry args={[w, d]} />
         <primitive object={oceanFloorMaterial()} attach="material" />
@@ -124,13 +144,57 @@ function OceanHall() {
         <planeGeometry args={[3.4, 0.62]} />
         <primitive object={signMaterial("OCEAN HALL", "#0f5c8f", "#ffffff", 768, 140)} attach="material" />
       </mesh>
+      </NearbyRoom>
     </group>
   );
 }
 
-/** The door between the halls: locked with a sign until the Ocean Hall is bought, then it swings open. */
-function HallDoor() {
-  const open = useGame((s) => s.model.progress.hallOpen);
+/** Dark scenery uses 10 draws including the persistent wall mesh (under 25 total).
+ * The three displays share one drifting texture; only its UV transform changes. */
+function Gallery() {
+  const open = useGame((s) => s.model.progress.galleryOpen);
+  const walls = useMemo(() => open ? galleryGeometry("walls") : null, [open]);
+  const extras = useMemo(() => open ? galleryGeometry("extras") : null, [open]);
+  useFrame(() => {
+    if (open) galleryJellyTexture().offset.set(Math.sin(rt.time * 0.035) * 0.035, rt.time * 0.012 % 1);
+  });
+  if (!open) return null;
+  const centre = ROOM_CENTER_X[2];
+  return (
+    <group>
+      <mesh geometry={walls!} material={galleryWallMaterial} />
+      <NearbyRoom index={2}>
+        <mesh geometry={extras!} material={galleryWallMaterial} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre, 0, 0]}>
+          <planeGeometry args={[GALLERY.maxX - GALLERY.minX, GALLERY.maxZ - GALLERY.minZ]} />
+          <meshBasicMaterial map={galleryFloorTexture()} toneMapped={false} />
+        </mesh>
+        <mesh position={[centre, 2.86, GALLERY.minZ + 0.075]}>
+          <planeGeometry args={[4.4, 0.5]} />
+          <primitive object={signMaterial("JELLYFISH GALLERY", "#10162e", "#a0e5ff", 1024, 128)} attach="material" />
+        </mesh>
+        {GALLERY_PORTHOLES.map((p, i) => (
+          <mesh key={i} position={[p.x, p.y, p.z]} rotation={[0, p.rotationY, 0]}>
+            <circleGeometry args={[0.465, 28]} />
+            <meshBasicMaterial map={galleryJellyTexture()} toneMapped={false} />
+          </mesh>
+        ))}
+        {[20.6, 24, 27.4].map((x) => (
+          <mesh key={x} position={[x, 1.65, -3.65]}>
+            <planeGeometry args={[1.1, 3]} />
+            <meshBasicMaterial map={galleryShaftTexture()} transparent depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} side={THREE.DoubleSide} />
+          </mesh>
+        ))}
+      </NearbyRoom>
+    </group>
+  );
+}
+
+/** The door between the halls: locked with a sign until bought, then it swings open. */
+function HallDoor({ gallery = false }: { gallery?: boolean }) {
+  const open = useGame((s) => roomOpen(gallery ? 2 : 1, s.model.progress));
+  const door = gallery ? GALLERY_DOOR : HALL_DOOR;
+  const title = ROOMS[gallery ? 2 : 1].name.toUpperCase();
   const leaf = useRef<THREE.Group>(null);
   const angle = useRef(open ? 1 : 0);
   useFrame((_, dt) => {
@@ -140,15 +204,15 @@ function HallDoor() {
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 8 || open) return;
     e.stopPropagation();
-    tapHallDoor();
+    if (gallery) tapGalleryDoor(); else tapHallDoor();
   };
-  const z0 = HALL_DOOR.z - HALL_DOOR.w / 2;
+  const z0 = door.z - door.w / 2;
   return (
-    <group position={[HALL_DOOR.x - 0.02, 0, z0]}>
+    <group position={[door.x - 0.02, 0, z0]}>
       <group ref={leaf}>
         <mesh position={[0, 1.15, HALL_DOOR.w / 2]} onClick={onClick}>
           <boxGeometry args={[0.08, 2.3, HALL_DOOR.w]} />
-          <meshLambertMaterial color="#2f8fc4" />
+          {gallery ? <meshBasicMaterial color="#1a2046" toneMapped={false} /> : <meshLambertMaterial color="#2f8fc4" />}
         </mesh>
         <mesh position={[-0.05, 1.45, HALL_DOOR.w / 2]} rotation={[0, -Math.PI / 2, 0]}>
           <circleGeometry args={[0.32, 20]} />
@@ -158,7 +222,7 @@ function HallDoor() {
           <>
             <mesh position={[-0.05, 2.0, HALL_DOOR.w / 2]} rotation={[0, -Math.PI / 2, 0]}>
               <planeGeometry args={[1.5, 0.36]} />
-              <primitive object={signMaterial("OCEAN HALL", "#0f5c8f", "#ffffff", 512, 128)} attach="material" />
+              <primitive object={signMaterial(title, gallery ? "#1a2046" : "#0f5c8f", "#ffffff", 512, 128)} attach="material" />
             </mesh>
             <DoorLock onClick={onClick} />
           </>
@@ -272,8 +336,8 @@ function Trophy() {
 /** An empty tank pad: dashed outline, a lock or a "+", and the placement preview. */
 function Pad({ slot }: { slot: SlotId }) {
   const taken = useGame((s) => s.model.tanks.some((t) => t.slot === slot));
-  const unlocked = useGame((s) => s.model.progress.stage >= 4);
-  const hallOpen = useGame((s) => s.model.progress.hallOpen);
+  const unlocked = useGame((s) => HALL_OF[slot] !== 0 || s.model.progress.stage >= 4);
+  const open = useGame((s) => roomOpen(HALL_OF[slot], s.model.progress));
   const placing = useGame((s) => (s.placing?.kind === "tank" ? s.placing : null));
   const p = SLOT_POS[slot];
   const ring = useRef<THREE.Mesh>(null);
@@ -285,8 +349,7 @@ function Pad({ slot }: { slot: SlotId }) {
     ringMat.color.set(on ? "#7dffb0" : "#ffffff");
     ringMat.opacity = on ? 0.6 + Math.sin(rt.time * 5) * 0.3 : 0.55;
   });
-  // The Ocean tank's pad (C) is never empty once the hall is open; D and E only exist then.
-  if (taken || slot === "C" || (slot !== "A" && slot !== "B" && !hallOpen)) return null;
+  if (taken || BUILT_IN_PADS.includes(slot) || !open) return null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 8) return;
     e.stopPropagation();
@@ -294,22 +357,26 @@ function Pad({ slot }: { slot: SlotId }) {
   };
   const type: TankType = placing?.type ?? "big";
   const def = TANKS[type];
+  const w = Math.max(...PAD_TYPES[slot].map((t) => TANKS[t].w)) + 0.3;
+  const d = Math.max(...PAD_TYPES[slot].map((t) => TANKS[t].d + (TANKS[t].bulge ?? 0))) + 0.3;
   return (
+    <NearbyRoom index={HALL_OF[slot]}>
     <group position={[p.x, 0, p.z]}>
-      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} material={ringMat}>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} scale={[w / 1.98, d / 1.98, 1]} material={ringMat}>
         <ringGeometry args={[1.25, 1.4, 4, 1, Math.PI / 4]} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0]}>
-        <planeGeometry args={[2.4, 1.6]} />
+        <planeGeometry args={[w, d]} />
         <meshBasicMaterial color="#9fd8e8" transparent opacity={0.35} depthWrite={false} />
       </mesh>
       <PadIcon locked={!unlocked} />
       {placing?.slot === slot && <Preview type={def.type} />}
       <mesh position={[0, 0.6, 0]} onClick={onClick}>
-        <boxGeometry args={[2.6, 1.2, 1.8]} />
+        <boxGeometry args={[w + 0.2, 1.2, d + 0.2]} />
         <meshBasicMaterial visible={false} />
       </mesh>
     </group>
+    </NearbyRoom>
   );
 }
 
