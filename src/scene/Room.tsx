@@ -169,9 +169,9 @@ function Gallery() {
           <planeGeometry args={[GALLERY.maxX - GALLERY.minX, GALLERY.maxZ - GALLERY.minZ]} />
           <meshBasicMaterial map={galleryFloorTexture()} toneMapped={false} />
         </mesh>
-        <mesh position={[centre, 2.86, GALLERY.minZ + 0.075]}>
-          <planeGeometry args={[4.4, 0.5]} />
-          <primitive object={signMaterial("JELLYFISH GALLERY", "#10162e", "#a0e5ff", 1024, 128)} attach="material" />
+        <mesh position={[centre, 2.72, GALLERY.minZ + 0.075]}>
+          <planeGeometry args={[2.6, 0.84]} />
+          <primitive object={signMaterial("JELLYFISH\nGALLERY", "#10162e", "#a0e5ff", 768, 248)} attach="material" />
         </mesh>
         {GALLERY_PORTHOLES.map((p, i) => (
           <mesh key={i} position={[p.x, p.y, p.z]} rotation={[0, p.rotationY, 0]}>
@@ -194,7 +194,8 @@ function Gallery() {
 function HallDoor({ gallery = false }: { gallery?: boolean }) {
   const open = useGame((s) => roomOpen(gallery ? 2 : 1, s.model.progress));
   const door = gallery ? GALLERY_DOOR : HALL_DOOR;
-  const title = ROOMS[gallery ? 2 : 1].name.toUpperCase();
+  // The narrow door sign only has room for the word that matters.
+  const title = gallery ? "JELLYFISH" : ROOMS[1].name.toUpperCase();
   const leaf = useRef<THREE.Group>(null);
   const angle = useRef(open ? 1 : 0);
   useFrame((_, dt) => {
@@ -222,7 +223,7 @@ function HallDoor({ gallery = false }: { gallery?: boolean }) {
           <>
             <mesh position={[-0.05, 2.0, HALL_DOOR.w / 2]} rotation={[0, -Math.PI / 2, 0]}>
               <planeGeometry args={[1.5, 0.36]} />
-              <primitive object={signMaterial(title, gallery ? "#1a2046" : "#0f5c8f", "#ffffff", 512, 128)} attach="material" />
+              <primitive object={signMaterial(title, gallery ? "#1a2046" : "#0f5c8f", gallery ? "#a0e5ff" : "#ffffff", 532, 128)} attach="material" />
             </mesh>
             <DoorLock onClick={onClick} />
           </>

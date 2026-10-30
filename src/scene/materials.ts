@@ -685,21 +685,36 @@ export const muralTexture = () =>
   );
 
 /** Painted sign text. */
+/**
+ * A rounded sign. "\n" splits the text into centred lines; the font shrinks
+ * (never stretches) until every line fits inside the margins. Give the canvas
+ * the same aspect as the plane it goes on.
+ */
 export function signTexture(text: string, bg: string, fg: string, w = 512, h = 128): THREE.CanvasTexture {
   return cached(`sign-${text}-${bg}-${fg}-${w}-${h}`, () =>
     canvasTex(w, h, (g) => {
+      const lines = text.split("\n");
+      const unit = Math.min(h / lines.length, w / 4);
       g.fillStyle = bg;
       g.beginPath();
-      g.roundRect(4, 4, w - 8, h - 8, h * 0.3);
+      g.roundRect(4, 4, w - 8, h - 8, Math.min(unit, h / 2) * 0.3);
       g.fill();
       g.lineWidth = 6;
       g.strokeStyle = "rgba(255,255,255,0.8)";
       g.stroke();
       g.fillStyle = fg;
-      g.font = `900 ${Math.round(h * 0.52)}px system-ui, sans-serif`;
       g.textAlign = "center";
       g.textBaseline = "middle";
-      g.fillText(text, w / 2, h / 2 + 3);
+      const fontAt = (px: number) => `900 ${px}px system-ui, sans-serif`;
+      const lineH = (h - unit * 0.36) / lines.length;
+      let px = Math.round(lineH * 0.8);
+      g.font = fontAt(px);
+      const widest = Math.max(...lines.map((l) => g.measureText(l).width));
+      const room = w - unit * 0.6;
+      if (widest > room) px = Math.floor((px * room) / widest);
+      g.font = fontAt(px);
+      const top = (h - lineH * lines.length) / 2;
+      lines.forEach((l, i) => g.fillText(l, w / 2, top + lineH * (i + 0.5) + 3));
     })
   );
 }
