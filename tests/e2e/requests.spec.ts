@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { boot, click3d, hook, playing, state, waitFor } from "./helpers";
+import { boot, click3d, hook, playing, precondition, state, waitFor } from "./helpers";
 
 /** Continue a saved Stage 3 aquarium (clownfish + blue tang in the small tank). */
 async function stage3(page: Page, expanded = false) {
@@ -47,7 +47,7 @@ test("'show me': wrong taps climb the hint ladder; the right one pays once", asy
   await hook(page, "requestVisitor", "adult", { kind: "show", color: "blue", fishOnly: true });
   await page.getByTestId("chip-visitor").click();
   await expect(page.getByTestId("request-line")).toHaveText("I like blue fish!");
-  await expect(page.getByTestId("request-action")).toContainText("Find the fish the visitor wants!");
+  await expect(page.getByTestId("request-action")).toContainText("TAP A TANK!");
   await expect(page.getByTestId("request").locator("mark.key")).toHaveCount(0);
   await expect(page.getByTestId("request-clue")).toHaveCount(0);
   await click3d(page, "tank", "t1");
@@ -105,7 +105,7 @@ async function checkRequestLayout(page: Page) {
   const request = page.getByTestId("request");
   await expect(request).toBeVisible();
   await expect(page.getByTestId("request-line")).toContainText(/I like blue(?:\s*blue)?\s+fish!/);
-  await expect(page.getByTestId("request-action")).toContainText("Find the fish the visitor wants!");
+  await expect(page.getByTestId("request-action")).toContainText(/TAP A (?:TANK|FISH)!|Look in this tank!|Tap the blue fish!/i);
   // The request card carries its own hints; Help steps aside until it closes.
   await expect(page.getByTestId("btn-help")).toHaveCount(0);
   const box = (await request.boundingBox())!;
@@ -173,15 +173,18 @@ for (const size of [
       await page.waitForTimeout(900);
       await checkRequestLayout(page);
       await openTank("t1");
+      const prior = await precondition(page, (s) => s.view === "tank" && s.tankId === "t1" && s.request?.status === "ready", "matching tank after two wrong tanks");
+      const tankMisses = prior.request!.misses;
+      expect(tankMisses).toBe(2);
       await tapFish(page, "clownfish");
-      await waitFor(page, (s) => s.request?.misses === 1, 5_000, "first wrong pick");
-      await page.waitForTimeout(800);
+      await waitFor(page, (s) => s.request?.misses === tankMisses + 1, 5_000, "first wrong fish");
+      await precondition(page, (s) => s.request?.status === "ready", "request ready for another wrong fish");
       await tapFish(page, "clownfish");
-      await waitFor(page, (s) => s.request?.misses === 2, 5_000, "second wrong pick");
+      await waitFor(page, (s) => s.request?.misses === tankMisses + 2, 5_000, "second wrong fish");
       await expect(page.getByTestId("request-clue")).toBeVisible();
       await checkRequestLayout(page);
       await back();
-      expect((await state(page)).request?.misses).toBe(2);
+      expect((await state(page)).request?.misses).toBe(tankMisses + 2);
       await expect(page.getByTestId("request-clue")).toBeVisible();
       expect(errors).toEqual([]);
     });

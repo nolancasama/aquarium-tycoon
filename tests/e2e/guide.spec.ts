@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { HALL_PRICE } from "../../src/game/data/tanks";
 import { SPECIES } from "../../src/game/data/fish";
-import { boot, click3d, hook, playing, settle, shot, state, waitFor } from "./helpers";
+import { boot, click3d, hook, playing, precondition, say, settle, shot, startNew, state, tapFirstFish, waitFor } from "./helpers";
 import { reply } from "./flows";
 
 /** The same starred Level 6 starting point as Phase 2, before opening the hall. */
@@ -157,5 +157,62 @@ test("Repeated wrong shops advance hints once per tier; the level overview dismi
   await expect(overview).toBeHidden();
   await expect(level).toHaveAttribute("aria-expanded", "false");
   await expect(level).toBeFocused();
+  expect(errors).toEqual([]);
+});
+
+test("the first tap, keyboard reminder and speaking/fallback headings show the expected action", async ({ page }) => {
+  const errors = await boot(page);
+  await startNew(page, "speak", false);
+  await precondition(page, (s) => s.tutorial === "buy" && s.mode === "play" && !s.prompt && !s.line, "interactive buy step");
+  await expect(page.getByTestId("btn-fish-shop")).toHaveClass(/guide/);
+  await expect(page.locator(".room-bar .big-btn")).toHaveCount(1);
+  await page.keyboard.press("ArrowUp");
+  await expect(page.getByTestId("nudge")).toContainText("Tap things to play!");
+  await expect(page.getByTestId("nudge")).toContainText("マウスで クリックしよう！");
+  const reminder = (await state(page)).nudge!.id;
+  await page.keyboard.press("ArrowRight");
+  expect((await state(page)).nudge!.id).toBe(reminder);
+  await shot(page, "tutorial-tap-fish-arrow-reminder");
+
+  await tapFirstFish(page);
+  await precondition(page, (s) => s.prompt?.kind === "choice" && !s.prompt.buttons, "spoken choice prompt");
+  await expect(page.getByTestId("prompt-heading")).toContainText("SAY ONE!");
+  await expect(page.getByTestId("btn-fish-shop")).toHaveCount(0);
+  expect((await state(page)).guide).toBeNull();
+  await reply(page, "orangePlease");
+  await precondition(page, (s) => s.placing?.kind === "fish", "fish ready to place");
+  await click3d(page, "tank", "t1");
+  await precondition(page, (s) => s.tutorial === "feed" && s.mode === "play" && s.view === "tank", "feed step");
+  await page.getByTestId("btn-feed").click();
+  await precondition(page, (s) => s.prompt?.kind === "command" && !s.prompt.buttons, "spoken command prompt");
+  await expect(page.getByTestId("prompt-heading")).toContainText("SAY THIS!");
+  await say(page, null, "not-allowed");
+  await precondition(page, (s) => s.micState === "blocked" && Boolean(s.prompt?.buttons), "automatic microphone fallback");
+  await expect(page.getByTestId("prompt-heading")).toContainText("TAP AN ANSWER!");
+  await shot(page, "tutorial-tap-fallback-heading");
+  expect(errors).toEqual([]);
+});
+
+test("the persistent request card derives visitor, tank and fish actions from the current view", async ({ page }) => {
+  const errors = await continueLevelSix(page);
+  await precondition(page, (s) => s.mode === "play" && s.view === "room" && !s.prompt && !s.line && !s.request, "free room before visitor");
+  await hook(page, "requestVisitor", "adult", { kind: "show", color: "blue", fishOnly: true });
+  await precondition(page, (s) => Boolean(s.waiting) && s.requestStep?.step === "visitor", "unopened visitor request");
+  // In free play the objectives card stays; only the tutorial swaps in "Tap the visitor!".
+  await expect(page.getByTestId("waiting-request")).toHaveCount(0);
+  await expect(page.getByTestId("goals")).toBeVisible();
+  await page.getByTestId("chip-visitor").click();
+  await precondition(page, (s) => s.request?.kind === "show" && s.view === "room", "heard request in room");
+  await expect(page.getByTestId("request")).toHaveAttribute("data-request-step", "tank");
+  await expect(page.getByTestId("request-action")).toContainText("TAP A TANK!");
+  expect((await state(page)).requestStep?.fishIds).toEqual([]);
+  await click3d(page, "tank", "t1");
+  await precondition(page, (s) => s.view === "tank" && s.tankId === "t1" && s.request?.kind === "show", "request close-up");
+  await expect(page.getByTestId("request")).toHaveAttribute("data-request-step", "fish");
+  await expect(page.getByTestId("request-action")).toContainText("TAP A FISH!");
+  await shot(page, "request-tap-a-fish");
+  await page.getByTestId("request-later").click();
+  await waitFor(page, (s) => s.request === null, 5_000, "request cancelled");
+  expect((await state(page)).glowFish).toBe(0);
   expect(errors).toEqual([]);
 });

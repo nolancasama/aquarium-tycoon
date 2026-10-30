@@ -12,6 +12,8 @@ export type IconId =
   | "back"
   | "tank"
   | "mic"
+  | "hand"
+  | "eye"
   | "speaker"
   | "close"
   | "check"
@@ -32,6 +34,21 @@ export type IconId =
 export function Icon({ id, size = 24, className }: { id: IconId; size?: number; className?: string }) {
   const p = { width: size, height: size, viewBox: "0 0 48 48", className, "aria-hidden": true } as const;
   switch (id) {
+    case "hand":
+      return (
+        <svg {...p}>
+          <path d="M18 25V9a4 4 0 0 1 8 0v9a4 4 0 0 1 7 0v4a4 4 0 0 1 7 2v7c0 7-5 12-12 12h-3c-4 0-7-2-9-5L8 28a4 4 0 0 1 6-5l4 4z" fill="#fff0cf" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+          <path d="M7 8l4 3M34 5l-3 4M22 0v2" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+      );
+    case "eye":
+      return (
+        <svg {...p}>
+          <path d="M4 24s7-13 20-13 20 13 20 13-7 13-20 13S4 24 4 24z" fill="#fff" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+          <circle cx="24" cy="24" r="8" fill="currentColor" />
+          <circle cx="26" cy="21" r="2.5" fill="#fff" />
+        </svg>
+      );
     case "lamp":
       return <svg {...p}>
         <path d="M13 20a11 11 0 1 1 22 0c0 6-6 8-6 15H19c0-7-6-9-6-15z" fill="#ffe482" stroke="#cf9445" strokeWidth="3" />

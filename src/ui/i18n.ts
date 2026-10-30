@@ -1,5 +1,55 @@
 import type { Text } from "../game/types";
 import type { Goal } from "../game/logic/model";
+import type { RequestStep } from "../game/logic/requestGuide";
+import { SPECIES } from "../game/data/fish";
+import { DECOR } from "../game/data/decor";
+
+const REQUEST_ACTION = {
+  visitor: { en: "TAP THE VISITOR!", ja: "おきゃくさんを タップ！" },
+  tank: { en: "TAP A TANK!", ja: "タンクを タップ！" },
+  fish: { en: "TAP A FISH!", ja: "さかなを タップ！" },
+  animal: { en: "TAP AN ANIMAL!", ja: "いきものを タップ！" },
+  thing: { en: "TAP A FISH OR DECORATION!", ja: "さかなや かざりを タップ！" },
+  lookTank: { en: "LOOK IN THIS TANK!", ja: "この タンクを みよう！" }
+};
+const COLOR_JA: Record<string, string> = {
+  red: "あかい", blue: "あおい", yellow: "きいろい", green: "みどりの", orange: "オレンジの",
+  purple: "むらさきの", pink: "ピンクの", white: "しろい"
+};
+
+/** Tag copy lives here; the request logic supplies only its semantic step. */
+export function requestAction(step: RequestStep): Text & { kind: "tap" | "look" } {
+  if (step.step === "tank" && step.tier >= 2) return { kind: "look", ...REQUEST_ACTION.lookTank };
+  if (step.step !== "exact" || !step.exact) return { kind: "tap", ...REQUEST_ACTION[step.step === "exact" ? "thing" : step.step] };
+  const target = step.exact;
+  const def = target.type === "fish" ? SPECIES[target.species] : DECOR[target.kind];
+  const color = target.type === "fish" ? SPECIES[target.species].color : target.variant;
+  const fish = target.type === "fish" && SPECIES[target.species].kind === "fish";
+  const en = fish ? `${color} fish` : target.type === "fish" ? SPECIES[target.species].word : `${color && COLOR_JA[color] ? `${color} ` : ""}${def.name.toLowerCase()}`;
+  const ja = fish ? `${COLOR_JA[color ?? ""] ?? ""} さかな` : `${target.type === "decor" && color && COLOR_JA[color] ? `${COLOR_JA[color]} ` : ""}${def.ja}`;
+  return { kind: "tap", en: `TAP THE ${en.toUpperCase()}!`, ja: `${ja}を タップ！` };
+}
+
+/** Shared action instructions: colours and icons are fixed by ActionTag. */
+export const ACTION = {
+  sayThis: { en: "SAY THIS!", ja: "これを いおう！" },
+  sayOne: { en: "SAY ONE!", ja: "ひとつ えらんで いおう！" },
+  sayAnswer: { en: "SAY THE ANSWER!", ja: "こたえを いおう！" },
+  tapAnswer: { en: "TAP AN ANSWER!", ja: "こたえを タップ！" },
+  sayOrTap: { en: "SAY IT OR TAP IT!", ja: "いうか、タップしよう！" },
+  lookAnimal: { en: "LOOK AT THE GLOWING ANIMAL!", ja: "ひかる いきものを みよう！" },
+  lookFish: { en: "LOOK AT THE FISH!", ja: "さかなを みよう！" },
+  tapFish: { en: "Tap Fish!", ja: "「さかな」を タップしよう！" },
+  tapTank: { en: "TAP THE TANK!", ja: "タンクを タップ！" },
+  tapVisitor: { en: "TAP THE VISITOR!", ja: "おきゃくさんを タップ！" },
+  tapCircle: { en: "TAP A CIRCLE!", ja: "まるを タップ！" },
+  tapFeed: { en: "TAP FEED!", ja: "「えさ」を タップ！" },
+  tapTray: { en: "TAP A DECORATION!", ja: "かざりを タップ！" },
+  aquariumBoss: { en: "You're the aquarium boss!", ja: "きみが すいぞくかんの かんちょうだよ！" },
+  tapToPlay: { en: "Tap things to play!", ja: "タップして あそぼう！" },
+  tapToPlayTouch: { en: "Tap things to play!", ja: "ゆびで タップしよう！" },
+  tapToPlayMouse: { en: "Tap things to play!", ja: "マウスで クリックしよう！" }
+} satisfies Record<string, Text>;
 
 /** UI text: short English with optional hiragana-forward Japanese help (never a translation of target English). */
 export const UI = {

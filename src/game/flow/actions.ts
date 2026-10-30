@@ -42,7 +42,7 @@ import {
 } from "../logic/model";
 import { ANIMAL_PHRASE, SHOP_COLOR_PHRASE, colorOfPhrase, speciesOfPhrase, type PhraseId } from "../logic/english";
 import { ask, say, speak } from "./ask";
-import { answerShow, openRequest } from "./visitors";
+import { answerShow, inspectRequestTank, openRequest } from "./visitors";
 import { dropPellets } from "../sim";
 import { toWorld } from "../world";
 import { audio } from "../../audio/audio";
@@ -57,10 +57,10 @@ type Act = "tapTank" | "openTank" | "back" | "feed" | "clean" | "decorate" | "tr
 
 const TUTORIAL_ALLOWS: Record<TutorialStep, Act[]> = {
   intro: [],
-  buy: [],
+  buy: ["fishShop"],
   place: ["tapTank"],
   feed: ["feed"],
-  visitor: ["tapTank", "openTank", "back", "tapFish", "tapDecor"],
+  visitor: ["tapTank", "openTank", "back", "tapFish", "tapDecor", "visitor"],
   decorate: ["decorate", "tray", "slot"],
   done: []
 };
@@ -163,6 +163,11 @@ export function animalOrderChoices(m: Model) {
 
 export function openFishShop() {
   if (!allowed("fishShop")) return;
+  if (model().progress.tutorial === "buy") {
+    setGame({ guide: null, nudge: null });
+    void orderFish({ tutorial: true });
+    return;
+  }
   if (!fishWithHome().length) {
     audio.play("error");
     toast({ en: "The tanks are full!", ja: "タンクが いっぱい! おおきな タンクが ひつよう", tone: "warn" });
@@ -357,6 +362,7 @@ export function tapTank(tankId: string) {
   }
   if (g.placing) return;
   if (!allowed("openTank") && !allowed("tapTank")) return;
+  inspectRequestTank(tankId);
   openTank(tankId);
 }
 

@@ -15,6 +15,9 @@ export interface AtState {
   coins: number;
   stage: number;
   tutorial: string;
+  guide: string | null;
+  nudge: { id: number; en: string; target?: string; kind?: string } | null;
+  requestStep: { step: string; tier: number; tankIds: string[]; fishIds: string[]; decorIds: string[] } | null;
   progress: { stage: number; tutorial: string; hearts: number; helpedInStage: number; counted: boolean; cleanedOnce: boolean; fedOnce: boolean; allHappy: boolean; star: boolean; freePlay: boolean; photo: boolean; said: string[]; firstFish: string | null; hallOpen: boolean; namedInStage: number; superStar: boolean };
   goals: { id: string; done: boolean; n?: number; of?: number }[];
   tanks: { id: string; slot: string; type: string; fish: string[]; fishIds: string[]; decor: { slot: number; kind: string; variant: string | null }[]; food: number; clean: number; happy: number | null }[];
@@ -63,14 +66,33 @@ export async function waitFor(page: Page, pred: (s: AtState) => boolean, timeout
   return s;
 }
 
+/** Setup failures are distinct from product assertions in controller acceptance. */
+export async function precondition(page: Page, pred: (s: AtState) => boolean, label: string, timeout = 30_000) {
+  try {
+    return await waitFor(page, pred, timeout, label);
+  } catch (error) {
+    throw new Error(`HARNESS_PRECONDITION_FAILED: ${label}`, { cause: error });
+  }
+}
+
 /** Choose the answer mode in Settings and start a new game. */
-export async function startNew(page: Page, mode: "tap" | "speak") {
+export async function startNew(page: Page, mode: "tap" | "speak", openFirstOrder = true) {
   await expect(page.getByTestId("title").getByRole("radiogroup", { name: "Answer mode" })).toHaveCount(0);
   await page.getByTestId("btn-title-settings").click();
   await page.getByTestId(mode === "tap" ? "settings-tap" : "settings-speak").click();
   await page.getByTestId("settings-close").click();
   await page.getByTestId("btn-new").click();
   await waitFor(page, (s) => s.screen === "game", 10_000, "game screen");
+  if (openFirstOrder) await tapFirstFish(page);
+}
+
+/** The tutorial's first interactive step uses the real highlighted Fish button. */
+export async function tapFirstFish(page: Page) {
+  await precondition(page, (s) => s.tutorial === "buy" && s.mode === "play" && !s.prompt && !s.line, "Tap Fish step", 20_000);
+  await expect(page.getByTestId("btn-fish-shop")).toHaveClass(/guide/);
+  await page.getByTestId("btn-fish-shop").click();
+  await waitFor(page, (s) => Boolean(s.prompt), 10_000, "Fish order opened by tap");
+  expect((await state(page)).guide).not.toBe("btn-fish-shop");
 }
 
 /** Answer the open prompt: tap the choice (Tap mode / rescue) or speak it into the stub recogniser. */

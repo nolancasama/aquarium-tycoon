@@ -4,21 +4,15 @@ import { cancelAsk, choose, micPress, micUsable, nextLine, replay } from "../gam
 import { cancelShow, replayRequest } from "../game/flow/visitors";
 import { PHRASES, type PhraseId } from "../game/logic/english";
 import { SPECIES } from "../game/data/fish";
-import { tankById } from "../game/logic/model";
-import { tankSatisfies } from "../game/logic/requests";
+import { requestStep } from "../game/logic/requestGuide";
 import { Icon } from "./icons";
 import { DecorPicture, FishPicture, LampPicture, SpeakerFace } from "./Portraits";
-import { SWATCH, UI } from "./i18n";
+import { ACTION, SWATCH, UI, requestAction } from "./i18n";
+import { ActionTag } from "./ActionTag";
+import { Ja } from "./Ja";
+import { promptHeading } from "./promptHeading";
 
-export function Ja({ children }: { children: React.ReactNode }) {
-  const on = useGame((s) => s.settings.japanese);
-  if (!on || !children) return null;
-  return (
-    <small className="ja" lang="ja">
-      {children}
-    </small>
-  );
-}
+export { Ja } from "./Ja";
 
 const NAME: Record<string, string> = {
   pico: "Pico",
@@ -60,6 +54,9 @@ export function PromptPanel() {
   useGame((s) => s.micState); // re-render when the mic gets blocked
   if (!p) return null;
   const mic = micUsable();
+  const heading = promptHeading(p, mic);
+  const lookCue = p.question?.en === "How many fish?" ? ACTION.lookFish
+    : p.question?.en === "What's this?" || p.question?.en === "What color is it?" ? ACTION.lookAnimal : null;
   const speakHint = touch ? UI.speakTouch : UI.speakKeys;
   const status =
     p.status === "listening"
@@ -74,7 +71,7 @@ export function PromptPanel() {
           ? UI.unclear
           : p.status === "wrong"
             ? UI.wrong
-            : p.buttons
+            : p.buttons && !mic
               ? UI.choose
               : speakHint;
   return (
@@ -87,26 +84,18 @@ export function PromptPanel() {
             <span className="q-en" data-testid="prompt-question">
               {p.question.en}
             </span>
-            {p.question.en === "What's this?" && (
+            {lookCue && (
               <span className="request-action" data-testid="request-action">
-                {UI.nameAnimal.en}<Ja>{UI.nameAnimal.ja}</Ja>
-              </span>
-            )}
-            {p.question.en === "What color is it?" && (
-              <span className="request-action" data-testid="request-action">
-                Look at the glowing animal.<Ja>ひかる いきものの いろを いおう!</Ja>
-              </span>
-            )}
-            {p.question.en === "How many fish?" && (
-              <span className="request-action" data-testid="request-action">
-                {UI.countFish.en}<Ja>{UI.countFish.ja}</Ja>
+                <ActionTag kind="look" {...lookCue} secondary />
               </span>
             )}
           </div>
+          <div className="prompt-heading" data-testid="prompt-heading"><ActionTag {...heading} /></div>
         </div>
       )}
       <div className="prompt-main">
         <div className="prompt-body">
+          {!p.question && <div className="prompt-heading" data-testid="prompt-heading"><ActionTag {...heading} /></div>}
           {!p.buttons && p.frame && (
             <div className="frame" data-testid="frame">
               {p.frame.before && <span className="frame-text">{p.frame.before}</span>}
@@ -157,7 +146,7 @@ export function PromptPanel() {
             <button className="speaker" onClick={() => void replay()} aria-label="Listen again" data-testid="replay">
               <Icon id="speaker" size={26} />
             </button>
-            <div className="prompt-status" data-testid="prompt-status">
+            <div className="prompt-status" data-testid="prompt-status" role="status" aria-live="polite">
               {p.status === "correct" ? (
                 <span className="good">
                   <Icon id="check" size={26} /> Great!
@@ -165,7 +154,10 @@ export function PromptPanel() {
               ) : (
                 <>
                   <span>{status.en}</span>
-                  <Ja>{p.status === "ready" && p.help && !p.buttons ? p.help : status.ja}</Ja>
+                  <Ja>{status.ja}</Ja>
+                  {mic && p.status !== "listening" && status !== speakHint && !(p.buttons && p.misses >= 3) && (
+                    <span className="prompt-mic-reminder">{speakHint.en}<Ja>{speakHint.ja}</Ja></span>
+                  )}
                 </>
               )}
               {p.heard && p.status !== "ready" && (
@@ -215,10 +207,11 @@ export function DialoguePanel() {
       <SpeakerFace by={line.by} size={64} />
       <div className="dialogue-body">
         <span className="who">{speakerName(line.by)}</span>
-        <p className="line-en" data-testid="line">
-          {line.en}
-        </p>
-        {!line.target && <Ja>{line.ja}</Ja>}
+        {line.en === ACTION.tapToPlay.en ? (
+          <p className="line-en" data-testid="line"><ActionTag kind="tap" en={line.en} ja={line.ja} /></p>
+        ) : (
+          <><p className="line-en" data-testid="line">{line.en}</p>{!line.target && <Ja>{line.ja}</Ja>}</>
+        )}
         {line.visual === "tips" && <TipsPicture />}
       </div>
       <button
@@ -239,21 +232,29 @@ export function DialoguePanel() {
 /** A "show me" request waiting for a tap: the visitor's sentence stays on screen. */
 export function RequestBanner() {
   const r = useGame((s) => s.request);
+  const waiting = useGame((s) => s.waiting);
+  const otherNudge = useGame((s) => Boolean(s.nudge && s.nudge.target !== "chip-visitor"));
+  const blocked = useGame((s) => Boolean(s.prompt || s.line || s.stageCard || s.settingsOpen || s.screen !== "game"));
   const view = useGame((s) => s.view);
   const tankId = useGame((s) => s.tankId);
   const model = useGame((s) => s.model);
+  const step = requestStep({ request: r, waiting, view, tankId, model });
+  if (!r && waiting && step && !blocked && !otherNudge && model.progress.tutorial !== "done") return (
+    <div className="panel request ui" data-testid="waiting-request" data-request-step="visitor" data-request-tier="1" role="status" style={{ pointerEvents: "none" }}>
+      <SpeakerFace by={waiting.type} size={44} />
+      <div className="req-body" data-testid="request-action"><ActionTag kind="tap" {...ACTION.tapVisitor} /></div>
+    </div>
+  );
   if (!r || (r.req.kind !== "show" && r.req.kind !== "showAnimal")) return null;
   const req = r.req;
   const highlight = r.misses >= 1;
   const words = r.line.split(/(\s+)/);
-  const here = tankId ? tankById(model, tankId) : null;
-  const wrongTank = r.misses >= 3 && view === "tank" && here !== null && !tankSatisfies(req, here);
   // The key word: the colour (with a swatch) or the animal (with its picture).
   const key = req.kind === "show" ? req.color : SPECIES[req.species].plural;
   const clue = req.kind === "show" ? <i className="swatch" style={{ background: SWATCH[req.color] }} /> : <FishPicture species={req.species} size={34} />;
-  const action = wrongTank ? UI.findGlow : req.kind === "showAnimal" ? UI.findAnimal : req.fishOnly ? UI.findFish : UI.findThing;
+  const action = step ? requestAction(step) : null;
   return (
-    <div className={`panel request ui ${r.status}`} data-testid="request" role="status">
+    <div className={`panel request ui ${r.status}`} data-testid="request" data-request-step={step?.step ?? "correct"} data-request-tier={step?.tier ?? ""} role="status">
       <SpeakerFace by={r.by} size={44} />
       <div className="req-body">
         <span className="who">{speakerName(r.by)}</span>
@@ -273,9 +274,7 @@ export function RequestBanner() {
             )
           )}
         </p>
-        <div className="request-action" data-testid="request-action">
-          {action.en}<Ja>{action.ja}</Ja>
-        </div>
+        {action && <div className="request-action" data-testid="request-action"><ActionTag {...action} /></div>}
       </div>
       <button className="speaker" onClick={() => replayRequest()} aria-label="Listen again" data-testid="request-replay">
         <Icon id="speaker" size={24} />

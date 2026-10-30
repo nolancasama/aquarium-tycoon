@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { boot, click3d, hook, startNew, state, waitFor } from "./helpers";
+import { boot, click3d, hook, startNew, state, tapFirstFish, waitFor } from "./helpers";
 import { reply } from "./flows";
 
 /** A Stage 4 aquarium with the big tank placed, a fish in a bag and a decoration in the tray. */
@@ -99,7 +99,9 @@ test("tanks, decorations, bags, unlocks and settings come back; New game asks fi
   await expect(page.getByTestId("btn-continue")).toBeVisible();
   await page.getByTestId("btn-new").click();
   await page.getByTestId("btn-confirm-new").click();
-  s = await waitFor(page, (x) => x.screen === "game" && Boolean(x.prompt), 20_000, "fresh start");
+  await waitFor(page, (x) => x.screen === "game" && x.tutorial === "buy", 20_000, "fresh start");
+  await tapFirstFish(page);
+  s = await state(page);
   expect(s.coins).toBe(100);
   expect(s.tanks).toHaveLength(1);
   // Teacher settings survive a new game.

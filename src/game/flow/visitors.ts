@@ -11,6 +11,7 @@ import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, b
 import { ask, fastMode, say, speak, wait } from "./ask";
 import { openTank } from "./actions";
 import { audio } from "../../audio/audio";
+import { requestStep } from "../logic/requestGuide";
 import type { ColorId } from "../types";
 
 /**
@@ -352,6 +353,33 @@ interface ShowWait {
 }
 
 let showWait: ShowWait | null = null;
+let requestQuiet = 0;
+let requestView = "";
+
+/** Keep the existing glow targets in sync with the same derived request step. */
+function syncRequestGuidance() {
+  const g = getGame();
+  const step = requestStep({ request: g.request, view: g.view, tankId: g.tankId, model: g.model });
+  clearGlow();
+  if (!step) return;
+  for (const id of step.tankIds) rt.glow.tanks.add(id);
+  for (const id of step.fishIds) rt.glow.fish.add(id);
+  for (const id of step.decorIds) rt.glow.decor.add(id);
+}
+
+/** The request's existing ladder gains only a tank clue after quiet play. */
+export function requestGuidanceTick(dt: number) {
+  const g = getGame();
+  if (!g.request || g.request.status === "correct") { requestQuiet = 0; requestView = ""; return; }
+  const key = `${g.request.visitorId}:${g.view}:${g.tankId}:${g.request.misses}`;
+  if (key !== requestView) { requestQuiet = 0; requestView = key; syncRequestGuidance(); }
+  if (g.mode !== "play" || g.settingsOpen || g.prompt || g.line || g.stageCard) return;
+  requestQuiet += dt;
+  if (requestQuiet < 20 || g.request.idleHint) return;
+  requestQuiet = 0;
+  setGame({ request: { ...g.request, idleHint: true } });
+  syncRequestGuidance();
+}
 
 export type RequestOutcome = { ok: boolean; tankId: string | null };
 
@@ -419,7 +447,10 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
   }
   if (req.kind === "show" || req.kind === "showAnimal") {
     v.state = "help";
-    setGame({ request: { visitorId: v.id, by: v.type, req, line, misses: 0, status: "ready" }, panel: null, placing: null });
+    requestQuiet = 0;
+    requestView = "";
+    clearGlow();
+    setGame({ request: { visitorId: v.id, by: v.type, req, line, misses: 0, status: "ready" }, panel: null, placing: null, guide: null, nudge: null });
     rt.slowFish = true;
     void speak(line, v.type);
     return new Promise((resolve) => {
@@ -508,7 +539,7 @@ export function answerShow(target: ShowTarget, tankId: string, ref: { fishId?: s
   if (!r || (r.req.kind !== "show" && r.req.kind !== "showAnimal") || r.status === "correct") return false;
   const req = r.req;
   if (matchesShow(req, target)) {
-    setGame({ request: { ...r, status: "correct" }, nudge: null });
+    setGame({ request: { ...r, status: "correct" }, nudge: null, guide: null });
     audio.play("correct");
     if (ref.fishId) {
       // Every animal the visitor asked for in that tank comes to the glass.
@@ -528,6 +559,15 @@ export function answerShow(target: ShowTarget, tankId: string, ref: { fishId?: s
     }, fastMode() ? 60 : 1200);
     return true;
   }
+  wrongRequestTap();
+  return true;
+}
+
+/** A wrong tank and a wrong object advance exactly the same miss ladder. */
+function wrongRequestTap() {
+  const r = getGame().request;
+  if (!r || r.status === "correct") return;
+  requestQuiet = 0;
   const misses = r.misses + 1;
   audio.play("error");
   setGame({ request: { ...r, misses, status: "wrong" } });
@@ -536,8 +576,16 @@ export function answerShow(target: ShowTarget, tankId: string, ref: { fishId?: s
     if (now && now.visitorId === r.visitorId && now.status === "wrong") setGame({ request: { ...now, status: "ready" } });
   }, 700);
   if (misses === 1) void speak(r.line, r.by, true);
-  if (misses >= 3) glowAnswers(req);
-  return true;
+  syncRequestGuidance();
+}
+
+/** Inspect the tank just tapped, while retaining free navigation between tanks. */
+export function inspectRequestTank(tankId: string) {
+  requestQuiet = 0;
+  const r = getGame().request;
+  const t = tankById(model(), tankId);
+  if (!r || !t || r.status === "correct" || (r.req.kind !== "show" && r.req.kind !== "showAnimal")) return;
+  if (!tankSatisfies(r.req, t)) wrongRequestTap();
 }
 
 /** Third miss: the right tank (room view) and the right fish/decorations (close-up) glow. */
@@ -561,12 +609,13 @@ export function cancelShow() {
   showWait = null;
   rt.slowFish = false;
   clearGlow();
-  setGame({ request: null });
+  setGame({ request: null, guide: null, nudge: null });
   w.resolve({ ok: false, tankId: null });
 }
 
 /** Replay the request (🔊). */
 export function replayRequest() {
+  requestQuiet = 0;
   const r = getGame().request;
   if (r) void speak(r.line, r.by);
 }
@@ -629,7 +678,8 @@ export async function helped(v: VisitorRt, req: Request, tankId: string | null) 
 /** Tap an eligible walking or seated visitor (or the HUD chip). */
 export async function openRequest(id: string) {
   const g = getGame();
-  if (activeRequest || scripted.busy || g.mode !== "play" || g.request || g.prompt || g.placing || g.stageCard) return;
+  const tutorial = g.model.progress.tutorial === "visitor";
+  if (activeRequest || (scripted.busy && !tutorial) || g.mode !== "play" || g.request || g.prompt || g.placing || g.stageCard) return;
   const v = rt.visitors.find((x) => x.id === id);
   if (!v || !v.request || !requestEligible(v)) return;
   activeRequest = v.id;
@@ -641,7 +691,7 @@ export async function openRequest(id: string) {
   v.moving = false;
   v.face = { x: rt.camera.pos.x, z: rt.camera.pos.z };
   if (!seated) v.yaw = Math.atan2(v.face.x - v.x, v.face.z - v.z);
-  setGame({ waiting: null });
+  setGame({ waiting: null, guide: null, nudge: null });
   try {
     let req: Request | null = v.request;
     if (!stillValid(model(), req)) req = makeRequest(model(), rand, { last: null });
@@ -652,7 +702,7 @@ export async function openRequest(id: string) {
       return;
     }
     v.request = req;
-    const out = await runRequest(v, req, { cancellable: true });
+    const out = await runRequest(v, req, { cancellable: !tutorial });
     if (out.ok) await helped(v, req, out.tankId);
   } finally {
     if (activeRequest === v.id) activeRequest = null;

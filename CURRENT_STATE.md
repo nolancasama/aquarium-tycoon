@@ -1,5 +1,33 @@
 # Current State
 
+## Explicit action guidance (2026-10-31)
+
+- Shared SAY/TAP/LOOK tags identify speaking, tapping and looking in prompts,
+  Pico nudges and visitor cards. Quizzes use SAY THE ANSWER; mic fallback uses
+  TAP AN ANSWER. Listening has a gentle pulse and a larger bilingual status.
+- Onboarding introduces the aquarium boss and tapping, then waits for a tap on
+  the highlighted Fish button. Tutorial visitor and decoration steps use the
+  same state-derived guide/nudge system, with 20-second idle reminders.
+- Visitor cards follow visitor → tank → fish/animal/decoration; existing miss
+  counters and a runtime idle clue escalate tank and exact-object highlights.
+  The existing marker pool now also points at visitors, doors and free rings.
+  Arrow/WASD reminders explain mouse/touch tapping with cooldown and session cap.
+- Read-only acceptance surfaces: `window.__at.state()` now exposes `guide`,
+  `nudge` and semantic `requestStep` (step/tier/target IDs), alongside existing
+  tutorial/view/request state. Cards expose `data-request-step` and
+  `data-request-tier`. E2E helpers handle the interactive Fish and visitor taps.
+- Expansion 1 / Jellyfish Gallery already exists (third room, display tanks and
+  additional animals). The Gallery sign fix from commit 8e69be5 is untouched.
+- Gallery signs: the door reads JELLYFISH, the gallery wall JELLYFISH /
+  GALLERY; `signTexture()` takes "
+" lines and shrinks text to fit.
+- Verified 2026-10-31: typecheck, `npm test` (321), build; tutorial review
+  screenshots (title → Tap Fish → arrow reminder → SAY ONE / listening /
+  misses → place → SAY THIS → visitor → TAP A TANK / TAP A FISH → decorate)
+  at 1366×768, 1280×720 and 1024×768 checked by eye (SwiftShader).
+  Playwright 30/30 on the production preview (10.2 min); loop budget
+  62 draw calls / 40.1k triangles (was 60 / 40.1k).
+
 ## Happiness-based tips made visible (2026-10-27)
 
 - Leaving visitors show "+N" tags above each tank they tipped (face = mood) and

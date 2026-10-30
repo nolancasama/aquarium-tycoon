@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { boot, click3d, hook, say, startNew, state, waitFor } from "./helpers";
+import { boot, click3d, hook, precondition, say, startNew, state, waitFor } from "./helpers";
 import { stagesTwoToFive, tutorial } from "./flows";
 
 test("the whole loop in Speak mode, every answer spoken", async ({ page }) => {
@@ -105,7 +105,9 @@ async function tutorialQuick(page: import("@playwright/test").Page) {
   await waitFor(page, (x) => x.tutorial === "feed" && x.view === "tank", 10_000, "feed step");
   await page.getByTestId("btn-feed").click();
   await say(page, "feed the fish");
-  await waitFor(page, (x) => x.request?.kind === "show", 40_000, "visitor");
+  await precondition(page, (x) => x.tutorial === "visitor" && x.mode === "play" && Boolean(x.waiting) && !x.line, "tutorial visitor waiting", 40_000);
+  await page.getByTestId("chip-visitor").click();
+  await waitFor(page, (x) => x.request?.kind === "show", 10_000, "visitor");
   await page.waitForTimeout(600);
   await click3d(page, "tank", "t1");
   await waitFor(page, (x) => x.view === "tank", 5_000, "close-up");

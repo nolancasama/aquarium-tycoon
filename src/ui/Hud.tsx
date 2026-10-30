@@ -28,6 +28,7 @@ import { tankStatusEl } from "../scene/CameraRig";
 import { Icon, type IconId } from "./icons";
 import { PicoFace, PersonFace } from "./Portraits";
 import { Ja } from "./Talk";
+import { ActionTag } from "./ActionTag";
 import { STAGE_NAMES, STAGE_PREVIEWS, UI, goalText } from "./i18n";
 
 function Big({
@@ -54,6 +55,7 @@ function Big({
     <button className={`big-btn ui ${locked ? "locked" : ""} ${guide ? "guide" : ""}`} onClick={onClick} data-testid={id} aria-disabled={locked} title={reason}>
       <span className="big-icon">
         <Icon id={icon} size={40} />
+        {guide && id === "btn-fish-shop" && <Icon id="hand" size={24} className="guide-hand" />}
         {locked && (
           <span className="lock">
             <Icon id="lock" size={18} />
@@ -116,11 +118,13 @@ function GoalCard() {
   const model = useGame((s) => s.model);
   const request = useGame((s) => s.request);
   const interrupted = useGame((s) => Boolean(s.prompt || s.line || s.stageCard));
+  const waiting = useGame((s) => Boolean(s.waiting));
   const [expanded, setExpanded] = useState(false);
   const step = useMemo(() => nextStep(model), [model]);
   // Start each level compact and clear an expanded list for scripted interactions.
   useEffect(() => setExpanded(false), [model.progress.stage, interrupted, Boolean(request)]);
-  if (request) return null;
+  // The tutorial's "Tap the visitor!" card takes this place; in free play the objectives stay.
+  if (request || (waiting && !interrupted && model.progress.tutorial !== "done")) return null;
   const p = model.progress;
   const list = goals(model);
   const name = STAGE_NAMES[p.stage];
@@ -291,6 +295,8 @@ function HallSwitch() {
 }
 
 function RoomBar() {
+  const tutorialBuy = useGame((s) => s.model.progress.tutorial === "buy");
+  const tutorialVisitor = useGame((s) => s.model.progress.tutorial === "visitor");
   const stage = useGame((s) => s.model.progress.stage);
   const hallOpen = useGame((s) => s.model.progress.hallOpen);
   const bag = useGame((s) => s.model.inv.fish.length);
@@ -313,13 +319,13 @@ function RoomBar() {
         )}
       </div>
       <div className="bar-main">
-        <Big id="btn-fish-shop" icon="fish" label="Fish" ja="さかな" onClick={openFishShop} />
-        {stage >= 6 && <Big id="btn-animal-shop" icon="turtle" label="Animals" ja="いきもの" onClick={() => {
+        {!tutorialVisitor && <Big id="btn-fish-shop" icon="fish" label="Fish" ja="さかな" onClick={openFishShop} />}
+        {!tutorialBuy && !tutorialVisitor && stage >= 6 && <Big id="btn-animal-shop" icon="turtle" label="Animals" ja="いきもの" onClick={() => {
           if (!hallOpen) toast({ en: "Open Ocean Hall first", ja: "さきに うみの ホールを ひらこう", tone: "info" }, 5000);
           else openAnimalShop();
         }} locked={!hallOpen} reason={!hallOpen ? "Open Ocean Hall first" : undefined} />}
-        <Big id="btn-decor-shop" icon="decor" label="Decor" ja="かざり" onClick={openDecorShop} locked={stage < 2} />
-        <Big id="btn-tank-shop" icon="tank" label="Tank" ja="タンク" onClick={openTankShop} locked={stage < 4} />
+        {!tutorialBuy && !tutorialVisitor && <Big id="btn-decor-shop" icon="decor" label="Decor" ja="かざり" onClick={openDecorShop} locked={stage < 2} />}
+        {!tutorialBuy && !tutorialVisitor && <Big id="btn-tank-shop" icon="tank" label="Tank" ja="タンク" onClick={openTankShop} locked={stage < 4} />}
       </div>
       <div className="chips-right">
         {waiting && (
@@ -331,7 +337,7 @@ function RoomBar() {
 }
 
 function WaitingChip({ id, type }: { id: string; type: VisitorType }) {
-  const guide = useGame((s) => s.nudge?.target === "chip-visitor");
+  const guide = useGame((s) => s.guide === "chip-visitor" || s.nudge?.target === "chip-visitor");
   return (
     <button className={`chip-btn visitor ui ${guide ? "guide" : ""}`} onClick={() => void openRequest(id)} data-testid="chip-visitor">
       <PersonFace type={type} size={48} />
@@ -385,6 +391,7 @@ function TankStatusPanel({ name, fish, capacity, food, clean, happy }: { name: s
 }
 
 function TankBar() {
+  const waiting = useGame((s) => s.waiting);
   const stage = useGame((s) => s.model.progress.stage);
   const lights = useGame((s) => {
     const tank = s.tankId ? tankById(s.model, s.tankId) : null;
@@ -404,7 +411,7 @@ function TankBar() {
         {stage >= 8 && <Big id="btn-upgrade" icon="up" label="" ja="アップ" onClick={openUpgrades} />}
         {stage >= 8 && lights && <Big id="btn-lights" icon="lamp" label="Lights" ja="ライト" onClick={() => void openLights()} />}
       </div>
-      <div className="chips-right" />
+      <div className="chips-right">{waiting && <WaitingChip id={waiting.id} type={waiting.type} />}</div>
     </div>
   );
 }
@@ -475,13 +482,18 @@ function Toasts() {
 
 function NudgeBubble() {
   const n = useGame((s) => s.nudge);
-  if (!n) return null;
+  const request = useGame((s) => s.request);
+  const waiting = useGame((s) => s.waiting);
+  const placingFish = useGame((s) => s.placing?.kind === "fish" && s.view === "room");
+  const decorating = useGame((s) => s.panel === "decorate");
+  if (!n || request || (waiting && n.target === "chip-visitor")) return null;
+  // The placing banner and the decoration tray already say this; one instruction at a time.
+  if ((placingFish && n.target?.startsWith("tank-")) || (decorating && (n.target === "tray" || n.target === "decor-rings"))) return null;
   return (
     <div className={`nudge ui ${n.repeated ? "repeated" : ""}`} key={n.id} data-testid="nudge" data-tier={n.tier} role="status" onClick={() => setGame({ nudge: null })}>
       <PicoFace size={58} />
       <div className="nudge-text">
-        {n.en}
-        <Ja>{n.ja}</Ja>
+        <ActionTag kind={n.kind ?? (n.target ? "tap" : "look")} en={n.en} ja={n.ja} />
       </div>
     </div>
   );
@@ -499,7 +511,7 @@ export function Hud() {
   const shot = useGame((s) => s.stageCard);
   if (screen !== "game") return null;
   const free = mode === "play" && !prompt && !line && !shot;
-  const showRoomBar = free && view === "room" && !panel && !placing && step === "done";
+  const showRoomBar = free && view === "room" && !panel && !placing && (step === "done" || step === "buy" || step === "visitor");
   const showTankBar = free && view === "tank" && panel !== "decorate";
   return (
     <>

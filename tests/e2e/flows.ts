@@ -1,5 +1,5 @@
 import { expect, type Page } from "@playwright/test";
-import { answer, click3d, hook, playing, settle, shot, stageOk, state, waitFor, type AtState } from "./helpers";
+import { answer, click3d, hook, playing, precondition, settle, shot, stageOk, state, tapFirstFish, waitFor, type AtState } from "./helpers";
 
 /**
  * The whole Phase 1 loop through the real UI: buttons are clicked, 3D things
@@ -173,6 +173,7 @@ export async function makeHappy(page: Page, ids: string[]) {
 
 /** Stage 1: Pico's tutorial. */
 export async function tutorial(page: Page) {
+  if (!(await state(page)).prompt) await tapFirstFish(page);
   await waitFor(page, (s) => s.prompt?.question === "Blue or orange?", 20_000, "fish shop");
   await shot(page, "shop");
   await reply(page, "orangePlease");
@@ -192,7 +193,9 @@ export async function tutorial(page: Page) {
   expect(s.tanks[0].food).toBeGreaterThan(90);
   await shot(page, "feeding");
   // The tutorial visitor asks for the colour that was bought.
-  s = await waitFor(page, (x) => x.request?.kind === "show", 40_000, "tutorial visitor request");
+  await precondition(page, (x) => x.tutorial === "visitor" && x.mode === "play" && Boolean(x.waiting) && !x.line, "tutorial visitor waiting", 40_000);
+  await page.getByTestId("chip-visitor").click();
+  s = await waitFor(page, (x) => x.request?.kind === "show", 10_000, "tutorial visitor request");
   expect(s.request!.color).toBe("orange");
   await settle(page, 800);
   await shot(page, "visitor-request");

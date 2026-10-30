@@ -360,9 +360,11 @@ function SlotMarkers({ tank }: { tank: TankRec }) {
       const taken = tank.decor.some((d) => d.slot === i);
       const picked = p?.kind === "move" && p.tankId === tank.id && p.slot === i;
       const active = (p?.kind === "decor" && !taken) || (p?.kind === "move" && !picked);
-      const scale = active ? 1 + Math.sin(rt.time * 5 + i) * 0.12 : 0.85;
-      mat.color.set(picked ? "#ff9f1c" : active ? "#7dffb0" : taken ? "#ffffff" : "#bff3ff");
-      mat.opacity = active ? 0.95 : taken ? 0.35 : 0.6;
+      const target = g.guide ?? g.nudge?.target;
+      const guided = !taken && active && (target === "decor-rings" || target === "tray");
+      const scale = active ? 1 + Math.sin(rt.time * 4 + i) * 0.12 : 0.85;
+      mat.color.set(guided ? "#ffcc33" : picked ? "#ff9f1c" : active ? "#7dffb0" : taken ? "#ffffff" : "#bff3ff");
+      mat.opacity = rt.camera.shot ? 0 : guided ? 0.78 + Math.sin(rt.time * 4 + i) * 0.2 : active ? 0.95 : taken ? 0.35 : 0.6;
       if (scales.current[i] === scale) return;
       scales.current[i] = scale;
       // Pulse the radius and re-drape every vertex, so the ring hugs dunes at any size.
@@ -383,7 +385,7 @@ function SlotMarkers({ tank }: { tank: TankRec }) {
   return (
     <>
       {def.slots.map((s, i) => (
-        <mesh key={i} position={[s.x, 0, s.z]} geometry={geos[i]} material={mats[i]} />
+        <mesh key={i} position={[s.x, 0, s.z]} geometry={geos[i]} material={mats[i]} raycast={() => {}} />
       ))}
     </>
   );

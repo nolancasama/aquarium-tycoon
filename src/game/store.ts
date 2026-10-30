@@ -96,6 +96,8 @@ export interface RequestUi {
   line: string;
   /** Wrong taps so far (the hint ladder). */
   misses: number;
+  /** Runtime idle escalation: points out tanks without naming the answer. */
+  idleHint?: boolean;
   status: "ready" | "wrong" | "correct";
 }
 
@@ -115,6 +117,7 @@ export interface Toast {
 
 export interface Nudge extends Text {
   id: number;
+  kind?: "say" | "tap" | "look";
   /** HUD element to point at (its data-testid). */
   target?: string;
   /** Runtime guide tier and offer; never part of the saved model. */

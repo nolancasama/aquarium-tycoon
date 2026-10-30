@@ -22,18 +22,20 @@ import {
   type TutorialStep
 } from "../logic/model";
 import { nextStep, type Step } from "../logic/guide";
+import { tutorialGuide } from "../logic/tutorialGuide";
 import { countableTanks, presentColors, type Request } from "../logic/requests";
 import { NUMBER_IDS, NUMBER_PHRASE } from "../logic/english";
 import { clearSave, encodeSave, rawSaveExists, readSave, writeSave } from "../logic/save";
 import { ask, say, wait } from "./ask";
-import { backToRoom, openTank, orderFish, startPlacingFish } from "./actions";
-import { celebrate, leave, numberSlots, numbersAround, resetVisitors, runRequest, helped, scripted, spawnVisitor, walkTo } from "./visitors";
+import { backToRoom, openTank, startPlacingFish } from "./actions";
+import { celebrate, leave, numberSlots, numbersAround, requestGuidanceTick, resetVisitors, runRequest, scripted, spawnVisitor, walkTo } from "./visitors";
 import { ENTRY, PEDESTAL, lookSpot, route } from "../world";
 import { HALL_OF } from "../data/tanks";
 import { watchHappiness } from "./cheer";
 import { audio } from "../../audio/audio";
 import { tts } from "../../audio/tts";
 import { recognition, requestMicPermission } from "../../audio/recognition";
+import { ACTION } from "../../ui/i18n";
 
 /**
  * Starting, continuing and saving; the tutorial with Pico; stage rewards;
@@ -63,11 +65,18 @@ export function installAutosave(): () => void {
     saveTimer = window.setTimeout(saveNow, 800);
   });
   const onHide = () => saveNow();
+  const onActivity = () => {
+    if (model().progress.tutorial !== "done") rt.idle = 0;
+  };
   window.addEventListener("pagehide", onHide);
+  window.addEventListener("pointerdown", onActivity);
+  window.addEventListener("keydown", onActivity);
   document.addEventListener("visibilitychange", onHide);
   return () => {
     unsub();
     window.removeEventListener("pagehide", onHide);
+    window.removeEventListener("pointerdown", onActivity);
+    window.removeEventListener("keydown", onActivity);
     document.removeEventListener("visibilitychange", onHide);
   };
 }
@@ -242,15 +251,22 @@ async function tutorial(g: number) {
     alive(g);
     await say("pico", "Hello!", "こんにちは! ぼくは ペンギンの ピコ。この すいぞくかんの かかりだよ");
     alive(g);
-    await say("pico", "Let's get a fish!", "さかなを かおう!");
+    await say("pico", ACTION.aquariumBoss.en, ACTION.aquariumBoss.ja);
+    alive(g);
+    await say("pico", ACTION.tapToPlay.en, ACTION.tapToPlay.ja);
     alive(g);
     setStep("buy");
   }
   if (step() === "buy") {
     setGame({ mode: "play" });
-    // Not cancellable in the tutorial: it resolves when a fish is bought.
+    // The player opens the existing non-cancellable order from the Fish button.
     while (!model().inv.fish.length && fishCount(model()) === 0) {
-      await orderFish({ tutorial: true });
+      syncTutorialGuide(0);
+      await until(() => getGame().mode !== "play" || model().inv.fish.length > 0 || fishCount(model()) > 0, g);
+      await until(() => {
+        const now = getGame();
+        return now.mode === "play" && !now.prompt && !now.line && !now.panel;
+      }, g);
       alive(g);
     }
     setStep("place");
@@ -260,6 +276,7 @@ async function tutorial(g: number) {
     if (bag) {
       startPlacingFish(bag.id);
       setGame({ mode: "play", guide: "tank-A" });
+      syncTutorialGuide(0);
       await until(() => model().inv.fish.length === 0, g);
     }
     // The new fish arrives hungry: feeding is the next lesson.
@@ -273,7 +290,7 @@ async function tutorial(g: number) {
     if (!model().progress.fedOnce) {
       if (t.food >= 90) updateModel((m) => setCare(m, t.id, 45, 100));
       setGame({ mode: "play", guide: "btn-feed" });
-      nudge({ en: "Your fish is hungry!", ja: "おなかが すいているよ。「えさ」を おそう" }, 9000);
+      syncTutorialGuide(0);
       await until(() => model().progress.fedOnce, g);
       setGame({ guide: null, nudge: null });
       await wait(3200);
@@ -291,15 +308,9 @@ async function tutorial(g: number) {
     const v = spawnVisitor("child", req);
     await until(() => v.state === "sit", g);
     setGame({ mode: "play" });
-    nudge({ en: "Show the fish!", ja: "タンクを ひらいて、その さかなを タップしよう" }, 9000);
-    for (;;) {
-      const out = await runRequest(v, req, { cancellable: false });
-      alive(g);
-      if (out.ok) {
-        await helped(v, req, out.tankId);
-        break;
-      }
-    }
+    syncTutorialGuide(0);
+    // The visitor/chip starts the same request flow used after the tutorial.
+    await until(() => v.helped && (v.state === "leave" || v.state === "gone"), g);
     alive(g);
     await stageComplete(g);
   }
@@ -311,6 +322,7 @@ async function tutorial(g: number) {
     const t = model().tanks[0];
     openTank(t.id);
     setGame({ mode: "play", panel: "decorate", guide: "tray" });
+    syncTutorialGuide(0);
     await until(() => model().tanks.some((x) => x.decor.length > 0), g);
     setGame({ guide: null, nudge: null });
     await wait(900);
@@ -614,6 +626,7 @@ let wrongPanels = 0;
 let pendingHint = false;
 let guideModel: Model | null = null;
 let guideStep: Step | null = null;
+let tutorialTarget: string | null = null;
 
 function resetHints() {
   hintKey = "";
@@ -622,7 +635,36 @@ function resetHints() {
   pendingHint = false;
   guideModel = null;
   guideStep = null;
+  tutorialTarget = null;
   rt.idle = 0;
+}
+
+/** Keep the existing tutorial guide/nudge in step with actions and carried items. */
+function syncTutorialGuide(dt: number) {
+  const g = getGame();
+  if (g.model.progress.tutorial === "done") return;
+  if (g.settingsOpen) return;
+  const hint = tutorialGuide(g);
+  if (!hint) {
+    if (tutorialTarget) {
+      const target = tutorialTarget;
+      tutorialTarget = null;
+      setGame({
+        ...(g.guide === target ? { guide: null } : {}),
+        ...(g.nudge?.target === target ? { nudge: null } : {})
+      });
+    }
+    rt.idle = 0;
+    return;
+  }
+  const changed = tutorialTarget !== hint.target;
+  rt.idle += dt;
+  if (changed || rt.idle >= 20) {
+    tutorialTarget = hint.target;
+    rt.idle = 0;
+    setGame({ guide: hint.target });
+    nudge({ ...hint, kind: "tap" }, 9000);
+  }
 }
 
 /** Cache by immutable model identity; storyTick itself runs every frame. */
@@ -664,6 +706,17 @@ function noteGuidePanel(panel: Panel) {
 /** Help and idle nudges share one ladder: A is the HUD, B and C are Pico. */
 export function showGuideHint() {
   const g = getGame();
+  if (g.model.progress.tutorial !== "done") {
+    if (g.screen !== "game") return;
+    const hint = tutorialGuide(g);
+    if (hint) {
+      tutorialTarget = hint.target;
+      rt.idle = 0;
+      setGame({ guide: hint.target });
+      nudge({ ...hint, kind: "tap" }, 9000);
+    }
+    return;
+  }
   const step = currentStep();
   if (!step || g.screen !== "game" || g.mode !== "play" || g.prompt || g.line || g.request || g.stageCard || g.settingsOpen) return;
   // Help can reopen C; only the first appearance of each tier animates Pico.
@@ -691,12 +744,16 @@ export function showGuideHint() {
   }
   rt.idle = 0;
   if (!repeated) rt.pico.waveT0 = rt.time;
-  nudge({ ...text, target, tier: hintTier, shopItem: hintTier === 2 ? step.shopItem : undefined, repeated }, 12000);
+  nudge({ ...text, kind: target ? "tap" : "look", target, tier: hintTier, shopItem: hintTier === 2 ? step.shopItem : undefined, repeated }, 12000);
 }
 
 export function storyTick(dt: number) {
   const g = getGame();
   if (g.screen === "game") watchHappiness(g.model);
+  if (g.screen === "game") {
+    requestGuidanceTick(dt);
+    syncTutorialGuide(dt);
+  }
   if (busyFlow || g.screen !== "game") return;
   const m = g.model;
   // Idle time toward Pico's nudge.

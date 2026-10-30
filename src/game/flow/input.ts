@@ -1,7 +1,11 @@
-import { getGame, setGame } from "../store";
+import { getGame, nudge, setGame } from "../store";
 import { cancelAsk, chooseIndex, hasLine, micPress, nextLine } from "./ask";
 import { backToRoom, cancelPlacing, closePanel } from "./actions";
 import { closeStageCard } from "./story";
+import { newTapReminder, tapReminder } from "../logic/tapReminder";
+import { ACTION } from "../../ui/i18n";
+
+let reminderState = newTapReminder();
 
 /** Fresh key presses, routed by what is on screen. */
 export function onKey(code: string) {
@@ -30,6 +34,13 @@ export function onKey(code: string) {
     return;
   }
   if (g.mode !== "play") return;
+  if (!g.prompt && !g.line) {
+    const next = tapReminder(reminderState, code, g.model.progress.tutorial, g.model.progress.stage, performance.now() / 1000);
+    if (next) {
+      reminderState = next;
+      nudge({ ...(g.touch ? ACTION.tapToPlayTouch : ACTION.tapToPlayMouse), kind: "tap" }, 4000);
+    }
+  }
   if (code === "Escape") {
     if (g.placing) cancelPlacing();
     else if (g.panel) closePanel();

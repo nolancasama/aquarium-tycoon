@@ -5,6 +5,7 @@ import { seedSim } from "./sim";
 import { leave, seedVisitors, spawnVisitor } from "./flow/visitors";
 import { decay, goals, happiness, latchHappy, setCare } from "./logic/model";
 import type { Request } from "./logic/requests";
+import { requestStep } from "./logic/requestGuide";
 import { SLOT_POS, STAND_H, TANKS } from "./data/tanks";
 import { decorVersion } from "./data/decor";
 import { PICO } from "./world";
@@ -39,6 +40,9 @@ export function installE2eHook(seed: number) {
         coins: m.coins,
         stage: m.progress.stage,
         tutorial: m.progress.tutorial,
+        guide: g.guide,
+        nudge: g.nudge ? { id: g.nudge.id, en: g.nudge.en, target: g.nudge.target, kind: g.nudge.kind } : null,
+        requestStep: requestStep({ request: g.request, view: g.view, tankId: g.tankId, model: m, waiting: g.waiting }),
         progress: m.progress,
         goals: goals(m),
         tanks: m.tanks.map((t) => ({

@@ -790,3 +790,43 @@ these changes and decisions.
 - **Save v3.** Adds only pads F–H, the new types, `galleryOpen` and
   `tank.light`. Version 2 saves read unchanged (ids, pads, animals, decor;
   test `save.test.ts` "migrates a version 2 save without changing anything").
+
+## 2026-10-31 — Make the next action explicit
+
+- SAY, TAP and LOOK share one reusable instruction tag, icon and fixed accent
+  everywhere: SAY microphone/purple (#6d3ab4), TAP pointing hand/amber
+  (#865400), LOOK eye/teal (#147878). Japanese uses the existing setting.
+  A prompt has one primary action; its LOOK cue is a smaller secondary line.
+- Model sentences say SAY THIS; free choices say SAY ONE. Quizzes say SAY THE
+  ANSWER because only one answer is correct. Unusable microphones say TAP AN
+  ANSWER; the existing third-miss spoken-or-tapped rescue remains available.
+  Listening gets a gentle CSS glow and a larger bilingual status. Matching,
+  answer sets, miss thresholds, speech timing and automatic acceptance stay intact.
+- Pico introduces the player as the aquarium boss and explains tapping. The
+  first Fish purchase starts with an interactive, highlighted Fish button,
+  including resumed buy-step saves. Tutorial nudges follow current state and
+  can repeat after 20 quiet seconds using the existing guide/nudge mechanism.
+- Arrow/WASD reminders use a pointing hand and distinguish touch Japanese
+  (ゆびで タップしよう！) from mouse Japanese (マウスで クリックしよう！).
+  Many school Chromebooks use a mouse. Reminders have a 20-second cooldown,
+  are limited to three after the tutorial, and stop after Level 2.
+- Visitor instructions derive from the current request, view, carried state
+  and existing wrong-tap count rather than a stored instruction string:
+  unopened visitor → tap visitor; room → tap tank; close-up → tap fish,
+  animal or decoration. One wrong pick or 20 quiet seconds reveals matching
+  tanks; three wrong picks reveal exact targets. Success/cancel clears the
+  active instruction and highlights immediately. Runtime idle clues are not saved.
+- World highlights reuse the existing three bobbing gold cones (room view only)
+  for visitors, room doors and tanks. In the tank close-up the free decoration
+  rings pulse gold themselves: room-sized cones there covered the fish. They ignore
+  raycasts and hide during camera shots. Post-processing outlines and extra
+  render passes were rejected for the Chromebook budget; the cone pool remains
+  capped at three draw calls.
+- One instruction at a time: Pico's nudge hides when the fish-placing banner
+  or the decoration tray already says the same thing. A waiting visitor's
+  "Tap the visitor!" card replaces the objectives card only in the tutorial;
+  in free play visitors wait often, and hiding the objectives (and their
+  toggle) would undo the HUD layout. There the visitor chip and the 3D marker
+  carry the cue when the guide points at visitors.
+- Opening a tank that cannot answer an open request counts as a wrong pick on
+  the existing ladder (no reward change), so hints escalate after exploring.

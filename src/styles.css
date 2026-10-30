@@ -2108,6 +2108,58 @@ mark.key {
   }
 }
 
+/* One action vocabulary in prompts, Pico's bubble and visitor cards. */
+.action-tag {
+  --action-accent: #6d3ab4;
+  --action-soft: #f2eaff;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-left: 4px solid var(--action-accent);
+  border-radius: 9px;
+  background: var(--action-soft);
+  color: var(--action-accent);
+  pointer-events: none;
+  line-height: 1.2;
+  text-align: left;
+}
+.action-tag.action-tap { --action-accent: #865400; --action-soft: #fff2cc; }
+.action-tag.action-look { --action-accent: #147878; --action-soft: #e7f7f4; }
+.action-tag > svg { flex: none; }
+.action-copy { min-width: 0; display: grid; gap: 2px; }
+.action-copy > strong { font-size: 21px; font-weight: 900; text-transform: uppercase; }
+.action-tag .ja { color: var(--action-accent); font-size: 13px; font-weight: 700; margin: 0; }
+.action-tag.secondary { padding: 2px 0; border: 0; background: transparent; gap: 6px; }
+.action-tag.secondary .action-copy { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 7px; }
+.action-tag.secondary strong { font-size: 13px; }
+.action-tag.secondary .ja { font-size: 11px; }
+.view-room .request .action-tag { gap: 6px; padding: 4px 6px; }
+.view-room .request .action-tag > svg { width: 20px; height: 20px; }
+.view-room .request .action-copy > strong { font-size: 16px; overflow-wrap: anywhere; }
+.view-room .request .action-tag .ja { font-size: 11px; }
+.prompt-heading { display: flex; justify-content: center; pointer-events: none; }
+.prompt-question .q-text { flex: 1; min-width: 0; }
+.prompt-question .prompt-heading { flex: none; margin-left: auto; }
+.guide-hand { position: absolute; right: -10px; bottom: -6px; color: #865400; pointer-events: none; }
+.prompt .request-action { margin-top: 2px; }
+.prompt-mic-reminder { font-size: 15px; font-weight: 800; }
+.prompt-mic-reminder .ja { font-size: 12px; }
+.prompt.listening .prompt-status { color: #a32c16; font-size: 27px; }
+.prompt.listening .prompt-status > .ja { font-size: 18px; }
+.prompt .mic.on { animation: actionMicGlow 1.6s ease-in-out infinite; }
+@keyframes actionMicGlow {
+  0%, 100% { box-shadow: 0 4px 0 var(--coral-dark), 0 0 10px 4px #ffad8299; }
+  50% { transform: scale(1.06); box-shadow: 0 4px 0 var(--coral-dark), 0 0 20px 7px #ff985dcc; }
+}
+.prompt mark.key { box-shadow: 0 0 0 2px #efbd35; }
+@media (max-height: 620px) {
+  .prompt-heading .action-tag { padding: 3px 8px; }
+  .prompt-heading .action-copy > strong { font-size: 18px; }
+  .prompt-heading .action-tag .ja { font-size: 11px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
