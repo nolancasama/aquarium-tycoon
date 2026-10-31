@@ -14,8 +14,11 @@
 - Focused SwiftShader frames in `.tmp/teach-review/` cover the first Fish hand,
   room clues, exact tank/fish hands and close-ups at 1366×768, 1280×720 and
   1024×768. A real click through the first Fish hand opens its order and clears
-  the hand. Added browser specs have not been run; Claude retains aesthetic
-  review. The full-loop draw budget has not been remeasured; glows add no draws.
+  the hand. Reviewed by eye by Claude. Full Playwright suite 43/43 on the
+  production preview (11.8 min, incl. new `audio.spec.ts` and `teach.spec.ts`);
+  loop budget unchanged at 62 draw calls / 40.1k triangles.
+- Still untested: real microphones/AGC levels, real TTS voices, and children's
+  response to the hand and blanked meanings on school Chromebooks.
 
 ## Optional classroom audio (2026-10-31)
 
