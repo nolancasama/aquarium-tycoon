@@ -35,13 +35,19 @@ export interface AtState {
 }
 
 /** Open the game with speech stubs and the test hook. Returns collected page errors. */
-export async function boot(page: Page, query = "fast=1&seed=1"): Promise<string[]> {
+export async function boot(page: Page, query = "fast=1&seed=1", showAudioSetup = false): Promise<string[]> {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(m.text());
   });
   await page.addInitScript(BROWSER_STUBS);
+  // Existing gameplay specs start after device setup; audio.spec opts into it.
+  if (!showAudioSetup) await page.addInitScript(() => {
+    const key = "at.settings.v1";
+    const previous = JSON.parse(localStorage.getItem(key) ?? "{}");
+    localStorage.setItem(key, JSON.stringify({ ...previous, audioSetupDone: true }));
+  });
   await page.goto(`/?e2e=1&${query}`);
   await expect(page.getByTestId("title")).toBeVisible();
   return errors;
@@ -76,10 +82,10 @@ export async function precondition(page: Page, pred: (s: AtState) => boolean, la
 }
 
 /** Choose the answer mode in Settings and start a new game. */
-export async function startNew(page: Page, mode: "tap" | "speak", openFirstOrder = true) {
+export async function startNew(page: Page, mode: "tap" | "speak" | "say-tap", openFirstOrder = true) {
   await expect(page.getByTestId("title").getByRole("radiogroup", { name: "Answer mode" })).toHaveCount(0);
   await page.getByTestId("btn-title-settings").click();
-  await page.getByTestId(mode === "tap" ? "settings-tap" : "settings-speak").click();
+  await page.getByTestId(`settings-${mode}`).click();
   await page.getByTestId("settings-close").click();
   await page.getByTestId("btn-new").click();
   await waitFor(page, (s) => s.screen === "game", 10_000, "game screen");

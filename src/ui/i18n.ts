@@ -32,6 +32,7 @@ export function requestAction(step: RequestStep): Text & { kind: "tap" | "look" 
 
 /** Shared action instructions: colours and icons are fixed by ActionTag. */
 export const ACTION = {
+  sayThenTap: { en: "SAY IT, THEN TAP!", ja: "いってから タップ！" },
   sayThis: { en: "SAY THIS!", ja: "これを いおう！" },
   sayOne: { en: "SAY ONE!", ja: "ひとつ えらんで いおう！" },
   sayAnswer: { en: "SAY THE ANSWER!", ja: "こたえを いおう！" },
@@ -49,6 +50,19 @@ export const ACTION = {
   tapToPlay: { en: "Tap things to play!", ja: "タップして あそぼう！" },
   tapToPlayTouch: { en: "Tap things to play!", ja: "ゆびで タップしよう！" },
   tapToPlayMouse: { en: "Tap things to play!", ja: "マウスで クリックしよう！" }
+} satisfies Record<string, Text>;
+
+export const AUDIO = {
+  speakClearly: { en: "Speak clearly!", ja: "マイクの ちかくで、はっきり はなそう！" },
+  normalVoice: { en: "Use your normal voice. Don't shout!", ja: "ふつうの こえで いいよ！" },
+  quiet: { en: "Try speaking closer to the mic!", ja: "マイクに ちかづいて はなそう！" },
+  overload: { en: "A little softer, please!", ja: "もう すこし ちいさな こえで はなそう！" },
+  neutral: { en: "Let's try again!", ja: "もう いちど やってみよう！" },
+  practice: { en: "Say it out loud, then tap your answer.", ja: "こえに だして いってから、こたえを タップしよう。" },
+  speaker: { en: "Can you hear Pico?", ja: "ピコの こえが きこえるかな？" },
+  mic: { en: "Let's test your microphone!", ja: "マイクを ためしてみよう！" },
+  signalOnly: { en: "I can hear sound, but I couldn't understand. Let's try again!", ja: "おとは きこえたよ。ことばは わからなかったよ。もう いちど やってみよう！" },
+  recognised: { en: "Great! I heard you!", ja: "いいね！ことばが きこえたよ！" }
 } satisfies Record<string, Text>;
 
 /** UI text: short English with optional hiragana-forward Japanese help (never a translation of target English). */

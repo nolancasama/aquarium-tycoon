@@ -1,4 +1,4 @@
-import { saveSettings, setGame, useGame, type Settings } from "../game/store";
+import { answerMode, saveSettings, setGame, useGame, type Settings } from "../game/store";
 import { toTitle } from "../game/flow/story";
 import { audio } from "../audio/audio";
 import { tts } from "../audio/tts";
@@ -41,7 +41,11 @@ export function SettingsModal() {
   const s = useGame((st) => st.settings);
   const screen = useGame((st) => st.screen);
   const micState = useGame((st) => st.micState);
-  if (!open) return null;
+  const check = useGame((st) => st.audioCheck);
+  const listening = useGame((st) => st.prompt?.status === "listening");
+  const promptOpen = useGame((st) => Boolean(st.prompt));
+  if (!open || check) return null;
+  const mode = answerMode(s);
   const set = (patch: Partial<Settings>) => apply({ ...s, ...patch });
   return (
     <div className="modal-back ui" onClick={() => setGame({ settingsOpen: false })}>
@@ -57,22 +61,31 @@ export function SettingsModal() {
         </header>
         <div className="setting mode-row">
           <span>
-            Answers <Ja>こたえかた</Ja>
+            For teachers: answers <Ja>せんせいへ：こたえかた</Ja>
           </span>
           <div className="mode-switch small" role="group" aria-label="Answer mode">
-            <button className={s.mic ? "on" : ""} aria-pressed={s.mic} onClick={() => set({ mic: true })} data-testid="settings-speak">
+            <button className={mode === "speak" ? "on" : ""} aria-pressed={mode === "speak"} onClick={() => set({ mic: true })} data-testid="settings-speak">
               <Icon id="mic" size={22} /> Speak
             </button>
-            <button className={!s.mic ? "on" : ""} aria-pressed={!s.mic} onClick={() => set({ mic: false })} data-testid="settings-tap">
+            <button className={mode === "say-tap" ? "on" : ""} aria-pressed={mode === "say-tap"} onClick={() => set({ mic: false, sayAloud: true })} data-testid="settings-say-tap">
+              <Icon id="mic" size={20} /> Say + Tap
+            </button>
+            <button className={mode === "tap" ? "on" : ""} aria-pressed={mode === "tap"} onClick={() => set({ mic: false, sayAloud: false })} data-testid="settings-tap">
               <Icon id="check" size={20} /> Tap
             </button>
           </div>
         </div>
+        {promptOpen && <p className="note">Answer changes start with the next question.<Ja>こたえかたは つぎの もんだいから かわるよ。</Ja></p>}
         {s.mic && micState === "blocked" && <p className="note">The microphone is blocked on this device: answers are tapped.</p>}
         <Toggle label="Japanese help" ja="にほんごの ヒント" on={s.japanese} onChange={(japanese) => set({ japanese })} id="japanese" />
         <Toggle label="Slow voice" ja="ゆっくり よむ" on={s.slowVoice} onChange={(slowVoice) => set({ slowVoice })} id="slow" />
         <Slider label="Music" ja="おんがく" value={s.music} onChange={(music) => set({ music })} id="music" />
         <Slider label="Sounds" ja="こうかおん" value={s.sfx} onChange={(sfx) => set({ sfx })} id="sfx" />
+        <div className="audio-buttons setting-checks">
+          <button className="secondary" disabled={listening} data-testid="settings-sound-check" onClick={() => setGame({ audioCheck: "speaker" })}>Sound check<Ja>おとの チェック</Ja></button>
+          <button className="secondary" disabled={listening} data-testid="settings-mic-check" onClick={() => setGame({ audioCheck: "mic" })}>Mic check<Ja>マイクの チェック</Ja></button>
+          <button className="secondary" disabled={listening} data-testid="settings-how-to-speak" onClick={() => setGame({ audioCheck: "tip" })}>How to speak<Ja>はなしかた</Ja></button>
+        </div>
         {screen !== "title" && (
           <button
             className="secondary"

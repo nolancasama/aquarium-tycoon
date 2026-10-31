@@ -65,7 +65,7 @@ test("tanks, decorations, bags, unlocks and settings come back; New game asks fi
   await page.addInitScript((save) => {
     if (!sessionStorage.getItem("seeded")) {
       localStorage.setItem("at.save.v1", JSON.stringify(save));
-      localStorage.setItem("at.settings.v1", JSON.stringify({ mic: false, music: 0.1, sfx: 0.5, japanese: false, slowVoice: true }));
+      localStorage.setItem("at.settings.v1", JSON.stringify({ mic: false, music: 0.1, sfx: 0.5, japanese: false, slowVoice: true, audioSetupDone: true }));
       sessionStorage.setItem("seeded", "1");
     }
   }, STAGE4);

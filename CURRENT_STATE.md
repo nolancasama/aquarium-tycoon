@@ -1,5 +1,24 @@
 # Current State
 
+## Optional classroom audio (2026-10-31)
+
+- First New Game offers skippable speaker/mic checks; Settings reopens either
+  check and “How to speak”. Device settings remember setup and the one-time
+  clear/normal-voice lesson; aquarium saves are unchanged.
+- Recognition has an optional local RMS/clipping meter with DOM-only updates.
+  Failed attempts give conservative quiet/clipping/neutral feedback. The mic
+  check separates permission, sound activity and recognised English, and all
+  streams close when attempts or checks end. Missing capabilities remain optional.
+- Teacher answers now include Say + Tap (spoken practice followed by the existing
+  tap answers, without a mic). Existing Speak/Tap settings and hard-error tap
+  fallback remain compatible; mode changes apply on the next prompt.
+- Added classifier, settings migration/mode and meter lifecycle unit coverage,
+  plus classroom audio Playwright cases and capability/track-cleanup stubs.
+  Browser acceptance and real Chromebook audio review have not been run for
+  this change; validation results are reported with the implementation.
+- Verified: `npm run typecheck`, `npm test` (340 tests), `npm run build` pass.
+  Build reports a bundle-size warning; no browser/visual evidence was produced.
+
 ## Explicit action guidance (2026-10-31)
 
 - Shared SAY/TAP/LOOK tags identify speaking, tapping and looking in prompts,

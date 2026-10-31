@@ -6,6 +6,7 @@ import { DialoguePanel, FishTalk, PromptPanel, RequestBanner } from "./ui/Talk";
 import { AnimalShop, DecorChoiceStrip, DecorShop, DecorTray, FishShop, TankShop, UpgradePanel } from "./ui/Shop";
 import { SettingsModal } from "./ui/Settings";
 import { ResultsScreen, StageCardModal, TitleScreen } from "./ui/Screens";
+import { AudioCheckModal } from "./ui/AudioCheck";
 import { installKeyboard } from "./input/keyboard";
 import { onKey } from "./game/flow/input";
 import { hasSaved, installAutosave, saveIsLost } from "./game/flow/story";
@@ -133,6 +134,7 @@ export function App() {
       <StageCardModal />
       <ResultsScreen />
       <SettingsModal />
+      <AudioCheckModal />
       <Fade />
     </div>
   );

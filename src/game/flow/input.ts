@@ -10,6 +10,7 @@ let reminderState = newTapReminder();
 /** Fresh key presses, routed by what is on screen. */
 export function onKey(code: string) {
   const g = getGame();
+  if (g.audioCheck) return;
   if (g.screen !== "game") return;
 
   if (g.settingsOpen) {

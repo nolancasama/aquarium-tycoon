@@ -2,12 +2,27 @@ import { PHRASES, type PhraseId } from "../logic/english";
 import { judgeSpeech, type Judgement } from "../logic/speechMatch";
 import { makeRng, shuffle } from "../logic/rng";
 import { noteSaid } from "../logic/model";
-import { getGame, setGame, updateModel, type Choice, type Line, type Mode, type PromptUi, type Speaker } from "../store";
+import { answerMode, getGame, setGame, updateModel, useGame, type Choice, type Line, type Mode, type PromptUi, type Speaker } from "../store";
 import { SPECIES } from "../data/fish";
 import { recognition, HARD_ERRORS } from "../../audio/recognition";
 import { tts } from "../../audio/tts";
 import { audio } from "../../audio/audio";
 import { rt } from "../runtime";
+import { canMeterDuringRecognition, classifyMicAttempt, createMicLevel, markMicWorked } from "../../audio/micLevel";
+
+export const promptMeter = createMicLevel();
+// Also clean up when navigation removes a prompt outside finish().
+useGame.subscribe((s, prev) => {
+  if (answerMode(s.settings) !== answerMode(prev.settings)) promptMeter.stop();
+  if (s.prompt?.id !== prev.prompt?.id || (s.prompt?.status !== "listening" && prev.prompt?.status === "listening")) promptMeter.stop();
+  if (s.prompt?.id !== prev.prompt?.id && active && !active.done && prev.prompt?.id !== undefined) {
+    active.done = true;
+    active.stopListening?.();
+    active.resolve(null);
+    active = null;
+    audio.setListening(false);
+  }
+});
 
 /**
  * The English interaction layer. Everything the student says or chooses goes
@@ -69,7 +84,13 @@ export function seedChoices(seed: number) {
 /** Mic can be used right now (setting on, recogniser present, not blocked). */
 export function micUsable(): boolean {
   const g = getGame();
-  return g.settings.mic && recognition.supported && g.micState !== "blocked" && g.micState !== "unsupported";
+  return (g.prompt?.answerMode ?? answerMode(g.settings)) === "speak" && recognition.supported && g.micState !== "blocked" && g.micState !== "unsupported";
+}
+
+/** Shared permission fallback, including checks opened over an existing prompt. */
+export function blockMic() {
+  setGame({ micState: "blocked" });
+  update({ status: "miss", buttons: true });
 }
 
 const VOICES: Record<string, { pitch: number; rate: number }> = {
@@ -119,6 +140,7 @@ export function ask(req: AskRequest): Promise<PhraseId | null> {
   const mic = micUsable();
   const show = req.show ?? (req.kind === "command" ? [req.options[0]] : req.options);
   const prompt: PromptUi = {
+    answerMode: answerMode(g.settings),
     id: promptId++,
     kind: req.kind,
     question: req.question ?? null,
@@ -148,7 +170,7 @@ async function readOpening(req: AskRequest, id: number) {
   if (req.readQuestion && req.question) await speak(req.question.en, req.question.by);
   if (getGame().prompt?.id !== id) return;
   // Tap mode: the student must read; reading the right answer aloud would give it away.
-  if (req.readSentence && req.kind === "command" && micUsable()) await readSentences(id);
+  if (req.readSentence && req.kind === "command" && (micUsable() || getGame().prompt?.answerMode === "say-tap")) await readSentences(id);
 }
 
 async function readSentences(id: number, slow = false) {
@@ -247,13 +269,16 @@ export function micPress() {
   const speechOptions = judgeIds.map((id) => PHRASES[id]);
   let last: Judgement = { kind: "none", heard: "" };
   let hard = false;
+  let ended = false;
+  const settingMode = answerMode(getGame().settings);
   audio.setListening(true);
   audio.play("micOn");
-  update({ status: "listening", heard: "", reading: false, wrongId: null });
+  update({ status: "listening", heard: "", reading: false, wrongId: null, micFeedback: undefined, meterAvailable: undefined });
   a.stopListening = recognition.listen(
     {
       onResult(alts) {
         if (a.done) return;
+        markMicWorked();
         const j = judgeSpeech(alts, speechOptions);
         if (alts[0]) update({ heard: alts[0] });
         if (j.kind === "match" && accepted(j.id)) {
@@ -266,29 +291,37 @@ export function micPress() {
         if (HARD_ERRORS.has(err)) hard = true;
       },
       onEnd() {
+        ended = true;
+        const summary = promptMeter.stop();
         audio.setListening(false);
         if (a.done) return;
         a.stopListening = null;
         audio.play("micOff");
-        miss(last, hard);
+        miss(last, hard, classifyMicAttempt(summary));
       }
     },
     7000
   );
+  // Recognition always starts first. This passive meter never requests permission.
+  void canMeterDuringRecognition().then(async (allowed) => {
+    if (!allowed || ended || a.done || getGame().prompt?.id !== p.id || answerMode(getGame().settings) !== settingMode) return;
+    const available = await promptMeter.start();
+    if (ended || a.done || getGame().prompt?.id !== p.id) return;
+    update({ meterAvailable: available === "available" });
+  });
 }
 
-function miss(j: Judgement, hard: boolean) {
+function miss(j: Judgement, hard: boolean, micFeedback: PromptUi["micFeedback"] = "neutral") {
   const a = active;
   const p = getGame().prompt;
   if (!p || !a) return;
   if (hard) {
-    setGame({ micState: "blocked" });
-    update({ status: "miss", buttons: true });
+    blockMic();
     return;
   }
   const misses = p.misses + 1;
   audio.play("error");
-  update({ status: j.kind === "unclear" ? "unclear" : "miss", misses, buttons: p.buttons || misses >= 3, highlight: p.highlight || misses >= 2 });
+  update({ status: j.kind === "unclear" ? "unclear" : "miss", micFeedback, misses, buttons: p.buttons || misses >= 3, highlight: p.highlight || misses >= 2 });
   if (misses === 1) void replaySlow(p.id);
   if (misses === 2) a.req.onClue?.();
 }

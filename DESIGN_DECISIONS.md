@@ -830,3 +830,38 @@ these changes and decisions.
   carry the cue when the guide points at visitors.
 - Opening a tank that cannot answer an open request counts as a wrong pick on
   the existing ladder (no reward change), so hints escalate after exploring.
+
+## 2026-10-31 — Classroom audio checks and Say + Tap
+
+- A first New Game offers optional speaker and microphone checks before the
+  tutorial. Both can be skipped; Settings reopens either check and the speaking
+  lesson. Unsupported recognition skips the setup mic step with a short note.
+  Setup and lesson flags live in device settings, never the aquarium save.
+- The speaker check repeats Pico's “Hello! Welcome!” with visible text and a
+  Chromebook volume tip. It does not change system volume. The mic check reports
+  permission/availability, local sound activity and recognised words separately;
+  only a matching recognition result says “Great! I heard you!” No signal alone
+  proves that a child's words were understood or identifies whose voice it was.
+- The shared local meter uses one microphone stream, a 1024-sample analyser
+  frame and a 15 Hz loop. It stores only numeric session summaries and closes
+  tracks, nodes and context on completion/cancellation. Samples are never
+  recorded, uploaded or persisted. Audio frames update DOM/CSS, not React state.
+- Gameplay starts recognition first, then opens the meter only with already
+  granted permission (or a previously working mic when Permissions is missing).
+  Meter failures hide the meter and leave recognition alone. An explicit check
+  may request permission once; its short permission stream closes before the
+  recognition/meter attempt. Denial uses the existing blocked-mic tap fallback.
+- Failed attempts get conservative feedback after listening ends: near silence
+  can suggest moving closer; over 2% clipped samples for at least 400 ms can
+  suggest a softer voice. Attempts under 3 seconds and ambiguous/noisy signals
+  stay neutral. Rejected: “speak louder”, identifying a speaker, or treating high
+  RMS as shouting; Chromebook automatic gain can make normal speech loud.
+- The one-time speaking card teaches clear, normal speech and can be dismissed
+  without blocking answers. Settings retains a “How to speak” entry.
+- Teacher answer choices are Speak, Say + Tap and Tap. Say + Tap uses the same
+  answer buttons with SAY/TAP tags and a practice instruction, opens no mic, and
+  makes no recognition claim. Existing model playback remains available. Mode
+  changes take effect at the next prompt; an existing listening session releases
+  its meter when the teacher changes modes. Old mic=true/false settings retain
+  Speak/Tap, using only optional new settings fields. No title mode selector,
+  speech matching, hint thresholds, rewards or save schema changes were needed.

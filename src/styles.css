@@ -1649,7 +1649,58 @@ mark.key {
   padding: 14px 20px 18px;
   display: grid;
   gap: 12px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
 }
+
+/* Optional classroom audio: transient audio values are DOM-only CSS variables. */
+.mic-meter {
+  --mic-level: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 30px;
+  width: 42px;
+  color: #8496a6;
+  pointer-events: none;
+  flex: none;
+}
+.mic-meter[hidden] { display: none; }
+.mic-meter i { width: 5px; height: calc(5px + 23px * var(--mic-level)); background: currentColor; border-radius: 4px; transition: height 65ms linear; }
+.mic-meter i:nth-child(even) { height: calc(5px + 17px * var(--mic-level)); }
+.mic-meter[data-state="listening"] { color: #6d3ab4; animation: mic-glimmer 1.5s ease-in-out infinite; }
+.mic-meter[data-state="sound"] { color: #147878; }
+.mic-meter[data-state="recognised"] { color: #238747; }
+.mic-meter[data-state="recognised"] i { height: 22px; }
+.mic-meter[data-state="not-recognised"] { color: #865400; }
+.mic-meter[data-state="not-recognised"] i { height: 10px; }
+.mic-meter[data-state="unavailable"] { color: #77828d; opacity: 0.45; border-bottom: 2px dashed currentColor; }
+@keyframes mic-glimmer { 50% { opacity: 0.5; } }
+.speak-tip { display: flex; align-items: center; gap: 10px; background: #f3ecff; border-radius: 14px; padding: 8px 12px; margin-bottom: 8px; font-size: 16px; pointer-events: none; }
+.speak-tip > svg { flex: none; color: #6d3ab4; }
+.speak-tip > span { flex: 1; }
+.speak-tip > span > span:not(.ja) { display: block; }
+.speak-tip button { pointer-events: auto; flex: none; }
+.say-tap-practice { margin: 0 0 8px; font-size: 16px; }
+.prompt-heading { display: flex; align-items: center; gap: 8px; }
+.mic-feedback { display: block; font-size: 16px; margin-top: 4px; }
+.settings .mode-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+.settings .mode-switch { width: 100%; justify-content: center; }
+.settings .mode-switch button { flex: 1; white-space: nowrap; }
+.audio-check-wrap { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; pointer-events: none; }
+.audio-check { width: min(540px, calc(100% - 24px)); max-height: calc(100% - 24px); overflow-y: auto; padding: 16px 20px; display: grid; gap: 10px; pointer-events: none; text-align: center; }
+.audio-check button { pointer-events: auto; }
+.audio-check h2 { font-size: 23px; margin: 0; }
+.audio-check h2 svg { vertical-align: middle; margin-right: 8px; }
+.audio-check p { margin: 0; }
+.audio-check .audio-model { font-size: 28px; font-weight: 800; }
+.audio-buttons { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.audio-target { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.audio-target > strong { font-size: 28px; }
+.audio-results { text-align: left; font-size: 16px; display: grid; gap: 6px; }
+.audio-check .speak-tip { margin: 0; text-align: left; }
+.setting-checks .secondary { padding: 8px 10px; min-height: 44px; font-size: 15px; }
+@media (prefers-reduced-motion: reduce) { .mic-meter { animation: none !important; } }
 
 .setting {
   display: flex;

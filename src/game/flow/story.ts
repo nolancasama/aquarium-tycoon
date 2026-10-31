@@ -140,7 +140,7 @@ const setStep = (step: TutorialStep) => updateModel((m) => setTutorial(m, step))
 
 // ------------------------------------------------------------------ start
 
-async function beginAudio() {
+async function beginAudio(requestPermission = true) {
   audio.unlock();
   const s = getGame().settings;
   audio.setVolumes(s.music, s.sfx);
@@ -148,7 +148,8 @@ async function beginAudio() {
   audio.startAmbience();
   audio.startMusic("aquarium");
   // The microphone is requested once, up front (never mid-sentence).
-  if (s.mic && getGame().micState === "unknown") {
+  if (s.mic && !recognition.supported) setGame({ micState: "unsupported" });
+  if (requestPermission && s.mic && getGame().micState === "unknown") {
     if (!recognition.supported) setGame({ micState: "unsupported" });
     else
       void requestMicPermission(8000).then((r) => {
@@ -187,8 +188,17 @@ function enter(m: Model) {
 }
 
 export async function newGame() {
+  const setup = !getGame().settings.audioSetupDone;
+  if (setup) {
+    setGame({ audioCheck: "setup", confirmNew: false });
+    await new Promise<void>((resolve) => {
+      const unsubscribe = useGame.subscribe((s) => {
+        if (!s.audioCheck) { unsubscribe(); resolve(); }
+      });
+    });
+  }
   clearSave();
-  void beginAudio();
+  void beginAudio(!setup);
   enter(newModel());
   saveNow();
   void flow(tutorial);

@@ -13,7 +13,8 @@ export function TitleScreen() {
   const hasSave = useGame((s) => s.hasSave);
   const confirm = useGame((s) => s.confirmNew);
   const lost = useGame((s) => s.saveLost);
-  if (screen !== "title") return null;
+  const checking = useGame((s) => s.audioCheck === "setup");
+  if (screen !== "title" || checking) return null;
   return (
     <div className="title-screen ui" data-testid="title">
       <div className="title-card panel">

@@ -36,6 +36,14 @@ export interface Settings {
   /** Japanese help for instructions (never for target English). */
   japanese: boolean;
   slowVoice: boolean;
+  sayAloud?: boolean;
+  audioSetupDone?: boolean;
+  speakTipSeen?: boolean;
+}
+
+export type AnswerMode = "speak" | "say-tap" | "tap";
+export function answerMode(s: Settings): AnswerMode {
+  return s.mic ? "speak" : s.sayAloud ? "say-tap" : "tap";
 }
 
 export type MicState = "unknown" | "ready" | "blocked" | "unsupported";
@@ -55,6 +63,9 @@ export interface Frame {
 }
 
 export interface PromptUi {
+  answerMode?: AnswerMode;
+  micFeedback?: "quiet" | "overload" | "neutral";
+  meterAvailable?: boolean;
   id: number;
   kind: "command" | "choice";
   question: { en: string; ja?: string; by: Speaker } | null;
@@ -139,6 +150,7 @@ export interface GameState {
   micState: MicState;
   touch: boolean;
   settingsOpen: boolean;
+  audioCheck: null | "setup" | "speaker" | "mic" | "tip";
   hasSave: boolean;
   /** The title's "start again?" confirmation. */
   confirmNew: boolean;
@@ -173,12 +185,14 @@ export const DEFAULT_SETTINGS: Settings = {
   music: 0.2,
   sfx: 0.75,
   japanese: true,
-  slowVoice: false
+  slowVoice: false,
+  sayAloud: false,
+  audioSetupDone: false,
+  speakTipSeen: false
 };
 
-function loadSettings(): Settings {
+export function parseSettings(raw: string | null): Settings {
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const s = { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
       return {
@@ -186,13 +200,27 @@ function loadSettings(): Settings {
         music: Math.max(0, Math.min(1, Number(s.music) || 0)),
         sfx: Math.max(0, Math.min(1, Number(s.sfx) || 0)),
         japanese: s.japanese !== false,
-        slowVoice: s.slowVoice === true
+        slowVoice: s.slowVoice === true,
+        sayAloud: s.sayAloud === true,
+        audioSetupDone: s.audioSetupDone === true,
+        speakTipSeen: s.speakTipSeen === true
       };
     }
   } catch {
     /* storage blocked on some managed devices */
   }
   return { ...DEFAULT_SETTINGS };
+}
+
+function loadSettings(): Settings {
+  try { return parseSettings(localStorage.getItem(SETTINGS_KEY)); }
+  catch { return { ...DEFAULT_SETTINGS }; }
+}
+
+export function updateSettings(patch: Partial<Settings>) {
+  const settings = { ...getGame().settings, ...patch };
+  saveSettings(settings);
+  setGame({ settings });
 }
 
 export function saveSettings(s: Settings) {
@@ -215,6 +243,7 @@ export const useGame = create<GameState>(() => ({
   micState: "unknown",
   touch: false,
   settingsOpen: false,
+  audioCheck: null,
   hasSave: false,
   confirmNew: false,
   saveLost: false,

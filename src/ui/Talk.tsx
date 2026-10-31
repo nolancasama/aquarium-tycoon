@@ -1,13 +1,15 @@
 import { Fragment } from "react";
 import { useGame, type Speaker } from "../game/store";
-import { cancelAsk, choose, micPress, micUsable, nextLine, replay } from "../game/flow/ask";
+import { cancelAsk, choose, micPress, micUsable, nextLine, promptMeter, replay } from "../game/flow/ask";
 import { cancelShow, replayRequest } from "../game/flow/visitors";
 import { PHRASES, type PhraseId } from "../game/logic/english";
 import { SPECIES } from "../game/data/fish";
 import { requestStep } from "../game/logic/requestGuide";
 import { Icon } from "./icons";
 import { DecorPicture, FishPicture, LampPicture, SpeakerFace } from "./Portraits";
-import { ACTION, SWATCH, UI, requestAction } from "./i18n";
+import { ACTION, AUDIO, SWATCH, UI, requestAction } from "./i18n";
+import { MicMeter } from "./MicMeter";
+import { SpeakTip } from "./SpeakTip";
 import { ActionTag } from "./ActionTag";
 import { Ja } from "./Ja";
 import { promptHeading } from "./promptHeading";
@@ -54,7 +56,9 @@ export function PromptPanel() {
   useGame((s) => s.micState); // re-render when the mic gets blocked
   if (!p) return null;
   const mic = micUsable();
-  const heading = promptHeading(p, mic);
+  const sayTap = p.answerMode === "say-tap";
+  const heading = sayTap ? { kind: "say" as const, ...ACTION.sayThenTap } : promptHeading(p, mic);
+  const headingTags = <><ActionTag {...heading} />{sayTap && <ActionTag kind="tap" en="TAP" ja="タップ" secondary />}</>;
   const lookCue = p.question?.en === "How many fish?" ? ACTION.lookFish
     : p.question?.en === "What's this?" || p.question?.en === "What color is it?" ? ACTION.lookAnimal : null;
   const speakHint = touch ? UI.speakTouch : UI.speakKeys;
@@ -76,6 +80,8 @@ export function PromptPanel() {
               : speakHint;
   return (
     <div className={`panel prompt ui ${p.status} ${expansion ? "expansion-prompt" : ""}`} data-testid="prompt" role="dialog" aria-label="English">
+      {mic && <SpeakTip key={p.id} />}
+      {sayTap && <p className="say-tap-practice">{AUDIO.practice.en}<Ja>{AUDIO.practice.ja}</Ja></p>}
       {p.question && (
         <div className="prompt-question">
           <SpeakerFace by={p.question.by} size={54} />
@@ -90,12 +96,12 @@ export function PromptPanel() {
               </span>
             )}
           </div>
-          <div className="prompt-heading" data-testid="prompt-heading"><ActionTag {...heading} /></div>
+          <div className="prompt-heading" data-testid="prompt-heading">{headingTags}</div>
         </div>
       )}
       <div className="prompt-main">
         <div className="prompt-body">
-          {!p.question && <div className="prompt-heading" data-testid="prompt-heading"><ActionTag {...heading} /></div>}
+          {!p.question && <div className="prompt-heading" data-testid="prompt-heading">{headingTags}</div>}
           {!p.buttons && p.frame && (
             <div className="frame" data-testid="frame">
               {p.frame.before && <span className="frame-text">{p.frame.before}</span>}
@@ -143,6 +149,7 @@ export function PromptPanel() {
                 {!touch && <kbd>SPACE</kbd>}
               </button>
             )}
+            {(mic || p.meterAvailable || p.status === "miss") && <MicMeter meter={promptMeter} hidden={p.meterAvailable === false} state={!mic ? "unavailable" : p.status === "correct" ? "recognised" : p.status === "listening" ? "listening" : p.status === "miss" || p.status === "unclear" ? "not-recognised" : "inactive"} />}
             <button className="speaker" onClick={() => void replay()} aria-label="Listen again" data-testid="replay">
               <Icon id="speaker" size={26} />
             </button>
@@ -155,6 +162,7 @@ export function PromptPanel() {
                 <>
                   <span>{status.en}</span>
                   <Ja>{status.ja}</Ja>
+                  {(p.status === "miss" || p.status === "unclear") && p.micFeedback && <span className="mic-feedback">{AUDIO[p.micFeedback].en}<Ja>{AUDIO[p.micFeedback].ja}</Ja></span>}
                   {mic && p.status !== "listening" && status !== speakHint && !(p.buttons && p.misses >= 3) && (
                     <span className="prompt-mic-reminder">{speakHint.en}<Ja>{speakHint.ja}</Ja></span>
                   )}
