@@ -20,9 +20,9 @@ function tankFor(tankId: string): TankRec | undefined {
 
 // ------------------------------------------------------------------ fish
 
-/** Hint glow wanted for an animal: the "show me" rescue, "What's this?", or the counting clue (one at a time). */
+/** Whole-body counting clue (one at a time); request hints use a rim to preserve colour. */
 function glowFor(id: string, tank: TankRec | undefined, t: number): number {
-  let want = rt.glow.fish.has(id) ? 0.6 + Math.sin(t * 6) * 0.3 : 0;
+  let want = 0;
   const cg = rt.countGlow;
   if (cg && tank && cg.tankId === tank.id) {
     const i = tank.fish.findIndex((x) => x.id === id);
@@ -30,6 +30,10 @@ function glowFor(id: string, tank: TankRec | undefined, t: number): number {
     if (k >= 0 && k < 0.8) want = 0.9;
   }
   return want;
+}
+
+function hintRim(id: string): number {
+  return rt.glow.fish.has(id) ? 0.6 + Math.sin(rt.time * Math.PI * 2 * 1.15) * 0.12 : 0;
 }
 
 /** Every animal: fish (and the pufferfish and seahorse) bend; the jellyfish pulses; the turtle paddles. */
@@ -75,6 +79,7 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
     mat.userData.uColour.value = f.colourPhase ?? 0;
     const tank = tankFor(tankId);
     glow.current += (glowFor(id, tank, t) - glow.current) * Math.min(1, dt * 10);
+    mat.userData.uHintGlow.value = hintRim(id);
     mat.emissive.setRGB(glow.current * 0.6, glow.current * 0.5, glow.current * 0.12);
   });
   return <mesh ref={ref} geometry={animalGeometry(species)} material={mat} renderOrder={def.body === "jelly" ? 1 : 0} dispose={null} />;
@@ -112,6 +117,7 @@ function SchoolMesh({ id, species, tankId }: { id: string; species: SpeciesId; t
     mat.userData.uMotion.value = 1 + response;
     const tank = tankFor(tankId);
     glow.current += (glowFor(id, tank, rt.time) - glow.current) * Math.min(1, dt * 10);
+    mat.userData.uHintGlow.value = hintRim(id);
     mat.emissive.setRGB(glow.current * 0.6, glow.current * 0.5, glow.current * 0.12);
   });
   return <instancedMesh ref={ref} args={[geometry, mat, def.school ?? 1]} frustumCulled={false} dispose={null} />;
@@ -161,6 +167,7 @@ function BendingFish({ id, species, tankId }: { id: string; species: SpeciesId; 
     mat.userData.uPhase.value = f.phase;
     mat.userData.uAmp.value = upright ? 0 : def.tailAmp * (hungry ? 0.75 : 1) * (1 - puff.current * 0.7);
     glow.current += (glowFor(id, tank, t) - glow.current) * Math.min(1, dt * 10);
+    mat.userData.uHintGlow.value = hintRim(id);
     mat.emissive.setRGB(glow.current * 0.6, glow.current * 0.5, glow.current * 0.12);
   });
   return <mesh ref={ref} geometry={fishGeometry(species)} material={mat} />;
@@ -193,6 +200,7 @@ function JellyMesh({ id, tankId }: { id: string; tankId: string }) {
     m.scale.set(1 + p * k, 1 - p * k * 0.8, 1 + p * k);
     const tank = getGame().model.tanks.find((x) => x.id === tankId);
     glow.current += (glowFor(id, tank, t) - glow.current) * Math.min(1, dt * 10);
+    mat.userData.uHintGlow.value = hintRim(id);
     mat.emissive.setRGB(0.12 + glow.current * 0.6, 0.04 + glow.current * 0.5, 0.2 + glow.current * 0.1);
   });
   return <mesh ref={ref} geometry={fishGeometry("jellyfish")} material={mat} renderOrder={1} />;
@@ -231,6 +239,7 @@ function TurtleMesh({ id, tankId }: { id: string; tankId: string }) {
     });
     const tank = getGame().model.tanks.find((x) => x.id === tankId);
     glow.current += (glowFor(id, tank, t) - glow.current) * Math.min(1, dt * 10);
+    mat.userData.uHintGlow.value = hintRim(id);
     mat.emissive.setRGB(glow.current * 0.6, glow.current * 0.5, glow.current * 0.12);
   });
   const spots: [number, number, number, number, THREE.BufferGeometry][] = [

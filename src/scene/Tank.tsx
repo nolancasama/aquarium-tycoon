@@ -11,7 +11,7 @@ import { tapDecor, tapFish, tapSlot, tapTank } from "../game/flow/actions";
 import { glassGeometry, surfaceGeometry, tankShellGeometry, waterGeometry } from "./models/tankShell";
 import { FishMesh } from "./Animals";
 import { decorModel } from "./models/decor";
-import { additiveSprite, algaeTexture, badgeTexture, flatMat, glassTexture, glowTexture, shaderTime, shadowMaterial, surfaceMaterial, tankShellMaterial, waterMaterial } from "./materials";
+import { additiveSprite, algaeTexture, badgeTexture, flatMat, glassTexture, shaderTime, shadowMaterial, surfaceMaterial, tankShellMaterial, waterMaterial } from "./materials";
 import { project, FOV } from "./CameraRig";
 import { footprintContains, sandSurfaceY, slotMarkerY, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
 import type { TankType } from "../game/types";
@@ -175,7 +175,7 @@ function TankContents({ tank }: { tank: TankRec }) {
       {special ? <ShapedGlass type={tank.type} /> : <Glass w={def.w} d={def.d} h={def.h} />}
       <Upgrades tank={tank} />
       <Badge tank={tank} />
-      <TankGlow tankId={tank.id} w={def.w} d={def.d + bulge} z={bulge / 2} />
+      <TankGlow tankId={tank.id} w={def.w} h={def.h} d={def.d + bulge} z={bulge / 2} />
       {/* Tap target: the whole tank and stand. */}
       <mesh position={[0, (STAND_H + def.h + 0.1) / 2, 0.02 + bulge / 2]} onClick={onClick}>
         <boxGeometry args={[def.w + 0.2, STAND_H + def.h + 0.1, def.d + bulge + 0.16]} />
@@ -691,19 +691,17 @@ function Badge({ tank }: { tank: TankRec }) {
   return <sprite ref={ref} material={mat} position={[0, 0, (def.bulge ?? 0) / 2]} scale={[width, width * (96 / 256), 1]} renderOrder={10} />;
 }
 
-/** The "show me" rescue in the room view: a golden glow behind the tank. */
-function TankGlow({ tankId, w, d, z }: { tankId: string; w: number; d: number; z: number }) {
-  const ref = useRef<THREE.Mesh>(null);
-  const mat = useMemo(() => new THREE.MeshBasicMaterial({ map: glowTexture(), color: "#ffd84a", transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }), []);
+/** One soft billboard behind the opaque tank silhouette: an edge halo, never a tap target. */
+function TankGlow({ tankId, w, h, d, z }: { tankId: string; w: number; h: number; d: number; z: number }) {
+  const ref = useRef<THREE.Sprite>(null);
+  const mat = useMemo(() => additiveSprite("#ffd84a", 0), []);
   useEffect(() => () => mat.dispose(), [mat]);
   useFrame(() => {
     const on = rt.glow.tanks.has(tankId) && getGame().view === "room";
-    mat.opacity = on ? 0.55 + Math.sin(rt.time * 5) * 0.25 : 0;
+    mat.opacity = on ? 0.6 + Math.sin(rt.time * Math.PI * 2 * 1.15) * 0.12 : 0;
     if (ref.current) ref.current.visible = on;
   });
   return (
-    <mesh ref={ref} position={[0, 0.02, z]} rotation={[-Math.PI / 2, 0, 0]} material={mat} visible={false}>
-      <planeGeometry args={[w + 1.6, d + 1.6]} />
-    </mesh>
+    <sprite ref={ref} position={[0, STAND_H + h / 2, z - d * 0.6]} scale={[w + 1.2, h + 1.2, 1]} material={mat} raycast={() => {}} visible={false} />
   );
 }

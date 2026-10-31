@@ -673,7 +673,7 @@ function syncTutorialGuide(dt: number) {
     tutorialTarget = hint.target;
     rt.idle = 0;
     setGame({ guide: hint.target });
-    nudge({ ...hint, kind: "tap" }, 9000);
+    nudge({ ...hint, kind: "tap", repeated: !changed }, 9000);
   }
 }
 

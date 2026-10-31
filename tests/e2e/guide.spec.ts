@@ -160,6 +160,27 @@ test("Repeated wrong shops advance hints once per tier; the level overview dismi
   expect(errors).toEqual([]);
 });
 
+test("the first Fish hand lets taps reach Fish and clears as its step completes", async ({ page }) => {
+  const errors = await boot(page);
+  await startNew(page, "speak", false);
+  await precondition(page, (s) => s.tutorial === "buy" && s.mode === "play" && !s.prompt && !s.line, "interactive buy step");
+  await expect(page.getByTestId("btn-fish-shop")).toHaveClass(/guide/);
+  await expect(page.locator(".room-bar .big-btn")).toHaveCount(1);
+  const hand = page.getByTestId("tap-hand");
+  await expect(hand).toHaveAttribute("data-hand-target", "btn-fish-shop");
+  expect(await hand.evaluate((el) => getComputedStyle(el).pointerEvents)).toBe("none");
+  // Its fingertip lies over Fish; the actual overlay position still clicks Fish.
+  const fingertip = await hand.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    return { x: box.left, y: box.top };
+  });
+  await page.mouse.click(fingertip.x, fingertip.y);
+  await expect(hand).toHaveAttribute("data-hand-target", "");
+  await precondition(page, (s) => s.prompt?.kind === "choice" && !s.prompt.buttons, "hand click reached Fish");
+  await expect(page.getByTestId("prompt-heading")).toContainText("SAY ONE!");
+  expect(errors).toEqual([]);
+});
+
 test("the first tap, keyboard reminder and speaking/fallback headings show the expected action", async ({ page }) => {
   const errors = await boot(page);
   await startNew(page, "speak", false);

@@ -1,0 +1,5 @@
+.meaning-help { pointer-events: none; margin-top: 3px; line-height: 1.3; }
+.sentence-meaning { display: block; font-size: 13px; color: #536b70; }
+.meaning-hint { pointer-events: auto; min-height: 30px; padding: 3px 9px; font-size: 12px; color: #536b70; background: #f1f8f6; }
+.request.ui { pointer-events: none; }
+.request button { pointer-events: auto; }

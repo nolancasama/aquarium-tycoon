@@ -4,6 +4,7 @@ import { DECOR, decorFits } from "../data/decor";
 import { BUILT_IN_PADS, HALL_OF, PAD_TYPES, SLOT_ORDER, TANKS } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
 import { PHRASES, type PhraseId } from "./english";
+import { isSentencePattern } from "./sentenceTeaching";
 import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep } from "./model";
 
 /**
@@ -137,6 +138,8 @@ function readProgress(raw: unknown, version: number): Progress {
   p.upgraded = src.upgraded === true && p.stage >= 8;
   p.superStar = src.superStar === true && p.stage === 8;
   p.tipsTaught = src.tipsTaught === true;
+  p.handShown = [...new Set(arr(src.handShown).filter((id): id is string => typeof id === "string" && ["fish-shop", "place-animal", "visitor", "decor-ring", "room-navigation"].includes(id)))];
+  p.seenPatterns = [...new Set(arr(src.seenPatterns).filter(isSentencePattern))];
   p.galleryOpen = src.galleryOpen === true && p.stage >= 8 && p.hallOpen;
   p.said = [...new Set(arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES))];
   return p;

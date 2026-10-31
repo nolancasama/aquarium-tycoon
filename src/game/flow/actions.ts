@@ -28,6 +28,7 @@ import {
   remodelPlan,
   remodelTank,
   setLight,
+  setTutorial,
   LIGHT_COLORS,
   EXPANSION_FROM,
   storeDecor,
@@ -302,7 +303,13 @@ export async function orderFish(opts: { tutorial?: boolean } = {}): Promise<Spec
 }
 
 export function startPlacingFish(fishId: string) {
-  setGame({ placing: { kind: "fish", fishId }, view: "room", tankId: null, panel: null });
+  // The bag is already interactive; do not wait for the tutorial's polling
+  // loop to enable tank taps after a fast spoken purchase.
+  const m = model();
+  setGame({
+    ...(m.progress.tutorial === "buy" ? { model: setTutorial(m, "place") } : {}),
+    placing: { kind: "fish", fishId }, view: "room", tankId: null, panel: null
+  });
 }
 
 /** The bag chip in the HUD: carry the first bagged fish again. */

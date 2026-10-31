@@ -3,6 +3,7 @@ import type { Goal } from "../game/logic/model";
 import type { RequestStep } from "../game/logic/requestGuide";
 import { SPECIES } from "../game/data/fish";
 import { DECOR } from "../game/data/decor";
+import type { Request } from "../game/logic/requests";
 
 const REQUEST_ACTION = {
   visitor: { en: "TAP THE VISITOR!", ja: "おきゃくさんを タップ！" },
@@ -12,22 +13,20 @@ const REQUEST_ACTION = {
   thing: { en: "TAP A FISH OR DECORATION!", ja: "さかなや かざりを タップ！" },
   lookTank: { en: "LOOK IN THIS TANK!", ja: "この タンクを みよう！" }
 };
-const COLOR_JA: Record<string, string> = {
-  red: "あかい", blue: "あおい", yellow: "きいろい", green: "みどりの", orange: "オレンジの",
-  purple: "むらさきの", pink: "ピンクの", white: "しろい"
-};
-
 /** Tag copy lives here; the request logic supplies only its semantic step. */
-export function requestAction(step: RequestStep): Text & { kind: "tap" | "look" } {
+export function requestAction(step: RequestStep, req?: Request): Text & { kind: "tap" | "look" } {
   if (step.step === "tank" && step.tier >= 2) return { kind: "look", ...REQUEST_ACTION.lookTank };
+  if (step.tier >= 2 && step.step !== "tank" && step.step !== "visitor" && step.step !== "exact" && req) {
+    if (req.kind === "show") return { kind: "tap", en: req.fishOnly ? `TAP THE ${req.color.toUpperCase()} FISH!` : `TAP SOMETHING ${req.color.toUpperCase()}!`, ja: req.fishOnly ? REQUEST_ACTION.fish.ja : REQUEST_ACTION.thing.ja };
+    if (req.kind === "showAnimal") return { kind: "tap", en: `TAP THE ${SPECIES[req.species].word.toUpperCase()}!`, ja: REQUEST_ACTION.animal.ja };
+  }
   if (step.step !== "exact" || !step.exact) return { kind: "tap", ...REQUEST_ACTION[step.step === "exact" ? "thing" : step.step] };
   const target = step.exact;
   const def = target.type === "fish" ? SPECIES[target.species] : DECOR[target.kind];
   const color = target.type === "fish" ? SPECIES[target.species].color : target.variant;
   const fish = target.type === "fish" && SPECIES[target.species].kind === "fish";
-  const en = fish ? `${color} fish` : target.type === "fish" ? SPECIES[target.species].word : `${color && COLOR_JA[color] ? `${color} ` : ""}${def.name.toLowerCase()}`;
-  const ja = fish ? `${COLOR_JA[color ?? ""] ?? ""} さかな` : `${target.type === "decor" && color && COLOR_JA[color] ? `${COLOR_JA[color]} ` : ""}${def.ja}`;
-  return { kind: "tap", en: `TAP THE ${en.toUpperCase()}!`, ja: `${ja}を タップ！` };
+  const en = fish ? `${color} fish` : target.type === "fish" ? SPECIES[target.species].word : `${color && SWATCH[color] ? `${color} ` : ""}${def.name.toLowerCase()}`;
+  return { kind: "tap", en: `TAP THE ${en.toUpperCase()}!`, ja: fish ? REQUEST_ACTION.fish.ja : target.type === "fish" ? REQUEST_ACTION.animal.ja : "かざりを タップ！" };
 }
 
 /** Shared action instructions: colours and icons are fixed by ActionTag. */

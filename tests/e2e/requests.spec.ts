@@ -63,19 +63,22 @@ test("'show me': wrong taps climb the hint ladder; the right one pays once", asy
   await page.waitForTimeout(900);
   await hook(page, "freezeFish", true);
   const before = await state(page);
-  // Wrong 1: replay slowly and emphasise the key word, without a picture or glow.
+  // Tier 2 (first miss): replay, emphasise the word and add its colour swatch.
   await tapFish(page, "clownfish");
   let s = await waitFor(page, (x) => x.request?.misses === 1, 5_000, "wrong 1");
   expect(s.progress.hearts).toBe(before.progress.hearts);
   expect(s.coins).toBe(before.coins);
   await expect(page.getByTestId("request").locator("mark.key")).toHaveText("blue");
+  await expect(page.getByTestId("request-swatch")).toBeVisible();
   await expect(page.getByTestId("request-clue")).toHaveCount(0);
   expect(s.glowFish).toBe(0);
-  // Wrong 2: the colour word lights up with a swatch.
+  // Another miss keeps the same clue; exact fish targets still wait for tier 3.
   await page.waitForTimeout(800);
   await tapFish(page, "clownfish");
   s = await waitFor(page, (x) => x.request?.misses === 2, 5_000, "wrong 2");
   await expect(page.getByTestId("request").locator("mark.key")).toContainText("blue");
+  await expect(page.getByTestId("request-swatch")).toBeVisible();
+  await expect(page.getByTestId("request-swatch")).toHaveAttribute("data-color", "blue");
   await expect(page.getByTestId("request-clue")).toBeVisible();
   await expect(page.getByTestId("request-clue")).toContainText("blue");
   await expect(page.getByTestId("request-clue").locator(".swatch")).toBeVisible();

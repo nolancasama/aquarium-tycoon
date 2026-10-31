@@ -121,6 +121,8 @@ export const rt = {
   effects: [] as Effect[],
   /** Hint glows: whole tanks (room view), fish and decorations (`tankId:slot`). */
   glow: { tanks: new Set<string>(), fish: new Set<string>(), decor: new Set<string>() },
+  /** The one DOM demonstration hand; scene markers yield to the same target. */
+  hand: { targetId: null as string | null },
   /** Counting clue: the fish of this tank light up one by one. */
   countGlow: null as null | { tankId: string; t0: number },
   /** A "show me" request is waiting for a tap: fish slow down. */
@@ -176,6 +178,7 @@ export function resetRuntime() {
   rt.camera.snap = true;
   rt.effects = [];
   clearGlow();
+  rt.hand.targetId = null;
   rt.slowFish = false;
   rt.spawnClock = 0;
   rt.sinceRequest = 0;

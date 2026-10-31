@@ -1,5 +1,34 @@
 # Design Decisions
 
+## 2026-10-31 — Tapping hand, sentence clues and pattern meanings
+
+- A single DOM hand demonstrates an exact tap with a short glide, press and
+  ripple, at most twice per showing. First encounters with the Fish button,
+  animal placement, visitor, decoration ring and room arrow are remembered in
+  optional save progress. Later demonstrations follow the existing exact Help,
+  request and hesitation guidance. Reduced motion uses a static pointer.
+  Positions follow DOM targets or the active camera's projection without React
+  updates each frame; disappearing targets and completed steps clear the hand.
+- The existing request card keeps the English sentence across visitor, tank
+  and close-up steps. Tier 1 gives only the action; tier 2 highlights the
+  request data's English keyword and adds a swatch for colours. Tier 3 adds
+  the exact hand alongside the existing target glow. Success clears clues.
+  Arrows direct travel, glows identify tappable objects, and the hand shows an
+  exact tap; a hand suppresses an arrow pointing to the same object.
+- Japanese meaning help follows stable sentence pattern IDs, with the tested
+  slot always blank. The first encounter shows the meaning when Japanese help
+  is enabled; later encounters offer a small Hint / ヒント control. Optional
+  seen-pattern progress defaults to empty for old saves, without a version bump.
+  Full request translations were rejected because they disclose the tested
+  colour or animal; exact sentence matching was rejected because changing the
+  vocabulary should still count as the same learned pattern.
+- Scene clues use gentle additive soft glows without post-processing or input
+  interception. Fish use a shader rim instead of a whole-body gold emissive
+  wash, which obscured the tested colour in the first review frames. The tank
+  billboard replaces its floor halo, and neither change adds draw calls.
+  A permanent animated pointer and new independent idle timers
+  were rejected to keep the classroom screen quiet and reuse the hint ladder.
+
 ## 2026-10-26 — Compact objectives and uninterrupted progression
 
 - Objectives start collapsed in the upper-left corner, showing the current

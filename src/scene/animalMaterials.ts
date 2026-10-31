@@ -10,6 +10,8 @@ export interface AnimalMaterial extends THREE.MeshLambertMaterial {
     uMotion: { value: number };
     /** A slow phase supplied by the crawling behaviour. */
     uColour: { value: number };
+    /** Golden request edge; never a whole-body colour wash. */
+    uHintGlow: { value: number };
   };
 }
 
@@ -32,11 +34,12 @@ export function animalMaterial(species: SpeciesId): AnimalMaterial {
   // A bell is one translucent surface; drawing its rear separately doubles the
   // work and makes the merged fringe unnecessarily dark on integrated GPUs.
   m.forceSinglePass = true;
-  m.userData = { uPhase: { value: 0 }, uMotion: { value: 1 }, uColour: { value: 0 } };
+  m.userData = { uPhase: { value: 0 }, uMotion: { value: 1 }, uColour: { value: 0 }, uHintGlow: { value: 0 } };
   m.onBeforeCompile = shader => {
     shader.uniforms.uPhase = m.userData.uPhase;
     shader.uniforms.uMotion = m.userData.uMotion;
     shader.uniforms.uColour = m.userData.uColour;
+    shader.uniforms.uHintGlow = m.userData.uHintGlow;
     shader.uniforms.uTime = shaderTime;
     shader.uniforms.uAnimal = { value: codes[species] ?? -1 };
     shader.uniforms.uLength = { value: SPECIES[species].length };
@@ -83,6 +86,7 @@ if (part == 1.0) {
 }`);
     shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
 uniform float uAnimal;
+uniform float uHintGlow;
 uniform float uColour;
 uniform float uTime;
 varying vec3 vAnimalPos;
@@ -129,8 +133,11 @@ if (uAnimal == 0.0 && part == 1.0) {
 }
 // Keep see-through bells pearly, with a quiet living glow inside.
 if (uAnimal >= 7.0 && part == 7.0) diffuseColor.rgb += vec3(0.025, 0.035, 0.05) * (0.8 + 0.2 * sin(uTime));
-`);
+`).replace("#include <opaque_fragment>", `
+float hintRim = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
+outgoingLight += vec3(1.0, 0.65, 0.08) * hintRim * uHintGlow;
+#include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => "expansion-animals-v1";
+  m.customProgramCacheKey = () => "expansion-animals-v2-hint-rim";
   return m;
 }

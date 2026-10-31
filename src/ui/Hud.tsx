@@ -29,6 +29,7 @@ import { Icon, type IconId } from "./icons";
 import { PicoFace, PersonFace } from "./Portraits";
 import { Ja } from "./Talk";
 import { ActionTag } from "./ActionTag";
+import { TapHand } from "./TapHand";
 import { STAGE_NAMES, STAGE_PREVIEWS, UI, goalText } from "./i18n";
 
 function Big({
@@ -55,7 +56,6 @@ function Big({
     <button className={`big-btn ui ${locked ? "locked" : ""} ${guide ? "guide" : ""}`} onClick={onClick} data-testid={id} aria-disabled={locked} title={reason}>
       <span className="big-icon">
         <Icon id={icon} size={40} />
-        {guide && id === "btn-fish-shop" && <Icon id="hand" size={24} className="guide-hand" />}
         {locked && (
           <span className="lock">
             <Icon id="lock" size={18} />
@@ -523,6 +523,7 @@ export function Hud() {
       {free && <PlacingBanner />}
       <Toasts />
       {!prompt && !line && <NudgeBubble />}
+      <TapHand />
     </>
   );
 }

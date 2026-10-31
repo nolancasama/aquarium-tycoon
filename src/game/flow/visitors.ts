@@ -13,6 +13,8 @@ import { openTank } from "./actions";
 import { audio } from "../../audio/audio";
 import { requestStep } from "../logic/requestGuide";
 import type { ColorId } from "../types";
+import { requestPattern } from "../logic/sentenceTeaching";
+import { meetPattern } from "./meaning";
 
 /**
  * Visitors: they come in, look at each tank, react to how happy its fish are,
@@ -429,6 +431,7 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
       ? whatColorChoices(SPECIES[f.species].color)
       : shuffle([answer, ...shuffle(animalAnswers.filter((p) => p !== answer), rand).slice(0, 2)], rand);
     const id = await ask({
+      pattern: requestPattern(req),
       kind: "command",
       options: [answer],
       judge: colorQuestion ? IT_COLOR_IDS : ITS_IDS,
@@ -450,7 +453,7 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
     requestQuiet = 0;
     requestView = "";
     clearGlow();
-    setGame({ request: { visitorId: v.id, by: v.type, req, line, misses: 0, status: "ready" }, panel: null, placing: null, guide: null, nudge: null });
+    setGame({ request: { ...meetPattern(requestPattern(req)), visitorId: v.id, by: v.type, req, line, misses: 0, status: "ready" }, panel: null, placing: null, guide: null, nudge: null });
     rt.slowFish = true;
     void speak(line, v.type);
     return new Promise((resolve) => {
@@ -472,6 +475,7 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
     v.face = { x: tankOrigin(t.slot).x, z: tankOrigin(t.slot).z };
     const n = t.fish.length;
     const id = await ask({
+      pattern: requestPattern(req),
       kind: "command",
       options: [NUMBER_PHRASE[n]],
       judge: NUMBER_IDS,
@@ -494,6 +498,7 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
   if (req.kind === "chatLike") {
     v.state = "help";
     const id = await ask({
+      pattern: requestPattern(req),
       kind: "choice",
       options: ["yesIDo", "noIDont"],
       question: { en: line, by: v.type },
@@ -510,6 +515,7 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
   const basic: PhraseId[] = ["likeRed", "likeBlue", "likeYellow", "likeGreen", "likeOrange"];
   const all: PhraseId[] = model().progress.stage >= 6 ? Object.values(LIKE_COLOR_PHRASE) : basic;
   const id = await ask({
+    pattern: requestPattern(req),
     kind: "choice",
     options: all,
     frame: { before: "I like", after: ".", slots: all },

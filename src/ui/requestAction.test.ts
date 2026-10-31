@@ -10,9 +10,9 @@ describe("visitor action copy", () => {
     expect(requestAction({ ...base, step: "fish" })).toMatchObject({ kind: "tap", en: "TAP A FISH!" });
     expect(requestAction({ ...base, tier: 2 })).toMatchObject({ kind: "look", en: "LOOK IN THIS TANK!" });
   });
-  it("names the fish only when the exact step supplies it", () => {
+  it("names an exact fish in English and keeps Japanese generic", () => {
     expect(requestAction({ ...base, step: "exact", tier: 3, exact: { type: "fish", species: "bluetang" } }))
-      .toMatchObject({ kind: "tap", en: "TAP THE BLUE FISH!", ja: "あおい さかなを タップ！" });
+      .toMatchObject({ kind: "tap", en: "TAP THE BLUE FISH!", ja: "さかなを タップ！" });
   });
   it("uses an animal name or a decoration colour for an exact target", () => {
     expect(requestAction({ ...base, step: "exact", tier: 3, exact: { type: "fish", species: "turtle" } }).en)

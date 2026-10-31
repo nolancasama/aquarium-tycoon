@@ -31,6 +31,7 @@ export function Markers() {
       const tanks = g.model.tanks;
       const guide = g.guide ?? g.nudge?.target ?? null;
       const add = (id: string) => {
+        if (rt.hand.targetId === `tank-${id}`) return;
         const t = tanks.find((x) => x.id === id);
         if (!t || HALL_OF[t.slot] !== g.hall || spots.length >= MAX || spots.some((p) => p.x === SLOT_POS[t.slot].x && p.z === SLOT_POS[t.slot].z)) return;
         const p = SLOT_POS[t.slot];
@@ -58,11 +59,11 @@ export function Markers() {
         if (guide === "chip-visitor" || guide?.startsWith("visitor-")) {
           const id = guide === "chip-visitor" ? g.waiting?.id : guide.slice(8);
           const visitor = rt.visitors.find((v) => v.id === id);
-          if (visitor && roomAtX(visitor.x) === g.hall && spots.length < MAX) spots.push({ x: visitor.x, y: 2.35 - visitor.seat * 0.25, z: visitor.z });
+          if (visitor && rt.hand.targetId !== `visitor-${visitor.id}` && roomAtX(visitor.x) === g.hall && spots.length < MAX) spots.push({ x: visitor.x, y: 2.35 - visitor.seat * 0.25, z: visitor.z });
         }
         const roomGoal = guide === "btn-tank-shop" && nextStep(g.model)?.goal === "openHall";
         const door = guide === "door-gallery" || guide === "gallery-door" ? 2 : guide === "door-hall" || guide === "hall-door" || roomGoal || g.nudge?.shopItem === "hall" ? 1 : null;
-        if (door && g.hall === door - 1 && spots.length < MAX) spots.push({ x: doorX(door) - 0.35, y: 2.7, z: DOOR_Z });
+        if (door && rt.hand.targetId !== `door-${door}` && g.hall === door - 1 && spots.length < MAX) spots.push({ x: doorX(door) - 0.35, y: 2.7, z: DOOR_Z });
       }
       // In the close-up the free decoration rings pulse gold themselves (Tank.tsx); room-sized arrows would hide the fish.
     }

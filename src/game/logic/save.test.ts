@@ -51,6 +51,22 @@ describe("save", () => {
     expect(decodeSave(JSON.stringify({ v: 1, model: { tanks: [] } }))).toBeNull();
   });
 
+  it("migrates optional teaching histories without changing the save version", () => {
+    const raw = JSON.parse(encodeSave(played()));
+    delete raw.model.progress.handShown;
+    delete raw.model.progress.seenPatterns;
+    const old = decodeSave(JSON.stringify(raw))!;
+    expect(old.v).toBe(VERSION);
+    expect(old.model.progress.handShown).toEqual([]);
+    expect(old.model.progress.seenPatterns).toEqual([]);
+    raw.model.progress.handShown = ["fish-shop", "visitor", "visitor", "unknown", 7];
+    raw.model.progress.seenPatterns = ["likeFish", "identify", "likeFish", "unknown", false];
+    const loaded = decodeSave(JSON.stringify(raw))!.model;
+    expect(loaded.progress.handShown).toEqual(["fish-shop", "visitor"]);
+    expect(loaded.progress.seenPatterns).toEqual(["likeFish", "identify"]);
+    expect(decodeSave(encodeSave(loaded))!.model).toEqual(loaded);
+  });
+
   it("repairs impossible data instead of trusting it", () => {
     const m = played();
     const raw = JSON.parse(encodeSave(m));

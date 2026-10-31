@@ -1,5 +1,22 @@
 # Current State
 
+## Tapping and sentence teaching (2026-10-31)
+
+- Added a reusable, limited tapping demonstration for first interactions and
+  existing exact guidance, with reduced-motion and click-through behavior.
+- Visitor clues follow request tiers: English keyword and colour swatch from
+  tier 2, exact target hand at tier 3, immediate clearing on success.
+- Japanese sentence meanings blank the tested word and fade to optional Hint
+  controls after the first pattern encounter. Optional progress fields preserve
+  old saves and the existing save version.
+- Typecheck, all 349 unit tests and production build pass. The build retains
+  its bundle-size warning.
+- Focused SwiftShader frames in `.tmp/teach-review/` cover the first Fish hand,
+  room clues, exact tank/fish hands and close-ups at 1366×768, 1280×720 and
+  1024×768. A real click through the first Fish hand opens its order and clears
+  the hand. Added browser specs have not been run; Claude retains aesthetic
+  review. The full-loop draw budget has not been remeasured; glows add no draws.
+
 ## Optional classroom audio (2026-10-31)
 
 - First New Game offers skippable speaker/mic checks; Settings reopens either

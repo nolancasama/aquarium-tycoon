@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { DecorKind, SlotId, SpeciesId, StageId, TankType, Text, VisitorType } from "./types";
 import type { PhraseId } from "./logic/english";
 import type { Request } from "./logic/requests";
+import type { SentencePatternId } from "./logic/sentenceTeaching";
 import { newModel, type Model, type Result } from "./logic/model";
 
 export type Screen = "title" | "game" | "results";
@@ -63,6 +64,9 @@ export interface Frame {
 }
 
 export interface PromptUi {
+  pattern?: SentencePatternId;
+  firstPattern?: boolean;
+  meaningRevealed?: boolean;
   answerMode?: AnswerMode;
   micFeedback?: "quiet" | "overload" | "neutral";
   meterAvailable?: boolean;
@@ -101,6 +105,9 @@ export interface Line {
 }
 
 export interface RequestUi {
+  pattern?: SentencePatternId;
+  firstPattern?: boolean;
+  meaningRevealed?: boolean;
   visitorId: string;
   by: VisitorType;
   req: Request;

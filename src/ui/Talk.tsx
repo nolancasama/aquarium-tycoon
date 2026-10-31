@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import { useGame, type Speaker } from "../game/store";
 import { cancelAsk, choose, micPress, micUsable, nextLine, promptMeter, replay } from "../game/flow/ask";
 import { cancelShow, replayRequest } from "../game/flow/visitors";
@@ -13,6 +12,8 @@ import { SpeakTip } from "./SpeakTip";
 import { ActionTag } from "./ActionTag";
 import { Ja } from "./Ja";
 import { promptHeading } from "./promptHeading";
+import { visibleRequestKeyword } from "../game/logic/sentenceTeaching";
+import { MeaningHelp } from "./MeaningHelp";
 
 export { Ja } from "./Ja";
 
@@ -142,6 +143,7 @@ export function PromptPanel() {
               ))}
             </div>
           )}
+          <MeaningHelp owner="prompt" pattern={p.pattern} first={p.firstPattern} revealed={p.meaningRevealed} correct={p.status === "correct"} />
           <div className="prompt-controls">
             {mic && p.status !== "correct" && (
               <button className={`mic ${p.status === "listening" ? "on" : ""}`} onClick={() => micPress()} aria-label="Speak" data-testid="mic">
@@ -255,33 +257,30 @@ export function RequestBanner() {
   );
   if (!r || (r.req.kind !== "show" && r.req.kind !== "showAnimal")) return null;
   const req = r.req;
-  const highlight = r.misses >= 1;
-  const words = r.line.split(/(\s+)/);
-  // The key word: the colour (with a swatch) or the animal (with its picture).
-  const key = req.kind === "show" ? req.color : SPECIES[req.species].plural;
-  const clue = req.kind === "show" ? <i className="swatch" style={{ background: SWATCH[req.color] }} /> : <FishPicture species={req.species} size={34} />;
-  const action = step ? requestAction(step) : null;
+  const keyword = visibleRequestKeyword(req, step?.tier ?? 1, r.status === "correct");
+  const keywordIndex = keyword ? r.line.toLowerCase().indexOf(keyword.word.toLowerCase()) : -1;
+  const swatch = keyword?.color ? <i className="swatch" data-testid="request-swatch" data-color={keyword.color} style={{ background: SWATCH[keyword.color] }} /> : null;
+  const action = step ? requestAction(step, req) : null;
   return (
     <div className={`panel request ui ${r.status}`} data-testid="request" data-request-step={step?.step ?? "correct"} data-request-tier={step?.tier ?? ""} role="status">
       <SpeakerFace by={r.by} size={44} />
       <div className="req-body">
         <span className="who">{speakerName(r.by)}</span>
         <p className="req-en" data-testid="request-line">
-          {words.map((w, i) =>
-            highlight && w.toLowerCase().replace(/[^a-z]/g, "") === key ? (
-              <mark key={i} className="key">
-                {w}
-                {r.misses >= 2 && (
-                  <span className="request-clue" data-testid="request-clue">
-                    {clue}<small>{req.kind === "show" ? req.color : SPECIES[req.species].word}</small>
-                  </span>
-                )}
-              </mark>
-            ) : (
-              <Fragment key={i}>{w}</Fragment>
-            )
-          )}
+          {keyword && keywordIndex >= 0 ? <>
+            {r.line.slice(0, keywordIndex)}
+            <mark className="key" data-testid="request-keyword" data-keyword={keyword.word}>
+              {r.line.slice(keywordIndex, keywordIndex + keyword.word.length)}
+              {r.misses < 2 && swatch}
+            </mark>
+            {r.misses >= 2 && <span className="request-clue" data-testid="request-clue">
+                {swatch ?? (req.kind === "showAnimal" ? <FishPicture species={req.species} size={34} /> : null)}
+                <small>{req.kind === "show" ? req.color : SPECIES[req.species].word}</small>
+              </span>}
+            {r.line.slice(keywordIndex + keyword.word.length)}
+          </> : r.line}
         </p>
+        <MeaningHelp owner="request" pattern={r.pattern} first={r.firstPattern} revealed={r.meaningRevealed} correct={r.status === "correct"} />
         {action && <div className="request-action" data-testid="request-action"><ActionTag {...action} /></div>}
       </div>
       <button className="speaker" onClick={() => replayRequest()} aria-label="Listen again" data-testid="request-replay">

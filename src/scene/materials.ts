@@ -846,7 +846,7 @@ export function surfaceMaterial(): THREE.ShaderMaterial & { uniforms: { uDirt: {
 }
 
 export interface FishMaterial extends THREE.MeshLambertMaterial {
-  userData: { uPhase: { value: number }; uAmp: { value: number }; uLen: { value: number } };
+  userData: { uPhase: { value: number }; uAmp: { value: number }; uLen: { value: number }; uHintGlow: { value: number } };
 }
 
 /**
@@ -856,11 +856,12 @@ export interface FishMaterial extends THREE.MeshLambertMaterial {
  */
 export function fishMaterial(length: number, species: SpeciesId = "clownfish"): FishMaterial {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true }) as FishMaterial;
-  m.userData = { uPhase: { value: 0 }, uAmp: { value: 0.3 }, uLen: { value: length } };
+  m.userData = { uPhase: { value: 0 }, uAmp: { value: 0.3 }, uLen: { value: length }, uHintGlow: { value: 0 } };
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uPhase = m.userData.uPhase;
     shader.uniforms.uAmp = m.userData.uAmp;
     shader.uniforms.uLen = m.userData.uLen;
+    shader.uniforms.uHintGlow = m.userData.uHintGlow;
     shader.uniforms.uSpecies = { value: ["clownfish", "bluetang", "yellowfish", "pufferfish", "turtle", "seahorse", "jellyfish"].indexOf(species) };
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -884,6 +885,7 @@ transformed.z += sin(uPhase - bt * 2.6) * uAmp * bt * bt * uLen;`
       );
     shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
 uniform float uSpecies;
+uniform float uHintGlow;
 varying vec3 vFishPos;
 varying vec3 vFishNormal;
 varying vec2 vFishUv;`).replace("#include <color_fragment>", `#include <color_fragment>
@@ -959,9 +961,11 @@ float wet = pow(max(dot(normal, normalize(viewDir + vec3(-0.4, 0.8, 0.6))), 0.0)
 float litColour = smoothstep(0.035, 0.18, max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b)));
 outgoingLight += (vec3(0.19, 0.28, 0.34) * rim + vec3(0.28, 0.27, 0.25) * wet) * litColour;
 if (uSpecies == 6.0) outgoingLight += vec3(0.13, 0.07, 0.2) * rim;
+// A narrow golden edge preserves the body's tested colour and dark markings.
+outgoingLight += vec3(1.0, 0.65, 0.08) * rim * uHintGlow;
 #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => "fish-painted-v2";
+  m.customProgramCacheKey = () => "fish-painted-v3-hint-rim";
   return m;
 }
 

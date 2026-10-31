@@ -17,8 +17,12 @@ export interface AtState {
   tutorial: string;
   guide: string | null;
   nudge: { id: number; en: string; target?: string; kind?: string } | null;
+  handTargetId: string | null;
+  keywordShown: string | null;
+  swatchShown: string | null;
+  meaningsShown: string[];
   requestStep: { step: string; tier: number; tankIds: string[]; fishIds: string[]; decorIds: string[] } | null;
-  progress: { stage: number; tutorial: string; hearts: number; helpedInStage: number; counted: boolean; cleanedOnce: boolean; fedOnce: boolean; allHappy: boolean; star: boolean; freePlay: boolean; photo: boolean; said: string[]; firstFish: string | null; hallOpen: boolean; namedInStage: number; superStar: boolean };
+  progress: { stage: number; tutorial: string; hearts: number; helpedInStage: number; counted: boolean; cleanedOnce: boolean; fedOnce: boolean; allHappy: boolean; star: boolean; freePlay: boolean; photo: boolean; said: string[]; firstFish: string | null; hallOpen: boolean; namedInStage: number; superStar: boolean; handShown?: string[]; seenPatterns?: string[] };
   goals: { id: string; done: boolean; n?: number; of?: number }[];
   tanks: { id: string; slot: string; type: string; fish: string[]; fishIds: string[]; decor: { slot: number; kind: string; variant: string | null }[]; food: number; clean: number; happy: number | null }[];
   inv: { fish: number; decor: { id: string; kind: string; variant: string | null }[]; tanks: number };

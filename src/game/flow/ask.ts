@@ -9,6 +9,8 @@ import { tts } from "../../audio/tts";
 import { audio } from "../../audio/audio";
 import { rt } from "../runtime";
 import { canMeterDuringRecognition, classifyMicAttempt, createMicLevel, markMicWorked } from "../../audio/micLevel";
+import { phrasePattern, type SentencePatternId } from "../logic/sentenceTeaching";
+import { meetPattern } from "./meaning";
 
 export const promptMeter = createMicLevel();
 // Also clean up when navigation removes a prompt outside finish().
@@ -41,6 +43,8 @@ useGame.subscribe((s, prev) => {
  */
 
 export interface AskRequest {
+  /** Request data can identify a question frame independently of its answer. */
+  pattern?: SentencePatternId;
   kind: "command" | "choice";
   /** Accepted sentences (a command accepts only the first). */
   options: PhraseId[];
@@ -140,6 +144,7 @@ export function ask(req: AskRequest): Promise<PhraseId | null> {
   const mic = micUsable();
   const show = req.show ?? (req.kind === "command" ? [req.options[0]] : req.options);
   const prompt: PromptUi = {
+    ...meetPattern(req.pattern ?? phrasePattern(req.options[0])),
     answerMode: answerMode(g.settings),
     id: promptId++,
     kind: req.kind,

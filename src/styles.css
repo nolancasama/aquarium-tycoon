@@ -700,6 +700,7 @@ button:focus-visible { outline: 4px solid var(--sea); outline-offset: 3px; }
 }
 
 .request {
+  pointer-events: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -716,6 +717,7 @@ button:focus-visible { outline: 4px solid var(--sea); outline-offset: 3px; }
 
 .request > svg,
 .request > button {
+  pointer-events: auto;
   flex: none;
 }
 
@@ -2193,7 +2195,6 @@ mark.key {
 .prompt-heading { display: flex; justify-content: center; pointer-events: none; }
 .prompt-question .q-text { flex: 1; min-width: 0; }
 .prompt-question .prompt-heading { flex: none; margin-left: auto; }
-.guide-hand { position: absolute; right: -10px; bottom: -6px; color: #865400; pointer-events: none; }
 .prompt .request-action { margin-top: 2px; }
 .prompt-mic-reminder { font-size: 15px; font-weight: 800; }
 .prompt-mic-reminder .ja { font-size: 12px; }
@@ -2218,4 +2219,32 @@ mark.key {
     animation: none !important;
     transition: none !important;
   }
+}
+.tap-hand {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  z-index: 35;
+  pointer-events: none;
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+.tap-hand * { pointer-events: none; }
+.tap-hand svg {
+  position: absolute;
+  left: -16px;
+  top: -3px;
+  overflow: visible;
+  transform-origin: 16px 3px;
+  filter: drop-shadow(0 2px 2px #49310b55);
+}
+.tap-hand-ripple {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e8a52a;
+  border-radius: 50%;
+  opacity: 0;
 }

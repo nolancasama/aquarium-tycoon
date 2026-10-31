@@ -94,6 +94,9 @@ export interface Progress {
   superStar: boolean;
   /** Pico has explained that happy tanks earn bigger tips (shown once). */
   tipsTaught: boolean;
+  /** Optional teaching history; older saves start with no demonstrations or patterns. */
+  handShown?: string[];
+  seenPatterns?: string[];
   /** Expansion 1: the Jellyfish Gallery is open. */
   galleryOpen: boolean;
   /** Distinct sentences said or chosen (results card). */
@@ -157,6 +160,8 @@ export function newProgress(): Progress {
     upgraded: false,
     superStar: false,
     tipsTaught: false,
+    handShown: [],
+    seenPatterns: [],
     galleryOpen: false,
     said: []
   };
