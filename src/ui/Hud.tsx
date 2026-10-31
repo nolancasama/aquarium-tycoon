@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { setGame, toast, useGame } from "../game/store";
-import { nextStep } from "../game/logic/guide";
+import { nextStep, objectivesUnlocked } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
 import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, type Goal } from "../game/logic/model";
 import { HALL_OF, TANKS } from "../game/data/tanks";
@@ -120,16 +120,27 @@ function GoalCard() {
   const interrupted = useGame((s) => Boolean(s.prompt || s.line || s.stageCard));
   const waiting = useGame((s) => Boolean(s.waiting));
   const [expanded, setExpanded] = useState(false);
+  const unlocked = objectivesUnlocked(model.progress.tutorial);
+  const wasUnlocked = useRef(unlocked);
+  const [revealing, setRevealing] = useState(false);
+  useEffect(() => {
+    const firstReveal = unlocked && !wasUnlocked.current;
+    wasUnlocked.current = unlocked;
+    if (!firstReveal) return;
+    setRevealing(true);
+    const timer = window.setTimeout(() => setRevealing(false), 250);
+    return () => window.clearTimeout(timer);
+  }, [unlocked]);
   const step = useMemo(() => nextStep(model), [model]);
   // Start each level compact and clear an expanded list for scripted interactions.
   useEffect(() => setExpanded(false), [model.progress.stage, interrupted, Boolean(request)]);
   // The tutorial's "Tap the visitor!" card takes this place; in free play the objectives stay.
-  if (request || (waiting && !interrupted && model.progress.tutorial !== "done")) return null;
+  if (!unlocked || request || (waiting && !interrupted && model.progress.tutorial !== "done")) return null;
   const p = model.progress;
   const list = goals(model);
   const name = STAGE_NAMES[p.stage];
   return (
-    <div className={`panel goals ui ${expanded ? "expanded" : ""}`} data-testid="goals">
+    <div className={`panel goals ui ${expanded ? "expanded" : ""} ${revealing ? "goals-reveal" : ""}`} data-testid="goals">
       <header>
         {p.star && list.length === 0 ? (
           <>

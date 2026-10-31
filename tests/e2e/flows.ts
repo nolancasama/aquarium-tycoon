@@ -173,6 +173,8 @@ export async function makeHappy(page: Page, ids: string[]) {
 
 /** Stage 1: Pico's tutorial. */
 export async function tutorial(page: Page) {
+  // The objectives wait until the first fish is in a tank.
+  await expect(page.getByTestId("goals")).toHaveCount(0);
   if (!(await state(page)).prompt) await tapFirstFish(page);
   await waitFor(page, (s) => s.prompt?.question === "Blue or orange?", 20_000, "fish shop");
   await shot(page, "shop");
@@ -184,6 +186,7 @@ export async function tutorial(page: Page) {
   await click3d(page, "tank", "t1");
   s = await waitFor(page, (x) => x.view === "tank" && x.tanks[0].fish.length === 1, 8_000, "fish in the tank");
   await waitFor(page, (x) => x.tutorial === "feed", 8_000, "feed step");
+  await expect(page.getByTestId("goals")).toBeVisible();
   await settle(page, 1200);
   await shot(page, "tank-closeup");
   await page.getByTestId("btn-feed").click();

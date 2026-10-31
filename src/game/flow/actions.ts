@@ -783,7 +783,9 @@ export function tapDecor(tankId: string, slot: number) {
 }
 
 export function tapVisitor(id: string) {
-  if (!allowed("visitor")) return;
+  const g = getGame();
+  if (g.screen !== "game" || g.settingsOpen || g.stageCard) return;
+  if (g.model.progress.tutorial !== "done" && !TUTORIAL_ALLOWS[g.model.progress.tutorial].includes("visitor")) return;
   void openRequest(id);
 }
 

@@ -186,6 +186,8 @@ export function CameraRig() {
           ? besideTank(g.tankId, want.current, wantLook.current, size.width, h, wantShift)
           : 0;
     shiftX.current += (wantX - shiftX.current) * Math.min(1, dt * 5);
+    // A celebrating visitor stands where the status panel is: fade it, never move it.
+    tankStatusEl.current?.classList.toggle("celebrating", rt.celebrations.size > 0);
     if (Math.abs(shift.current) > 0.5 || Math.abs(shiftX.current) > 0.5) cam.setViewOffset(size.width, h, shiftX.current, shift.current, size.width, h);
     else if (cam.view) cam.clearViewOffset();
     c.pos.x = pos.current.x;

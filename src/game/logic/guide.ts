@@ -2,7 +2,10 @@ import { DECOR, decorFits } from "../data/decor";
 import { FISH_ORDER, SPECIES } from "../data/fish";
 import { HALL_PRICE, TANKS } from "../data/tanks";
 import type { SpeciesId } from "../types";
-import { canLive, goals, happiness, HAPPY, hasSpace, isSpeciesUnlocked, padsFor, UPGRADE_PRICE, type Goal, type Model, type TankRec } from "./model";
+import { canLive, goals, happiness, HAPPY, hasSpace, isSpeciesUnlocked, padsFor, UPGRADE_PRICE, type Goal, type Model, type TankRec, type TutorialStep } from "./model";
+
+/** Placement completes before the feed step; old saves need no extra flag. */
+export const objectivesUnlocked = (step: TutorialStep) => step === "feed" || step === "visitor" || step === "decorate" || step === "done";
 
 type Line = { en: string; ja: string };
 export type Step = {

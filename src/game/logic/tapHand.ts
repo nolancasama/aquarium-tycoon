@@ -57,7 +57,7 @@ export function handCue(g: GameState, activeFirst?: string): HandCue | null {
   if (g.panel === "decorate" && (g.placing?.kind === "decor" || g.placing?.kind === "move") && first("decor-ring")) {
     return make(guideTarget(g, "decor-rings"), "first:decor-ring", "decor-ring");
   }
-  if (g.waiting && !g.panel && !g.placing && g.view === "room" && first("visitor")) {
+  if (g.model.progress.tutorial === "visitor" && g.waiting && !g.panel && !g.placing && g.view === "room" && first("visitor")) {
     return make(g.hall === 0 ? { id: `visitor-${g.waiting.id}`, kind: "world" } : { id: "chip-visitor", kind: "dom" }, "first:visitor", "visitor");
   }
   if (g.view === "room" && !g.panel && first("room-navigation")) {

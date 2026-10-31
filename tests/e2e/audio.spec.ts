@@ -126,7 +126,8 @@ test("Say + Tap advances by tapping without opening a mic or claiming recognitio
   await page.keyboard.press("Space");
   await expect(page.getByTestId("prompt")).not.toContainText(/I heard you/i);
   await page.locator('[data-testid="choice"][data-id="orangePlease"]').click();
-  await expect(page.getByTestId("prompt")).not.toContainText(/I heard you/i);
+  // The prompt may already have closed; either way it never claims to have heard.
+  await expect(page.getByTestId("prompt").filter({ hasText: /I heard you/i })).toHaveCount(0);
   await waitFor(page, (s) => s.placing?.kind === "fish", 10_000, "Say + Tap purchase");
   expect((await audio(page)).requests).toBe(before.requests);
   expect(await page.evaluate(() => (window as unknown as { __speech: { starts: number } }).__speech.starts)).toBe(starts);
@@ -195,3 +196,43 @@ for (const capability of ["unavailable", "no-web-audio"] as const) {
     expect(errors).toEqual([]);
   });
 }
+
+test("sound check answers unlock only after Play Sound; hearing it celebrates and cues Next", async ({ page }) => {
+  await boot(page);
+  await openCheck(page, "sound");
+  await expect(page.getByTestId("audio-speaker-hear")).toBeDisabled();
+  await expect(page.getByTestId("audio-speaker-cant")).toBeDisabled();
+  await page.getByTestId("audio-speaker-cant").click({ force: true });
+  await expect(page.getByTestId("audio-check")).not.toContainText("Chromebookの おとの");
+  await page.getByTestId("audio-speaker-play").click();
+  await expect(page.getByTestId("audio-speaker-hear")).toBeEnabled();
+  // Can't hear: help, no celebration, Play Sound still works.
+  await page.getByTestId("audio-speaker-cant").click();
+  await expect(page.getByTestId("audio-check")).toContainText("Chromebookの おとの おおきさを たしかめてね。");
+  await expect(page.getByTestId("audio-success")).toHaveCount(0);
+  await expect(page.getByTestId("audio-speaker-play")).toBeEnabled();
+  await page.getByTestId("audio-speaker-play").click();
+  await page.getByTestId("audio-speaker-hear").click();
+  await expect(page.getByTestId("audio-success")).toBeVisible();
+  const next = page.getByTestId("audio-next");
+  await expect(next).toHaveClass(/primary/);
+  await expect(next).toHaveAttribute("data-next-cue", "true");
+  await next.click();
+  await expect(page.getByTestId("audio-check")).toHaveCount(0);
+});
+
+test("mic check celebrates only a recognised sentence, then cues Next", async ({ page }) => {
+  await boot(page);
+  await openCheck(page, "mic");
+  await plan(page, "a noisy classroom");
+  await page.getByTestId("audio-mic").click();
+  await expect(page.getByTestId("audio-retry")).toBeVisible();
+  await expect(page.getByTestId("audio-success")).toHaveCount(0);
+  await expect(page.getByTestId("audio-skip")).toHaveAttribute("data-next-cue", "false");
+  await plan(page, "I like fish");
+  await page.getByTestId("audio-retry").click();
+  await expect(page.getByTestId("audio-success")).toContainText("マイク OK！");
+  await expect(page.getByTestId("audio-skip")).toHaveAttribute("data-next-cue", "true");
+  await page.getByTestId("audio-skip").click();
+  await expect(page.getByTestId("audio-check")).toHaveCount(0);
+});

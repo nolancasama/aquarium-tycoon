@@ -46,7 +46,10 @@ describe("the bounded tap demonstration's eligibility", () => {
     g.model.progress.handShown = [];
     g.model.inv.fish = [{ id: "bagged", species: "clownfish" }];
     expect(handCue({ ...g, placing: { kind: "fish", fishId: "bagged" } })?.id).toBe(`tank-${g.model.tanks[0].id}`);
+    expect(handCue({ ...g, waiting: { id: "v1", type: "child" } })).toBeNull();
+    g.model.progress.tutorial = "visitor";
     expect(handCue({ ...g, waiting: { id: "v1", type: "child" } })?.id).toBe("visitor-v1");
+    g.model.progress.tutorial = "done";
     expect(handCue({ ...g, panel: "decorate", view: "tank", tankId: g.model.tanks[0].id, placing: { kind: "decor", decorId: "d1" } })?.id).toBe(`ring-${g.model.tanks[0].id}:0`);
     g.model.progress.hallOpen = true;
     expect(handCue(g)?.id).toBe("btn-hall-next");

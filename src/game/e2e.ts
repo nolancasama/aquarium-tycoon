@@ -1,5 +1,5 @@
 import { getGame, setGame, updateModel } from "./store";
-import { rt } from "./runtime";
+import { beginCelebration, endCelebration, rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
 import { seedSim } from "./sim";
 import { leave, seedVisitors, spawnVisitor } from "./flow/visitors";
@@ -24,6 +24,7 @@ export function installE2eHook(seed: number) {
   seedSim(seed);
   seedVisitors(seed);
   let visitorsOn = true;
+  const heldCelebrations: symbol[] = [];
   const api = {
     state() {
       const g = getGame();
@@ -85,6 +86,10 @@ export function installE2eHook(seed: number) {
         pellets: rt.pellets.length,
         countGlow: Boolean(rt.countGlow),
         glowFish: rt.glow.fish.size,
+        glowVisitors: [...rt.glow.visitors],
+        pendingVisitorTap: rt.pendingVisitorTap?.visitorId ?? null,
+        visitorTapAck: rt.visitorTapAck?.id ?? null,
+        celebrations: rt.celebrations.size,
         perf: { ...perf, dpr: dprState.dpr, dprDropped: dprState.dropped }
       };
     },
@@ -138,6 +143,15 @@ export function installE2eHook(seed: number) {
       const xs = pts.map((p) => p!.x);
       const ys = pts.map((p) => p!.y);
       return { left: Math.min(...xs), right: Math.max(...xs), top: Math.min(...ys), bottom: Math.max(...ys) };
+    },
+    /** Hold (or release the latest) visitor celebration; fast mode makes real ones shorter than a frame. */
+    holdCelebration(on: boolean) {
+      if (on) heldCelebrations.push(beginCelebration());
+      else {
+        const token = heldCelebrations.pop();
+        if (token) endCelebration(token);
+      }
+      return rt.celebrations.size;
     },
     /** Fish hold still (clicking a moving fish under SwiftShader's 5 fps is flaky). */
     freezeFish(on: boolean) {

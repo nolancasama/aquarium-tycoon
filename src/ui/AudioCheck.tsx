@@ -13,6 +13,10 @@ import { Ja } from "./Ja";
 import { ACTION, AUDIO } from "./i18n";
 import { MicMeter } from "./MicMeter";
 import { SpeakTip } from "./SpeakTip";
+import { TapHand } from "./TapHand";
+
+const SPEAKER_NEXT = { kind: "dom" as const, id: "audio-next" };
+const MIC_NEXT = { kind: "dom" as const, id: "audio-skip" };
 
 export function AudioCheckModal() {
   const check = useGame((s) => s.audioCheck);
@@ -24,6 +28,8 @@ function AudioCheck({ check }: { check: "setup" | "speaker" | "mic" | "tip" }) {
   const [step, setStep] = useState(check === "setup" ? "speaker" : check);
   const [played, setPlayed] = useState(false);
   const [volumeTip, setVolumeTip] = useState(false);
+  const [heard, setHeard] = useState(false);
+  const [nextCue, setNextCue] = useState(false);
   const [status, setStatus] = useState<"inactive" | "listening" | "recognised" | "not-recognised" | "unavailable">("inactive");
   const [permission, setPermission] = useState("Not checked yet");
   const [signal, setSignal] = useState<boolean | null>(null);
@@ -35,6 +41,18 @@ function AudioCheck({ check }: { check: "setup" | "speaker" | "mic" | "tip" }) {
   const running = useRef(false);
   const blocked = useGame((s) => s.micState === "blocked");
   const supported = recognition.supported;
+  const succeeded = step === "speaker" ? heard : step === "mic" && status === "recognised";
+
+  useEffect(() => {
+    setNextCue(false);
+    if (!succeeded) return;
+    // The same visible check/pop and correct-answer sound as an English answer.
+    tts.cancel();
+    audio.play("correct");
+    const show = window.setTimeout(() => setNextCue(true), 400);
+    const hide = window.setTimeout(() => setNextCue(false), 6000);
+    return () => { window.clearTimeout(show); window.clearTimeout(hide); };
+  }, [succeeded, step]);
 
   const release = () => {
     generation.current++;
@@ -53,6 +71,7 @@ function AudioCheck({ check }: { check: "setup" | "speaker" | "mic" | "tip" }) {
     setGame({ audioCheck: null });
   };
   const next = () => {
+    setNextCue(false);
     release();
     if (check === "setup" && step === "speaker" && !supported) {
       setGame({ micState: "unsupported" });
@@ -140,21 +159,23 @@ function AudioCheck({ check }: { check: "setup" | "speaker" | "mic" | "tip" }) {
         <p className="audio-model">Hello! Welcome!</p>
         {tts.available ? <button className="primary" data-testid="audio-speaker-play" onClick={() => { tts.cancel(); setPlayed(true); void tts.speak("Hello! Welcome!", { pitch: 1.3, rate: 0.9 }); }}><Icon id="speaker" size={24} />{played ? "Replay" : "Play Sound"}<Ja>{played ? "もう いちど" : "こえを きく"}</Ja></button>
           : <p>Voice playback is unavailable in this browser.<Ja>この ブラウザでは こえを だせないよ。</Ja></p>}
-        <div className="audio-buttons">
-          <button className="primary" data-testid="audio-speaker-hear" onClick={next}>I can hear!<Ja>きこえる！</Ja></button>
-          <button className="secondary" data-testid="audio-speaker-cant" onClick={() => setVolumeTip(true)}>Can't hear<Ja>きこえない</Ja></button>
-        </div>
+        {!heard && <div className="audio-buttons">
+          <button className="secondary" data-testid="audio-speaker-hear" disabled={!played} onClick={() => setHeard(true)}>I can hear!<Ja>きこえる！</Ja></button>
+          <button className="secondary" data-testid="audio-speaker-cant" disabled={!played} onClick={() => setVolumeTip(true)}>Can't hear<Ja>きこえない</Ja></button>
+        </div>}
+        {heard && <AudioSuccess mic={false} />}
         {volumeTip && <p lang="ja">Chromebookの おとの おおきさを たしかめてね。</p>}
-        {(volumeTip || !tts.available) && <button className="secondary" data-testid="audio-next" onClick={next}>Next<Ja>つぎへ</Ja></button>}
+        {(heard || volumeTip || !tts.available) && <button className={heard ? `primary audio-continue ${nextCue ? "guide" : ""}` : "secondary"} data-testid="audio-next" data-next-cue={nextCue} onClick={next}>Next<Ja>つぎへ</Ja></button>}
       </> : <>
         <h2>{AUDIO.mic.en}<Ja>{AUDIO.mic.ja}</Ja></h2>
         {!supported ? <p>Speech recognition is unavailable. You can tap answers.<Ja>こえでの こたえは つかえないよ。タップで あそべるよ。</Ja></p> : <>
           <SpeakTip always />
           <div className="audio-target"><ActionTag kind="say" {...ACTION.sayThis} /><strong>I like fish!</strong></div>
           <div className="audio-buttons">
-            <button className={`mic ${status === "listening" ? "on" : ""}`} data-testid="audio-mic" aria-label="Test microphone" disabled={status === "listening" || blocked} onClick={() => void testMic()}><Icon id="mic" size={32} /></button>
+            <button className={`mic ${status === "listening" ? "on" : ""}`} data-testid="audio-mic" aria-label="Test microphone" disabled={status === "listening" || status === "recognised" || blocked} onClick={() => void testMic()}><Icon id="mic" size={32} /></button>
             <MicMeter meter={meter} state={status} hidden={meterAvailable === false} />
           </div>
+          {status === "recognised" && <AudioSuccess mic />}
           <div className="audio-results" role="status" aria-live="polite">
             <p data-testid="audio-permission">{blocked ? "Microphone unavailable or permission denied" : permission}<Ja>{blocked ? "マイクは つかえないよ。タップで あそぼう。" : "マイクの きょか・つかえるか"}</Ja></p>
             <p data-testid="audio-signal">{signal === true ? "Sound received" : signal === false ? "No sound detected" : meterAvailable === false ? "Signal meter unavailable" : "Sound: not checked yet"}<Ja>{signal === true ? "おとが とどいたよ" : signal === false ? "おとは とどかなかったよ" : "おとの チェック"}</Ja></p>
@@ -164,7 +185,15 @@ function AudioCheck({ check }: { check: "setup" | "speaker" | "mic" | "tip" }) {
           {(status === "not-recognised" || status === "unavailable") && <button className="secondary" disabled={blocked} data-testid="audio-retry" onClick={() => void testMic()}>Retry<Ja>もう いちど</Ja></button>}
         </>}
       </>}
-      {step !== "tip" && <button className="secondary" data-testid="audio-skip" onClick={next}>{step === "mic" && (status === "recognised" || !supported) ? "Next" : "Skip"}<Ja>{step === "mic" && (status === "recognised" || !supported) ? "つぎへ" : "スキップ"}</Ja></button>}
+      {step !== "tip" && !(step === "speaker" && heard) && <button className={succeeded ? `primary audio-continue ${nextCue ? "guide" : ""}` : "secondary"} data-testid="audio-skip" data-next-cue={nextCue} onClick={next}>{step === "mic" && (status === "recognised" || !supported) ? "Next" : "Skip"}<Ja>{step === "mic" && (status === "recognised" || !supported) ? "つぎへ" : "スキップ"}</Ja></button>}
     </div>
+    {nextCue && <TapHand target={step === "speaker" ? SPEAKER_NEXT : MIC_NEXT} />}
+  </div>;
+}
+
+function AudioSuccess({ mic }: { mic: boolean }) {
+  return <div className="good audio-success" data-testid="audio-success" role="status" aria-live="polite">
+    <Icon id="check" size={58} />
+    <span><strong lang="ja">{mic ? "マイク OK！" : "OK！"}</strong><span className="audio-success-en">{mic ? "Microphone OK!" : "I can hear Pico!"}</span></span>
   </div>;
 }

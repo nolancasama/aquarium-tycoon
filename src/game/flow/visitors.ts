@@ -1,5 +1,5 @@
 import { getGame, model, nudge, setGame, updateModel } from "../store";
-import { clearGlow, effect, rt, type VisitorRt } from "../runtime";
+import { beginCelebration, clearGlow, clearVisitorTapQueue, effect, endCelebration, resetCelebrations, rt, type VisitorRt } from "../runtime";
 import type { SlotId, Vec2, VisitorType } from "../types";
 import { award, EXPANSION_FROM, fishCount, happiness, helpVisitor, mood, tankById, tipBreakdown, type TankRec } from "../logic/model";
 import { makeRequest, matchesShow, requestLine, requestReward, stillValid, tankSatisfies, targetsIn, type Request, type ShowTarget } from "../logic/requests";
@@ -15,6 +15,7 @@ import { requestStep } from "../logic/requestGuide";
 import type { ColorId } from "../types";
 import { requestPattern } from "../logic/sentenceTeaching";
 import { meetPattern } from "./meaning";
+import { queuedVisitorTapState } from "../logic/visitorTap";
 
 /**
  * Visitors: they come in, look at each tank, react to how happy its fish are,
@@ -308,6 +309,7 @@ export function stepVisitors(dt: number) {
   }
   if (rt.visitors.some((v) => v.state === "gone")) rt.visitors = rt.visitors.filter((v) => v.state !== "gone");
   syncWaiting();
+  flushVisitorTap();
 }
 
 // ------------------------------------------------------------------ spawning
@@ -628,6 +630,9 @@ export function replayRequest() {
 
 /** The visitor celebrates beside the tank in a three-quarter shot that shows both. */
 export async function celebrate(v: VisitorRt, tankId: string | null) {
+  const token = beginCelebration();
+  let shot: typeof rt.camera.shot = null;
+  try {
   v.bubble = "heart";
   v.bubbleT0 = rt.time;
   v.anim = { kind: "jump", t0: rt.time };
@@ -648,7 +653,7 @@ export async function celebrate(v: VisitorRt, tankId: string | null) {
     v.yaw = Math.atan2(o.x - spot.x, o.z - spot.z) + 0.6;
     // From the front-left: the fish at the glass, and the visitor at the
     // right corner turned toward us in three-quarter view.
-    rt.camera.shot = {
+    rt.camera.shot = shot = {
       pos: { x: o.x - w * 0.15 - 0.9, y: 1.6, z: o.z + 4.1 },
       target: { x: o.x + w * 0.22, y: 1.1, z: o.z + 0.45 }
     };
@@ -656,10 +661,14 @@ export async function celebrate(v: VisitorRt, tankId: string | null) {
     v.face = { x: rt.camera.shot.pos.x, z: rt.camera.shot.pos.z };
     effect("hearts", v.x, 1.9, v.z, 5);
     await wait(2600);
-    rt.camera.shot = null;
   } else {
     effect("hearts", v.x, 1.9, v.z, 5);
     await wait(1400);
+  }
+  } finally {
+    // An older celebration must not clear a newer celebration's camera cut.
+    if (shot && rt.camera.shot === shot) rt.camera.shot = null;
+    endCelebration(token);
   }
 }
 
@@ -685,9 +694,15 @@ export async function helped(v: VisitorRt, req: Request, tankId: string | null) 
 export async function openRequest(id: string) {
   const g = getGame();
   const tutorial = g.model.progress.tutorial === "visitor";
-  if (activeRequest || (scripted.busy && !tutorial) || g.mode !== "play" || g.request || g.prompt || g.placing || g.stageCard) return;
+  if (g.screen !== "game" || activeRequest || (scripted.busy && !tutorial) || g.request || g.prompt || g.placing || g.stageCard || g.settingsOpen || g.fade > 0 || g.mode === "ask") return;
   const v = rt.visitors.find((x) => x.id === id);
   if (!v || !v.request || !requestEligible(v)) return;
+  acknowledgeVisitorTap(v);
+  if (g.mode !== "play" || g.line || rt.pico.talking || rt.camera.shot) {
+    rt.pendingVisitorTap = { visitorId: v.id, queuedAt: rt.time, screen: g.screen, hall: g.hall };
+    return;
+  }
+  rt.pendingVisitorTap = null;
   activeRequest = v.id;
   // Get up forward if seated; a walking visitor stops exactly where tapped.
   const seated = v.seat > 0 || v.seatTarget === 1;
@@ -722,6 +737,31 @@ export async function openRequest(id: string) {
   }
 }
 
+function acknowledgeVisitorTap(v: VisitorRt) {
+  rt.visitorTapAck = { id: v.id, t0: rt.time };
+  rt.glow.visitors.delete(v.id);
+  rt.idle = 0;
+  audio.play("tick");
+  setGame({ guide: null, nudge: null });
+}
+
+/** Called by the existing visitor frame step; no timer or React updates while waiting. */
+export function flushVisitorTap() {
+  const pending = rt.pendingVisitorTap;
+  if (!pending) return;
+  const g = getGame();
+  const v = rt.visitors.find((x) => x.id === pending.visitorId);
+  const state = queuedVisitorTapState(pending, rt.time, g, v, {
+    activeRequest: Boolean(activeRequest),
+    scriptedBusy: scripted.busy && g.model.progress.tutorial !== "visitor",
+    cameraMoving: Boolean(rt.camera.shot),
+    picoTalking: rt.pico.talking
+  });
+  if (state === "wait") return;
+  rt.pendingVisitorTap = null;
+  if (state === "open") void openRequest(pending.visitorId);
+}
+
 /** The things in a tank a tap could mean (for the "show me" ladder). */
 export function showTargets(t: TankRec): ShowTarget[] {
   return targetsIn(t);
@@ -729,6 +769,9 @@ export function showTargets(t: TankRec): ShowTarget[] {
 
 /** Clear visitors (new game / title). */
 export function resetVisitors() {
+  clearVisitorTapQueue();
+  rt.glow.visitors.clear();
+  resetCelebrations();
   activeRequest = null;
   arrivals.clear();
   exclaimed.clear();

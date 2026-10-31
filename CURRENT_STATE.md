@@ -1,5 +1,16 @@
 # Current State
 
+## First-minute polish (2026-10-31)
+
+- Sound check answers unlock after Play Sound; sound and mic success show the
+  game's check + pop + SFX, then a short Next cue (pulses + hand).
+- Goals panel hidden until the first fish is placed.
+- The tutorial visitor glows, gets the hand, and is tappable while walking;
+  other early taps during a line are acknowledged and queued with revalidation.
+- Close-up celebrations fade the status panel in place (celebration token set).
+- Codex stopped on quota mid-run; Claude finished it (router: no worker
+  available). Evidence: `.tmp/firstminute-review/` at 1366×768 and 1024×768.
+
 ## Tapping and sentence teaching (2026-10-31)
 
 - Added a reusable, limited tapping demonstration for first interactions and

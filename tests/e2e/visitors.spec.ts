@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { boot, click3d, hook, playing, state, waitFor } from "./helpers";
 
-async function walkingRequest(page: Page) {
+async function walkingRequest(page: Page, query = "fast=1&seed=7") {
   await page.addInitScript(() => {
     localStorage.setItem("at.settings.v1", JSON.stringify({ mic: false, music: 0, sfx: 0, japanese: true, slowVoice: false }));
     localStorage.setItem("at.save.v1", JSON.stringify({
@@ -19,7 +19,7 @@ async function walkingRequest(page: Page) {
   });
   // Seed 7's first ordinary arrival requests a blue fish. Use the real arrival
   // rather than requestVisitor(), which places a visitor directly on the bench.
-  const errors = await boot(page, "fast=1&seed=7");
+  const errors = await boot(page, query);
   await page.getByTestId("btn-continue").click();
   await playing(page);
   const s = await waitFor(page, (x) => Boolean(x.waiting && x.visitors.some((v) => v.id === x.waiting!.id && v.state === "walk")), 20_000, "walking request inside the room");
@@ -79,5 +79,68 @@ test("put off a walking request, then help the visitor after sitting", async ({ 
   await expect(page.getByTestId("chip-visitor")).toBeVisible();
   await openByTappingVisitor(page, id);
   await completeOnce(page, id);
+  expect(errors).toEqual([]);
+});
+
+test("a tap during a line is acknowledged at once and opens the request afterwards", async ({ page }) => {
+  const { id, errors } = await walkingRequest(page);
+  await hook(page, "set", { mode: "talk" });
+  await click3d(page, "visitor", id);
+  let s = await waitFor(page, (x) => x.pendingVisitorTap === id, 3_000, "queued tap");
+  expect(s.visitorTapAck).toBe(id);
+  expect(s.request).toBeNull();
+  await hook(page, "set", { mode: "play" });
+  await expect(page.getByTestId("request-line")).toHaveText("I like blue fish!");
+  s = await state(page);
+  expect(s.pendingVisitorTap).toBeNull();
+  expect(errors).toEqual([]);
+});
+
+test("a queued tap is dropped when its visitor leaves first", async ({ page }) => {
+  const { id, errors } = await walkingRequest(page);
+  await hook(page, "set", { mode: "talk" });
+  await click3d(page, "visitor", id);
+  await waitFor(page, (x) => x.pendingVisitorTap === id, 3_000, "queued tap");
+  await hook(page, "leaveVisitor", id);
+  await hook(page, "set", { mode: "play" });
+  await waitFor(page, (x) => x.pendingVisitorTap === null, 3_000, "stale tap dropped");
+  await page.waitForTimeout(1000);
+  expect((await state(page)).request).toBeNull();
+  await expect(page.getByTestId("request")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("celebrations fade the close-up status panel in place; overlaps never flash it back", async ({ page }) => {
+  // Fast mode shortens a real celebration below one frame, so hold the same
+  // celebration tokens celebrate() uses.
+  const { errors } = await walkingRequest(page);
+  await click3d(page, "tank", "t1");
+  await waitFor(page, (s) => s.view === "tank", 5_000, "tank close-up");
+  await page.waitForTimeout(1200);
+  const status = page.getByTestId("status");
+  const opacity = () => status.evaluate((el) => getComputedStyle(el).opacity);
+  const box = await status.boundingBox();
+  const transform = await status.evaluate((el) => el.style.transform);
+  expect(await opacity()).toBe("1");
+  expect(await hook(page, "holdCelebration", true)).toBe(1);
+  await expect(status).toHaveClass(/celebrating/);
+  await expect.poll(opacity).toBe("0");
+  // A second visitor starts cheering before the first one ends.
+  expect(await hook(page, "holdCelebration", true)).toBe(2);
+  expect(await hook(page, "holdCelebration", false)).toBe(1);
+  await page.waitForTimeout(400);
+  await expect(status).toHaveClass(/celebrating/);
+  expect(await opacity()).toBe("0");
+  expect(await status.evaluate((el) => el.style.transform)).toBe(transform);
+  expect(await hook(page, "holdCelebration", false)).toBe(0);
+  await expect(status).not.toHaveClass(/celebrating/);
+  await expect.poll(opacity).toBe("1");
+  expect(await status.boundingBox()).toEqual(box);
+  // A scene change while hidden leaves nothing behind.
+  await hook(page, "holdCelebration", true);
+  await page.getByTestId("btn-back").click();
+  await page.getByTestId("btn-settings").click();
+  await page.getByTestId("settings-title").click();
+  await waitFor(page, (s) => s.screen === "title" && s.celebrations === 0, 10_000, "title clears celebrations");
   expect(errors).toEqual([]);
 });

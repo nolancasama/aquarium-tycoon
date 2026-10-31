@@ -2248,3 +2248,33 @@ mark.key {
   border-radius: 50%;
   opacity: 0;
 }
+
+/* Optional audio checks share the answer check/pop and the finite guide cue. */
+.audio-success {
+  justify-content: center;
+  gap: 12px;
+  padding: 8px;
+  font-size: 30px;
+  animation: pop 1s ease-out;
+}
+.audio-success > svg { flex: none; }
+.audio-success-en { display: block; font-size: 19px; }
+.audio-check .audio-continue {
+  background: linear-gradient(180deg, #348eea, var(--sea));
+  box-shadow: 0 4px 0 var(--sea-dark);
+}
+.audio-check .audio-continue.guide { animation: guide 1.1s ease-in-out 3; }
+.audio-check button:disabled { opacity: 0.4; filter: saturate(0.35); }
+@media (prefers-reduced-motion: reduce) {
+  .audio-success { animation: none; }
+  .audio-check .audio-continue.guide {
+    animation: none;
+    outline: 4px solid var(--gold);
+    box-shadow: 0 4px 0 var(--sea-dark), 0 0 0 9px #ffc93c55;
+  }
+}
+
+/* A celebrating visitor stands beside the glass: the status panel fades out
+   (150 ms) and back (200 ms) in place. Position and size never change. */
+.view-tank .tank-status { transition: transform 0.35s ease, opacity 0.2s ease; }
+.view-tank .tank-status.celebrating { opacity: 0; transition: transform 0.35s ease, opacity 0.15s ease; }

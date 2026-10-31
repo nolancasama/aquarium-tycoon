@@ -894,3 +894,38 @@ these changes and decisions.
   its meter when the teacher changes modes. Old mic=true/false settings retain
   Speak/Tap, using only optional new settings fields. No title mode selector,
   speech matching, hint thresholds, rewards or save schema changes were needed.
+
+## 2026-10-31 — First-minute polish: gated sound check, Next cue, hidden goals, early visitor taps, celebration clears gauges
+
+- **Sound check is gated.** "I can hear!" / "Can't hear" stay disabled until
+  Play Sound has been pressed once, so nobody passes without trying. Hearing it
+  shows the game's own correct-answer check, pop and SFX ("OK！ / I can hear
+  Pico!"); Can't hear shows only the volume tip and keeps Play Sound and Next.
+- **Mic check success** is the existing recognition match only ("マイク OK！");
+  the press and the level meter never count.
+- **Next cue.** After a success, ~400 ms later the blue Next button pulses three
+  times with the existing TapHand pointing at it, for at most ~6 s; reduced
+  motion gets a static gold outline and a static hand.
+- **Goals panel waits** until the first fish is placed (tutorial past `place`),
+  then fades in once. Derived from tutorial progress, so saves need no flag and
+  it never hides again. Rejected: showing it from frame one (competes with
+  "tap things to play").
+- **Early visitor taps.** Root cause of "tap does nothing until they sit": the
+  tutorial held `mode: "busy"` until the first visitor sat. The visitor is now
+  tappable once inside the room and opens the request at once. Elsewhere, a tap
+  on an eligible visitor that arrives during a brief blocker (a line, busy mode,
+  camera shot) gets an immediate squash-pop + tick and is queued (one at most);
+  before opening it is revalidated (visitor still eligible, same screen/hall,
+  no other request/prompt/placing/card, < 10 s) or dropped. Taps while another
+  request or English prompt is open are still ignored — the child is mid-task.
+  Rejected: ignoring early taps silently.
+- **First visitor cue.** Only the tutorial visitor gets a soft halo sprite and
+  the hand while walking; both clear on tap. Later visitors rely on the hint
+  ladder.
+- **Celebration clears gauges.** The close-up celebration puts the visitor at
+  the tank's right corner, where the status panel sits. While any celebration
+  token is held (a Set of tokens, so overlaps never flash it back) the panel
+  fades out (150 ms) and back (200 ms) in place; its transform never changes.
+  Tokens reset on new game and title. Rejected: permanently moving the gauges.
+  Fast test mode shortens a celebration below one frame, so e2e holds tokens
+  through a `holdCelebration` hook.

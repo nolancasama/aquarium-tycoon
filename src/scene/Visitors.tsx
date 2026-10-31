@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { getGame } from "../game/store";
@@ -7,7 +7,7 @@ import { SLOT_POS, TANKS } from "../game/data/tanks";
 import { benchPose, requestEligible } from "../game/world";
 import { tapVisitor } from "../game/flow/actions";
 import { paletteCount, personModel } from "./models/people";
-import { bubbleTexture, shadowMaterial, smoothMat } from "./materials";
+import { additiveSprite, bubbleTexture, shadowMaterial, smoothMat } from "./materials";
 
 /** The visitors in rt.visitors (the list is re-read when someone arrives or leaves). */
 export function Visitors() {
@@ -23,6 +23,8 @@ export function Visitors() {
     </>
   );
 }
+
+const REDUCED_MOTION = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Hide a visitor standing between the close-up camera and the tank. */
 function blocksCloseUp(v: VisitorRt): boolean {
@@ -52,6 +54,10 @@ function Visitor({ id }: { id: string }) {
   const bubble = useRef<THREE.Sprite>(null);
   const bubbleMat = useMemo(() => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }), []);
   const shadow = useMemo(() => shadowMaterial(0.28), []);
+  // The first-visitor hint: a soft halo behind the body (only drawn while on).
+  const glow = useRef<THREE.Sprite>(null);
+  const glowMat = useMemo(() => additiveSprite("#fff19a", 0), []);
+  useEffect(() => () => glowMat.dispose(), [glowMat]);
   useFrame(() => {
     const v = rt.visitors.find((x) => x.id === id);
     const r = root.current;
@@ -59,6 +65,15 @@ function Visitor({ id }: { id: string }) {
     const t = rt.time;
     r.position.set(v.x, 0, v.z);
     r.rotation.y = v.yaw;
+    if (glow.current) {
+      const on = rt.glow.visitors.has(id);
+      glow.current.visible = on;
+      glowMat.opacity = on ? (REDUCED_MOTION ? 0.55 : 0.5 + Math.sin(t * 7) * 0.15) : 0;
+    }
+    // A tap that has to wait still answers at once with a short squash-pop.
+    const ack = rt.visitorTapAck?.id === id ? t - rt.visitorTapAck.t0 : Infinity;
+    const pop = ack < 0.35 ? 1 + Math.sin((ack / 0.35) * Math.PI) * (REDUCED_MOTION ? 0.04 : 0.12) : 1;
+    r.scale.set(pop, pop, pop);
     r.visible = !blocksCloseUp(v) && t - v.bornT > 0.05;
     let y = 0;
     let lean = 0;
@@ -148,6 +163,7 @@ function Visitor({ id }: { id: string }) {
           </group>
         </group>
       </group>
+      <sprite ref={glow} material={glowMat} position={[0, model.height * 0.55, -0.05]} scale={[1.3, model.height * 1.35, 1]} visible={false} raycast={() => {}} />
       <sprite ref={bubble} material={bubbleMat} visible={false} renderOrder={12} onClick={onClick} />
       <mesh position={[0, model.height / 2 + 0.1, 0]} onClick={onClick}>
         <boxGeometry args={[0.9, model.height + 0.5, 0.9]} />

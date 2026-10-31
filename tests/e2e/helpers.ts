@@ -31,10 +31,14 @@ export interface AtState {
   request: { kind: string; color: string | null; misses: number; status: string; by: string } | null;
   stageCard: { stage: number; reward: string } | null;
   waiting: { id: string; type: string } | null;
-  visitors: { id: string; type: string; state: string; request: string | null; helped: boolean }[];
+  visitors: { id: string; type: string; state: string; request: string | null; helped: boolean; seat: number }[];
   pellets: number;
   countGlow: boolean;
   glowFish: number;
+  glowVisitors: string[];
+  pendingVisitorTap: string | null;
+  visitorTapAck: string | null;
+  celebrations: number;
   perf: { calls: number; triangles: number; fps: number };
 }
 

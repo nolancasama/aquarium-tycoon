@@ -1,5 +1,5 @@
 import { commit, getGame, model, nudge, setGame, toast, updateModel, useGame, type Panel, type Reward } from "../store";
-import { effect, resetRuntime, rt } from "../runtime";
+import { clearVisitorTapQueue, effect, resetCelebrations, resetRuntime, rt } from "../runtime";
 import type { StageId } from "../types";
 import { SPECIES } from "../data/fish";
 import {
@@ -29,7 +29,7 @@ import { clearSave, encodeSave, rawSaveExists, readSave, writeSave } from "../lo
 import { ask, say, wait } from "./ask";
 import { backToRoom, openTank, startPlacingFish } from "./actions";
 import { celebrate, leave, numberSlots, numbersAround, requestGuidanceTick, resetVisitors, runRequest, scripted, spawnVisitor, walkTo } from "./visitors";
-import { ENTRY, PEDESTAL, lookSpot, route } from "../world";
+import { ENTRY, PEDESTAL, lookSpot, requestEligible, route } from "../world";
 import { HALL_OF } from "../data/tanks";
 import { watchHappiness } from "./cheer";
 import { audio } from "../../audio/audio";
@@ -220,6 +220,8 @@ export function toTitle() {
   gen++;
   busyFlow = false;
   scripted.busy = false;
+  resetCelebrations();
+  clearVisitorTapQueue();
   tts.cancel();
   audio.startMusic("aquarium");
   setGame({
@@ -316,7 +318,9 @@ async function tutorial(g: number) {
     const first = model().progress.firstFish ?? model().tanks[0].fish[0]?.species ?? "clownfish";
     const req: Request = { kind: "show", color: SPECIES[first].color, fishOnly: true };
     const v = spawnVisitor("child", req);
-    await until(() => v.state === "sit", g);
+    // The first visitor glows and can be tapped while still walking to the bench.
+    rt.glow.visitors.add(v.id);
+    await until(() => requestEligible(v) || v.state === "sit", g);
     setGame({ mode: "play" });
     syncTutorialGuide(0);
     // The visitor/chip starts the same request flow used after the tutorial.

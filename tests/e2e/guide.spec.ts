@@ -237,3 +237,27 @@ test("the persistent request card derives visitor, tank and fish actions from th
   expect((await state(page)).glowFish).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("the first visitor glows, gets the hand, and can be tapped while still walking", async ({ page }) => {
+  const errors = await boot(page);
+  await startNew(page, "tap");
+  await waitFor(page, (s) => s.prompt?.question === "Blue or orange?", 20_000, "fish shop");
+  await reply(page, "orangePlease");
+  await waitFor(page, (x) => x.placing?.kind === "fish", 5_000, "fish in a bag");
+  await settle(page, 700);
+  await click3d(page, "tank", "t1");
+  await waitFor(page, (x) => x.tutorial === "feed", 8_000, "feed step");
+  await page.getByTestId("btn-feed").click();
+  await reply(page, "feedFish");
+  const s = await waitFor(page, (x) => x.tutorial === "visitor" && x.mode === "play" && Boolean(x.waiting) &&
+    x.visitors.some((v) => v.id === x.waiting!.id && v.state === "walk"), 40_000, "first visitor walking and tappable");
+  const id = s.waiting!.id;
+  expect(s.glowVisitors).toEqual([id]);
+  await waitFor(page, (x) => x.handTargetId === `visitor-${id}`, 5_000, "hand on the visitor");
+  await click3d(page, "visitor", id);
+  const open = await waitFor(page, (x) => x.request?.kind === "show", 5_000, "request opened from a walking tap");
+  expect(open.visitors.find((v) => v.id === id)?.seat).toBe(0);
+  expect(open.glowVisitors).toEqual([]);
+  await waitFor(page, (x) => x.handTargetId !== `visitor-${id}`, 5_000, "hand cleared");
+  expect(errors).toEqual([]);
+});

@@ -3,6 +3,7 @@ import type { SwimState } from "./logic/swim";
 import type { BehaviorState } from "./logic/behavior";
 import type { Request } from "./logic/requests";
 import type { Mood } from "./logic/model";
+import type { PendingVisitorTap } from "./logic/visitorTap";
 
 /**
  * Mutable per-frame state shared by the scene, the per-frame step and the
@@ -109,6 +110,11 @@ export const rt = {
   /** Tank id -> rt.time a fish was poured in. */
   splash: new Map<string, number>(),
   visitors: [] as VisitorRt[],
+  /** One acknowledged request tap can wait briefly for a line/camera move. */
+  pendingVisitorTap: null as PendingVisitorTap | null,
+  visitorTapAck: null as { id: string; t0: number } | null,
+  /** Tokens, rather than a boolean, keep overlapping celebrations hidden. */
+  celebrations: new Set<symbol>(),
   camera: {
     /** Management view: orbit (rad, ±0.52) and zoom (0.8..1.25). */
     orbit: 0,
@@ -120,7 +126,7 @@ export const rt = {
   },
   effects: [] as Effect[],
   /** Hint glows: whole tanks (room view), fish and decorations (`tankId:slot`). */
-  glow: { tanks: new Set<string>(), fish: new Set<string>(), decor: new Set<string>() },
+  glow: { tanks: new Set<string>(), fish: new Set<string>(), decor: new Set<string>(), visitors: new Set<string>() },
   /** The one DOM demonstration hand; scene markers yield to the same target. */
   hand: { targetId: null as string | null },
   /** Counting clue: the fish of this tank light up one by one. */
@@ -166,12 +172,34 @@ export function clearGlow() {
   rt.countGlow = null;
 }
 
+export function beginCelebration(): symbol {
+  const token = Symbol("visitor celebration");
+  rt.celebrations.add(token);
+  return token;
+}
+
+export function endCelebration(token: symbol) {
+  rt.celebrations.delete(token);
+}
+
+export function resetCelebrations() {
+  rt.celebrations.clear();
+}
+
+export function clearVisitorTapQueue() {
+  rt.pendingVisitorTap = null;
+  rt.visitorTapAck = null;
+}
+
 export function resetRuntime() {
   rt.fish.clear();
   rt.pellets = [];
   rt.cleaning.clear();
   rt.splash.clear();
   rt.visitors = [];
+  clearVisitorTapQueue();
+  resetCelebrations();
+  rt.glow.visitors.clear();
   rt.camera.orbit = 0;
   rt.camera.zoom = 1;
   rt.camera.shot = null;
