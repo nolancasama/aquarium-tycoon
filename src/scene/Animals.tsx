@@ -19,8 +19,6 @@ import { createGroundPose, groundAnimal } from "./grounding";
 
 /** Every animal's mesh and its per-frame pose (positions come from rt.fish, set by the sim). */
 
-const REDUCED_MOTION = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-
 function tankFor(tankId: string): TankRec | undefined {
   for (const tank of getGame().model.tanks) if (tank.id === tankId) return tank;
   return undefined;
@@ -155,8 +153,7 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
     const ht = t - f.happyT0;
     const tt = t - f.tapT0;
     const et = t - f.eatT0;
-    const octopus = species === "octopus";
-    const ground = octopus || def.body === "crab" || def.movement === "perch";
+    const ground = def.body === "crab" || def.body === "octopus" || def.movement === "perch";
     const happy = ht >= 0 && ht < 1.2 ? Math.sin(ht / 1.2 * Math.PI) : 0;
     const tap = tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0;
     const eat = eatResponse(species, et);
@@ -182,26 +179,14 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
     mesh.scale.setScalar(1);
     mat.userData.uGroundEnabled.value = ground ? 1 : 0;
     if (ground) {
-      if (octopus) {
-        // The arm rig owns the body pose: its tips are stored relative to it.
-        const rig = f.octopus;
-        mesh.visible = !!rig;
-        if (rig) {
-          rig.calm = REDUCED_MOTION;
-          mesh.position.set(rig.x, rig.y, rig.z);
-          mesh.rotation.set(0, rig.yaw, 0, "YZX");
-          mat.userData.uRig.value = rig.rig;
-        }
-      } else {
-        const elevated = Math.max(0, f.s.y - (SAND_H + def.radius + 0.03));
-        groundAnimal(support, species, tankDef, f.s.x, f.s.z, f.yaw, phase, motion, reaction, t, dt, elevated);
-        mesh.position.set(support.x, support.y, support.z);
-        mesh.rotation.copy(support.euler);
-        mat.userData.uFeet.value.set(support.feet);
-        // Walkers and perchers dip their heads to pick food up from the sand.
-        mesh.rotation.z -= eat * 0.22;
-        mat.userData.uEat.value = eat;
-      }
+      const elevated = Math.max(0, f.s.y - (SAND_H + def.radius + 0.03));
+      groundAnimal(support, species, tankDef, f.s.x, f.s.z, f.yaw, phase, motion, reaction, t, dt, elevated);
+      mesh.position.set(support.x, support.y, support.z);
+      mesh.rotation.copy(support.euler);
+      mat.userData.uFeet.value.set(support.feet);
+      // Walkers and perchers dip their heads to pick food up from the sand.
+      mesh.rotation.z -= eat * 0.22;
+      mat.userData.uEat.value = eat;
       if (terrain.current.tank !== tank.type || terrain.current.slot !== tank.slot) {
         const dune = sandDune(tankDef), origin = tankOrigin(tank.slot);
         mat.userData.uSand.value.set(origin.x + dune.x, origin.z + dune.z, dune.radius, STAND_H + SAND_H);
@@ -224,15 +209,14 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
     mat.userData.uPhase.value = phase;
     mat.userData.uMotion.value = motion;
     mat.userData.uColour.value = f.colourPhase ?? 0;
-    // The octopus flushes pale on a tap and fades; its arms answer separately.
-    mat.userData.uReaction.value = octopus ? Math.max((f.octopus?.colour ?? 0) * 0.28, eat * 0.2) : reaction;
+    mat.userData.uReaction.value = reaction;
     turn.current += (THREE.MathUtils.clamp(f.bank * 2.5, -1, 1) - turn.current) * Math.min(1, dt * 3);
     mat.userData.uTurn.value = turn.current;
     glow.current += (glowFor(id, tank, t) - glow.current) * Math.min(1, dt * 10);
     mat.userData.uHintGlow.value = hintRim(id);
     mat.emissive.setRGB(glow.current * 0.6, glow.current * 0.5, glow.current * 0.12);
   });
-  return <mesh ref={ref} geometry={animalGeometry(species)} material={mat} frustumCulled={species !== "eel" && species !== "octopus"} renderOrder={def.body === "jelly" ? 1 : 0} dispose={null} />;
+  return <mesh ref={ref} geometry={animalGeometry(species)} material={mat} frustumCulled={species !== "eel"} renderOrder={def.body === "jelly" ? 1 : 0} dispose={null} />;
 }
 
 /** Six chromis share geometry, material and one instanced draw call. */

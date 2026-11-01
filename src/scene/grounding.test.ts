@@ -8,7 +8,7 @@ import { animalGeometry, deformGroundVertex } from "./models/animals";
 import { createGroundPose, groundAnimal, groundedVertex } from "./grounding";
 
 describe("visible sand grounding", () => {
-  for (const species of ["crab", "goby"] as const) for (const habitat of SPECIES[species].habitat) {
+  for (const species of ["crab", "octopus", "goby"] as const) for (const habitat of SPECIES[species].habitat) {
     it(`${species}: real lower hull and feet clear dunes and glass in ${habitat}`, () => {
       const tank = TANKS[habitat], dune = sandDune(tank), geometry = animalGeometry(species);
       const vertices = geometry.getAttribute("position"), wave = geometry.getAttribute("wave");

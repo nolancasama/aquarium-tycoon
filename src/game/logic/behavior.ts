@@ -3,13 +3,11 @@ import type { TankDef } from "../data/tanks";
 import { clampToBounds, floorAt, frontAt, stepSwim, type SwimEnv, type SwimState } from "./swim";
 import { jellyPulseStyle } from "./motion";
 import { collideEelBody, createEelBody, deformEelVertex, eelBounds, eelDenRail, eelFloor, eelRandom, recordEelHead, resetEelHistory, steerEelHead, updateEelRig, type EelBody } from "./eelBody";
-import { createOctopusRig, octopusTap, updateOctopusRig, type OctopusRig } from "./octopusRig";
 
 /** Followers only; the caller's SwimState is always the school's leader. */
 export interface SchoolMember extends SwimState { ox: number; oy: number; oz: number }
 export interface BehaviorState {
   eel?: EelBody;
-  octopus?: OctopusRig;
   members?: SchoolMember[];
   mode?: "rest" | "move" | "climb" | "cruise" | "return";
   modeTimer?: number;
@@ -43,7 +41,6 @@ export function reactToAnimalTap(s: SwimState, state: BehaviorState, tapT0: numb
   state.reactedTapT0 = tapT0;
   s.burst = Math.max(s.burst, 0.55);
   s.wait = 0;
-  if (state.octopus) octopusTap(state.octopus);
 }
 
 /** Project a target without allocating a temporary point or changing velocity. */
@@ -162,10 +159,9 @@ function stepSchool(s: SwimState, state: BehaviorState, def: SpeciesDef, env: Be
 }
 
 function stepCrawl(s: SwimState, state: BehaviorState, def: SpeciesDef, env: BehaviorEnv, dt: number, rand: () => number): void {
-  // The rig's planted arms set the pace: the body is pulled while they grip and
-  // waits while they reach, instead of sliding. A visitor's show keeps it brisk.
-  const rig = state.octopus ?? (state.octopus = createOctopusRig(s, env.phase ?? 0));
-  const speed = env.show ? Math.max(0.5, def.speed * env.speedMul) * Math.max(0.6, rig.pull) : def.speed * env.speedMul * rig.pull * (s.burst > 0 ? 1.6 : 1);
+  // The arm reach is followed by a body pull, rather than a uniform slide.
+  const pull = env.attract || s.burst > 0 ? 1 : 0.55 + 0.65 * Math.max(0, Math.sin((env.phase ?? 0) * 2));
+  const speed = env.show ? Math.max(0.5, def.speed * env.speedMul) : def.speed * env.speedMul * pull * (s.burst > 0 ? 2.8 : 1);
   state.colourPhase = ((state.colourPhase ?? env.phase ?? 0) + dt * 0.35) % TAU;
   if (state.mode === undefined) { ground(s, def, env); state.mode = "rest"; state.modeTimer = duration(def, rand); }
   if (env.attract) {
@@ -218,7 +214,6 @@ function stepCrawl(s: SwimState, state: BehaviorState, def: SpeciesDef, env: Beh
   }
   s.burst = Math.max(0, s.burst - dt);
   clampToBounds(s, env.bounds, env.columns, def.radius);
-  updateOctopusRig(rig, s, env.tank, env.columns, env.bounds, dt, state.mode !== "rest", s.y > env.bounds.min.y + 0.015 && Math.abs(s.z - env.bounds.min.z) < 0.03);
 }
 
 function stepDen(s: SwimState, state: BehaviorState, def: SpeciesDef, env: BehaviorEnv, dt: number, rand: () => number): void {

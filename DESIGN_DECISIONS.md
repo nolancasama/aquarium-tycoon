@@ -1230,3 +1230,11 @@ meter, happiness, saves and the first-time "Feed the fish!" are unchanged.
 - **The food strip runs on game time.** A wall-clock timer could expire before a slow
   machine had drawn much. It also sits outside `.top-panels`, whose transform turned
   its `position: fixed` into an off-screen position.
+
+### Octopus rebuild reverted (2026-11-01)
+
+The owner asked for the previous octopus back after seeing the rebuilt one live. Its
+model, part 3 arm shader, `groundAnimal` placement and tap burst are restored, and the
+freeze's Octopus section no longer describes the game. It eats by reaching food on the
+sand like other bottom animals, with no arm carrying food. The frozen-eel pose fix from
+that work stays, for the eel only. The rig remains in git at 841807a.

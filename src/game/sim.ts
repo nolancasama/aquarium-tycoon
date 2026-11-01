@@ -6,7 +6,6 @@ import { decay, happiness, latchHappy, mood, type TankRec } from "./logic/model"
 import { newSwimState, tankFishBounds, frontAt, floorAt, type Bounds, type SwimEnv, type Column } from "./logic/swim";
 import { reactToAnimalTap, stepBehavior, type BehaviorEnv } from "./logic/behavior";
 import { eelBounds } from "./logic/eelBody";
-import { octopusGrab } from "./logic/octopusRig";
 import { sandSurfaceY } from "./logic/tankLayout";
 import { FOOD_FALL, PELLET_SINK, PLANKTON_LIFE, eatsFood, foodsFor, type FoodId } from "./data/food";
 import { makeRng } from "./logic/rng";
@@ -160,7 +159,7 @@ function stepFish(dt: number, tanks: TankRec[]) {
       } else {
         let best = Infinity;
         for (const p of rt.pellets) {
-          if (p.tankId !== t.id || p.eaten || p.held || (ground && p.landedT < 0) || !eatsFood(f.species, p.food)) continue;
+          if (p.tankId !== t.id || p.eaten || (ground && p.landedT < 0) || !eatsFood(f.species, p.food)) continue;
           const d = (p.x - s.x) ** 2 + (p.y - s.y) ** 2 + (p.z - s.z) ** 2;
           if (d < best) {
             best = d;
@@ -189,9 +188,8 @@ function stepFish(dt: number, tanks: TankRec[]) {
         }
       }
       const assignedDen = def.movement === "den" ? denIndex++ : undefined;
-      // A rigged animal needs one step for its pose, even if the fish start frozen.
-      const unposed = (def.movement === "den" && !f.eel) || (def.movement === "crawl" && !f.octopus);
-      if (!rt.freezeFish || unposed) {
+      // A moray needs one step for its spine, even if the fish start frozen.
+      if (!rt.freezeFish || (def.movement === "den" && !f.eel)) {
         reactToAnimalTap(s, f, f.tapT0, rt.time);
         others.length = 0;
         for (const o of fishes) if (o !== f) others.push(o.s);
@@ -208,25 +206,8 @@ function stepFish(dt: number, tanks: TankRec[]) {
         behaviorEnv.phase = f.phase;
         stepBehavior(s, f, def, behaviorEnv, dt, rand);
       }
-      // An octopus takes food with an arm and carries it to its mouth.
-      if (f.octopus) {
-        const rig = f.octopus, held = f.heldPellet;
-        if (held) {
-          const arm = rig.arms[rig.grabArm];
-          if (rig.grabPhase === "reached" || rig.grabPhase === "mouth") { held.x = arm.tip.x; held.y = arm.tip.y; held.z = arm.tip.z; }
-          else if (rig.grabPhase === "delivered") {
-            held.eaten = true;
-            f.heldPellet = undefined;
-            f.eatT0 = rt.time;
-            audio.play("gulp");
-          }
-        } else if (target && Math.hypot(target.x - s.x, target.z - s.z) < 0.2 && octopusGrab(rig, target.x, target.y, target.z)) {
-          target.held = true;
-          f.heldPellet = target;
-        }
-      }
       // Eat a pellet the mouth reaches.
-      if (target && !f.octopus) {
+      if (target) {
         const mouth = def.body === "eel" ? 0 : def.length * 0.45;
         const mx = f.eel?.mouth.x ?? s.x + Math.cos(f.yaw) * mouth;
         const my = f.eel?.mouth.y ?? s.y;
@@ -276,7 +257,7 @@ function THREE_clamp(v: number, lo: number, hi: number) {
 function stepPellets(dt: number) {
   if (!rt.pellets.length) return;
   for (const p of rt.pellets) {
-    if (p.eaten || p.held) continue;
+    if (p.eaten) continue;
     if (p.landedT < 0) {
       p.y += p.vy * dt;
       p.x += Math.sin(rt.time * 2 + p.sway) * p.drift * dt;
@@ -287,9 +268,9 @@ function stepPellets(dt: number) {
       }
     }
   }
-  rt.pellets = rt.pellets.filter((p) => !p.eaten && (p.held || (p.food === "plankton"
+  rt.pellets = rt.pellets.filter((p) => !p.eaten && (p.food === "plankton"
     ? rt.time - p.bornT < PLANKTON_LIFE
-    : p.landedT < 0 || rt.time - p.landedT < 6)));
+    : p.landedT < 0 || rt.time - p.landedT < 6));
 }
 
 /** Care time runs during ordinary play only (not on the title, in Settings or in scripted moments). */

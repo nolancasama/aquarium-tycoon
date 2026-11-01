@@ -2,10 +2,9 @@ import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import { SPECIES } from "../../game/data/fish";
 import type { SpeciesId } from "../../game/types";
-import { OCTOPUS_ARM_LENGTH, OCTOPUS_LENGTH } from "../../game/logic/octopusRig";
 
 type V3 = [number, number, number];
-type Wave = (x: number, y: number, z: number, u: number, v: number) => V3;
+type Wave = (x: number, y: number, z: number, u: number) => V3;
 
 /** All dimensions below are body lengths. One merged, vertex-coloured mesh per
  * animal; a wave attribute identifies flexible parts without bones or textures. */
@@ -20,7 +19,7 @@ class AnimalBuilder {
     const v = new THREE.Vector3();
     for (let i = 0; i < p.count; i++) {
       v.fromBufferAttribute(p, i).applyMatrix4(m);
-      const w = wave?.(v.x, v.y, v.z, uv ? uv.getX(i) : 0, uv ? uv.getY(i) : 0) ?? [0, 0, 0];
+      const w = wave?.(v.x, v.y, v.z, uv ? uv.getX(i) : 0) ?? [0, 0, 0];
       a.set([kind, ...w], i * 4);
     }
     g.setAttribute("wave", new THREE.BufferAttribute(a, 4));
@@ -178,42 +177,15 @@ export function eelBodyTop(s: number): number {
 
 function octopus() {
   const b = new AnimalBuilder();
-  // The pear-shaped mantle is separate from the low head, so its soft breathing
-  // never distorts the eyes or the eight fixed arm roots.
-  b.add(new THREE.SphereGeometry(1, 20, 12), "#ed8b43", [-0.075, 0.0, 0], [0.26, 0.3, 0.245], [0, 0, 0], 14, () => [1, 0, 0]);
-  b.add(new THREE.SphereGeometry(1, 14, 9), "#f5a157", [0.03, -0.22, 0], [0.215, 0.13, 0.225], [0, 0, 0], 14, () => [0, 0, 0]);
-  const segments = 12, sides = 7, armLength = OCTOPUS_ARM_LENGTH / OCTOPUS_LENGTH;
+  b.ell([0.24, 0.3, 0.24], [-0.03, -0.03, 0], "#ec873c", 0, undefined, 16);
+  b.ell([0.19, 0.13, 0.22], [0.045, -0.25, 0], "#f6a650");
   for (let i = 0; i < 8; i++) {
-    const vertices: number[] = [], normals: number[] = [], uv: number[] = [], indices: number[] = [];
-    for (let ring = 0; ring <= segments; ring++) {
-      const t = ring / segments, radius = 0.092 * Math.pow(1 - t, 0.85) + 0.012;
-      for (let side = 0; side <= sides; side++) {
-        const angle = side / sides * Math.PI * 2;
-        vertices.push(t * armLength, Math.cos(angle) * radius, Math.sin(angle) * radius);
-        const slope = 0.08 / armLength, inv = 1 / Math.sqrt(1 + slope * slope);
-        normals.push(slope * inv, Math.cos(angle) * inv, Math.sin(angle) * inv);
-        uv.push(t, side / sides);
-        if (ring < segments && side < sides) {
-          const k = ring * (sides + 1) + side;
-          indices.push(k, k + 1, k + sides + 1, k + 1, k + sides + 2, k + sides + 1);
-        }
-      }
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-    g.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
-    g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-    g.setIndex(indices);
-    // Positions encode a straight taper; shader and CPU use the same local frame.
-    // wave.w is the circular coordinate for the underside's two sucker rows.
-    b.add(g, i % 2 ? "#eb873f" : "#f1984d", [0, 0, 0], [1, 1, 1], [0, 0, 0], 13,
-      (_x, _y, _z, t, v) => [t, i, v * Math.PI * 2]);
+    const a = i * Math.PI / 4;
+    const x = Math.cos(a), z = Math.sin(a);
+    b.tube([[x * 0.11, -0.22, z * 0.11], [x * 0.29, -0.4, z * 0.29], [x * 0.46, -0.46, z * 0.46], [x * 0.53 + z * 0.07, -0.38, z * 0.53 - x * 0.07]], 0.075, i % 2 ? "#e87538" : "#f4974d", 3, a, 12, 5, 0.87, i);
+    for (let j = 1; j <= 3; j++) b.add(new THREE.CircleGeometry(0.025, 6), "#ffd3a0", [x * (0.18 + j * 0.075), -0.445, z * (0.18 + j * 0.075)], [1, 1, 1], [Math.PI / 2, 0, 0], 3, () => [0.4 + j * 0.13, a, i]);
   }
-  for (const side of [-1, 1]) {
-    b.ell([0.072, 0.078, 0.05], [0.135, -0.1, side * 0.165], "#fff8df", 14, () => [0, 0, 0], 10);
-    b.ell([0.044, 0.05, 0.02], [0.155, -0.1, side * 0.2], "#263741", 14, () => [0, 0, 0], 8);
-    b.ell([0.013, 0.016, 0.008], [0.168, -0.08, side * 0.216], "#ffffff", 14, () => [0, 0, 0], 6);
-  }
+  b.eyes(0.15, -0.12, 0.18, 0.09);
   return b;
 }
 
@@ -322,10 +294,10 @@ const geometries = new Map<SpeciesId, THREE.BufferGeometry>();
 
 /** CPU mirror of flexible ground limbs, before per-foot terrain corrections.
  * Mutates a reusable vector, so terrain support sampling makes no frame garbage.
- * Keep the part 4 formulas in animalMaterials.ts in step with this helper. */
+ * Keep the part 3 / 4 formulas in animalMaterials.ts in step with this helper. */
 export function deformGroundVertex(
   target: THREE.Vector3, species: SpeciesId, part: number, w: number, phaseTag: number,
-  phase: number, motion: number, _reaction = 0, _time = 0
+  phase: number, motion: number, reaction = 0, time = 0
 ): THREE.Vector3 {
   const length = SPECIES[species].length;
   const speed = Math.max(0, Math.min(1.8, motion));
@@ -334,6 +306,16 @@ export function deformGroundVertex(
     const swing = Math.max(0, Math.sin(ph));
     target.y += swing * swing * w * w * length * 0.13 * speed;
     target.z += Math.cos(ph) * w * w * length * 0.075 * speed;
+  } else if (part === 3) {
+    const reach = Math.sin(ph - w * 3.2);
+    const curl = (0.5 + 0.5 * Math.sin(time * 0.8 + phaseTag * 1.7)) * 0.55 + reaction;
+    const t = Math.max(0, Math.min(1, (w - 0.42) / 0.58));
+    const tip = t * t * (3 - 2 * t);
+    const radial = (reach * speed * 0.055 - tip * tip * curl * 0.14 - reaction * w * 0.12) * w;
+    const tangent = Math.sin(ph - w * 6) * w * w * 0.028 * (0.35 + speed);
+    target.x += (Math.cos(phaseTag) * radial - Math.sin(phaseTag) * tangent) * length;
+    target.z += (Math.sin(phaseTag) * radial + Math.cos(phaseTag) * tangent) * length;
+    target.y += (Math.max(0, reach) * w * w * 0.095 * speed + tip * tip * curl * 0.11 + reaction * w * 0.09) * length;
   }
   return target;
 }

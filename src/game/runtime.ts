@@ -30,8 +30,6 @@ export interface FishRt extends BehaviorState {
   showT0: number;
   /** Hint glow (0..1, eased by the scene). */
   glow: number;
-  /** The piece an octopus arm is bringing to its mouth. */
-  heldPellet?: Pellet;
 }
 
 export interface Pellet {
@@ -48,8 +46,6 @@ export interface Pellet {
   drift: number;
   floor: number;
   bornT: number;
-  /** An octopus arm is carrying it to the mouth. */
-  held?: boolean;
   eaten: boolean;
   /** rt.time when it reached the sand (it fades a little later). */
   landedT: number;
