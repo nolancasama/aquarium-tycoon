@@ -179,7 +179,9 @@ function stepFish(dt: number, tanks: TankRec[]) {
         }
       }
       const assignedDen = def.movement === "den" ? denIndex++ : undefined;
-      if (!rt.freezeFish) {
+      // A rigged animal needs one step for its pose, even if the fish start frozen.
+      const unposed = (def.movement === "den" && !f.eel) || (def.movement === "crawl" && !f.octopus);
+      if (!rt.freezeFish || unposed) {
         reactToAnimalTap(s, f, f.tapT0, rt.time);
         others.length = 0;
         for (const o of fishes) if (o !== f) others.push(o.s);
