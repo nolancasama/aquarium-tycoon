@@ -84,6 +84,16 @@ let pelletId = 1;
 /** Drop a handful of pellets at the tank's feeding spot. */
 export function dropPellets(tankId: string, type: TankType) {
   const spot = feedSpot(type);
+  // Vary food appearance according to residents without changing the simple
+  // tank-wide feeding meter or introducing dietary penalties.
+  const residents = getGame().model.tanks.find((t) => t.id === tankId)?.fish ?? [];
+  const kinds = [...new Set(residents.map(({ species }) => {
+    if (species === "jellyfish" || species === "moonjelly" || species === "spottedjelly" || species === "seanettle") return "plankton" as const;
+    if (species === "eel" || species === "octopus" || species === "crab" || species === "stingray" || species === "shrimp") return "seafood" as const;
+    if (species === "parrotfish" || species === "bluetang" || species === "turtle") return "seaweed" as const;
+    return "pellet" as const;
+  }))];
+  if (!kinds.length) kinds.push("pellet");
   const n = 6 + Math.floor(rand() * 5);
   for (let i = 0; i < n; i++) {
     rt.pellets.push({
@@ -94,6 +104,7 @@ export function dropPellets(tankId: string, type: TankType) {
       z: spot.z + (rand() - 0.5) * 0.25,
       vy: -(0.08 + rand() * 0.06),
       sway: rand() * 6,
+      visualKind: kinds[i % kinds.length],
       eaten: false,
       landedT: -1
     });

@@ -40,6 +40,8 @@ export interface Pellet {
   z: number;
   vy: number;
   sway: number;
+  /** Visual distinction only: diet requirements are a separate future feature. */
+  visualKind?: "pellet" | "seaweed" | "seafood" | "plankton";
   eaten: boolean;
   /** rt.time when it reached the sand (it fades a little later). */
   landedT: number;

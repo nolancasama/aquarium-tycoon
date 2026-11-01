@@ -76,7 +76,14 @@ export function atriumFurnitureGeometry(): THREE.BufferGeometry {
     b.cyl(0.09, 0.14, 1.78, p.x, 0.52, p.z, "#a97949", 8);
     for (let i = 0; i < 7; i++) {
       const a = i * Math.PI * 2 / 7;
-      const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(p.x, 2.3, p.z), new THREE.Vector3(p.x + Math.cos(a) * 0.65, 2.64, p.z + Math.sin(a) * 0.65), new THREE.Vector3(p.x + Math.cos(a) * 1.05, 2.05, p.z + Math.sin(a) * 1.05));
+      const dx = Math.cos(a), dz = Math.sin(a);
+      const room = ROOMS[3].bounds;
+      // Bound the *fronds*, not just the trunk: wall-side canopy is shorter.
+      const clearance = 0.48;
+      const limitX = Math.abs(dx) < 0.001 ? 1.05 : (dx > 0 ? room.maxX - clearance - p.x : p.x - room.minX - clearance) / Math.abs(dx);
+      const limitZ = Math.abs(dz) < 0.001 ? 1.05 : (dz > 0 ? room.maxZ - clearance - p.z : p.z - room.minZ - clearance) / Math.abs(dz);
+      const reach = Math.max(0.28, Math.min(1.05, limitX, limitZ));
+      const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(p.x, 2.3, p.z), new THREE.Vector3(p.x + dx * reach * 0.62, 2.64, p.z + dz * reach * 0.62), new THREE.Vector3(p.x + dx * reach, 2.05, p.z + dz * reach));
       b.add(new THREE.TubeGeometry(curve, 5, 0.05, 3, false), "#438f5d", [0, 0, 0]);
       for (let j = 1; j <= 4; j++) {
         const q = curve.getPoint(j / 5);
@@ -86,10 +93,12 @@ export function atriumFurnitureGeometry(): THREE.BufferGeometry {
   }
   for (const p of ATRIUM_BENCHES) {
     b.box(2, 0.08, 0.56, p.x, BENCH_SEAT_H - 0.08, p.z, "#bd8255");
-    b.box(2, 0.42, 0.08, p.x, BENCH_SEAT_H, p.z + 0.25, "#d59b68");
+    // Separate the back, seat and armrest faces: touching/coplanar faces
+    // flickered as the management camera moved.
+    b.box(1.92, 0.39, 0.075, p.x, BENCH_SEAT_H + 0.035, p.z + 0.33, "#d59b68");
     for (const dx of [-0.76, 0.76]) {
-      b.box(0.12, BENCH_SEAT_H - 0.08, 0.48, p.x + dx, 0, p.z, "#2e8f93");
-      b.box(0.08, 0.13, 0.58, p.x + dx, BENCH_SEAT_H + 0.17, p.z, "#2e8f93");
+      b.box(0.12, BENCH_SEAT_H - 0.08, 0.43, p.x + dx, 0, p.z - 0.025, "#2e8f93");
+      b.box(0.08, 0.12, 0.34, p.x + dx, BENCH_SEAT_H + 0.14, p.z - 0.045, "#2e8f93");
     }
   }
   for (const p of ATRIUM_BOARDS) {

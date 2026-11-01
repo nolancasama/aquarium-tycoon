@@ -1,5 +1,14 @@
 # Current State
 
+## Small polish fixes (2026-11-01)
+
+- Ocean Hall's Jellyfish Gallery door opens nearer its wall, reducing obstruction of the adjacent tank.
+- Atrium bench components no longer have touching seat/back/armrest surfaces; palm fronds shorten near room walls.
+- Upgraded tank lights sit clear of their built-in rims/bars to avoid overlapping-depth flicker.
+- Child visitor models now include six outfits/hairstyles and slight height variation; existing visitor mechanics are unchanged.
+- Food particles get lightweight resident-informed visual varieties (pellet, algae/seaweed, seafood, plankton) using instanced colors/scales. **This is visual only**; per-species dietary requirements and feeding rules remain future work.
+- Visual inspection on real Chromebooks and full local Playwright validation remain outstanding; review deployment workflow results before treating this as fully verified.
+
 ## Coral Reef Atrium, animal motion, shop name previews (2026-11-01)
 
 - **Coral Reef Atrium** (room 4, after the Gallery, 260 coins): 16×11 m, 5.5 m

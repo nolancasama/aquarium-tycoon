@@ -32,7 +32,10 @@ const PALETTES: Record<VisitorType, Palette[]> = {
   child: [
     { shirt: "#ff6b6b", pants: "#3b5bdb", hair: "#3a2a1e", skin: "#f6d2b0", extra: "#ffd43b" },
     { shirt: "#51cf66", pants: "#495057", hair: "#1e1e24", skin: "#efc9a4", extra: "#ff922b" },
-    { shirt: "#fcc419", pants: "#1971c2", hair: "#5c3b1e", skin: "#f8dcc0", extra: "#e64980" }
+    { shirt: "#fcc419", pants: "#1971c2", hair: "#5c3b1e", skin: "#f8dcc0", extra: "#e64980" },
+    { shirt: "#b197fc", pants: "#364fc7", hair: "#3e2924", skin: "#f7d4b6", extra: "#ffa94d" },
+    { shirt: "#f783ac", pants: "#5c677d", hair: "#2a211c", skin: "#eac4a4", extra: "#66d9e8" },
+    { shirt: "#74c0fc", pants: "#7048e8", hair: "#60482e", skin: "#ecc6a9", extra: "#ffd43b" }
   ],
   adult: [
     { shirt: "#748ffc", pants: "#343a40", hair: "#2b1d14", skin: "#f1cfac", extra: "#e8590c" },
@@ -65,7 +68,9 @@ export function personModel(type: VisitorType, variant: number): PersonModel {
   if (hit) return hit;
   const p = PALETTES[type][variant % PALETTES[type].length];
   const child = type === "child";
-  const s = child ? 0.74 : 1;
+  // Small height differences keep children recognizable without changing
+  // the existing articulated walking and sitting rig.
+  const s = child ? [0.72, 0.75, 0.74, 0.69, 0.77, 0.73][variant % PALETTES.child.length] : 1;
   const hip = 0.74 * s;
   const b = new PartBuilder(0.3);
   // Torso, shoulders, arms, hands.
@@ -91,11 +96,29 @@ export function personModel(type: VisitorType, variant: number): PersonModel {
   b.sphere(hr * 0.13, 0, hy - hr * 0.02, hr * 0.98, p.skin, [0.8, 0.8, 0.8], 8);
   // Type extras.
   if (type === "child") {
-    // Cap with a brim, and a backpack.
-    b.sphere(hr * 1.08, 0, hy + hr * 0.3, 0, p.extra, [1, 0.62, 1], 14);
-    b.add(new THREE.CylinderGeometry(hr * 0.75, hr * 0.75, 0.02, 14, 1, false, -Math.PI / 2, Math.PI), p.extra, [0, hy + hr * 0.38, hr * 0.55], [0, 0, 0]);
-    b.box(0.28 * s, 0.34 * s, 0.14 * s, 0, hip + 0.12 * s, -0.25 * s, p.extra);
-    b.box(0.2 * s, 0.12 * s, 0.04 * s, 0, hip + 0.16 * s, -0.33 * s, "#ffffff");
+    const style = variant % PALETTES.child.length;
+    if (style === 0 || style === 2) {
+      // Bright cap and short brim.
+      b.sphere(hr * 1.08, 0, hy + hr * 0.3, 0, p.extra, [1, 0.62, 1], 14);
+      b.add(new THREE.CylinderGeometry(hr * 0.75, hr * 0.75, 0.02, 14, 1, false, -Math.PI / 2, Math.PI), p.extra, [0, hy + hr * 0.38, hr * 0.55], [0, 0, 0]);
+    } else if (style === 1 || style === 4) {
+      // Ponytail and two side locks, behind the face.
+      b.sphere(hr * 0.56, 0, hy - hr * 0.07, -hr * 1.23, p.hair, [0.8, 1.42, 0.75], 10);
+      for (const x of [-1, 1]) b.sphere(hr * 0.22, x * hr * 0.92, hy - hr * 0.31, 0, p.hair, [0.8, 1.7, 0.8], 8);
+    } else if (style === 3) {
+      // Slightly tousled, layered hair.
+      for (const x of [-0.12, 0, 0.12]) b.sphere(hr * 0.37, x, hy + hr * 0.63, 0, p.hair, [1, 0.8, 1], 8);
+    } else {
+      // Short hair with an asymmetrical side fringe.
+      b.sphere(hr * 0.5, -hr * 0.55, hy + hr * 0.4, hr * 0.55, p.hair, [0.7, 0.55, 0.65], 10);
+    }
+    if (style % 2 === 0) {
+      b.box(0.28 * s, 0.34 * s, 0.14 * s, 0, hip + 0.12 * s, -0.25 * s, p.extra);
+      b.box(0.2 * s, 0.12 * s, 0.04 * s, 0, hip + 0.16 * s, -0.33 * s, "#ffffff");
+    } else {
+      // Simple contrasting shirt stripe instead of the same backpack.
+      b.box(0.30 * s, 0.045 * s, 0.014, 0, hip + 0.42 * s, 0.201 * s, p.extra);
+    }
   } else if (type === "adult") {
     // A shoulder bag with a strap.
     b.box(0.2, 0.18, 0.08, 0.3, hip - 0.05, 0.02, p.extra);

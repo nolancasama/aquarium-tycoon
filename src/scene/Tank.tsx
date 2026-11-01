@@ -435,7 +435,20 @@ function SlotMarkers({ tank }: { tank: TankRec }) {
 // ------------------------------------------------------------------ pellets, bubbles, dirt, sponge
 
 const pelletGeo = new THREE.SphereGeometry(0.012, 6, 5);
-const pelletMat = new THREE.MeshLambertMaterial({ color: "#c8692b" });
+// One instanced draw call for all food previews; existing care/eating rules are unchanged.
+const pelletMat = new THREE.MeshLambertMaterial({ color: "#ffffff" });
+const FOOD_COLORS = {
+  pellet: new THREE.Color("#c8692b"),
+  seaweed: new THREE.Color("#65b76b"),
+  seafood: new THREE.Color("#e99a7d"),
+  plankton: new THREE.Color("#bde6df")
+};
+const FOOD_SCALES = {
+  pellet: [1, 1, 1],
+  seaweed: [1.45, 0.38, 1.0],
+  seafood: [1.45, 0.85, 0.9],
+  plankton: [0.55, 0.55, 0.55]
+} as const;
 
 function Pellets({ tankId }: { tankId: string }) {
   const ref = useRef<THREE.InstancedMesh>(null);
@@ -446,11 +459,17 @@ function Pellets({ tankId }: { tankId: string }) {
     let n = 0;
     for (const p of rt.pellets) {
       if (p.tankId !== tankId || p.eaten || n >= 40) continue;
-      m4.makeTranslation(p.x, p.y, p.z);
-      mesh.setMatrixAt(n++, m4);
+      const kind = p.visualKind ?? "pellet";
+      const scale = FOOD_SCALES[kind];
+      m4.makeScale(scale[0], scale[1], scale[2]);
+      m4.setPosition(p.x, p.y, p.z);
+      mesh.setMatrixAt(n, m4);
+      mesh.setColorAt(n, FOOD_COLORS[kind]);
+      n++;
     }
     mesh.count = n;
     mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   });
   return <instancedMesh ref={ref} args={[pelletGeo, pelletMat, 40]} frustumCulled={false} />;
 }
@@ -677,11 +696,11 @@ function Upgrades({ tank }: { tank: TankRec }) {
       {tank.upgrades.lamp && (
         <>
           {hexRing ? (
-            <mesh geometry={hexRing} position={[0, STAND_H + def.h + 0.066, 0]}>
+            <mesh geometry={hexRing} position={[0, STAND_H + def.h + 0.09, 0]}>
               <meshBasicMaterial color="#fff6c8" side={THREE.DoubleSide} />
             </mesh>
           ) : (
-            <mesh position={[0, STAND_H + def.h + 0.085, lampZ]}>
+            <mesh position={[0, STAND_H + def.h + 0.12, lampZ]}>
               <boxGeometry args={[lampW, 0.03, 0.09]} />
               <meshBasicMaterial color="#fff6c8" />
             </mesh>

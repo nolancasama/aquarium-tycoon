@@ -281,7 +281,9 @@ function HallDoor({ gallery = false }: { gallery?: boolean }) {
   const angle = useRef(open ? 1 : 0);
   useFrame((_, dt) => {
     angle.current += ((open ? 1 : 0) - angle.current) * Math.min(1, dt * 2);
-    if (leaf.current) leaf.current.rotation.y = -angle.current * 1.75;
+    // Open the Gallery door close to its adjoining wall, out of the Ocean
+    // Hall tank's sightline; the Hall 1 door keeps its existing motion.
+    if (leaf.current) leaf.current.rotation.y = -angle.current * (gallery ? 2.85 : 1.75);
   });
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     if (e.delta > 8 || open) return;
