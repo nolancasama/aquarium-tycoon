@@ -71,6 +71,31 @@ export function FishPicture({ species, size = 80 }: { species: SpeciesId; size?:
         {[22, 35, 49, 66, 81].map((x, i) => <circle key={x} cx={x} cy={i % 2 ? 56 : 53} r="2" fill="#ffd1ab" />)}
       </svg>
     );
+  if (species === "parrotfish")
+    return (
+      <svg {...p}>
+        <path d="M24 35L6 20q4 15 0 30z" fill="#f6a24b" stroke="#1f8a76" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M34 20Q50 8 68 16M38 50q14 8 26 2" stroke="#f6a24b" strokeWidth="6" fill="none" strokeLinecap="round" />
+        <path d="M22 35Q40 10 70 16q16 4 20 19-4 15-20 19Q40 60 22 35" fill="#2fb59b" stroke="#1f8a76" strokeWidth="2" />
+        <path d="M40 19q-5 16 0 32M52 16q-5 19 0 38M64 17q-4 18 0 36" stroke="#f38fb5" strokeWidth="5" fill="none" />
+        <path d="M83 30q9 2 9 6-1 4-9 6z" fill="#e8f3df" stroke="#7c8f86" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M84 36h7" stroke="#7c8f86" strokeWidth="1.5" />
+        {eye(74, 29, 5)}
+      </svg>
+    );
+  if (species === "shrimp")
+    return (
+      <svg {...p}>
+        <path d="M70 30Q82 14 98 6M70 32Q86 22 99 20" stroke="#fffaf0" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M70 30Q82 14 98 6M70 32Q86 22 99 20" stroke="#c9b9a8" strokeWidth="0.6" fill="none" />
+        <path d="M30 46l-4 12M40 48l-3 12M50 48l-1 12M60 46l1 12" stroke="#f07a5c" strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M18 44L4 36l2 10-2 10z" fill="#e2432f" stroke="#a52a1f" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M18 44Q24 28 46 28q24 0 28 8-4 10-28 12Q28 50 18 44" fill="#e2432f" stroke="#a52a1f" strokeWidth="2" />
+        <path d="M22 40Q32 30 48 30q16 0 24 5" stroke="#fffaf0" strokeWidth="3" fill="none" strokeLinecap="round" />
+        <path d="M24 46q20 4 46-6" stroke="#f6c75a" strokeWidth="3" fill="none" strokeLinecap="round" />
+        {eye(66, 32, 4)}
+      </svg>
+    );
   if (species === "crab")
     return (
       <svg {...p}>

@@ -1,5 +1,39 @@
 # Current State
 
+## Coral Reef Atrium, animal motion, shop name previews (2026-11-01)
+
+- **Coral Reef Atrium** (room 4, after the Gallery, 260 coins): 16×11 m, 5.5 m
+  sunlit room with skylights, palms, benches, floor mosaic, and a freestanding
+  giant reef (pad I, built in, 14 places, 10 decor rings, rock bank + organic
+  arch over a column-free swim lane). Pads J/K take hex/panorama/cave tanks.
+  New coral decor (staghorn, brain, fan, table). Arrival reveal + bilingual card
+  on first entry. `atriumOpen` / `atriumIntroSeen` are optional save fields.
+  Rooms may now carry their own pad layout (`padLayout` in `data/rooms.ts`).
+- **New animals**: parrotfish and (cleaner) shrimp, named animals at the animal
+  counter; shrimp walks on the crab's leg/grounding path. Reef affinity makes
+  clownfish, parrotfish, butterflyfish, angelfish (and tang, weakly) hover beside
+  reef formations in the giant reef only.
+- **Animals**: crab/octopus/goby grounded on the visible sand incl. dunes;
+  richer procedural motion for crab, octopus, eel, ray, seahorse, jellies, fish.
+- **Shop**: tapping an animal picture says its name (visual name always shown;
+  never buys or answers; visual-only while listening or while the game talks).
+- **Hex tank**: straight back lamp beam replaced by a six-sided light strip;
+  the lamp upgrade on a hex is a six-sided ring.
+- Verified: typecheck, `npm test` 451/451, build, Playwright 59/59 on the
+  production preview (14.8 min, incl. new `name-preview.spec.ts`, shown to fail
+  with its handler disabled). Loop budget 61 draw calls / 40.1k triangles.
+  Atrium view ~53 calls / 53k triangles (SwiftShader). Frames checked by eye:
+  `.tmp/visual/atrium/` (room at 1366/1280/1024, reef close-up, Gallery door,
+  arrival), `.tmp/motion-review/after/`, `.tmp/name-preview/`.
+- Known limits: no parrotfish grazing peck or shrimp-cleaning interaction yet;
+  no reef lighting choice; the room sign is partly hidden behind the reef top in
+  the reef close-up; the left "Coral Reef" board is half behind the reef in the
+  management view. Real Chromebook fps for the atrium is unmeasured.
+- Codex built the three slices in parallel worktrees, then hit its usage limit
+  (until 2026-11-05) during the reef visual correction; Claude rebuilt the reef
+  scenery, fixed the Gallery-side door, added the floor mosaic, the two species,
+  reef affinity and the hex ring, and reviewed/merged everything.
+
 ## Quieter prompts, counting numbers, decoration swap, debug overlay (2026-11-01)
 
 - Counting questions number each fish (sprites over fish ids, clamped inside
@@ -289,9 +323,13 @@ approach frames, the trophy from front/side/rear.
    hall switching, and Level 6–8 pacing with children.
 3. Watch with children whether the "Next:" line and Help / ヒント are noticed and
    enough to get through Level 6 (Ocean Hall → turtle) without adult help.
+4. Atrium on a real Chromebook: fps in the atrium view, whether 260 coins feels
+   reachable, and whether children notice the reef animals' names.
+5. Optional reef follow-ups: parrotfish grazing peck, shrimp cleaning a fish,
+   a reef lighting choice; move the atrium sign/left board clear of the reef.
 
 ## Codex / Delegated Work
-None pending. The 2026-10-24 guidance pass was split into four Codex runs
+None pending (Coral Reef Atrium slices merged 2026-11-01). The 2026-10-24 guidance pass was split into four Codex runs
 (guide + shop + level cards; visitors + bench; wall + trophy; request card),
 all reviewed and accepted; layout fixes, the bench glide and test repairs were
 done by Claude.

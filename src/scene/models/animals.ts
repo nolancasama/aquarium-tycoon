@@ -167,6 +167,39 @@ function crab() {
   return b;
 }
 
+/** A cleaner shrimp on the crab's leg tags (same gait and foot support): red
+ * arched body with a white back stripe, fan tail and long white antennae. */
+function shrimp() {
+  const b = new AnimalBuilder();
+  const red = "#e2432f";
+  b.ell([0.21, 0.1, 0.095], [0.17, -0.2, 0], red, 0, undefined, 14);
+  for (const [x, y, r] of [[0.0, -0.19, 0.11], [-0.13, -0.2, 0.095], [-0.25, -0.225, 0.08], [-0.35, -0.26, 0.065]]) {
+    b.ell([0.08, r, r * 0.88], [x, y, 0], red, 0, undefined, 12);
+    b.ell([0.06, r * 0.5, r * 0.6], [x, y - r * 0.45, 0], "#f6c75a");
+  }
+  // White stripe along the back, head to tail.
+  for (const [x, y] of [[0.2, -0.105], [0.04, -0.085], [-0.1, -0.11], [-0.23, -0.15], [-0.34, -0.2]]) {
+    b.ell([0.085, 0.022, 0.03], [x, y, 0], "#fffaf0");
+  }
+  // Fan tail.
+  for (const a of [-0.55, 0, 0.55]) {
+    b.ell([0.09, 0.016, 0.05], [-0.45, -0.28, Math.sin(a) * 0.06], red, 0, undefined, 8, [0, a, -0.15]);
+    b.ell([0.03, 0.012, 0.04], [-0.53, -0.29, Math.sin(a) * 0.1], "#fffaf0", 0, undefined, 6, [0, a, -0.15]);
+  }
+  // Long white antennae arching forward, and a short pair below.
+  for (const s of [-1, 1]) {
+    b.tube([[0.34, -0.15, s * 0.03], [0.58, -0.04, s * 0.12], [0.82, 0.1, s * 0.19], [1.02, 0.2, s * 0.16]], 0.009, "#fffaf0", 0, 0, 10, 4, 0.5);
+    b.tube([[0.33, -0.22, s * 0.04], [0.48, -0.27, s * 0.11], [0.6, -0.26, s * 0.16]], 0.008, "#fffaf0", 0, 0, 5, 4, 0.5);
+  }
+  // Eight thin walking legs: alternating phase per leg and opposite side, as on the crab.
+  for (const s of [-1, 1]) for (let i = 0; i < 4; i++) {
+    const x = 0.24 - i * 0.09;
+    b.tube([[x, -0.26, s * 0.06], [x - 0.03, -0.31, s * 0.16], [x - 0.06, -0.58, s * 0.2]], 0.016, "#f07a5c", 4, i * Math.PI + (s < 0 ? Math.PI : 0), 5, 4, 0.55, (s < 0 ? 0 : 4) + i);
+  }
+  b.eyes(0.33, -0.12, 0.065, 0.04, true);
+  return b;
+}
+
 function ray() {
   const b = new AnimalBuilder();
   // Wide, nearly round disc: the wing wave grows continuously toward its tips.
@@ -257,6 +290,7 @@ export function animalGeometry(species: SpeciesId): THREE.BufferGeometry {
     case "eel": builder = eel(); break;
     case "octopus": builder = octopus(); break;
     case "crab": builder = crab(); break;
+    case "shrimp": builder = shrimp(); break;
     case "stingray": builder = ray(); break;
     case "jellyfish": case "moonjelly": case "spottedjelly": case "seanettle": builder = jelly(species); break;
     default: throw new Error(`No expansion animal geometry for ${species}`);

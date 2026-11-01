@@ -13,8 +13,10 @@ const tank = (type, slot, species = [], decor = []) => ({
   upgrades: { filter: false, lamp: false }
 });
 const tanks = [tank("small", "A", ["clownfish"]), tank("ocean", "C", ["turtle"]), tank("cylinder", "G", ["moonjelly"]),
-  tank("reef", "I", ["clownfish", "bluetang", "yellowfish", "angelfish", "goby", "chromis", "crab", "seahorse", "stingray"],
-    [["staghorn", "red", 0], ["brain", null, 1], ["fan", "blue", 4], ["table", null, 6]])];
+  tank("reef", "I", ["clownfish", "bluetang", "yellowfish", "angelfish", "goby", "chromis", "crab", "seahorse", "stingray", "parrotfish", "shrimp"],
+    [["staghorn", "red", 0], ["brain", null, 1], ["fan", "blue", 4], ["table", null, 6]]),
+  // The hex lamp ring, seen from the management camera.
+  { ...tank("hex", "J", ["angelfish"]), upgrades: { filter: false, lamp: true } }];
 const model = { coins: 500, tanks, inv: { fish: [], decor: [], tanks: [] },
   progress: { stage: 8, tutorial: "done", firstFish: "clownfish", fedOnce: true, cleanedOnce: true, counted: true,
     hearts: 10, photo: true, star: true, freePlay: true, hallOpen: true, galleryOpen: true, atriumOpen: true,

@@ -30,7 +30,7 @@ function supportFor(species: SpeciesId): Support {
     } else if (s.w > 0.999) tips.set(`${s.foot},${s.x},${s.y},${s.z}`, s);
   }
   // The shader's largest horizontal limb displacement, including idle curls.
-  radius += SPECIES[species].length * (species === "crab" ? 0.11 : species === "octopus" ? 0.12 : 0.04);
+  radius += SPECIES[species].length * (SPECIES[species].body === "crab" ? 0.11 : species === "octopus" ? 0.12 : 0.04);
   const result = { minY, radius, body: [...body.values()], tips: [...tips.values()] };
   supports.set(species, result);
   return result;

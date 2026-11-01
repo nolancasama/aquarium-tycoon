@@ -17,7 +17,9 @@ export type SpeciesId =
   | "stingray"
   | "moonjelly"
   | "spottedjelly"
-  | "seanettle";
+  | "seanettle"
+  | "parrotfish"
+  | "shrimp";
 export type DecorKind =
   | "plant"
   | "coral"

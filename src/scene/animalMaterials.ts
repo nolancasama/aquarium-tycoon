@@ -27,7 +27,7 @@ export interface AnimalMaterial extends THREE.MeshLambertMaterial {
 
 const codes: Partial<Record<SpeciesId, number>> = {
   angelfish: 0, goby: 1, chromis: 2, eel: 3, octopus: 4,
-  crab: 5, stingray: 6, moonjelly: 7, spottedjelly: 8, seanettle: 9, jellyfish: 10
+  crab: 5, shrimp: 5, stingray: 6, moonjelly: 7, spottedjelly: 8, seanettle: 9, jellyfish: 10
 };
 
 /** Each animal owns uniforms; geometry and the compiled shader are shared.

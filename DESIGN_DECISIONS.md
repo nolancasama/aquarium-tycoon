@@ -1095,3 +1095,33 @@ these changes and decisions.
   older doors: an open bright-teal leaf in the dark Gallery read as a stray slab.
 - Floor detail (mosaic rays from the reef ring, wave border, starfish medallion
   at the entrance) is painted into the single floor texture rather than geometry.
+
+## 2026-11-01 — Reef animals, reef behaviour and the hex lamp ring
+
+- **Parrotfish and shrimp are named animals**, ordered at the animal counter
+  ("A parrotfish, please!", "It's a shrimp."). Every fish colour already belongs
+  to one fish at the colour counter, and naming them teaches "What's this? It's a
+  parrotfish." The cleaner shrimp is simply "Shrimp / エビ": no scientific names
+  for Grade 3. Parrotfish live in the reef and panorama; shrimp in the reef and
+  the cave tank (the atrium's invertebrate exhibit on pad K). Both are optional
+  purchases (70 / 35 coins); nothing is auto-stocked.
+- **The shrimp reuses the crab's body path**: crab shader code, leg tags and
+  per-foot sand support, so it inherits grounding on dunes and the alternating
+  gait. Only the crab walks sideways (`def.id === "crab"`). The parrotfish is a
+  bending fish with a pale fused beak. Rejected for now: a parrotfish grazing
+  peck animation and a shrimp-cleans-fish interaction (both need new renderer
+  states; reef affinity already keeps the parrotfish working the coral).
+- **Reef affinity**: in the giant reef only, clownfish, parrotfish, butterflyfish,
+  angelfish and (weakly) blue tang pick many wander targets just outside a
+  formation, on its visitor side, around its upper half; gobies stay perched on
+  sand and chromis school in open water as before. Targets that land inside an
+  overlapping neighbour formation are retried, falling back to open water.
+  Other tanks are unchanged (same RNG sequence). Rejected: per-decoration homes
+  in every tank (would change long-tested behaviour everywhere).
+- **Hex lamp**: the straight lamp beam across the back of the hex top is
+  replaced by a light strip set into the six-sided frame; the lamp upgrade on a
+  hex is a brighter six-sided ring (one flat mesh) instead of a straight bar.
+- **Reef English reuses existing requests**: visitors' "I like parrotfish!",
+  "Do you like shrimp?" and show-me requests already draw on any owned named
+  animal; counting stays capped at eight animals, so the busy reef is not
+  counted. No new tutorial: the atrium's short arrival reveal is the introduction.

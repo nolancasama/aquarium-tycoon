@@ -83,6 +83,33 @@ function clownfish(L: number) {
   return f.build();
 }
 
+/** Teal-green body with pink scale bands, orange-edged fins and a pale beak. */
+function parrotfish(L: number) {
+  const f = new FishBuilder();
+  const a = L * 0.5;
+  const by = L * 0.22;
+  const bz = L * 0.12;
+  const teal = "#2fb59b";
+  f.ell([a, by, bz], [0, 0, 0], teal, [0, 0, 0], 24);
+  // A blunt, rounded forehead.
+  f.ell([0.42 * a, by * 0.86, bz * 0.95], [0.5 * a, 0.06 * by, 0], teal, [0, 0, 0], 18);
+  // Pink scale bands that hug the flanks.
+  for (const x of [0.18, -0.12, -0.42]) {
+    f.ell([0.07 * a, by * at(a, x * a) * 0.92, bz * at(a, x * a) + 0.0015], [x * a, 0, 0], "#f38fb5", [0, 0, 0], 14);
+  }
+  f.ell([0.36 * a, 0.05 * L, bz * 0.99 + 0.002], [0.1 * a, -0.55 * by, 0], "#9be3c8", [0, 0, 0], 16);
+  // The beak: two pale fused plates instead of lips.
+  for (const s of [1, -1]) f.ell([0.16 * a, 0.045 * L, 0.05 * L], [0.94 * a, s * 0.035 * L - 0.08 * by, 0], "#e8f3df", [0, 0, s * 0.18], 12);
+  f.ell([0.02 * L, 0.018 * L, 0.055 * L], [1.03 * a, -0.08 * by, 0], "#7c8f86", [0, 0, 0], 8);
+  // Crescent tail and fins with orange edges.
+  for (const s of [1, -1]) f.fin([0.17 * a, 0.2 * L, 0.018 * L], [-a - 0.06 * a, s * 0.075 * L, 0], "#f6a24b", "#1f8a76", [0, 0, s * 0.7]);
+  f.fin([0.8 * a, 0.06 * L, 0.014 * L], [-0.1 * a, by * 0.95, 0], "#f6a24b", "#1f8a76");
+  f.fin([0.45 * a, 0.05 * L, 0.014 * L], [-0.3 * a, -by * 0.95, 0], "#f6a24b", "#1f8a76");
+  for (const s of [1, -1]) f.fin([0.1 * L, 0.045 * L, 0.012 * L], [0.25 * a, -0.2 * by, s * bz * 0.98], "#ffd08a", null, [s * 0.5, s * 0.4, -0.5]);
+  f.eyes(0.62 * a, 0.3 * by, bz * 0.72, 0.048 * L);
+  return f.build();
+}
+
 function blueTang(L: number) {
   const f = new FishBuilder();
   const a = L * 0.5;
@@ -286,6 +313,9 @@ export function fishGeometry(s: SpeciesId): THREE.BufferGeometry {
         break;
       case "jellyfish":
         g = jellyfish(L);
+        break;
+      case "parrotfish":
+        g = parrotfish(L);
         break;
       default:
         g = turtleModel().body;

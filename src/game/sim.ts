@@ -174,6 +174,7 @@ function stepFish(dt: number, tanks: TankRec[]) {
         behaviorEnv.tank = TANKS[t.type];
         behaviorEnv.bounds = bounds;
         behaviorEnv.columns = columns;
+        behaviorEnv.reef = t.type === "reef";
         const counting = rt.countGlow?.numbers.some((x) => x.fishId === f.id);
         behaviorEnv.speedMul = (attract ? 1.35 : baseMul) * (counting ? 0.18 : rt.slowFish && !showing ? 0.3 : 1);
         behaviorEnv.attract = attract;
@@ -208,7 +209,7 @@ function stepFish(dt: number, tanks: TankRec[]) {
       // Heading and tail beat for drawing.
       const speed = Math.hypot(s.vx, s.vz);
       if (speed > 0.015) {
-        const want = Math.atan2(-s.vz, s.vx) + (def.body === "crab" ? Math.PI / 2 : 0);
+        const want = Math.atan2(-s.vz, s.vx) + (def.id === "crab" ? Math.PI / 2 : 0);
         let d = want - f.yaw;
         while (d > Math.PI) d -= Math.PI * 2;
         while (d < -Math.PI) d += Math.PI * 2;

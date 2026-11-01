@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SPECIES, SPECIES_ORDER } from "../data/fish";
 import { TANKS, SAND_H } from "../data/tanks";
 import { makeRng } from "./rng";
-import { fishBounds, floorAt, newSwimState, stepSwim, type Column, type SwimEnv } from "./swim";
+import { fishBounds, floorAt, newSwimState, pickTarget, REEF_AFFINITY, stepSwim, type Column, type SwimEnv } from "./swim";
 
 describe("fish swimming", () => {
   for (const id of SPECIES_ORDER) {
@@ -104,5 +104,51 @@ describe("fish swimming", () => {
       previous = heading;
     }
     expect(s.vz).not.toBe(0);
+  });
+});
+
+describe("reef fish keep to the coral", () => {
+  const tank = TANKS.reef;
+  const columns: Column[] = (tank.rocks ?? []).map((r) => ({ x: r.x, z: r.z, r: r.r, top: SAND_H + r.top }));
+  // In open water (not above rock), on a formation's visitor side, close to its edge.
+  const beside = (x: number, z: number, radius: number) =>
+    columns.every((c) => Math.hypot(x - c.x, z - c.z) > c.r) &&
+    columns.some((c) => z > c.z && Math.hypot(x - c.x, z - c.z) - c.r < radius + 0.2);
+  const besideRate = (id: keyof typeof REEF_AFFINITY, reef: boolean) => {
+    const def = SPECIES[id];
+    const bounds = fishBounds(tank.w, tank.d, tank.h, SAND_H, def);
+    const env: SwimEnv = { bounds, columns, others: [], speedMul: 1, attract: null, depthBias: 0, reef };
+    const rand = makeRng(11);
+    const s = newSwimState(def, env, rand);
+    let hits = 0;
+    for (let i = 0; i < 400; i++) {
+      pickTarget(s, def, env, rand);
+      expect(s.tx).toBeGreaterThanOrEqual(bounds.min.x);
+      expect(s.tx).toBeLessThanOrEqual(bounds.max.x);
+      expect(s.ty).toBeLessThanOrEqual(bounds.max.y);
+      expect(s.ty).toBeGreaterThanOrEqual(floorAt(s.tx, s.tz, bounds, columns, def.radius) - 1e-9);
+      if (beside(s.tx, s.tz, def.radius)) hits++;
+    }
+    return hits / 400;
+  };
+
+  for (const id of Object.keys(REEF_AFFINITY) as (keyof typeof REEF_AFFINITY)[]) {
+    it(`${id}: in the reef, targets hover beside formations' visitor side and stay in the water`, () => {
+      const open = besideRate(id, false);
+      expect(besideRate(id, true)).toBeGreaterThan(open + REEF_AFFINITY[id]! * 0.4);
+    });
+  }
+
+  it("outside the giant reef the wander pick is unchanged", () => {
+    const def = SPECIES.clownfish;
+    const bounds = fishBounds(tank.w, tank.d, tank.h, SAND_H, def);
+    const pick = (reef: boolean | undefined) => {
+      const rand = makeRng(5);
+      const env: SwimEnv = { bounds, columns, others: [], speedMul: 1, attract: null, depthBias: 0, reef };
+      const s = newSwimState(def, env, rand);
+      pickTarget(s, def, env, rand);
+      return [s.tx, s.ty, s.tz];
+    };
+    expect(pick(false)).toEqual(pick(undefined));
   });
 });

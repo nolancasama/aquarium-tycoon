@@ -162,10 +162,10 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
     const tankDef = TANKS[tank.type];
     if (Number.isFinite(travel.current.x)) {
       const distance = Math.hypot(f.s.x - travel.current.x, f.s.z - travel.current.z);
-      travel.current.phase += Math.min(distance, 0.08) / (def.length * (species === "crab" ? 0.28 : 0.45)) * Math.PI * 2;
+      travel.current.phase += Math.min(distance, 0.08) / (def.length * (def.body === "crab" ? 0.28 : 0.45)) * Math.PI * 2;
     }
     travel.current.x = f.s.x; travel.current.z = f.s.z;
-    const phase = species === "crab" || species === "octopus" ? travel.current.phase : def.movement === "drift" ? f.pulsePhase ?? f.phase : f.phase;
+    const phase = def.body === "crab" || species === "octopus" ? travel.current.phase : def.movement === "drift" ? f.pulsePhase ?? f.phase : f.phase;
     const reaction = Math.max(tap, eat * 0.5);
     mesh.position.set(f.s.x, f.s.y + (ground ? 0 : happy * 0.035 + tap * 0.025), f.s.z);
     // Ground animals acknowledge taps by rocking their shell/mantle above planted feet.

@@ -6,7 +6,7 @@
 
 ## North star
 
-The game should grow from the student's **first clownfish** into a thriving aquarium with dramatically different exhibits, animal behaviors, and visitor experiences. The visual and gameplay finale should be an **enormous outdoor coastal marine complex**, with dolphin habitats and a separate, much larger orca sanctuary. **Jellyfish Gallery is the last current built room, not the final planned attraction.**
+The game should grow from the student's **first clownfish** into a thriving aquarium with dramatically different exhibits, animal behaviors, and visitor experiences. The visual and gameplay finale should be an **enormous outdoor coastal marine complex**, with dolphin habitats and a separate, much larger orca sanctuary. **The Coral Reef Atrium (built 2026-11-01) is the newest room, not the final planned attraction.**
 
 Maintain the original audience: Japanese Grade 3 beginner EFL students on touch Chromebooks. New English tasks should fit naturally into aquarium management, remain understandable without reliable audio/STT, and use concise Japanese assistance as appropriate.
 
@@ -15,13 +15,14 @@ Maintain the original audience: Japanese Grade 3 beginner EFL students on touch 
 - **First Hall:** starter fish, care, decorations, visitors and small tanks.
 - **Ocean Hall:** bigger tanks, sea turtle, additional animals, upgrades.
 - **Jellyfish Gallery:** third room, glowing displays, specialized tank types.
+- **Coral Reef Atrium (2026-11-01):** fourth, taller sunlit room with a freestanding giant reef habitat, coral decorations, parrotfish and (cleaner) shrimp, and two open pads for secondary exhibits.
 - Existing special tanks: hexagonal, panoramic, jellyfish cylinder, rocky cave.
 - Existing expansion animals include angelfish, goby, chromis school, moray eel, octopus, crab, stingray and distinct jellyfish species.
-- The three existing rooms are declared in `src/game/data/rooms.ts` and currently connect in a straight line; future large areas should not be forced into an endless row of identical rooms.
+- The four existing rooms are declared in `src/game/data/rooms.ts` (pads may now carry their own layout) and still connect in a straight line; future large areas should not be forced into an endless row of identical rooms.
 
 See `CURRENT_STATE.md` for actual implemented/tested status and `DESIGN_DECISIONS.md` for established design decisions. Do not mistake this roadmap for completed work.
 
-## Immediate polish and fixes (before or alongside the next expansion)
+## Immediate polish and fixes — done 2026-11-01 (kept for reference)
 
 ### 1. Crab sinks into the sand
 
@@ -70,7 +71,10 @@ Prefer shared lightweight rig/part animation or targeted shader animation. Keep 
 
 These are **distinct types of experiences**, not merely additional copies of the current rectangular tanks. The order below suggests a satisfying increase in spectacle, but **do not enforce fixed linear unlocks, stage numbers, prices or branching rules yet**. Those are separate design decisions.
 
-### A. Coral Reef Atrium
+### A. Coral Reef Atrium — implemented 2026-11-01
+
+**Status:** built (see `DESIGN_DECISIONS.md`, 2026-11-01 entries, and `CURRENT_STATE.md`). Not yet built: parrotfish grazing animation, shrimp cleaning interaction, a reef lighting choice.
+
 
 **Visual identity:** bright, airy, large panoramic reef, layers of coral, expansive viewing windows.
 

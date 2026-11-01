@@ -185,6 +185,16 @@ function specialShellGeometry(t: TankDef): THREE.BufferGeometry {
   if (round) {
     // Coloured emissive bands are drawn separately by Tank, leaving one merged opaque shell.
     slab(b, t, 0.055, STAND_H + t.h + 0.025, -0.035, "#38596e");
+  } else if (t.shape === "hex") {
+    // A light strip set into the six-sided top frame: a straight beam across
+    // the back read as an unrelated bar.
+    const p = footprintPoints(t, 0.075);
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], c = p[(i + 1) % p.length];
+      const len = Math.hypot(c.x - a.x, c.z - a.z), rot = -Math.atan2(c.z - a.z, c.x - a.x);
+      b.box(len + 0.02, 0.012, 0.05, (a.x + c.x) / 2, STAND_H + t.h + 0.04, (a.z + c.z) / 2, "#24313d", rot);
+      b.box(len, 0.012, 0.024, (a.x + c.x) / 2, STAND_H + t.h + 0.052, (a.z + c.z) / 2, "#fff4c5", rot);
+    }
   } else {
     b.box(t.w * 0.82, 0.055, 0.1, 0, STAND_H + t.h + 0.035, -t.d / 2 + 0.08, "#24313d");
     b.box(t.w * 0.76, 0.018, 0.065, 0, STAND_H + t.h + 0.025, -t.d / 2 + 0.08, "#fff4c5");

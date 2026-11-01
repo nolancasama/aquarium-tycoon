@@ -1,6 +1,6 @@
 import type { SpeciesDef } from "../data/fish";
 import type { TankDef } from "../data/tanks";
-import type { Vec3 } from "../types";
+import type { SpeciesId, Vec3 } from "../types";
 import { swimRhythm } from "./motion";
 
 /**
@@ -87,6 +87,39 @@ export interface SwimEnv {
   attract: { x: number; y: number; z: number } | null;
   /** Shift of the preferred depth band (hungry fish drift up toward the feeding spot). */
   depthBias: number;
+  /** In the giant reef some species keep close to the coral formations. */
+  reef?: boolean;
+}
+
+/** Chance that a wander target hugs a reef formation instead of open water. */
+export const REEF_AFFINITY: Partial<Record<SpeciesId, number>> = {
+  clownfish: 0.75, // hovers by shelter
+  parrotfish: 0.7, // grazes reef surfaces
+  yellowfish: 0.6, // the butterflyfish picks over the coral
+  angelfish: 0.45, // cruises round the formations
+  bluetang: 0.25
+};
+
+/** A point just outside a formation, on its visitor side, around its upper
+ * half. Formations overlap, so a point that lands inside a neighbour is
+ * retried; false when none is found (the caller picks open water). */
+function reefTarget(s: SwimState, def: SpeciesDef, env: SwimEnv, rand: () => number): boolean {
+  const b = env.bounds;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const c = env.columns[Math.floor(rand() * env.columns.length)];
+    const a = rand() * Math.PI;
+    const d = c.r + def.radius + 0.04 + rand() * 0.12;
+    const x = clamp(c.x + Math.cos(a) * d, b.min.x, b.max.x);
+    const z = clamp(c.z + Math.sin(a) * d, b.min.z, frontAt(b, x));
+    if (env.columns.some((o) => Math.hypot(x - o.x, z - o.z) < o.r + def.radius)) continue;
+    const top = Math.min(c.top, b.max.y);
+    const y = top + 0.06 - rand() * Math.max(0.05, (top - b.min.y) * 0.5);
+    s.tx = x; s.tz = z;
+    s.ty = clamp(y, floorAt(x, z, b, env.columns, def.radius), b.max.y);
+    s.wait = def.wander[0] + rand() * (def.wander[1] - def.wander[0]);
+    return true;
+  }
+  return false;
 }
 
 /** The space a fish's body can occupy without touching glass, sand or the surface. */
@@ -149,6 +182,8 @@ export function clampToBounds(s: SwimState, b: Bounds, columns: readonly Column[
 }
 
 export function pickTarget(s: SwimState, def: SpeciesDef, env: SwimEnv, rand: () => number): void {
+  const affinity = env.reef && !env.attract ? REEF_AFFINITY[def.id] ?? 0 : 0;
+  if (affinity > 0 && env.columns.length > 0 && rand() < affinity && reefTarget(s, def, env, rand)) return;
   const b = env.bounds;
   const h = b.max.y - b.min.y;
   const lo = clamp(def.depth[0] + env.depthBias, 0, 1);

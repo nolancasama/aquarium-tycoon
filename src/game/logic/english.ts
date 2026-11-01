@@ -63,10 +63,14 @@ export type PhraseId =
   | "octopusPlease"
   | "crabPlease"
   | "stingrayPlease"
+  | "parrotfishPlease"
+  | "shrimpPlease"
   | "itsEel"
   | "itsOctopus"
   | "itsCrab"
   | "itsStingray"
+  | "itsParrotfish"
+  | "itsShrimp"
   | "itRed"
   | "itBlue"
   | "itYellow"
@@ -104,8 +108,10 @@ const EEL = ["eel", "eels", "eel's", "eal", "iel", "moray", "morays", "eeru", "i
 const OCTOPUS = ["octopus", "octopuses", "octopi", "octopus's", "octopuss", "octapus", "oktopus", "okutopasu", "tako"];
 const CRAB = ["crab", "crabs", "crab's", "krab", "crabb", "kurabu", "grab"];
 const STINGRAY = ["stingray", "stingrays", "stingray's", "sting", "ray", "rays", "sutingurei", "stingrey"];
+const PARROTFISH = ["parrotfish", "parrotfishes", "parrot", "parrots", "parrotfish's", "parotfish", "perrot", "paratto", "parotto", "parrotto"];
+const SHRIMP = ["shrimp", "shrimps", "shrimp's", "srimp", "schrimp", "shrimpu", "shurimpu", "shurinpu", "ebi"];
 /** "It's a fish." must not also match "jelly fish", "sea horse", "turtle" or the other sea animals. */
-const NOT_FISH = ["jelly", "jellyfish", "jerry", "jerryfish", "seahorse", "horse", "turtle", "turtles", "eel", "moray", "octopus", "crab", "stingray", "ray"];
+const NOT_FISH = ["jelly", "jellyfish", "jerry", "jerryfish", "seahorse", "horse", "turtle", "turtles", "eel", "moray", "octopus", "crab", "stingray", "ray", "parrot", "parrots", "parrotfish", "shrimp", "shrimps"];
 
 const BIG = ["big", "bigger", "biggest", "bigg", "bigu", "biggu", "beg", "bag", "big's"];
 const SMALL = ["small", "smaller", "smallest", "smol", "smal", "smoll", "smalls", "sumo", "sumooru", "small's"];
@@ -154,7 +160,9 @@ export const ANIMAL_PHRASE: Partial<Record<SpeciesId, PhraseId>> = {
   eel: "eelPlease",
   octopus: "octopusPlease",
   crab: "crabPlease",
-  stingray: "stingrayPlease"
+  stingray: "stingrayPlease",
+  parrotfish: "parrotfishPlease",
+  shrimp: "shrimpPlease"
 };
 
 /** "What's this?" answers: every fish is "a fish", every jellyfish "a jellyfish". */
@@ -173,6 +181,8 @@ export const ITS_PHRASE: Record<SpeciesId, PhraseId> = {
   octopus: "itsOctopus",
   crab: "itsCrab",
   stingray: "itsStingray",
+  parrotfish: "itsParrotfish",
+  shrimp: "itsShrimp",
   moonjelly: "itsJellyfish",
   spottedjelly: "itsJellyfish",
   seanettle: "itsJellyfish"
@@ -259,10 +269,14 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   octopusPlease: animal("octopusPlease", "An octopus, please!", OCTOPUS, "octopus"),
   crabPlease: animal("crabPlease", "A crab, please!", CRAB, "crab"),
   stingrayPlease: animal("stingrayPlease", "A stingray, please!", STINGRAY, "stingray"),
+  parrotfishPlease: animal("parrotfishPlease", "A parrotfish, please!", PARROTFISH, "parrotfish"),
+  shrimpPlease: animal("shrimpPlease", "A shrimp, please!", SHRIMP, "shrimp"),
   itsEel: animal("itsEel", "It's an eel.", EEL, "eel"),
   itsOctopus: animal("itsOctopus", "It's an octopus.", OCTOPUS, "octopus"),
   itsCrab: animal("itsCrab", "It's a crab.", CRAB, "crab"),
   itsStingray: animal("itsStingray", "It's a stingray.", STINGRAY, "stingray"),
+  itsParrotfish: animal("itsParrotfish", "It's a parrotfish.", PARROTFISH, "parrotfish"),
+  itsShrimp: animal("itsShrimp", "It's a shrimp.", SHRIMP, "shrimp"),
   itRed: itColor("itRed", "red"),
   itBlue: itColor("itBlue", "blue"),
   itYellow: itColor("itYellow", "yellow"),
@@ -280,7 +294,7 @@ export const NUMBER_IDS: PhraseId[] = ["n1", "n2", "n3", "n4", "n5", "n6", "n7",
 /** "What's this?" answers before Level 8 (distractors stay among animals the class has met). */
 export const ITS_IDS_BASE: PhraseId[] = ["itsTurtle", "itsSeahorse", "itsJellyfish", "itsFish"];
 /** Every "What's this?" answer (the judge hears them all). */
-export const ITS_IDS: PhraseId[] = [...ITS_IDS_BASE, "itsEel", "itsOctopus", "itsCrab", "itsStingray"];
+export const ITS_IDS: PhraseId[] = [...ITS_IDS_BASE, "itsEel", "itsOctopus", "itsCrab", "itsStingray", "itsParrotfish", "itsShrimp"];
 export const IT_COLOR_IDS: PhraseId[] = Object.values(IT_COLOR_PHRASE);
 
 export function numberOf(id: PhraseId): number | null {

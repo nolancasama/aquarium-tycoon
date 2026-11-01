@@ -13,7 +13,7 @@ import { FishMesh } from "./Animals";
 import { decorModel } from "./models/decor";
 import { additiveSprite, algaeTexture, badgeTexture, flatMat, glassTexture, shaderTime, shadowMaterial, surfaceMaterial, tankShellMaterial, waterMaterial } from "./materials";
 import { project, FOV } from "./CameraRig";
-import { footprintContains, sandSurfaceY, slotMarkerY, SLOT_MARKER_LIFT, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
+import { footprintContains, footprintPoints, sandSurfaceY, slotMarkerY, SLOT_MARKER_LIFT, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
 import type { TankType } from "../game/types";
 import { PartBuilder } from "./partBuilder";
 import { currentMaterial, displayGlowMaterial, displayRingMaterial, shapedWaterMaterial } from "./tankMaterials";
@@ -660,7 +660,15 @@ function Upgrades({ tank }: { tank: TankRec }) {
   const narrow = def.shape === "round" || def.shape === "hex";
   const lampW = def.w * (narrow ? 0.42 : 0.86);
   const lampZ = narrow ? -def.d * 0.22 : -def.d / 2 + 0.07;
-  useEffect(() => () => glowMat.dispose(), [glowMat]);
+  // The hex lamp is a six-sided ring following the frame, not a straight bar.
+  const hexRing = useMemo(() => {
+    if (def.shape !== "hex") return null;
+    const outer = footprintPoints(def, 0.055), inner = footprintPoints(def, 0.1);
+    const shape = new THREE.Shape(outer.map((p) => new THREE.Vector2(p.x, -p.z)));
+    shape.holes.push(new THREE.Path(inner.map((p) => new THREE.Vector2(p.x, -p.z))));
+    return new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2);
+  }, [def]);
+  useEffect(() => () => { glowMat.dispose(); hexRing?.dispose(); }, [glowMat, hexRing]);
   useFrame(() => {
     if (ref.current) glowMat.opacity = 0.35 + Math.sin(rt.time * 1.5) * 0.08;
   });
@@ -668,10 +676,16 @@ function Upgrades({ tank }: { tank: TankRec }) {
     <>
       {tank.upgrades.lamp && (
         <>
-          <mesh position={[0, STAND_H + def.h + 0.085, lampZ]}>
-            <boxGeometry args={[lampW, 0.03, 0.09]} />
-            <meshBasicMaterial color="#fff6c8" />
-          </mesh>
+          {hexRing ? (
+            <mesh geometry={hexRing} position={[0, STAND_H + def.h + 0.066, 0]}>
+              <meshBasicMaterial color="#fff6c8" side={THREE.DoubleSide} />
+            </mesh>
+          ) : (
+            <mesh position={[0, STAND_H + def.h + 0.085, lampZ]}>
+              <boxGeometry args={[lampW, 0.03, 0.09]} />
+              <meshBasicMaterial color="#fff6c8" />
+            </mesh>
+          )}
           <sprite ref={ref} material={glowMat} position={[0, STAND_H + def.h * 0.75, (def.bulge ?? 0) / 2]} scale={[def.w * (narrow ? 0.75 : 1.1), def.h * 0.8, 1]} renderOrder={3} />
         </>
       )}
