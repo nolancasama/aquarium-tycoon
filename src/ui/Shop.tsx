@@ -12,6 +12,7 @@ import { Icon, type IconId } from "./icons";
 import { DecorPicture, FishPicture, LampPicture, TankPicture as ShapePicture } from "./Portraits";
 import { Ja } from "./Talk";
 import "./DecorTray.css";
+import { NamePreview } from "./NamePreview";
 
 type ShopReason = { en: string; ja: string };
 const needCoins = (n: number): ShopReason => ({ en: `Need ${n} more coins`, ja: `コインが あと ${n} まい ひつよう` });
@@ -55,7 +56,7 @@ function AnimalCards({ list, testid, title }: { list: SpeciesId[]; testid: strin
             : homeless ? expansion ? HOME_REASON_TEXT[habitatReason] : noSpace : short ? needCoins(def.price - model.coins) : null;
         return (
           <div key={s} className={`card fish-card ${locked ? "locked" : ""} ${short || homeless ? "short" : ""} ${shopItem === s ? "guide shop-recommended" : ""}`} data-testid="shop-card" data-species={s} aria-disabled={Boolean(reason)}>
-            <FishPicture species={s} size={110} />
+            <NamePreview species={s} />
             {expansion && <small className="animal-ja" lang="ja">{def.ja}</small>}
             {expansion && <span className="habitat-chips" aria-label="Habitats">
               {def.habitat.map((type) => <span key={type} className="habitat-chip" title={TANKS[type].ja} aria-label={TANKS[type].ja}><ShapePicture type={type} size={26} /></span>)}

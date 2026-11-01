@@ -23,6 +23,7 @@ export const BROWSER_STUBS = `
   if (synth) {
     // Like Chrome: speaking ends after a while, and cancel() ends it at once.
     const pending = new Set();
+    Object.defineProperty(w, '__ttsPending', { get: () => pending.size });
     const end = (u) => { if (!pending.has(u)) return; pending.delete(u); u.onend && u.onend(); };
     synth.speak = (u) => { w.__ttsSpoken.push(u.text); pending.add(u); setTimeout(() => end(u), w.__ttsMs ?? 120); };
     synth.cancel = () => { [...pending].forEach(end); };
