@@ -173,7 +173,8 @@ function stepFish(dt: number, tanks: TankRec[]) {
         behaviorEnv.tank = TANKS[t.type];
         behaviorEnv.bounds = bounds;
         behaviorEnv.columns = columns;
-        behaviorEnv.speedMul = (attract ? 1.35 : baseMul) * (rt.slowFish && !showing ? 0.3 : 1);
+        const counting = rt.countGlow?.numbers.some((x) => x.fishId === f.id);
+        behaviorEnv.speedMul = (attract ? 1.35 : baseMul) * (counting ? 0.18 : rt.slowFish && !showing ? 0.3 : 1);
         behaviorEnv.attract = attract;
         behaviorEnv.depthBias = hungry && !attract ? 0.3 : 0;
         behaviorEnv.show = showing;

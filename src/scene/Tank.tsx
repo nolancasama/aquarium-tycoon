@@ -51,6 +51,26 @@ function pickInTank(tank: TankRec, sx: number, sy: number) {
         best = i;
       }
     });
+    if (g.placing?.kind === "decor") {
+      // Tall decorations can cover their rings. Their visible height is also
+      // a target for the same slot, while a nearer circle keeps precedence.
+      for (const d of tank.decor) {
+        const s = def.slots[d.slot];
+        const floor = STAND_H + sandSurfaceY(def, s.x, s.z);
+        const top = decorVersion(d.kind, d.variant).height * def.h;
+        const a = project(o.x + s.x, floor, o.z + s.z);
+        const b = project(o.x + s.x, floor + top, o.z + s.z);
+        if (!a || !b) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const lengthSq = dx * dx + dy * dy;
+        const u = lengthSq ? THREE.MathUtils.clamp(((sx - a.x) * dx + (sy - a.y) * dy) / lengthSq, 0, 1) : 0;
+        const distance = Math.hypot(sx - a.x - u * dx, sy - a.y - u * dy);
+        if (distance < Math.min(bd, 60)) {
+          bd = distance;
+          best = d.slot;
+        }
+      }
+    }
     if (best >= 0) tapSlot(tank.id, best);
     return;
   }
@@ -359,9 +379,9 @@ function SlotMarkers({ tank }: { tank: TankRec }) {
       const mat = mats[i];
       const taken = tank.decor.some((d) => d.slot === i);
       const picked = p?.kind === "move" && p.tankId === tank.id && p.slot === i;
-      const active = (p?.kind === "decor" && !taken) || (p?.kind === "move" && !picked);
+      const active = p?.kind === "decor" || (p?.kind === "move" && !picked);
       const target = g.guide ?? g.nudge?.target;
-      const guided = !taken && active && (target === "decor-rings" || target === "tray");
+      const guided = active && (!taken || p?.kind === "decor") && (target === "decor-rings" || target === "tray");
       const scale = active ? 1 + Math.sin(rt.time * 4 + i) * 0.12 : 0.85;
       mat.color.set(guided ? "#ffcc33" : picked ? "#ff9f1c" : active ? "#7dffb0" : taken ? "#ffffff" : "#bff3ff");
       mat.opacity = rt.camera.shot ? 0 : guided ? 0.78 + Math.sin(rt.time * 4 + i) * 0.2 : active ? 0.95 : taken ? 0.35 : 0.6;

@@ -118,7 +118,7 @@ test("denied microphone permission falls back to tapping without blocking the tu
 test("Say + Tap advances by tapping without opening a mic or claiming recognition", async ({ page }) => {
   const errors = await boot(page);
   await startNew(page, "say-tap");
-  await expect(page.getByTestId("prompt-heading")).toContainText("SAY IT, THEN TAP!");
+  await expect(page.getByTestId("prompt-heading")).toHaveText("SAY / TAPいって タップ");
   await expect(page.getByTestId("prompt")).toContainText("Say it out loud, then tap your answer.");
   await expect(page.getByTestId("mic")).toHaveCount(0);
   const before = await audio(page);

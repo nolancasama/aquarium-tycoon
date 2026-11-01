@@ -11,6 +11,7 @@ import { bagRemodelAnimal, buyDecorKind, buyGallery, buyHall, buyTankType, buyTa
 import { Icon, type IconId } from "./icons";
 import { DecorPicture, FishPicture, LampPicture, TankPicture as ShapePicture } from "./Portraits";
 import { Ja } from "./Talk";
+import "./DecorTray.css";
 
 type ShopReason = { en: string; ja: string };
 const needCoins = (n: number): ShopReason => ({ en: `Need ${n} more coins`, ja: `コインが あと ${n} まい ひつよう` });
@@ -454,15 +455,14 @@ export function DecorTray() {
   const placing = useGame((s) => s.placing);
   const guide = useGame((s) => s.guide === "tray" || s.nudge?.target === "tray");
   const tutorial = useGame((s) => s.model.progress.tutorial !== "done");
+  const selectedIndex = placing?.kind === "decor" ? inv.findIndex((d) => d.id === placing.decorId) : -1;
   if (panel !== "decorate" || view !== "tank" || mode !== "play") return null;
   const hint =
     placing?.kind === "decor"
-      ? { en: "Tap a circle on the sand!", ja: "すなの ○を タップ" }
+      ? { en: "Tap a circle to place or swap!", ja: "まるを タップして おく・いれかえる！" }
       : placing?.kind === "move"
         ? { en: "Tap a new place!", ja: "あたらしい ばしょを タップ" }
-        : inv.length
-          ? { en: "Choose a decoration!", ja: "かざりを えらぼう (おいた かざりを タップすると うごかせるよ)" }
-          : { en: "Buy decorations!", ja: "ショップで かざりを かおう" };
+        : { en: "Choose a decoration!", ja: "かざりを えらぼう！" };
   return (
     <div className="panel tray ui" data-testid="tray">
       <div className="tray-hint">
@@ -471,10 +471,17 @@ export function DecorTray() {
       </div>
       <div className="tray-row">
         <div className={`tray-items ${guide ? "guide" : ""}`}>
+          <span
+            className="tray-selection"
+            aria-hidden="true"
+            style={{ opacity: selectedIndex >= 0 ? 1 : 0, transform: `translateX(${Math.max(0, selectedIndex) * 80}px)` }}
+          />
           {inv.map((d) => (
             <button
               key={d.id}
               className={`tray-item ${placing?.kind === "decor" && placing.decorId === d.id ? "picked" : ""}`}
+              aria-pressed={placing?.kind === "decor" && placing.decorId === d.id}
+              aria-label={`${DECOR[d.kind].name}${d.variant ? ` (${d.variant})` : ""}`}
               onClick={() => pickTrayItem(d.id)}
               data-testid="tray-item"
               data-id={d.id}

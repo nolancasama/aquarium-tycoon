@@ -493,11 +493,12 @@ function Toasts() {
 
 function NudgeBubble() {
   const n = useGame((s) => s.nudge);
+  const interrupted = useGame((s) => Boolean(s.prompt || s.line || s.stageCard || s.settingsOpen));
   const request = useGame((s) => s.request);
   const waiting = useGame((s) => s.waiting);
   const placingFish = useGame((s) => s.placing?.kind === "fish" && s.view === "room");
   const decorating = useGame((s) => s.panel === "decorate");
-  if (!n || request || (waiting && n.target === "chip-visitor")) return null;
+  if (!n || interrupted || request || (waiting && n.target === "chip-visitor")) return null;
   // The placing banner and the decoration tray already say this; one instruction at a time.
   if ((placingFish && n.target?.startsWith("tank-")) || (decorating && (n.target === "tray" || n.target === "decor-rings"))) return null;
   return (

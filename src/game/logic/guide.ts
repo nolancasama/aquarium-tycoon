@@ -134,7 +134,7 @@ function decoration(m: Model, goal: Goal["id"], home: TankRec): Step {
   const owned = m.inv.decor.find((d) => decorFits(d.kind, home.type));
   if (owned) return step(goal, line("Place your decoration!", "もっている かざりを おこう！"),
     line(`Open tank ${home.slot}. Tap Decorate.`, `タンク ${home.slot} を ひらいて、「かざる」を おそう！`),
-    line("Tap Decorate, choose a decoration from your tray, then tap an empty spot in the tank.", "「かざる」で もっている かざりを えらんで、タンクの あいている ばしょに おこう！"), tankTarget(home));
+    line("Tap Decorate, choose a decoration from your tray, then tap a circle to place or swap.", "「かざる」で もっている かざりを えらんで、まるを タップして おく・いれかえる！"), tankTarget(home));
   const price = Math.min(...DECOR.plant.versions.map((v) => v.price));
   return purchase(m, price, step(goal, line("Get a decoration!", "かざりを かおう！"),
     line("Tap Decor. Choose a plant.", "「かざり」で みずくさを えらぼう！"),

@@ -406,6 +406,28 @@ export function placeDecor(m: Model, decorId: string, tankId: string, slot: numb
   return { ok: true, id: decorId, m: mapTank(placed, tankId, (t) => ({ ...t, decor: [...t.decor, { ...d, slot }] })) };
 }
 
+/** Place from the tray, returning any occupant to inventory in the same atomic change. */
+export function swapDecor(m: Model, tankId: string, slot: number, invDecorId: string): Result {
+  const incoming = m.inv.decor.find((d) => d.id === invDecorId);
+  const tank = tankById(m, tankId);
+  if (!incoming || !tank) return fail("missing");
+  if (!Number.isInteger(slot) || slot < 0 || slot >= TANKS[tank.type].slots.length) return fail("missing");
+  if (!decorFits(incoming.kind, tank.type)) return fail("tooBig");
+  const displaced = tank.decor.find((d) => d.slot === slot);
+  const inventory = m.inv.decor.filter((d) => d.id !== invDecorId);
+  if (displaced) inventory.push({ id: displaced.id, kind: displaced.kind, variant: displaced.variant });
+  return {
+    ok: true,
+    id: invDecorId,
+    m: mapTank({ ...m, inv: { ...m.inv, decor: inventory } }, tankId, (t) => ({
+      ...t,
+      decor: displaced
+        ? t.decor.map((d) => d.slot === slot ? { ...incoming, slot } : d)
+        : [...t.decor, { ...incoming, slot }]
+    }))
+  };
+}
+
 /** Move a placed decoration to another slot of its tank (swapping if taken). */
 export function moveDecor(m: Model, tankId: string, from: number, to: number): Result {
   const tank = tankById(m, tankId);

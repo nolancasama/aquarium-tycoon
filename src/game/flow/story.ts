@@ -1,5 +1,5 @@
 import { commit, getGame, model, nudge, setGame, toast, updateModel, useGame, type Panel, type Reward } from "../store";
-import { clearVisitorTapQueue, effect, resetCelebrations, resetRuntime, rt } from "../runtime";
+import { clearVisitorTapQueue, effect, resetCelebrations, resetRuntime, rt, startCount } from "../runtime";
 import type { StageId } from "../types";
 import { SPECIES } from "../data/fish";
 import {
@@ -437,8 +437,8 @@ async function picoCount(g: number) {
   await say("pico", "Let's count!", "さかなを かぞえよう!");
   alive(g);
   setGame({ mode: "play" });
-  const n = t.fish.length;
-  await ask({
+  const n = startCount(t.id, t.fish).numbers.length;
+  const answer = await ask({
     kind: "command",
     options: [NUMBER_PHRASE[n]],
     judge: NUMBER_IDS,
@@ -449,11 +449,12 @@ async function picoCount(g: number) {
     readQuestion: true,
     help: "さかなは なんびき? かぞえて えいごで いおう",
     onClue: () => {
-      rt.countGlow = { tankId: t.id, t0: rt.time };
+      startCount(t.id, t.fish);
     }
   });
   rt.countGlow = null;
   alive(g);
+  if (!answer) return;
   updateModel(markCounted);
   await say("pico", "Yes! Good counting!", "せいかい! よく かぞえたね");
 }

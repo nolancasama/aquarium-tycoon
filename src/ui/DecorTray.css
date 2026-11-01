@@ -1,0 +1,29 @@
+.tray .tray-items {
+  position: relative;
+}
+
+.tray .tray-item {
+  transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease;
+}
+
+/* One persistent outline slides to the returned item, including newly mounted cards. */
+.tray .tray-selection {
+  position: absolute;
+  left: 4px;
+  top: 0;
+  width: 72px;
+  height: 72px;
+  border: 3px solid #16834e;
+  border-radius: 16px;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #16834e;
+  pointer-events: none;
+  z-index: 1;
+  transition: transform 220ms ease, opacity 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tray .tray-item,
+  .tray .tray-selection {
+    transition: none;
+  }
+}

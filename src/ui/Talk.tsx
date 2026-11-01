@@ -6,13 +6,13 @@ import { SPECIES } from "../game/data/fish";
 import { requestStep } from "../game/logic/requestGuide";
 import { Icon } from "./icons";
 import { DecorPicture, FishPicture, LampPicture, SpeakerFace } from "./Portraits";
-import { ACTION, AUDIO, SWATCH, UI, requestAction } from "./i18n";
+import { ACTION, AUDIO, LIKES_MEANINGS, SWATCH, UI, requestAction } from "./i18n";
 import { MicMeter } from "./MicMeter";
 import { SpeakTip } from "./SpeakTip";
 import { ActionTag } from "./ActionTag";
 import { Ja } from "./Ja";
 import { promptHeading } from "./promptHeading";
-import { visibleRequestKeyword } from "../game/logic/sentenceTeaching";
+import { SENTENCE_PATTERNS, visibleRequestKeyword } from "../game/logic/sentenceTeaching";
 import { MeaningHelp } from "./MeaningHelp";
 
 export { Ja } from "./Ja";
@@ -58,10 +58,9 @@ export function PromptPanel() {
   if (!p) return null;
   const mic = micUsable();
   const sayTap = p.answerMode === "say-tap";
-  const heading = sayTap ? { kind: "say" as const, ...ACTION.sayThenTap } : promptHeading(p, mic);
-  const headingTags = <><ActionTag {...heading} />{sayTap && <ActionTag kind="tap" en="TAP" ja="タップ" secondary />}</>;
-  const lookCue = p.question?.en === "How many fish?" ? ACTION.lookFish
-    : p.question?.en === "What's this?" || p.question?.en === "What color is it?" ? ACTION.lookAnimal : null;
+  const heading = promptHeading(p, mic);
+  const headingTag = heading && <div className="prompt-heading" data-testid="prompt-heading"><ActionTag {...heading} secondary /></div>;
+  const meaning = <MeaningHelp owner="prompt" pattern={p.pattern} first={p.firstPattern} revealed={p.meaningRevealed} correct={p.status === "correct"} question={p.question?.en} />;
   const speakHint = touch ? UI.speakTouch : UI.speakKeys;
   const status =
     p.status === "listening"
@@ -82,7 +81,6 @@ export function PromptPanel() {
   return (
     <div className={`panel prompt ui ${p.status} ${expansion ? "expansion-prompt" : ""}`} data-testid="prompt" role="dialog" aria-label="English">
       {mic && <SpeakTip key={p.id} />}
-      {sayTap && <p className="say-tap-practice">{AUDIO.practice.en}<Ja>{AUDIO.practice.ja}</Ja></p>}
       {p.question && (
         <div className="prompt-question">
           <SpeakerFace by={p.question.by} size={54} />
@@ -91,18 +89,14 @@ export function PromptPanel() {
             <span className="q-en" data-testid="prompt-question">
               {p.question.en}
             </span>
-            {lookCue && (
-              <span className="request-action" data-testid="request-action">
-                <ActionTag kind="look" {...lookCue} secondary />
-              </span>
-            )}
+            {meaning}
           </div>
-          <div className="prompt-heading" data-testid="prompt-heading">{headingTags}</div>
         </div>
       )}
       <div className="prompt-main">
         <div className="prompt-body">
-          {!p.question && <div className="prompt-heading" data-testid="prompt-heading">{headingTags}</div>}
+          <div className="sentence-group">
+          {!p.question && p.buttons && p.pattern && <p className="q-en">{SENTENCE_PATTERNS[p.pattern].en}</p>}
           {!p.buttons && p.frame && (
             <div className="frame" data-testid="frame">
               {p.frame.before && <span className="frame-text">{p.frame.before}</span>}
@@ -125,6 +119,10 @@ export function PromptPanel() {
               ))}
             </ol>
           )}
+          {!p.question && meaning}
+          </div>
+          {headingTag}
+          {sayTap && p.firstPattern && <p className="say-tap-practice">{AUDIO.practice.en}<Ja>{AUDIO.practice.ja}</Ja></p>}
           {p.buttons && (
             <div className={`choices n${p.choices.length}`} role="group">
               {p.choices.map((c, i) => (
@@ -143,7 +141,6 @@ export function PromptPanel() {
               ))}
             </div>
           )}
-          <MeaningHelp owner="prompt" pattern={p.pattern} first={p.firstPattern} revealed={p.meaningRevealed} correct={p.status === "correct"} />
           <div className="prompt-controls">
             {mic && p.status !== "correct" && (
               <button className={`mic ${p.status === "listening" ? "on" : ""}`} onClick={() => micPress()} aria-label="Speak" data-testid="mic">
@@ -162,12 +159,8 @@ export function PromptPanel() {
                 </span>
               ) : (
                 <>
-                  <span>{status.en}</span>
-                  <Ja>{status.ja}</Ja>
+                  {(p.status !== "ready" || p.firstPattern) && <><span>{status.en}</span><Ja>{status.ja}</Ja></>}
                   {(p.status === "miss" || p.status === "unclear") && p.micFeedback && <span className="mic-feedback">{AUDIO[p.micFeedback].en}<Ja>{AUDIO[p.micFeedback].ja}</Ja></span>}
-                  {mic && p.status !== "listening" && status !== speakHint && !(p.buttons && p.misses >= 3) && (
-                    <span className="prompt-mic-reminder">{speakHint.en}<Ja>{speakHint.ja}</Ja></span>
-                  )}
                 </>
               )}
               {p.heard && p.status !== "ready" && (
@@ -210,18 +203,18 @@ function TipsPicture() {
 /** A line of dialogue (Pico, a visitor, a fish). */
 export function DialoguePanel() {
   const line = useGame((s) => s.line);
+  const prompt = useGame((s) => Boolean(s.prompt));
   const touch = useGame((s) => s.touch);
-  if (!line) return null;
+  if (!line || prompt) return null;
   return (
     <div className={`panel dialogue ui by-${line.by}`} onClick={() => nextLine()} data-testid="dialogue" role="dialog">
       <SpeakerFace by={line.by} size={64} />
       <div className="dialogue-body">
         <span className="who">{speakerName(line.by)}</span>
-        {line.en === ACTION.tapToPlay.en ? (
-          <p className="line-en" data-testid="line"><ActionTag kind="tap" en={line.en} ja={line.ja} /></p>
-        ) : (
-          <><p className="line-en" data-testid="line">{line.en}</p>{!line.target && <Ja>{line.ja}</Ja>}</>
-        )}
+        <div className="sentence-group">
+          <p className="line-en" data-testid="line">{line.en}</p>
+          {!line.target && <Ja>{line.ja}</Ja>}
+        </div>
         {line.visual === "tips" && <TipsPicture />}
       </div>
       <button
@@ -255,7 +248,7 @@ export function RequestBanner() {
       <div className="req-body" data-testid="request-action"><ActionTag kind="tap" {...ACTION.tapVisitor} /></div>
     </div>
   );
-  if (!r || (r.req.kind !== "show" && r.req.kind !== "showAnimal")) return null;
+  if (!r || blocked || (r.req.kind !== "show" && r.req.kind !== "showAnimal")) return null;
   const req = r.req;
   const keyword = visibleRequestKeyword(req, step?.tier ?? 1, r.status === "correct");
   const keywordIndex = keyword ? r.line.toLowerCase().indexOf(keyword.word.toLowerCase()) : -1;
@@ -266,6 +259,7 @@ export function RequestBanner() {
       <SpeakerFace by={r.by} size={44} />
       <div className="req-body">
         <span className="who">{speakerName(r.by)}</span>
+        <div className="sentence-group">
         <p className="req-en" data-testid="request-line">
           {keyword && keywordIndex >= 0 ? <>
             {r.line.slice(0, keywordIndex)}
@@ -281,7 +275,8 @@ export function RequestBanner() {
           </> : r.line}
         </p>
         <MeaningHelp owner="request" pattern={r.pattern} first={r.firstPattern} revealed={r.meaningRevealed} correct={r.status === "correct"} />
-        {action && <div className="request-action" data-testid="request-action"><ActionTag {...action} /></div>}
+        </div>
+        {action && (r.firstPattern || model.progress.tutorial !== "done" || (step?.tier ?? 1) > 1) && <div className="request-action" data-testid="request-action"><ActionTag {...action} secondary /></div>}
       </div>
       <button className="speaker" onClick={() => replayRequest()} aria-label="Listen again" data-testid="request-replay">
         <Icon id="speaker" size={24} />
@@ -305,12 +300,16 @@ export function RequestBanner() {
 /** A tapped fish says what it likes. */
 export function FishTalk() {
   const ft = useGame((s) => s.fishTalk);
-  if (!ft) return null;
+  const blocked = useGame((s) => Boolean(s.prompt || s.line || s.request || s.nudge || s.stageCard || s.settingsOpen || s.waiting || s.screen !== "game"));
+  if (!ft || blocked) return null;
   const def = SPECIES[ft.species];
   return (
     <div className="panel fish-talk ui" key={ft.id} data-testid="fish-talk">
       <SpeakerFace by={ft.species} size={52} />
-      <span className="ft-en">{def.likesLine}</span>
+      <div className="fish-talk-body sentence-group">
+        <span className="ft-en">{def.likesLine}</span>
+        <Ja>{LIKES_MEANINGS[def.likes]}</Ja>
+      </div>
       {def.likes === "lamp" ? <LampPicture size={44} /> : <DecorPicture kind={def.likes} size={44} />}
     </div>
   );

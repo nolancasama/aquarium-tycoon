@@ -10,6 +10,7 @@ import { Visitors } from "./Visitors";
 import { Pico } from "./Pico";
 import { Effects } from "./Effects";
 import { Markers } from "./Markers";
+import { CountNumbers } from "./Animals";
 
 /** Renderer stats for the test hook (draw calls / triangles per frame). */
 export const perf = { calls: 0, triangles: 0, fps: 0 };
@@ -89,6 +90,7 @@ export function GameScene() {
       <Visitors />
       <Effects />
       <Markers />
+      <CountNumbers />
       <CameraRig />
     </Canvas>
   );

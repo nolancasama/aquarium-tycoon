@@ -13,6 +13,7 @@ import { project } from "../scene/CameraRig";
 import { dprState, perf } from "../scene/GameScene";
 import { sandSurfaceY, slotMarkerY } from "./logic/tankLayout";
 import type { SlotId, VisitorType } from "./types";
+import { visibleCountNumbers } from "./logic/counting";
 
 /**
  * Test hook (only with ?e2e=1): read game state, find where things are on
@@ -85,6 +86,7 @@ export function installE2eHook(seed: number) {
         visitors: rt.visitors.map((v) => ({ id: v.id, type: v.type, state: v.state, request: v.request?.kind ?? null, helped: v.helped, x: v.x, z: v.z, yaw: v.yaw, seat: v.seat })),
         pellets: rt.pellets.length,
         countGlow: Boolean(rt.countGlow),
+        countNumbers: visibleCountNumbers(rt.countGlow, rt.time).filter((x) => rt.fish.has(x.fishId)),
         glowFish: rt.glow.fish.size,
         glowVisitors: [...rt.glow.visitors],
         pendingVisitorTap: rt.pendingVisitorTap?.visitorId ?? null,

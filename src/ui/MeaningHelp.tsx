@@ -1,14 +1,16 @@
 import { getGame, setGame, useGame } from "../game/store";
 import { meaningVisible, SENTENCE_PATTERNS, type SentencePatternId } from "../game/logic/sentenceTeaching";
 import "./MeaningHelp.css";
+import { QUESTION_MEANINGS } from "./i18n";
 
 /** The slot is blank even after opening Hint: it never translates an answer. */
-export function MeaningHelp({ pattern, first = false, revealed = false, correct = false, owner }: {
+export function MeaningHelp({ pattern, first = false, revealed = false, correct = false, owner, question }: {
   pattern?: SentencePatternId;
   first?: boolean;
   revealed?: boolean;
   correct?: boolean;
   owner: "request" | "prompt";
+  question?: string;
 }) {
   const japanese = useGame((s) => s.settings.japanese);
   if (!japanese || !pattern || correct) return null;
@@ -21,7 +23,7 @@ export function MeaningHelp({ pattern, first = false, revealed = false, correct 
     }
   };
   return <div className="meaning-help" data-pattern={pattern} data-meaning-shown={shown}>
-    {shown ? <span className="sentence-meaning" lang="ja" data-testid="sentence-meaning" data-pattern={pattern}>{SENTENCE_PATTERNS[pattern].ja}</span>
+    {shown ? <span className="sentence-meaning" lang="ja" data-testid="sentence-meaning" data-pattern={pattern}>{(question && QUESTION_MEANINGS[question]) || SENTENCE_PATTERNS[pattern].ja}</span>
       : <button className="meaning-hint" data-testid="meaning-hint" onClick={reveal}>Hint / ヒント</button>}
   </div>;
 }

@@ -10,6 +10,9 @@ import { fishGeometry, turtleModel } from "./models/fish";
 import { fishMaterial } from "./materials";
 import { animalGeometry } from "./models/animals";
 import { animalMaterial } from "./animalMaterials";
+import { COUNT_BEAT, COUNT_LABEL_SIZE, countLabelPosition } from "../game/logic/counting";
+import { TANKS } from "../game/data/tanks";
+import { tankOrigin } from "../game/world";
 
 /** Every animal's mesh and its per-frame pose (positions come from rt.fish, set by the sim). */
 
@@ -25,11 +28,91 @@ function glowFor(id: string, tank: TankRec | undefined, t: number): number {
   let want = 0;
   const cg = rt.countGlow;
   if (cg && tank && cg.tankId === tank.id) {
-    const i = tank.fish.findIndex((x) => x.id === id);
-    const k = ((t - cg.t0) % (tank.fish.length * 0.9 + 1.2)) - i * 0.9;
-    if (k >= 0 && k < 0.8) want = 0.9;
+    const i = cg.numbers.findIndex((x) => x.fishId === id);
+    const k = t - cg.t0 - i * COUNT_BEAT;
+    if (i >= 0 && k >= 0 && k < COUNT_BEAT) want = 0.9;
   }
   return want;
+}
+
+const countTextures = new Map<number, THREE.CanvasTexture>();
+function countTexture(n: number) {
+  const cached = countTextures.get(n);
+  if (cached) return cached;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+  ctx.beginPath();
+  ctx.arc(64, 64, 56, 0, Math.PI * 2);
+  ctx.fillStyle = "#fff8cc";
+  ctx.fill();
+  ctx.strokeStyle = "#184653";
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  ctx.fillStyle = "#184653";
+  ctx.font = "bold 84px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(String(n), 64, 66);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  countTextures.set(n, texture);
+  return texture;
+}
+
+/** Fixed eight-sprite pool: no React updates or texture creation during animation. */
+export function CountNumbers() {
+  const group = useRef<THREE.Group>(null);
+  const labels = useMemo(() => Array.from({ length: 8 }, (_, i) => {
+    const material = new THREE.SpriteMaterial({ map: countTexture(i + 1), depthTest: false, depthWrite: false, toneMapped: false });
+    const sprite = new THREE.Sprite(material);
+    sprite.visible = false;
+    sprite.renderOrder = 100;
+    sprite.raycast = () => undefined;
+    return sprite;
+  }), []);
+  const projected = useMemo(() => labels.map(() => new THREE.Vector3()), [labels]);
+  const reduced = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
+  useEffect(() => () => labels.forEach((s) => s.material.dispose()), [labels]);
+  useFrame(({ camera, size }) => {
+    const g = getGame();
+    const sequence = rt.countGlow;
+    const tank = sequence && g.view === "tank" && g.tankId === sequence.tankId
+      ? g.model.tanks.find((t) => t.id === sequence.tankId) : undefined;
+    labels.forEach((sprite) => { sprite.visible = false; });
+    if (!sequence || !tank || !group.current) return;
+    const origin = tankOrigin(tank.slot);
+    const def = TANKS[tank.type];
+    for (let i = 0; i < Math.min(labels.length, sequence.numbers.length); i++) {
+      const fish = rt.fish.get(sequence.numbers[i].fishId);
+      const age = rt.time - sequence.t0 - i * COUNT_BEAT;
+      if (!fish || age < 0) continue;
+      const sprite = labels[i];
+      sprite.visible = true;
+      const baseY = fish.s.y + SPECIES[fish.species].radius * 0.65 + COUNT_LABEL_SIZE / 2 + 0.015;
+      const baseX = baseY > def.h - COUNT_LABEL_SIZE / 2 - 0.15
+        ? fish.s.x + (fish.s.x < 0 ? -1 : 1) * (SPECIES[fish.species].radius + COUNT_LABEL_SIZE / 2 + 0.02)
+        : fish.s.x;
+      // Try nearby positions in camera space, keeping every candidate within the water.
+      const offsets = [[0, 0], [0, 0.22], [0.22, 0], [-0.22, 0], [0.22, -0.22], [-0.22, -0.22], [0, -0.22], [0, -0.44]];
+      for (const [dx, dy] of offsets) {
+        const pos = countLabelPosition(baseX + dx, baseY + dy, def);
+        sprite.position.set(origin.x + pos.x, origin.y + pos.y, origin.z + fish.s.z);
+        projected[i].copy(sprite.position).project(camera);
+        let overlaps = false;
+        for (let j = 0; j < i; j++) {
+          if (labels[j].visible && Math.abs(projected[i].x - projected[j].x) * size.width / 2 < 42 &&
+            Math.abs(projected[i].y - projected[j].y) * size.height / 2 < 42) overlaps = true;
+        }
+        if (!overlaps) break;
+      }
+      projected[i].copy(sprite.position).project(camera);
+      const p = Math.min(1, age / 0.28);
+      const pop = reduced ? 1 : 1 + 2.3 * (p - 1) ** 3 + 1.3 * (p - 1) ** 2;
+      sprite.scale.setScalar(COUNT_LABEL_SIZE * Math.max(0.01, pop));
+    }
+  });
+  return <group ref={group}>{labels.map((sprite, i) => <primitive key={i} object={sprite} dispose={null} />)}</group>;
 }
 
 function hintRim(id: string): number {

@@ -1,5 +1,5 @@
 import { getGame, model, nudge, setGame, updateModel } from "../store";
-import { beginCelebration, clearGlow, clearVisitorTapQueue, effect, endCelebration, resetCelebrations, rt, type VisitorRt } from "../runtime";
+import { beginCelebration, clearGlow, clearVisitorTapQueue, effect, endCelebration, resetCelebrations, rt, startCount, type VisitorRt } from "../runtime";
 import type { SlotId, Vec2, VisitorType } from "../types";
 import { award, EXPANSION_FROM, fishCount, happiness, helpVisitor, mood, tankById, tipBreakdown, type TankRec } from "../logic/model";
 import { makeRequest, matchesShow, requestLine, requestReward, stillValid, tankSatisfies, targetsIn, type Request, type ShowTarget } from "../logic/requests";
@@ -475,7 +475,8 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
     v.z = spot.z;
     v.path = [];
     v.face = { x: tankOrigin(t.slot).x, z: tankOrigin(t.slot).z };
-    const n = t.fish.length;
+    const n = startCount(t.id, t.fish).numbers.length;
+    if (!n) { rt.countGlow = null; return { ok: false, tankId: null }; }
     const id = await ask({
       pattern: requestPattern(req),
       kind: "command",
@@ -489,7 +490,7 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
       cancellable: opts.cancellable,
       help: "さかなは なんびき? かぞえて えいごで いおう",
       onClue: () => {
-        rt.countGlow = { tankId: t.id, t0: rt.time };
+        startCount(t.id, t.fish);
       }
     });
     rt.countGlow = null;

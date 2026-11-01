@@ -689,12 +689,13 @@ button:focus-visible { outline: 4px solid var(--sea); outline-offset: 3px; }
 
 .top-panels {
   position: absolute;
-  top: 12px;
+  top: 76px;
   left: 50%;
   transform: translateX(-50%);
   display: grid;
   gap: 8px;
   justify-items: center;
+  width: min(640px, calc(100% - 32px));
   pointer-events: none;
   z-index: 15;
 }
@@ -847,6 +848,44 @@ mark.key {
   animation: toastIn 0.25s ease-out;
 }
 
+.fish-talk-body {
+  min-width: 0;
+}
+
+.ft-en {
+  display: block;
+}
+
+.fish-talk > svg,
+.fish-talk > .face-fish {
+  flex: none;
+}
+
+/* Keep the meaning with its English, ahead of activity controls. */
+.sentence-group {
+  display: block;
+}
+
+.sentence-group > .ja,
+.fish-talk-body > .ja,
+.dialogue-body > .ja {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.sentence-group > .q-en {
+  margin: 0;
+}
+
+.prompt,
+.dialogue,
+.fish-talk,
+.request {
+  background: #fff;
+}
+
 .face-fish {
   display: grid;
   place-items: center;
@@ -862,6 +901,9 @@ mark.key {
   bottom: 10px;
   transform: translateX(-50%);
   width: min(900px, calc(100% - 24px));
+  max-height: calc(100dvh - 86px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: grid;
   gap: 8px;
   pointer-events: none;
@@ -1149,6 +1191,7 @@ mark.key {
 
 .dialogue-body {
   flex: 1;
+  min-width: 0;
 }
 
 /* Pico's tips lesson: sad → 1 coin, okay → 2, happy → 3. */
@@ -2010,7 +2053,7 @@ mark.key {
 /* In the room, requests replace objectives in the left column so the
    happiness faces above all three Ocean Hall tanks stay exposed. */
 .view-room .top-panels:has(.request) {
-  top: 12px;
+  top: 76px;
   left: 14px;
   width: clamp(160px, 18vw, 240px);
   transform: none;

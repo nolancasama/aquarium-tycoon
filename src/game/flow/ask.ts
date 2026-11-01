@@ -15,6 +15,8 @@ import { meetPattern } from "./meaning";
 export const promptMeter = createMicLevel();
 // Also clean up when navigation removes a prompt outside finish().
 useGame.subscribe((s, prev) => {
+  if (s.view !== prev.view || s.tankId !== prev.tankId || s.screen !== prev.screen ||
+    (prev.prompt && (s.prompt?.id !== prev.prompt.id || s.prompt?.status === "correct"))) rt.countGlow = null;
   if (answerMode(s.settings) !== answerMode(prev.settings)) promptMeter.stop();
   if (s.prompt?.id !== prev.prompt?.id || (s.prompt?.status !== "listening" && prev.prompt?.status === "listening")) promptMeter.stop();
   if (s.prompt?.id !== prev.prompt?.id && active && !active.done && prev.prompt?.id !== undefined) {
@@ -206,7 +208,8 @@ async function replaySlow(id: number) {
 /** Replay (🔊): the question and the sentence to say; in Tap mode every choice in order (listening, not a give-away). */
 export async function replay() {
   const p = getGame().prompt;
-  if (!p || p.status === "listening") return;
+  if (!p || p.status === "listening" || p.status === "correct") return;
+  active?.req.onClue?.();
   tts.cancel();
   if (p.question) await speak(p.question.en, p.question.by);
   if (getGame().prompt?.id !== p.id) return;

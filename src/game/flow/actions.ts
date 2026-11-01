@@ -22,7 +22,7 @@ import {
   moveDecor,
   openHall,
   openGallery,
-  placeDecor,
+  swapDecor,
   placeFish,
   placeTank,
   remodelPlan,
@@ -633,19 +633,14 @@ export function tapSlot(tankId: string, slot: number) {
   const here = t.decor.find((d) => d.slot === slot);
   const p = g.placing;
   if (p?.kind === "decor") {
-    if (here) {
-      // Taken: pick that one up instead, keep the tray item for later.
-      audio.play("pick");
-      setGame({ placing: { kind: "move", tankId, slot } });
-      return;
-    }
-    const r = commit(placeDecor(model(), p.decorId, tankId, slot));
-    if (r.ok) placedFx(tankId, slot);
-    else if (r.reason === "tooBig") {
+    const r = commit(swapDecor(model(), tankId, slot, p.decorId));
+    if (r.ok) {
+      setGame({ placing: here ? { kind: "decor", decorId: here.id } : null });
+      placedFx(tankId, slot);
+    } else if (r.reason === "tooBig") {
       audio.play("error");
       toast({ en: "Too big!", ja: "おおきすぎる! おおきな タンクか うみの タンクに おこう", tone: "warn" }, 3600);
     }
-    setGame({ placing: null });
     return;
   }
   if (p?.kind === "move" && p.tankId === tankId) {

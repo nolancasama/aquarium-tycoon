@@ -929,3 +929,39 @@ these changes and decisions.
   Tokens reset on new game and title. Rejected: permanently moving the gauges.
   Fast test mode shortens a celebration below one frame, so e2e holds tokens
   through a `holdCelebration` hook.
+
+## Quieter prompts, counting numbers, decoration swapping (2026-11-01)
+
+- **Counting is shown, not told.** "How many fish?" (Level 2 Pico and the
+  visitor/judge count requests) numbers the counted fish 1..n above each fish,
+  one every 0.65 s, bound to fish ids, with the counted fish slowed to 18 %.
+  Labels sit just above their fish and are clamped inside the tank's water so
+  they never cross the frame or the HUD. Replay (🔊) and the clue ladder
+  restart the sequence; numbers clear when the question ends. Built on
+  `rt.countGlow` (`logic/counting.ts`), cached digit sprites, no React per
+  frame. The student still answers; numbers never answer for them. Replaces
+  the "LOOK AT THE FISH!" cue.
+- **Japanese sits directly under its English** in prompts, dialogue, animal
+  speech and request cards. Where meanings are hidden after a pattern's first
+  encounter, the Hint button takes that spot and is replaced in place by the
+  meaning. Answer blanking is unchanged.
+- **Instruction tags only on first encounter.** The generic "SAY THE ANSWER!"
+  heading and the "LOOK" cue are gone; a short SAY/TAP tag and the status line
+  ("Choose one.") remain only the first time a prompt pattern appears, and on
+  mic fallback. Partly reverses 2026-10-31 "Explicit action guidance": the
+  tags on every prompt made obvious tasks noisy. Rejected: removing them
+  entirely (first-time players still need to learn that they speak or tap).
+- **Temporary dialogue never covers coins/level/hearts.** Animal speech, Pico
+  lines and requests are opaque and placed below the fixed HUD. Rejected:
+  fading the HUD as the default (kept only as a narrow-screen fallback).
+- **Tray decorations swap directly.** With a tray item selected, tapping an
+  occupied circle (or the decoration on it) swaps atomically (`swapDecor`):
+  the displaced piece returns to the tray and becomes the selection, so
+  repeated taps alternate. Empty circles place and clear the selection as
+  before; with no tray selection the old select-and-move stays. Fit rules
+  apply to the incoming piece only; no coins. Rejected: the previous "tap a
+  taken circle to pick it up" (it switched modes unexpectedly).
+- **Debug overlay** (Ctrl+Alt+D, always on, by request): jump to any level,
+  unlock everything, open halls through the real open rules (with their
+  tanks), coins, finish tutorial, fill care, crown. Not hidden from students
+  by decision of the teacher.

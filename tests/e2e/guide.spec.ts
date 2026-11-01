@@ -177,7 +177,7 @@ test("the first Fish hand lets taps reach Fish and clears as its step completes"
   await page.mouse.click(fingertip.x, fingertip.y);
   await expect(hand).toHaveAttribute("data-hand-target", "");
   await precondition(page, (s) => s.prompt?.kind === "choice" && !s.prompt.buttons, "hand click reached Fish");
-  await expect(page.getByTestId("prompt-heading")).toContainText("SAY ONE!");
+  await expect(page.getByTestId("prompt-heading")).toHaveText("SAYいおう");
   expect(errors).toEqual([]);
 });
 
@@ -197,7 +197,7 @@ test("the first tap, keyboard reminder and speaking/fallback headings show the e
 
   await tapFirstFish(page);
   await precondition(page, (s) => s.prompt?.kind === "choice" && !s.prompt.buttons, "spoken choice prompt");
-  await expect(page.getByTestId("prompt-heading")).toContainText("SAY ONE!");
+  await expect(page.getByTestId("prompt-heading")).toHaveText("SAYいおう");
   await expect(page.getByTestId("btn-fish-shop")).toHaveCount(0);
   expect((await state(page)).guide).toBeNull();
   await reply(page, "orangePlease");
@@ -206,7 +206,7 @@ test("the first tap, keyboard reminder and speaking/fallback headings show the e
   await precondition(page, (s) => s.tutorial === "feed" && s.mode === "play" && s.view === "tank", "feed step");
   await page.getByTestId("btn-feed").click();
   await precondition(page, (s) => s.prompt?.kind === "command" && !s.prompt.buttons, "spoken command prompt");
-  await expect(page.getByTestId("prompt-heading")).toContainText("SAY THIS!");
+  await expect(page.getByTestId("prompt-heading")).toHaveText("SAYいおう");
   await say(page, null, "not-allowed");
   await precondition(page, (s) => s.micState === "blocked" && Boolean(s.prompt?.buttons), "automatic microphone fallback");
   await expect(page.getByTestId("prompt-heading")).toContainText("TAP AN ANSWER!");

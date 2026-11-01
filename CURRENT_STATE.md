@@ -1,5 +1,21 @@
 # Current State
 
+## Quieter prompts, counting numbers, decoration swap, debug overlay (2026-11-01)
+
+- Counting questions number each fish (sprites over fish ids, clamped inside
+  the tank); Japanese sits under its English with in-place Hint; SAY/TAP tags
+  only on first encounter; temporary dialogue is opaque and below the HUD;
+  tray decorations swap directly with occupied circles (`swapDecor`).
+- Ctrl+Alt+D opens the debug overlay (`src/ui/DebugPanel.tsx`), always on.
+- Verified: typecheck, `npm test` 367/367, build; Playwright 52/52 on the
+  production preview (13.4 min) incl. new `count.spec.ts` and
+  `decor-swap.spec.ts` (these two have not yet been shown to fail on a
+  known-bad build). Count frames at 1366×768 and 1024×768, swap frame and
+  prompt/dialogue/request frames at 1366/1280/1024/844 checked by eye
+  (SwiftShader).
+- Done by three parallel Codex runs plus one label-placement correction;
+  reviewed and accepted by Claude.
+
 ## First-minute polish (2026-10-31)
 
 - Sound check answers unlock after Play Sound; sound and mic success show the

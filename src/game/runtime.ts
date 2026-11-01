@@ -4,6 +4,7 @@ import type { BehaviorState } from "./logic/behavior";
 import type { Request } from "./logic/requests";
 import type { Mood } from "./logic/model";
 import type { PendingVisitorTap } from "./logic/visitorTap";
+import { countedFish, type CountSequence } from "./logic/counting";
 
 /**
  * Mutable per-frame state shared by the scene, the per-frame step and the
@@ -129,8 +130,8 @@ export const rt = {
   glow: { tanks: new Set<string>(), fish: new Set<string>(), decor: new Set<string>(), visitors: new Set<string>() },
   /** The one DOM demonstration hand; scene markers yield to the same target. */
   hand: { targetId: null as string | null },
-  /** Counting clue: the fish of this tank light up one by one. */
-  countGlow: null as null | { tankId: string; t0: number },
+  /** Counting question and replay clue: stable fish ids, numbered one by one. */
+  countGlow: null as CountSequence | null,
   /** A "show me" request is waiting for a tap: fish slow down. */
   slowFish: false,
   /** Tests: fish hold still. */
@@ -160,6 +161,11 @@ export const rt = {
 };
 
 let effectId = 1;
+export function startCount(tankId: string, fish: readonly { id: string; species: SpeciesId }[]) {
+  rt.countGlow = { tankId, t0: rt.time, numbers: countedFish(fish) };
+  return rt.countGlow;
+}
+
 export function effect(kind: EffectKind, x: number, y: number, z: number, n = 1, opts: { tone?: Mood; delay?: number } = {}) {
   rt.effects.push({ id: effectId++, kind, x, y, z, t0: rt.time + (opts.delay ?? 0), n, tone: opts.tone });
   if (rt.effects.length > 24) rt.effects.shift();
