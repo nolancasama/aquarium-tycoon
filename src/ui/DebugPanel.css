@@ -1,0 +1,63 @@
+.debug-panel {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 9000;
+  width: min(300px, calc(100vw - 32px));
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: #1d2733;
+  color: #f4f7fa;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 14px;
+}
+.debug-panel header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.debug-panel header span {
+  flex: 1;
+  opacity: 0.75;
+  font-size: 12px;
+}
+.debug-panel header .round {
+  width: 28px;
+  height: 28px;
+  font-size: 18px;
+  line-height: 1;
+}
+.debug-levels {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+.debug-panel button {
+  border: 0;
+  border-radius: 8px;
+  background: #33465a;
+  color: inherit;
+  font: inherit;
+  padding: 7px 6px;
+  cursor: pointer;
+}
+.debug-panel button:hover {
+  background: #44607a;
+}
+.debug-levels button.on {
+  background: #f2b631;
+  color: #1d2733;
+  font-weight: 700;
+}
+.debug-action {
+  text-align: left;
+}
+.debug-panel small {
+  opacity: 0.6;
+  text-align: center;
+}

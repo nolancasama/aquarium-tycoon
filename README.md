@@ -87,6 +87,10 @@ once), `layout`
 Test hook: `?e2e=1` exposes `window.__at` (state, screen positions, frozen
 fish, time, visitors); `?fast=1` shortens waits; `?seed=N` fixes randomness.
 
+Debug overlay (always on): Ctrl+Alt+D toggles a panel to jump to any level,
+unlock everything, open all halls (with their tanks), add coins, finish the
+tutorial, fill care and give the crown.
+
 ### Code map
 
 - `src/game/logic/` — pure rules with unit tests (model, swim, requests, english, speechMatch, save)
