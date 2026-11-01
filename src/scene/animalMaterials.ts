@@ -15,6 +15,10 @@ export interface AnimalMaterial extends THREE.MeshLambertMaterial {
     uReaction: { value: number };
     /** Smoothed turn rate; trailing parts bend against a change of heading. */
     uTurn: { value: number };
+    /** Shared rig: moray arc-length spine now, octopus arm controls later. */
+    uRig: { value: Float32Array };
+    /** Jaw gape, including the timed feeding snap. */
+    uEat: { value: number };
     /** Eight limb support corrections, blended toward each arm/leg tip. */
     uFeet: { value: Float32Array };
     uGroundEnabled: { value: number };
@@ -47,6 +51,7 @@ export function animalMaterial(species: SpeciesId): AnimalMaterial {
   m.userData = {
     uPhase: { value: 0 }, uMotion: { value: 1 }, uColour: { value: 0 },
     uReaction: { value: 0 }, uTurn: { value: 0 }, uHintGlow: { value: 0 },
+    uRig: { value: new Float32Array(16 * 4) }, uEat: { value: 0 },
     uFeet: { value: new Float32Array(8) }, uGroundEnabled: { value: 0 },
     uSand: { value: new THREE.Vector4(0, 0, 1, 0) }
   };
@@ -56,6 +61,8 @@ export function animalMaterial(species: SpeciesId): AnimalMaterial {
     shader.uniforms.uColour = m.userData.uColour;
     shader.uniforms.uReaction = m.userData.uReaction;
     shader.uniforms.uTurn = m.userData.uTurn;
+    shader.uniforms.uRig = m.userData.uRig;
+    shader.uniforms.uEat = m.userData.uEat;
     shader.uniforms.uFeet = m.userData.uFeet;
     shader.uniforms.uGroundEnabled = m.userData.uGroundEnabled;
     shader.uniforms.uSand = m.userData.uSand;
@@ -77,8 +84,43 @@ uniform float uTurn;
 uniform float uFeet[8];
 uniform float uGroundEnabled;
 uniform vec4 uSand;
+uniform vec4 uRig[16];
+uniform float uEat;
 varying vec3 vAnimalPos;
-varying float vAnimalPart;`).replace("#include <begin_vertex>", `#include <begin_vertex>
+varying float vAnimalPart;
+// P runs head-to-tail. T points forwards, retaining the rest pose's +x axis.
+void eelFrame(float s, out vec3 p, out vec3 t, out vec3 up, out vec3 side) {
+  float q = clamp(s, 0.0, 1.0) * 15.0;
+  int i = int(min(floor(q), 14.0));
+  float f = q - float(i);
+  vec3 b = uRig[i].xyz;
+  vec3 c = uRig[i + 1].xyz;
+  vec3 a = i > 0 ? uRig[i - 1].xyz : 2.0 * b - c;
+  vec3 d = i < 14 ? uRig[i + 2].xyz : 2.0 * c - b;
+  vec3 v = c - a;
+  vec3 w = 2.0 * a - 5.0 * b + 4.0 * c - d;
+  vec3 z = -a + 3.0 * b - 3.0 * c + d;
+  p = 0.5 * (2.0 * b + v * f + w * f * f + z * f * f * f);
+  vec3 deriv = -0.5 * (v + 2.0 * w * f + 3.0 * z * f * f);
+  t = length(deriv) > 0.000001 ? normalize(deriv) : vec3(1.0, 0.0, 0.0);
+  vec3 reference = abs(t.y) > 0.98 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+  side = normalize(cross(t, reference));
+  up = cross(side, t);
+}
+vec3 eelJaw(vec3 p, bool direction) {
+  float a = -clamp(uEat, 0.0, 1.0) * 0.62;
+  vec3 hinge = vec3(-0.11, -0.026, 0.0) * uLength;
+  if (!direction) p -= hinge;
+  p.xy = mat2(cos(a), sin(a), -sin(a), cos(a)) * p.xy;
+  if (!direction) p += hinge;
+  return p;
+}`).replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
+if (wave.x == 12.0) {
+  vec3 ep, et, eu, es;
+  eelFrame(wave.y, ep, et, eu, es);
+  vec3 n = wave.z > 0.5 ? eelJaw(objectNormal, true) : objectNormal;
+  objectNormal = normalize(et * n.x + eu * n.y + es * n.z);
+}`).replace("#include <begin_vertex>", `#include <begin_vertex>
 vAnimalPos = position / uLength;
 vAnimalPart = wave.x;
 float part = wave.x;
@@ -149,6 +191,11 @@ if (part == 1.0) {
 } else if (part == 11.0) {
   transformed.z += (-uTurn * w * w * 0.19 + sin(uPhase - w * 5.0) * w * w * 0.025) * uLength;
   transformed.y += sin(uPhase - w * 3.5) * w * w * uLength * 0.018;
+} else if (part == 12.0) {
+  vec3 ep, et, eu, es;
+  eelFrame(wave.y, ep, et, eu, es);
+  vec3 local = wave.z > 0.5 ? eelJaw(position, false) : position;
+  transformed = ep + et * (local.x + wave.y * uLength) + eu * local.y + es * local.z;
 }
 if (uGroundEnabled > 0.5) {
   if (part == 3.0 || part == 4.0) transformed.y += uFeet[int(clamp(wave.w, 0.0, 7.0))] * w * w * w;
@@ -180,10 +227,15 @@ if (uAnimal == 0.0 && part == 1.0) {
 } else if (uAnimal == 2.0 && part == 1.0) {
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.025, 0.48, 0.8), smoothstep(0.02, 0.16, ap.y) * 0.4);
 } else if (uAnimal == 3.0 && painted > 0.5) {
-  vec2 cells = ap.xz * vec2(28.0, 72.0);
-  cells.y += sin(floor(cells.x) * 4.7) * 0.8;
-  float spot = 1.0 - smoothstep(0.15, 0.25, length(fract(cells) - 0.5));
-  diffuseColor.rgb *= 1.0 - spot * 0.72;
+  // Rest-pose coordinates travel with each skin vertex, never through the water.
+  // Warped cells make irregular olive reticulation rather than a dotted grid.
+  vec2 cells = vec2(ap.x * 31.0, atan(ap.z, ap.y) * 2.6);
+  cells += vec2(sin(cells.y * 2.3 + cells.x * 0.6), sin(cells.x * 1.8)) * 0.24;
+  vec2 cell = floor(cells);
+  vec2 offset = vec2(sin(dot(cell, vec2(17.3, 9.2))), cos(dot(cell, vec2(7.8, 21.7)))) * 0.12;
+  float fleck = 1.0 - smoothstep(0.19, 0.34, length(fract(cells) - 0.5 + offset));
+  diffuseColor.rgb *= 1.0 - fleck * 0.48;
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.04, 1.0, 0.8), (1.0 - smoothstep(-0.055, -0.01, ap.y)) * 0.32);
 } else if (uAnimal == 4.0) {
   // Warm orange colour changes preserve the eyes and pale suckers.
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 0.77, 0.88), (0.5 + 0.5 * sin(uColour)) * painted * 0.42);
@@ -214,6 +266,6 @@ float hintRim = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
 outgoingLight += vec3(1.0, 0.65, 0.08) * hintRim * uHintGlow;
 #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => "expansion-animals-v3-articulated-motion";
+  m.customProgramCacheKey = () => "expansion-animals-v4-shared-spine-rig";
   return m;
 }

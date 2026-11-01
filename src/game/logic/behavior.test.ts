@@ -7,11 +7,12 @@ import { reactToAnimalTap, stepBehavior, type BehaviorEnv, type BehaviorState } 
 import { floorAt, frontAt, newSwimState, stepSwim, tankFishBounds, type SwimState } from "./swim";
 import { animalGeometry } from "../../scene/models/animals";
 import { jellyPulse, jellyPulseStyle } from "./motion";
+import { eelBounds, eelDenRail, eelFloor, EEL_RADIUS } from "./eelBody";
 
 const expansion: SpeciesId[] = ["angelfish", "goby", "chromis", "eel", "octopus", "crab", "stingray", "moonjelly", "spottedjelly", "seanettle"];
 function setup(id: SpeciesId, type: TankType, seed: number, decoration = true) {
   const def = SPECIES[id], tank = TANKS[type];
-  const bounds = tankFishBounds(tank, SAND_H, def);
+  const bounds = id === "eel" ? eelBounds(tank) : tankFishBounds(tank, SAND_H, def);
   const columns = [...(tank.rocks ?? [])];
   if (decoration) columns.push({ x: 0, z: (bounds.min.z + bounds.max.z) / 2, r: 0.1, top: Math.min(bounds.max.y - def.radius, 0.35) });
   const env: BehaviorEnv = { bounds, tank, columns, others: [], speedMul: 1, attract: null, depthBias: 0 };
@@ -28,6 +29,33 @@ function inside(s: SwimState, env: BehaviorEnv, radius: number): boolean {
     && s.z >= b.min.z - epsilon && s.z <= frontAt(b, s.x) + epsilon
     && (b.round === undefined || Math.hypot(s.x, s.z) <= b.round + epsilon)
     && s.y >= floorAt(s.x, s.z, b, env.columns, radius) - epsilon && s.y <= b.max.y + epsilon;
+}
+
+/** An eel's collision envelope is a head radius and a recorded body, rather
+ * than half its total length. The rig tests cover every trailing point. */
+function eelHeadInside(s: SwimState, state: BehaviorState, env: BehaviorEnv): boolean {
+  const r = EEL_RADIUS, epsilon = 1e-6, tank = env.tank;
+  if (!Number.isFinite(s.x + s.y + s.z + s.vx + s.vy + s.vz)
+    || Math.abs(s.x) > tank.w / 2 - r + epsilon
+    || s.z > tank.d / 2 - r + epsilon || s.z < -tank.d / 2 + r - epsilon
+    || s.y < r - epsilon || s.y > tank.h - r + epsilon) return false;
+  const face = -tank.d / 2 + (tank.backRock ?? 0);
+  const index = state.denIndex ?? 0, body = state.eel, mouth = tank.dens?.[index];
+  // The straight rail lane is q=0..0.40 m in front of the mouth. Its last
+  // 12 mm of lateral capture error blend to zero by q=.075, before crossing.
+  if (mouth && body?.rail && s.z >= mouth.z && s.z <= mouth.z + 0.40
+    && Math.hypot(s.x - mouth.x, s.y - mouth.y) <= 0.012 + epsilon) return true;
+  // Head travel behind the face follows the assigned tunnel. Crossing and
+  // full-body clearance are checked against its actual mouth in eelBody tests.
+  if (s.z < face + r) {
+    if (!tank.dens?.[index] || !body?.rail) return false;
+    const rail = { x: 0, y: 0, z: 0 };
+    eelDenRail(rail, tank, index, body.railQ);
+    return Math.hypot(s.x - rail.x, s.y - rail.y, s.z - rail.z) < epsilon;
+  }
+  return s.y >= eelFloor(tank, s.x, s.z) - epsilon
+    && env.columns.every(column => Math.hypot(s.x - column.x, s.z - column.z) >= column.r + r - epsilon
+      || s.y >= column.top + r - epsilon);
 }
 
 describe("species movement", () => {
@@ -48,7 +76,7 @@ describe("species movement", () => {
     it(`${id} respects the ${type} glass and rockwork for several seeds`, () => {
       for (const seed of [3, 19, 101]) {
         const { def, env, rand, s, state } = setup(id, type, seed);
-        let valid = true, onSurface = true, compact = true;
+        let valid = true, onSurface = true, compact = true, firstInvalid = "";
         for (let i = 0; i < 2400; i++) {
           // Out-of-glass food and show targets must also stay contained.
           if (i % 600 === 0) env.attract = { x: 5, y: 3, z: 4 };
@@ -56,7 +84,12 @@ describe("species movement", () => {
           env.show = i % 600 < 45;
           env.speedMul = i % 400 < 80 ? 1.4 : 0.8;
           stepBehavior(s, state, def, env, 0.05, rand);
-          valid &&= inside(s, env, def.radius);
+          const headInside = id === "eel" ? eelHeadInside(s, state, env) : inside(s, env, def.radius);
+          if (!headInside && !firstInvalid) firstInvalid = JSON.stringify({ i, s, mode: state.mode, rail: state.eel?.rail,
+            railQ: state.eel?.railQ, yaw: state.eel?.yaw, pitch: state.eel?.pitch,
+            floor: id === "eel" ? eelFloor(env.tank, s.x, s.z) : floorAt(s.x, s.z, env.bounds, env.columns, def.radius),
+            columns: env.columns });
+          valid &&= headInside;
           if (def.movement === "perch" || def.movement === "walk") {
             onSurface &&= Math.abs(s.y - floorAt(s.x, s.z, env.bounds, env.columns, def.radius)) < 1e-8;
           }
@@ -68,7 +101,7 @@ describe("species movement", () => {
             compact &&= Math.hypot(m.x - s.x, m.y - s.y, m.z - s.z) <= 0.35 + 1e-8;
           }
         }
-        expect(valid, `bounds, seed ${seed}`).toBe(true);
+        expect(valid, `bounds, seed ${seed}: ${firstInvalid}`).toBe(true);
         expect(onSurface, `surface, seed ${seed}`).toBe(true);
         expect(compact, `school radius, seed ${seed}`).toBe(true);
         if (def.school) expect((state.members?.length ?? 0) + 1).toBe(def.school);
@@ -96,31 +129,48 @@ describe("species movement", () => {
   it("eels repeatedly leave and return to their assigned accessible den mouths", () => {
     const mouths: number[] = [];
     for (let index = 0; index < TANKS.cave.capacity; index++) {
-      const { def, env, rand, s, state } = setup("eel", "cave", 12 + index, false);
-      env.denIndex = index;
-      let departures = 0, returns = 0, previous: BehaviorState["mode"];
-      let mouthX = 0, mouthY = 0, mouthZ = 0;
-      for (let i = 0; i < 4000; i++) {
-        stepBehavior(s, state, def, env, 0.05, rand);
-        if (i === 0) { mouthX = s.tx; mouthY = s.ty; mouthZ = s.tz; mouths.push(s.x); }
-        if (state.mode === "rest") {
-          expect(s.z).toBeGreaterThanOrEqual(mouthZ - 1e-8);
-          expect(s.z).toBeLessThanOrEqual(mouthZ + 0.025 + 1e-8);
+      for (const seed of [12 + index, 3, 19, 101]) {
+        const { def, env, rand, s, state } = setup("eel", "cave", seed, false);
+        env.denIndex = index;
+        let departures = 0, returns = 0, previous: BehaviorState["mode"];
+        const mouth = TANKS.cave.dens![index];
+        const homeX = mouth?.x ?? (-.1 + (index - TANKS.cave.dens!.length) * .5);
+        let homeY = mouth?.y ?? eelFloor(env.tank, homeX, .39);
+        if (!mouth) for (let i = 1; i < 16; i++) homeY = Math.max(homeY, eelFloor(env.tank, homeX - i * def.length / 15, .39));
+        const homeZ = mouth ? mouth.z + .16 : .39;
+        if (seed === 12 + index) mouths.push(homeX);
+        for (let i = 0; i < 4000; i++) {
+          stepBehavior(s, state, def, env, 0.05, rand);
+          if (state.mode === "rest") {
+            // Head and neck remain in the open water; the recorded spine extends
+            // through the real aperture into the hidden tunnel behind the disc.
+            if (mouth) {
+              expect(Math.abs(s.x - mouth.x)).toBeLessThan(1e-6);
+              expect(Math.abs(s.y - mouth.y)).toBeLessThan(1e-6);
+              expect(s.z).toBeGreaterThanOrEqual(mouth.z + 0.13 - 1e-6);
+              expect(s.z).toBeLessThanOrEqual(mouth.z + 0.19 + 1e-6);
+            } else {
+              expect(Math.hypot(s.x - homeX, s.y - homeY, s.z - homeZ)).toBeLessThan(.026);
+              expect(s.y).toBeGreaterThanOrEqual(eelFloor(env.tank, s.x, s.z) - 1e-6);
+              expect(s.z).toBeGreaterThan(env.bounds.min.z);
+            }
+          }
+          if (previous === "rest" && state.mode === "cruise") departures++;
+          if (previous === "return" && state.mode === "rest") {
+            returns++;
+            const peekZ = mouth ? mouth.z + .16 + .03 * Math.sin(state.eel!.phase * .27) : homeZ;
+            expect(Math.hypot(s.x - homeX, s.y - homeY, s.z - peekZ)).toBeLessThan(mouth ? .016 : .026);
+            expect(state.modeTimer).toBeGreaterThanOrEqual(8);
+            expect(state.modeTimer).toBeLessThanOrEqual(15);
+          }
+          previous = state.mode;
         }
-        if (previous === "rest" && state.mode === "cruise") departures++;
-        if (previous === "return" && state.mode === "rest") {
-          returns++;
-          expect(Math.hypot(s.x - mouthX, s.y - mouthY, s.z - mouthZ)).toBeLessThan(1e-8);
-          expect(state.modeTimer).toBeGreaterThanOrEqual(8);
-          expect(state.modeTimer).toBeLessThanOrEqual(15);
-        }
-        previous = state.mode;
+        expect(departures, `den ${index}, seed ${seed}`).toBeGreaterThan(2);
+        expect(returns, `den ${index}, seed ${seed}`).toBeGreaterThan(2);
       }
-      expect(departures).toBeGreaterThan(2);
-      expect(returns).toBeGreaterThan(2);
     }
     expect(new Set(mouths).size).toBe(TANKS.cave.capacity);
-  });
+  }, 60_000);
 
   for (const id of ["jellyfish", "moonjelly", "spottedjelly", "seanettle"] as const) {
     it(`${id} contracts faster than it relaxes and applies thrust on the contraction`, () => {

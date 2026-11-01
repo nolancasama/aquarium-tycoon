@@ -110,32 +110,3 @@ export function groundedVertex(out: THREE.Vector3, species: SpeciesId, vertex: n
   return out;
 }
 
-/** A moray's origin is its head: confine its whole long, waving body to the
- * accessible water in front of the rock face, not just the head's radius. */
-export function containEel(out: THREE.Vector3, tank: TankDef, x: number, y: number, z: number, yaw: number): void {
-  const box = animalGeometry("eel").boundingBox!, length = SPECIES.eel.length;
-  const co = Math.cos(yaw), si = Math.sin(yaw);
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (let i = 0; i <= 16; i++) for (let j = 0; j < 2; j++) {
-    const lx = box.min.x + (box.max.x - box.min.x) * i / 16;
-    const back = clamp(-lx / length - .05, 0, 1);
-    const sway = (.117 + back * .09) * back * length;
-    const lz = j ? box.max.z + sway : box.min.z - sway;
-    const dx = co * lx + si * lz, dz = -si * lx + co * lz;
-    minX = Math.min(minX, dx); maxX = Math.max(maxX, dx); minZ = Math.min(minZ, dz); maxZ = Math.max(maxZ, dz);
-  }
-  out.x = clamp(x, -tank.w / 2 - minX + 0.015, tank.w / 2 - maxX - 0.015);
-  out.z = clamp(z, -tank.d / 2 + (tank.backRock ?? 0) - minZ + 0.015, tank.d / 2 - maxZ - 0.015);
-  out.y = Math.max(y, sandSurfaceY(tank, out.x, out.z) - STAND_H - box.min.y + 0.015);
-  if (tank.rocks) for (const rock of tank.rocks) for (let i = 0; i <= 16; i++) {
-    const lx = box.min.x + (box.max.x - box.min.x) * i / 16;
-    const back = clamp(-lx / length - .05, 0, 1);
-    const reach = rock.r + Math.max(Math.abs(box.min.z), box.max.z) + (.117 + back * .09) * back * length;
-    const distance = Math.hypot(out.x + co * lx - rock.x, out.z - si * lx - rock.z) - reach;
-    // Begin climbing before the trailing body reaches a freestanding rock,
-    // so its head's column test cannot leave the tail intersecting the stone.
-    const t = clamp(1 - distance / .12, 0, 1), ease = t * t * (3 - 2 * t);
-    const top = rock.top - box.min.y + length * .012 + .015;
-    out.y = Math.max(out.y, y + (top - y) * ease);
-  }
-}

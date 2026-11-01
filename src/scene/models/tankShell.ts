@@ -224,6 +224,7 @@ function specialShellGeometry(t: TankDef): THREE.BufferGeometry {
 
 /** Rock wall with real apertures, dark recessed backs and layered side formations. */
 function caveRockwork(b: PartBuilder, t: TankDef) {
+  const mouthCurveSegments = 10;
   const wall = new THREE.Shape();
   wall.moveTo(-t.w / 2 + 0.012, SAND_H);
   wall.lineTo(t.w / 2 - 0.012, SAND_H);
@@ -234,10 +235,11 @@ function caveRockwork(b: PartBuilder, t: TankDef) {
     const hole = new THREE.Path();
     hole.absellipse(den.x, den.y, 0.12, 0.085, 0, Math.PI * 2, true, 0);
     wall.holes.push(hole);
-    const mouth = new THREE.CircleGeometry(1, 12);
+    // EllipseCurve uses twice curveSegments around a complete ellipse.
+    const mouth = new THREE.CircleGeometry(1, mouthCurveSegments * 2);
     b.add(mouth, "#14232a", [den.x, STAND_H + den.y, den.z - 0.035], [0, 0, 0], [0.12, 0.085, 1], { vary: false });
   }
-  b.add(new THREE.ExtrudeGeometry(wall, { depth: (t.backRock ?? 0.28) - 0.012, steps: 1, bevelEnabled: false, curveSegments: 3 }),
+  b.add(new THREE.ExtrudeGeometry(wall, { depth: (t.backRock ?? 0.28) - 0.012, steps: 1, bevelEnabled: false, curveSegments: mouthCurveSegments }),
     "#56666d", [0, STAND_H, -t.d / 2 + 0.012]);
   // Shallow irregular strata on the back face. Gaps leave every den mouth and
   // its rim unobstructed; all relief is merged into the same static shell.
@@ -247,7 +249,7 @@ function caveRockwork(b: PartBuilder, t: TankDef) {
       const x = -t.w * 0.405 + column * t.w * 0.16 + (layer % 2) * 0.035;
       const width = t.w * (0.139 + 0.009 * ((column + layer) % 3));
       const height = 0.10 + (column % 2) * 0.025;
-      if ((t.dens ?? []).some((den) => Math.abs(x - den.x) < width / 2 + 0.145 && Math.abs(y - den.y) < height / 2 + 0.105)) continue;
+      if ((t.dens ?? []).some((den) => Math.abs(x - den.x) < width * 0.58 + 0.145 && Math.abs(y - den.y) < height * 0.65 + 0.105)) continue;
       b.add(new THREE.IcosahedronGeometry(1, 0), layer % 2 ? "#7a8581" : "#667675",
         [x, STAND_H + y, -t.d / 2 + (t.backRock ?? 0.28) - 0.004],
         [0, 0, 0], [width * 0.58, height * 0.65, 0.025]);
