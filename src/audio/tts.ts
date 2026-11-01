@@ -15,6 +15,7 @@ let rateScale = 1;
 let speaking = 0;
 const listeners = new Set<Listener>();
 const live = new Set<SpeechSynthesisUtterance>(); // keep references: Chrome drops events of GC'd utterances
+const previews = new Map<SpeechSynthesisUtterance, () => void>();
 let cancelGeneration = 0;
 
 const PREFERRED = [/Google US English/i, /Samantha/i, /Microsoft (Aria|Jenny|Ana|Zira)/i, /en[-_]US/i];
@@ -63,7 +64,7 @@ export const tts = {
     rateScale = scale;
   },
 
-  speak(text: string, opts: { pitch?: number; rate?: number } = {}): Promise<void> {
+  speak(text: string, opts: { pitch?: number; rate?: number; preview?: boolean } = {}): Promise<void> {
     const generation = cancelGeneration;
     const estimate = 900 + text.length * 75 / rateScale;
     return new Promise((resolve) => {
@@ -89,8 +90,10 @@ export const tts = {
       live.add(u);
       const end = () => {
         live.delete(u);
+        previews.delete(u);
         finish();
       };
+      if (opts.preview) previews.set(u, end);
       u.onend = end;
       u.onerror = end;
       // Watchdog: some Chromebooks never fire onend.
@@ -105,6 +108,18 @@ export const tts = {
         end();
       }
     });
+  },
+
+  /** Only cancel when every active utterance belongs to vocabulary preview. */
+  cancelPreview() {
+    if (!previews.size || previews.size !== live.size || speaking !== live.size) return;
+    const finish = [...previews.values()];
+    try {
+      synth?.cancel();
+    } catch {
+      /* ignore */
+    }
+    finish.forEach((end) => end());
   },
 
   cancel() {

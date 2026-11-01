@@ -1,5 +1,22 @@
 # Design Decisions
 
+## 2026-11-01 — Animal picture vocabulary previews
+
+- Fish/Animals pictures are independent, keyboard-accessible preview buttons,
+  including locked offers. They briefly pulse (300 ms) and show the existing
+  English display name with optional Japanese directly underneath (1.8 s).
+  A subtle speaker icon adds no new instruction tags. This allows deliberate
+  vocabulary exploration in Speak, Say + Tap and Tap modes without answering,
+  selecting, ordering or buying anything. Names are sentence case, with spaces
+  preserved (for example, “Sea turtle!”), spoken slightly slower than normal.
+- Live recognition (`prompt.status === "listening"`) and ongoing game TTS
+  make previews visual-only. We reject queuing behind a prompt: delayed audio
+  could start during the child's next microphone attempt. Repeated taps cancel
+  only preview-owned speech, and only when no game utterance is active or queued.
+  Missing TTS and zero SFX volume also use visual-only feedback; hardware mute
+  cannot be detected, so the visible name always appears. Existing prompt audio
+  and the microphone's TTS guard retain their behavior.
+
 ## 2026-10-31 — Tapping hand, sentence clues and pattern meanings
 
 - A single DOM hand demonstrates an exact tap with a short glide, press and

@@ -1,0 +1,21 @@
+.name-preview { position: relative; flex-shrink: 0; }
+.name-preview .name-preview-button {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 110px; height: 88px; min-width: 88px; min-height: 88px;
+  padding: 0; border: 0; background: transparent; box-shadow: none;
+  border-radius: 12px; pointer-events: auto; cursor: pointer;
+}
+.name-preview-button:focus-visible { outline: 3px solid var(--aqua); outline-offset: 2px; }
+.name-preview-picture { display: flex; pointer-events: none; }
+.name-preview-picture > svg { width: 88px; height: 78px; }
+.name-preview .name-preview-speaker { position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; opacity: .55; }
+.name-preview-label {
+  position: absolute; z-index: 2; top: 4px; left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: 150px; padding: 4px 8px; border-radius: 8px;
+  background: var(--panel); box-shadow: var(--shadow); color: var(--ink);
+  text-align: center; font-size: 15px; line-height: 1.2; pointer-events: none;
+}
+.name-preview-label .ja { display: block; font-size: 12px; }
+.name-preview-picture.pulse { animation: name-preview-pulse 300ms ease-out; }
+@keyframes name-preview-pulse { 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .name-preview-picture.pulse { animation: none; } }
