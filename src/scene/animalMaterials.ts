@@ -15,7 +15,7 @@ export interface AnimalMaterial extends THREE.MeshLambertMaterial {
     uReaction: { value: number };
     /** Smoothed turn rate; trailing parts bend against a change of heading. */
     uTurn: { value: number };
-    /** Shared rig: moray arc-length spine now, octopus arm controls later. */
+    /** Shared rig: moray arc-length spine or eight octopus controls and tips. */
     uRig: { value: Float32Array };
     /** Jaw gape, including the timed feeding snap. */
     uEat: { value: number };
@@ -88,6 +88,26 @@ uniform vec4 uRig[16];
 uniform float uEat;
 varying vec3 vAnimalPos;
 varying float vAnimalPart;
+varying vec2 vArmSurface;
+// The pure octopusRig module mirrors this Bezier, curl derivative and frame.
+void octopusFrame(float index, float t, out vec3 p, out vec3 tangent, out vec3 up, out vec3 side) {
+  int i = int(clamp(index, 0.0, 7.0));
+  float a = float(i) * 0.7853981633974483;
+  vec3 root = vec3(cos(a) * 0.16, -0.28, sin(a) * 0.16) * uLength;
+  vec3 control = uRig[i].xyz;
+  vec3 tip = uRig[i + 8].xyz;
+  float f = 1.0 - t;
+  p = f * f * root + 2.0 * f * t * control + t * t * tip;
+  vec3 derivative = 2.0 * (f * (control - root) + t * (tip - control));
+  float q = clamp((t - 0.65) / 0.35, 0.0, 1.0);
+  float curl = uRig[i].w * uLength * 0.14;
+  p.y += curl * pow(sin(3.141592653589793 * q), 2.0);
+  if (t > 0.65 && t < 1.0) derivative.y += curl * (3.141592653589793 / 0.35) * sin(6.283185307179586 * q);
+  tangent = length(derivative) > 0.000001 ? normalize(derivative) : vec3(1.0, 0.0, 0.0);
+  vec3 reference = abs(tangent.y) > 0.98 ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+  side = normalize(cross(tangent, reference));
+  up = cross(side, tangent);
+}
 // P runs head-to-tail. T points forwards, retaining the rest pose's +x axis.
 void eelFrame(float s, out vec3 p, out vec3 t, out vec3 up, out vec3 side) {
   float q = clamp(s, 0.0, 1.0) * 15.0;
@@ -120,9 +140,19 @@ if (wave.x == 12.0) {
   eelFrame(wave.y, ep, et, eu, es);
   vec3 n = wave.z > 0.5 ? eelJaw(objectNormal, true) : objectNormal;
   objectNormal = normalize(et * n.x + eu * n.y + es * n.z);
+} else if (wave.x == 13.0) {
+  vec3 p, tangent, up, side;
+  octopusFrame(wave.z, wave.y, p, tangent, up, side);
+  objectNormal = normalize(tangent * objectNormal.x + up * objectNormal.y + side * objectNormal.z);
+} else if (wave.x == 14.0 && wave.y > 0.5) {
+  float breath = sin(uTime * 1.45) * 0.018;
+  float sx = 1.0 + breath, sy = 1.0 - breath * 0.65;
+  float lean = clamp(uMotion, 0.0, 1.8) * 0.075;
+  objectNormal = normalize(vec3(objectNormal.x / sx, objectNormal.y / sy + lean * objectNormal.x / sx, objectNormal.z / sx));
 }`).replace("#include <begin_vertex>", `#include <begin_vertex>
 vAnimalPos = position / uLength;
 vAnimalPart = wave.x;
+vArmSurface = wave.yw;
 float part = wave.x;
 float w = wave.y;
 float ph = uPhase + wave.z;
@@ -133,17 +163,6 @@ if (part == 1.0) {
   float back = clamp(-vAnimalPos.x - 0.05, 0.0, 1.0);
   transformed.z += (sin(uPhase - back * 9.0) * (0.036 + 0.045 * motion) - uTurn * back * 0.09) * back * uLength;
   transformed.y += sin(uPhase * 0.63 - back * 7.0) * back * back * uLength * 0.012;
-} else if (part == 3.0) {
-  // Three smooth bend zones along each arm: reaching base, pulling middle,
-  // curling tip. The CPU terrain sampler mirrors these exact displacements.
-  float reach = sin(ph - w * 3.2);
-  float curl = (0.5 + 0.5 * sin(uTime * 0.8 + wave.z * 1.7)) * 0.55 + uReaction;
-  float tip = smoothstep(0.42, 1.0, w);
-  float radial = (reach * motion * 0.055 - tip * tip * curl * 0.14 - uReaction * w * 0.12) * w;
-  float tangent = sin(ph - w * 6.0) * w * w * 0.028 * (0.35 + motion);
-  transformed.x += (cos(wave.z) * radial - sin(wave.z) * tangent) * uLength;
-  transformed.z += (sin(wave.z) * radial + cos(wave.z) * tangent) * uLength;
-  transformed.y += (max(0.0, reach) * w * w * 0.095 * motion + tip * tip * curl * 0.11 + uReaction * w * 0.09) * uLength;
 } else if (part == 4.0) {
   // Opposite tetrapods share a half-cycle offset; stance feet stay planted.
   float swing = max(0.0, sin(ph));
@@ -196,9 +215,19 @@ if (part == 1.0) {
   eelFrame(wave.y, ep, et, eu, es);
   vec3 local = wave.z > 0.5 ? eelJaw(position, false) : position;
   transformed = ep + et * (local.x + wave.y * uLength) + eu * local.y + es * local.z;
+} else if (part == 13.0) {
+  vec3 p, tangent, up, side;
+  octopusFrame(wave.z, wave.y, p, tangent, up, side);
+  transformed = p + up * position.y + side * position.z;
+} else if (part == 14.0 && wave.y > 0.5) {
+  float breath = sin(uTime * 1.45) * 0.018;
+  float sx = 1.0 + breath, sy = 1.0 - breath * 0.65;
+  float lean = motion * 0.075;
+  float h = (position.y + uLength * 0.25) * sy;
+  transformed = vec3(position.x * sx - h * lean, h - uLength * 0.25, position.z * sx);
 }
 if (uGroundEnabled > 0.5) {
-  if (part == 3.0 || part == 4.0) transformed.y += uFeet[int(clamp(wave.w, 0.0, 7.0))] * w * w * w;
+  if (part == 4.0) transformed.y += uFeet[int(clamp(wave.w, 0.0, 7.0))] * w * w * w;
   vec3 worldGround = (modelMatrix * vec4(transformed, 1.0)).xyz;
   vec2 dunePos = (worldGround.xz - uSand.xy) / vec2(uSand.z, uSand.z * 0.55);
   float duneSurface = uSand.w - 0.01 + uSand.z * 0.09 * sqrt(max(0.0, 1.0 - dot(dunePos, dunePos)));
@@ -212,7 +241,8 @@ uniform float uColour;
 uniform float uTime;
 uniform float uReaction;
 varying vec3 vAnimalPos;
-varying float vAnimalPart;`).replace("#include <color_fragment>", `#include <color_fragment>
+varying float vAnimalPart;
+varying vec2 vArmSurface;`).replace("#include <color_fragment>", `#include <color_fragment>
 vec3 ap = vAnimalPos;
 float chroma = max(vColor.r, max(vColor.g, vColor.b)) - min(vColor.r, min(vColor.g, vColor.b));
 float painted = smoothstep(0.04, 0.16, chroma);
@@ -238,8 +268,22 @@ if (uAnimal == 0.0 && part == 1.0) {
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.04, 1.0, 0.8), (1.0 - smoothstep(-0.055, -0.01, ap.y)) * 0.32);
 } else if (uAnimal == 4.0) {
   // Warm orange colour changes preserve the eyes and pale suckers.
+  float mottling = sin(ap.x * 43.0 + sin(ap.z * 31.0)) * sin(ap.y * 36.0 - ap.z * 19.0);
+  diffuseColor.rgb *= 1.0 + mottling * painted * 0.055;
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 0.77, 0.88), (0.5 + 0.5 * sin(uColour)) * painted * 0.42);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.98, 0.86, 0.60), painted * uReaction * 0.8);
+  if (part == 13.0) {
+    // Two rows follow the underside through bends and tip curls. An annulus and
+    // darker cup centre read as suckers without any extra triangles.
+    float angle = vArmSurface.y - 3.141592653589793;
+    vec2 cups = vec2(vArmSurface.x * 11.0, (angle + 0.6) / 0.6);
+    vec2 cell = vec2(fract(cups.x) - 0.5, fract(cups.y) - 0.5);
+    float d = length(cell * vec2(1.0, 1.35));
+    float underside = 1.0 - smoothstep(1.05, 1.3, abs(angle));
+    float cup = (1.0 - smoothstep(0.27, 0.36, d)) * underside * smoothstep(0.04, 0.13, vArmSurface.x);
+    vec3 cupColour = mix(vec3(0.76, 0.39, 0.21), vec3(1.0, 0.80, 0.56), smoothstep(0.10, 0.21, d));
+    diffuseColor.rgb = mix(diffuseColor.rgb, cupColour, cup * 0.94);
+  }
 } else if (uAnimal == 6.0 && part == 6.0) {
   vec2 cells = ap.xz * 12.0;
   cells.x += sin(floor(cells.y) * 2.8) * 0.45;
@@ -266,6 +310,6 @@ float hintRim = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
 outgoingLight += vec3(1.0, 0.65, 0.08) * hintRim * uHintGlow;
 #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => "expansion-animals-v4-shared-spine-rig";
+  m.customProgramCacheKey = () => "expansion-animals-v5-independent-octopus-arms";
   return m;
 }
