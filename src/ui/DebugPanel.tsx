@@ -46,7 +46,7 @@ const ACTIONS: { label: string; run: (m: Model) => Model }[] = [
   { label: "Give the crown (finish Level 8)", run: (m) => ({ ...m, progress: { ...m.progress, superStar: true } }) }
 ];
 
-/** Debug overlay, always available: Ctrl+Alt+D toggles it, Ctrl+Alt+U unlocks everything directly, Escape closes it. */
+/** Debug overlay, always available: Ctrl+Alt+D toggles it, Ctrl+Alt+U unlocks everything and Ctrl+Alt+M adds 1000 coins directly, Escape closes it. */
 export function DebugPanel() {
   const [open, setOpen] = useState(false);
   const stage = useGame((s) => s.model.progress.stage);
@@ -63,6 +63,11 @@ export function DebugPanel() {
         e.stopPropagation();
         updateModel(unlockAll);
         toast({ en: "Debug: everything unlocked", tone: "info" });
+      } else if (e.ctrlKey && e.altKey && e.code === "KeyM") {
+        e.preventDefault();
+        e.stopPropagation();
+        updateModel((m) => ({ ...m, coins: m.coins + 1000 }));
+        toast({ en: "Debug: +1000 coins", tone: "info" });
       } else if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", key, true);
@@ -96,7 +101,7 @@ export function DebugPanel() {
           {a.label}
         </button>
       ))}
-      <small>Ctrl+Alt+D to close · Ctrl+Alt+U unlocks everything anytime</small>
+      <small>Ctrl+Alt+D to close · Ctrl+Alt+U unlock all · Ctrl+Alt+M +1000 coins</small>
     </div>
   );
 }
