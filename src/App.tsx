@@ -3,6 +3,7 @@ import { GameScene } from "./scene/GameScene";
 import { bottomPanel } from "./scene/CameraRig";
 import { Hud } from "./ui/Hud";
 import { DialoguePanel, FishTalk, PromptPanel, RequestBanner } from "./ui/Talk";
+import { FoodStrip } from "./ui/FoodStrip";
 import { AnimalShop, DecorChoiceStrip, DecorShop, DecorTray, FishShop, TankShop, UpgradePanel } from "./ui/Shop";
 import { SettingsModal } from "./ui/Settings";
 import { ResultsScreen, StageCardModal, TitleScreen } from "./ui/Screens";
@@ -127,6 +128,7 @@ export function App() {
         <RequestBanner />
         <FishTalk />
       </div>
+      <FoodStrip />
       <DecorTray />
       <DecorShop />
       <TankShop />

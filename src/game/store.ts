@@ -1,3 +1,4 @@
+import type { FoodId } from "./data/food";
 import { create } from "zustand";
 import type { DecorKind, SlotId, SpeciesId, StageId, TankType, Text, VisitorType } from "./types";
 import type { PhraseId } from "./logic/english";
@@ -180,6 +181,8 @@ export interface GameState {
   waiting: { id: string; type: VisitorType } | null;
   /** A tapped fish says what it likes. */
   fishTalk: { id: number; species: SpeciesId } | null;
+  /** The foods just fed to a tank, shown with their English words until rt.time passes `until`. */
+  foodStrip: { id: number; tankId: string; foods: FoodId[]; until: number } | null;
   /** HUD control the tutorial points at (its data-testid). */
   guide: string | null;
   /** The decoration whose two versions are being chosen ("Red or blue?"): pictures above the prompt. */
@@ -267,6 +270,7 @@ export const useGame = create<GameState>(() => ({
   coinPop: null,
   waiting: null,
   fishTalk: null,
+  foodStrip: null,
   guide: null,
   decorAsk: null
 }));

@@ -1,11 +1,14 @@
-import { getGame, updateModel } from "./store";
+import { getGame, setGame, updateModel } from "./store";
 import { rt, type FishRt, type Pellet } from "./runtime";
 import { SPECIES } from "./data/fish";
-import { SAND_H, TANKS } from "./data/tanks";
+import { SAND_H, STAND_H, TANKS } from "./data/tanks";
 import { decay, happiness, latchHappy, mood, type TankRec } from "./logic/model";
 import { newSwimState, tankFishBounds, frontAt, floorAt, type Bounds, type SwimEnv, type Column } from "./logic/swim";
 import { reactToAnimalTap, stepBehavior, type BehaviorEnv } from "./logic/behavior";
 import { eelBounds } from "./logic/eelBody";
+import { octopusGrab } from "./logic/octopusRig";
+import { sandSurfaceY } from "./logic/tankLayout";
+import { FOOD_FALL, PELLET_SINK, PLANKTON_LIFE, eatsFood, foodsFor, type FoodId } from "./data/food";
 import { makeRng } from "./logic/rng";
 import { columnsOf, feedSpot } from "./world";
 import { stepVisitors, visitorsTick } from "./flow/visitors";
@@ -82,34 +85,41 @@ function syncFish(tanks: TankRec[]) {
 
 let pelletId = 1;
 
-/** Drop a handful of pellets at the tank's feeding spot. */
-export function dropPellets(tankId: string, type: TankType) {
-  const spot = feedSpot(type);
-  // Vary food appearance according to residents without changing the simple
-  // tank-wide feeding meter or introducing dietary penalties.
-  const residents = getGame().model.tanks.find((t) => t.id === tankId)?.fish ?? [];
-  const kinds = [...new Set(residents.map(({ species }) => {
-    if (species === "jellyfish" || species === "moonjelly" || species === "spottedjelly" || species === "seanettle") return "plankton" as const;
-    if (species === "eel" || species === "octopus" || species === "crab" || species === "stingray" || species === "shrimp") return "seafood" as const;
-    if (species === "parrotfish" || species === "bluetang" || species === "turtle") return "seaweed" as const;
-    return "pellet" as const;
-  }))];
-  if (!kinds.length) kinds.push("pellet");
-  const n = 6 + Math.floor(rand() * 5);
-  for (let i = 0; i < n; i++) {
+function dropFood(tankId: string, type: TankType, food: FoodId, count: number) {
+  const spot = feedSpot(type), tank = TANKS[type], fall = FOOD_FALL[food];
+  for (let i = 0; i < count; i++) {
+    const id = pelletId++;
+    const x = spot.x + (rand() - 0.5) * 0.3 * fall.spread;
+    const z = spot.z + (rand() - 0.5) * 0.25 * fall.spread;
+    const sink = food === "flakes" && id % 3 === 0 ? PELLET_SINK : fall.sink;
     rt.pellets.push({
-      id: pelletId++,
+      id,
       tankId,
-      x: spot.x + (rand() - 0.5) * 0.3,
+      food,
+      x,
       y: spot.y + rand() * 0.04,
-      z: spot.z + (rand() - 0.5) * 0.25,
-      vy: -(0.08 + rand() * 0.06),
+      z,
+      vy: -sink * (0.85 + rand() * 0.3),
       sway: rand() * 6,
-      visualKind: kinds[i % kinds.length],
+      drift: sink === PELLET_SINK ? 0.006 : fall.drift,
+      floor: (Math.max(SAND_H, sandSurfaceY(tank, x, z) - STAND_H)) + 0.015,
+      bornT: rt.time,
       eaten: false,
       landedT: -1
     });
   }
+}
+
+/** Drop what the tank's residents eat at its feeding spot, in one tap. */
+export function dropPellets(tankId: string, type: TankType) {
+  const foods = foodsFor(getGame().model.tanks.find((t) => t.id === tankId)?.fish ?? []);
+  const n = Math.min(14, Math.max(6 + Math.floor(rand() * 5), foods.length * 3));
+  foods.forEach((food, i) => dropFood(tankId, type, food, Math.floor(n / foods.length) + (i < n % foods.length ? 1 : 0)));
+}
+
+/** A small extra pinch from the food strip. It does not touch the meter. */
+export function dropPinch(tankId: string, type: TankType, food: FoodId) {
+  dropFood(tankId, type, food, 2);
 }
 
 const SHOW_SECONDS = 2.6;
@@ -150,7 +160,7 @@ function stepFish(dt: number, tanks: TankRec[]) {
       } else {
         let best = Infinity;
         for (const p of rt.pellets) {
-          if (p.tankId !== t.id || p.eaten || (ground && p.landedT < 0)) continue;
+          if (p.tankId !== t.id || p.eaten || p.held || (ground && p.landedT < 0) || !eatsFood(f.species, p.food)) continue;
           const d = (p.x - s.x) ** 2 + (p.y - s.y) ** 2 + (p.z - s.z) ** 2;
           if (d < best) {
             best = d;
@@ -198,8 +208,25 @@ function stepFish(dt: number, tanks: TankRec[]) {
         behaviorEnv.phase = f.phase;
         stepBehavior(s, f, def, behaviorEnv, dt, rand);
       }
+      // An octopus takes food with an arm and carries it to its mouth.
+      if (f.octopus) {
+        const rig = f.octopus, held = f.heldPellet;
+        if (held) {
+          const arm = rig.arms[rig.grabArm];
+          if (rig.grabPhase === "reached" || rig.grabPhase === "mouth") { held.x = arm.tip.x; held.y = arm.tip.y; held.z = arm.tip.z; }
+          else if (rig.grabPhase === "delivered") {
+            held.eaten = true;
+            f.heldPellet = undefined;
+            f.eatT0 = rt.time;
+            audio.play("gulp");
+          }
+        } else if (target && Math.hypot(target.x - s.x, target.z - s.z) < 0.2 && octopusGrab(rig, target.x, target.y, target.z)) {
+          target.held = true;
+          f.heldPellet = target;
+        }
+      }
       // Eat a pellet the mouth reaches.
-      if (target) {
+      if (target && !f.octopus) {
         const mouth = def.body === "eel" ? 0 : def.length * 0.45;
         const mx = f.eel?.mouth.x ?? s.x + Math.cos(f.yaw) * mouth;
         const my = f.eel?.mouth.y ?? s.y;
@@ -249,17 +276,20 @@ function THREE_clamp(v: number, lo: number, hi: number) {
 function stepPellets(dt: number) {
   if (!rt.pellets.length) return;
   for (const p of rt.pellets) {
-    if (p.eaten) continue;
+    if (p.eaten || p.held) continue;
     if (p.landedT < 0) {
       p.y += p.vy * dt;
-      p.x += Math.sin(rt.time * 2 + p.sway) * 0.02 * dt;
-      if (p.y <= SAND_H + 0.015) {
-        p.y = SAND_H + 0.015;
+      p.x += Math.sin(rt.time * 2 + p.sway) * p.drift * dt;
+      p.z += Math.cos(rt.time * 1.4 + p.sway) * p.drift * 0.6 * dt;
+      if (p.y <= p.floor) {
+        p.y = p.floor;
         p.landedT = rt.time;
       }
     }
   }
-  rt.pellets = rt.pellets.filter((p) => !p.eaten && (p.landedT < 0 || rt.time - p.landedT < 6));
+  rt.pellets = rt.pellets.filter((p) => !p.eaten && (p.held || (p.food === "plankton"
+    ? rt.time - p.bornT < PLANKTON_LIFE
+    : p.landedT < 0 || rt.time - p.landedT < 6)));
 }
 
 /** Care time runs during ordinary play only (not on the title, in Settings or in scripted moments). */
@@ -277,6 +307,8 @@ export function tick(dt: number) {
   stepVisitors(dt);
   rt.effects = rt.effects.filter((e) => rt.time - e.t0 < 4);
   if (g.screen !== "game") return;
+  // Game time, so a slow machine still shows the food words for as long.
+  if (g.foodStrip && rt.time > g.foodStrip.until) setGame({ foodStrip: null });
   if (decayRunning()) {
     rt.decayAcc += dt;
     if (rt.decayAcc >= 1) {

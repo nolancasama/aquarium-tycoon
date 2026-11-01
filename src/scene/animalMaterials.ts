@@ -173,6 +173,11 @@ if (part == 1.0) {
   float opening = pow(max(0.0, sin(uTime * 0.9 + wave.w * 2.7)), 5.0);
   transformed.y += (lift + wave.z * opening * 0.05) * uLength;
   transformed.x += sin(uTime * 1.1 + wave.w * 2.0) * uLength * 0.025;
+  // Feeding: the claws take turns carrying food up to the mouth.
+  float feeding = uEat * (0.5 + 0.5 * sin(uTime * 9.0 + wave.w * 1.57));
+  transformed.y += feeding * uLength * 0.12;
+  transformed.x -= feeding * uLength * 0.18;
+  transformed.z *= 1.0 - feeding * 0.45;
 } else if (part == 6.0) {
   // Spanwise travelling wave, with a delayed rear edge; centre stays stable.
   transformed.y += (sin(uPhase - w * 4.5 - vAnimalPos.x * 3.5) * 0.10 + sin(uPhase * 0.7 - w * 6.0) * 0.018) * w * w * uLength;
@@ -198,10 +203,17 @@ if (part == 1.0) {
   transformed.x += (sin(lag + wave.z) * 0.035 + sin(uTime * 0.65 + wave.z) * 0.022 - uTurn * w * 0.055) * w * uLength;
   transformed.z += cos(lag * 0.85 + wave.z) * w * w * uLength * 0.055;
   transformed.y -= squeeze * w * uLength * 0.065;
+  // Feeding: tentacles gather food in toward the bell's centre.
+  transformed.xz *= 1.0 - uEat * 0.3 * w;
+  transformed.y += uEat * w * uLength * 0.14;
 } else if (part == 9.0) {
   // Independent claw arms and palms use time, so pauses retain expression.
   transformed.y += (0.5 + 0.5 * sin(uTime * 1.3 + wave.z * 2.2)) * w * uLength * 0.055;
   transformed.x += sin(uTime * 1.1 + wave.z * 2.0) * w * uLength * 0.025;
+  float feeding = uEat * (0.5 + 0.5 * sin(uTime * 9.0 + wave.z * 1.57));
+  transformed.y += feeding * w * uLength * 0.12;
+  transformed.x -= feeding * w * uLength * 0.18;
+  transformed.z *= 1.0 - feeding * w * 0.45;
 } else if (part == 10.0) {
   // Morays pump water with their jaws even when resting at a den entrance.
   float gape = pow(0.5 + 0.5 * sin(uTime * 0.9), 4.0);
@@ -310,6 +322,6 @@ float hintRim = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
 outgoingLight += vec3(1.0, 0.65, 0.08) * hintRim * uHintGlow;
 #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => "expansion-animals-v5-independent-octopus-arms";
+  m.customProgramCacheKey = () => "expansion-animals-v6-species-feeding";
   return m;
 }

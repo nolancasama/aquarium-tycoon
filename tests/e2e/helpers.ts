@@ -33,6 +33,7 @@ export interface AtState {
   waiting: { id: string; type: string } | null;
   visitors: { id: string; type: string; state: string; request: string | null; helped: boolean; seat: number }[];
   pellets: number;
+  pelletFoods: string[];
   countGlow: boolean;
   glowFish: number;
   glowVisitors: string[];

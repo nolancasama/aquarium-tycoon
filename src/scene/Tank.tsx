@@ -1,3 +1,4 @@
+import type { Pellet } from "../game/runtime";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
@@ -434,44 +435,81 @@ function SlotMarkers({ tank }: { tank: TankRec }) {
 
 // ------------------------------------------------------------------ pellets, bubbles, dirt, sponge
 
-const pelletGeo = new THREE.SphereGeometry(0.012, 6, 5);
-// One instanced draw call for all food previews; existing care/eating rules are unchanged.
-const pelletMat = new THREE.MeshLambertMaterial({ color: "#ffffff" });
-const FOOD_COLORS = {
-  pellet: new THREE.Color("#c8692b"),
-  seaweed: new THREE.Color("#65b76b"),
-  seafood: new THREE.Color("#e99a7d"),
-  plankton: new THREE.Color("#bde6df")
-};
-const FOOD_SCALES = {
-  pellet: [1, 1, 1],
-  seaweed: [1.45, 0.38, 1.0],
-  seafood: [1.45, 0.85, 0.9],
-  plankton: [0.55, 0.55, 0.55]
-} as const;
+type FoodShape = "flake" | "pellet" | "seaweed" | "shrimp" | "seafood" | "plankton";
+const FOOD_SHAPES: FoodShape[] = ["flake", "pellet", "seaweed", "shrimp", "seafood", "plankton"];
+const shapeOf = (p: Pellet): FoodShape => p.food === "flakes" ? (p.id % 3 === 0 ? "pellet" : "flake") : p.food;
 
+/** A curved ribbon of seaweed. */
+function seaweedGeometry() {
+  const g = new THREE.PlaneGeometry(0.02, 0.058, 1, 4);
+  const p = g.getAttribute("position");
+  for (let i = 0; i < p.count; i++) p.setZ(i, Math.sin(p.getY(i) * 70) * 0.006);
+  g.computeVertexNormals();
+  return g;
+}
+/** A curled shrimp: a bent body and a small fan tail. */
+function shrimpGeometry() {
+  const body = new THREE.TorusGeometry(0.013, 0.0055, 5, 8, Math.PI * 1.25);
+  const tail = new THREE.ConeGeometry(0.0065, 0.012, 5);
+  tail.rotateZ(-Math.PI / 2);
+  tail.translate(0.016, -0.004, 0);
+  return mergeGeometries([body.toNonIndexed(), tail.toNonIndexed()])!;
+}
+/** A wisp of plankton: one piece reads as a little cloud of specks. */
+function planktonGeometry() {
+  return mergeGeometries([[0, 0, 0], [0.017, 0.008, 0.005], [-0.014, 0.011, -0.008], [0.006, -0.015, 0.011], [-0.009, -0.01, 0.014]].map(([x, y, z]) => {
+    const g = new THREE.OctahedronGeometry(0.0034, 0);
+    g.translate(x, y, z);
+    return g;
+  }))!;
+}
+const FOOD_GEOMETRY: Record<FoodShape, THREE.BufferGeometry> = {
+  flake: new THREE.CircleGeometry(0.016, 6),
+  pellet: new THREE.SphereGeometry(0.0115, 6, 5),
+  seaweed: seaweedGeometry(),
+  shrimp: shrimpGeometry(),
+  seafood: new THREE.IcosahedronGeometry(0.021, 0).scale(1.35, 0.72, 0.9),
+  plankton: planktonGeometry()
+};
+const FOOD_MATERIAL: Record<FoodShape, THREE.Material> = {
+  flake: new THREE.MeshLambertMaterial({ color: "#e8913a", side: THREE.DoubleSide }),
+  pellet: new THREE.MeshLambertMaterial({ color: "#b5602a" }),
+  seaweed: new THREE.MeshLambertMaterial({ color: "#4fa85a", side: THREE.DoubleSide }),
+  shrimp: new THREE.MeshLambertMaterial({ color: "#f28c78" }),
+  seafood: new THREE.MeshLambertMaterial({ color: "#f3b9a2", flatShading: true }),
+  plankton: new THREE.MeshLambertMaterial({ color: "#d8f5ec", emissive: "#3b6b63" })
+};
+
+/** One instanced mesh per food shape; a mesh only draws while that food exists. */
 function Pellets({ tankId }: { tankId: string }) {
+  return <>{FOOD_SHAPES.map((shape) => <FoodPieces key={shape} tankId={tankId} shape={shape} />)}</>;
+}
+
+function FoodPieces({ tankId, shape }: { tankId: string; shape: FoodShape }) {
   const ref = useRef<THREE.InstancedMesh>(null);
-  const m4 = useMemo(() => new THREE.Matrix4(), []);
+  const pose = useMemo(() => new THREE.Object3D(), []);
   useFrame(() => {
     const mesh = ref.current;
     if (!mesh) return;
     let n = 0;
     for (const p of rt.pellets) {
-      if (p.tankId !== tankId || p.eaten || n >= 40) continue;
-      const kind = p.visualKind ?? "pellet";
-      const scale = FOOD_SCALES[kind];
-      m4.makeScale(scale[0], scale[1], scale[2]);
-      m4.setPosition(p.x, p.y, p.z);
-      mesh.setMatrixAt(n, m4);
-      mesh.setColorAt(n, FOOD_COLORS[kind]);
+      if (p.tankId !== tankId || p.eaten || n >= 24 || shapeOf(p) !== shape) continue;
+      const falling = p.landedT < 0;
+      const k = rt.time + p.sway;
+      pose.position.set(p.x, p.y, p.z);
+      // Flakes tumble as they flutter, seaweed sways, a landed piece lies flat.
+      if (shape === "flake") falling ? pose.rotation.set(k * 2.4, k * 1.3, 0) : pose.rotation.set(-Math.PI / 2, 0, p.sway);
+      else if (shape === "seaweed") falling ? pose.rotation.set(Math.sin(k * 1.6) * 0.5, p.sway, Math.sin(k) * 0.4) : pose.rotation.set(-Math.PI / 2, 0, p.sway);
+      else pose.rotation.set(0, p.sway + (falling ? k * 0.6 : 0), 0);
+      pose.updateMatrix();
+      mesh.setMatrixAt(n, pose.matrix);
       n++;
     }
     mesh.count = n;
+    mesh.visible = n > 0;
     mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   });
-  return <instancedMesh ref={ref} args={[pelletGeo, pelletMat, 40]} frustumCulled={false} />;
+  return <instancedMesh ref={ref} args={[FOOD_GEOMETRY[shape], FOOD_MATERIAL[shape], 24]} frustumCulled={false} visible={false} />;
 }
 
 const bubbleMat = (scale: { value: number }, h: number) =>

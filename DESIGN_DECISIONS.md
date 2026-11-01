@@ -1211,3 +1211,22 @@ request seat as default. `ATRIUM_REST_SPOTS` standing rests are replaced by sitt
 data. Animals target only pieces their diet accepts. Each food has its own fall
 behaviour and instanced shape (a mesh draws only while that food exists). The food
 meter, happiness, saves and the first-time "Feed the fish!" are unchanged.
+
+### Changes made while building
+
+- **The eel's chain solver was replaced.** A 32-pass length-and-bend solver collapsed
+  the body by up to 34% and cost too much per frame. Each point now slews a limited
+  offset toward one clear pass, smoothed with its neighbours, and does nothing when
+  clear. The head corridor gives clearance normally.
+- **Den holes are round.** Three curve segments drew the 0.12 x 0.085 m ellipses as
+  hexagons, with less clearance than the code assumed.
+- **The octopus's first look was rejected by eye.** It passed its tests but read as a
+  spider: thin legs arching high. Arms are now longer (0.85 body lengths) and thicker,
+  planted arms are capped at a low arch so they drape along the sand, and each has a
+  slow sideways bend. Rejected: strict constant arm length, which is what forced the
+  high arch; planted arms may now be up to about a quarter shorter than free ones.
+- **The rig owns the octopus's body pose.** Tips are stored relative to the body, so
+  `groundAnimal` placing it separately would make planted tips drift.
+- **The food strip runs on game time.** A wall-clock timer could expire before a slow
+  machine had drawn much. It also sits outside `.top-panels`, whose transform turned
+  its `position: fixed` into an off-screen position.

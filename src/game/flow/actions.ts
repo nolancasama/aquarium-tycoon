@@ -46,7 +46,8 @@ import {
 import { ANIMAL_PHRASE, SHOP_COLOR_PHRASE, colorOfPhrase, speciesOfPhrase, type PhraseId } from "../logic/english";
 import { ask, say, speak } from "./ask";
 import { answerShow, inspectRequestTank, openRequest } from "./visitors";
-import { dropPellets } from "../sim";
+import { dropPellets, dropPinch } from "../sim";
+import { FOOD, foodsFor, type FoodId } from "../data/food";
 import { toWorld } from "../world";
 import { audio } from "../../audio/audio";
 
@@ -738,6 +739,21 @@ export async function feedTank() {
   if (!r.ok) return;
   dropPellets(t.id, t.type);
   audio.play("sprinkle");
+  setGame({ foodStrip: { id: foodStripId++, tankId: t.id, foods: foodsFor(t.fish), until: rt.time + 4 } });
+}
+
+let foodStripId = 1;
+let lastPinch = -10;
+
+/** The food strip: say the word and add a pinch. No effect on the meter or coins. */
+export function tasteFood(food: FoodId) {
+  const g = getGame();
+  const t = g.foodStrip && g.mode === "play" ? tankById(model(), g.foodStrip.tankId) : null;
+  if (!t || rt.time - lastPinch < 0.5) return;
+  lastPinch = rt.time;
+  dropPinch(t.id, t.type, food);
+  audio.play("sprinkle");
+  void speak(FOOD[food].en);
 }
 
 export async function cleanTank() {
