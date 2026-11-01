@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { SpeciesId } from "../game/types";
 import { SPECIES } from "../game/data/fish";
 import { shaderTime } from "./materials";
+import { jellyPulseStyle } from "../game/logic/motion";
 
 export interface AnimalMaterial extends THREE.MeshLambertMaterial {
   userData: {
@@ -10,6 +11,15 @@ export interface AnimalMaterial extends THREE.MeshLambertMaterial {
     uMotion: { value: number };
     /** A slow phase supplied by the crawling behaviour. */
     uColour: { value: number };
+    /** Decaying tap response, also used by the octopus to gather its arms. */
+    uReaction: { value: number };
+    /** Smoothed turn rate; trailing parts bend against a change of heading. */
+    uTurn: { value: number };
+    /** Eight limb support corrections, blended toward each arm/leg tip. */
+    uFeet: { value: Float32Array };
+    uGroundEnabled: { value: number };
+    /** World dune centre x/z, dune radius, and flat visible sand height. */
+    uSand: { value: THREE.Vector4 };
     /** Golden request edge; never a whole-body colour wash. */
     uHintGlow: { value: number };
   };
@@ -17,7 +27,7 @@ export interface AnimalMaterial extends THREE.MeshLambertMaterial {
 
 const codes: Partial<Record<SpeciesId, number>> = {
   angelfish: 0, goby: 1, chromis: 2, eel: 3, octopus: 4,
-  crab: 5, stingray: 6, moonjelly: 7, spottedjelly: 8, seanettle: 9
+  crab: 5, stingray: 6, moonjelly: 7, spottedjelly: 8, seanettle: 9, jellyfish: 10
 };
 
 /** Each animal owns uniforms; geometry and the compiled shader are shared.
@@ -34,20 +44,39 @@ export function animalMaterial(species: SpeciesId): AnimalMaterial {
   // A bell is one translucent surface; drawing its rear separately doubles the
   // work and makes the merged fringe unnecessarily dark on integrated GPUs.
   m.forceSinglePass = true;
-  m.userData = { uPhase: { value: 0 }, uMotion: { value: 1 }, uColour: { value: 0 }, uHintGlow: { value: 0 } };
+  m.userData = {
+    uPhase: { value: 0 }, uMotion: { value: 1 }, uColour: { value: 0 },
+    uReaction: { value: 0 }, uTurn: { value: 0 }, uHintGlow: { value: 0 },
+    uFeet: { value: new Float32Array(8) }, uGroundEnabled: { value: 0 },
+    uSand: { value: new THREE.Vector4(0, 0, 1, 0) }
+  };
   m.onBeforeCompile = shader => {
     shader.uniforms.uPhase = m.userData.uPhase;
     shader.uniforms.uMotion = m.userData.uMotion;
     shader.uniforms.uColour = m.userData.uColour;
+    shader.uniforms.uReaction = m.userData.uReaction;
+    shader.uniforms.uTurn = m.userData.uTurn;
+    shader.uniforms.uFeet = m.userData.uFeet;
+    shader.uniforms.uGroundEnabled = m.userData.uGroundEnabled;
+    shader.uniforms.uSand = m.userData.uSand;
     shader.uniforms.uHintGlow = m.userData.uHintGlow;
     shader.uniforms.uTime = shaderTime;
     shader.uniforms.uAnimal = { value: codes[species] ?? -1 };
     shader.uniforms.uLength = { value: SPECIES[species].length };
+    shader.uniforms.uContract = { value: jellyPulseStyle(species).contract };
     shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>
 attribute vec4 wave;
 uniform float uPhase;
 uniform float uMotion;
 uniform float uLength;
+uniform float uTime;
+uniform float uAnimal;
+uniform float uReaction;
+uniform float uContract;
+uniform float uTurn;
+uniform float uFeet[8];
+uniform float uGroundEnabled;
+uniform vec4 uSand;
 varying vec3 vAnimalPos;
 varying float vAnimalPart;`).replace("#include <begin_vertex>", `#include <begin_vertex>
 vAnimalPos = position / uLength;
@@ -57,38 +86,84 @@ float w = wave.y;
 float ph = uPhase + wave.z;
 float motion = clamp(uMotion, 0.0, 1.8);
 if (part == 1.0) {
-  transformed.z += sin(uPhase - w * 4.2) * w * w * uLength * 0.14 * (0.15 + 0.85 * motion);
+  transformed.z += (sin(uPhase - w * 4.2) * 0.14 * (0.15 + 0.85 * motion) - uTurn * 0.11) * w * w * uLength;
 } else if (part == 2.0) {
   float back = clamp(-vAnimalPos.x - 0.05, 0.0, 1.0);
-  transformed.z += sin(uPhase - back * 9.0) * back * uLength * 0.075 * (0.3 + 0.7 * motion);
+  transformed.z += (sin(uPhase - back * 9.0) * (0.036 + 0.045 * motion) - uTurn * back * 0.09) * back * uLength;
+  transformed.y += sin(uPhase * 0.63 - back * 7.0) * back * back * uLength * 0.012;
 } else if (part == 3.0) {
-  // Relaxed arms spread on the sand; crawling draws them in and curls the tips.
-  float curl = w * w;
-  transformed.x -= cos(wave.z) * w * uLength * 0.07 * motion;
-  transformed.z -= sin(wave.z) * w * uLength * 0.07 * motion;
-  transformed.y += (sin(ph - w * 5.0) * curl * 0.035 + curl * w * motion * 0.065) * uLength;
-  transformed.x += sin(ph - w * 5.0) * curl * uLength * 0.025;
+  // Three smooth bend zones along each arm: reaching base, pulling middle,
+  // curling tip. The CPU terrain sampler mirrors these exact displacements.
+  float reach = sin(ph - w * 3.2);
+  float curl = (0.5 + 0.5 * sin(uTime * 0.8 + wave.z * 1.7)) * 0.55 + uReaction;
+  float tip = smoothstep(0.42, 1.0, w);
+  float radial = (reach * motion * 0.055 - tip * tip * curl * 0.14 - uReaction * w * 0.12) * w;
+  float tangent = sin(ph - w * 6.0) * w * w * 0.028 * (0.35 + motion);
+  transformed.x += (cos(wave.z) * radial - sin(wave.z) * tangent) * uLength;
+  transformed.z += (sin(wave.z) * radial + cos(wave.z) * tangent) * uLength;
+  transformed.y += (max(0.0, reach) * w * w * 0.095 * motion + tip * tip * curl * 0.11 + uReaction * w * 0.09) * uLength;
 } else if (part == 4.0) {
-  transformed.y += max(0.0, sin(ph)) * w * uLength * 0.07 * motion;
-  transformed.x += cos(ph) * w * uLength * 0.035 * motion;
+  // Opposite tetrapods share a half-cycle offset; stance feet stay planted.
+  float swing = max(0.0, sin(ph));
+  transformed.y += swing * swing * w * w * uLength * 0.13 * motion;
+  transformed.z += cos(ph) * w * w * uLength * 0.075 * motion;
 } else if (part == 5.0) {
-  transformed.y += wave.z * (0.5 + 0.5 * sin(uPhase * 0.65)) * uLength * 0.035;
+  float lift = (0.5 + 0.5 * sin(uTime * 1.3 + wave.w * 2.2)) * 0.055;
+  float opening = pow(max(0.0, sin(uTime * 0.9 + wave.w * 2.7)), 5.0);
+  transformed.y += (lift + wave.z * opening * 0.05) * uLength;
+  transformed.x += sin(uTime * 1.1 + wave.w * 2.0) * uLength * 0.025;
 } else if (part == 6.0) {
-  transformed.y += sin(uPhase - w * 4.0 - vAnimalPos.x * 2.0) * w * w * uLength * 0.11;
+  // Spanwise travelling wave, with a delayed rear edge; centre stays stable.
+  transformed.y += (sin(uPhase - w * 4.5 - vAnimalPos.x * 3.5) * 0.10 + sin(uPhase * 0.7 - w * 6.0) * 0.018) * w * w * uLength;
 } else if (part == 7.0) {
-  float pulse = sin(uPhase);
-  transformed.xz *= 1.0 + pulse * 0.12 * w;
-  transformed.y += pulse * uLength * 0.025 * (1.0 - w * 0.6);
+  // Fast power stroke (first fifth), long elastic relaxation. Each species
+  // supplies its own rhythm through uPhase and has its own bell strength.
+  float cycle = fract(uPhase / 6.28318530718);
+  float squeeze = cycle < uContract ? smoothstep(0.0, uContract, cycle) : 1.0 - smoothstep(uContract, 1.0, cycle);
+  float strength = uAnimal == 7.0 ? 0.15 : uAnimal == 8.0 ? 0.24 : uAnimal == 9.0 ? 0.28 : 0.22;
+  transformed.xz *= 1.0 - squeeze * strength * (0.35 + w * 0.65);
+  transformed.y += squeeze * uLength * (0.035 + w * 0.075);
 } else if (part == 8.0) {
-  transformed.x += sin(ph - w * 4.0) * w * uLength * 0.045;
-  transformed.z += cos(ph - w * 3.5) * w * uLength * 0.04;
-  transformed.y += sin(uPhase - 0.6) * w * uLength * 0.035;
+  // Delay increases down the tentacle; broad oral arms trail as one ribbon.
+  float lag = uPhase - w * 2.8;
+  float cycle = fract(lag / 6.28318530718);
+  float squeeze = cycle < uContract ? smoothstep(0.0, uContract, cycle) : 1.0 - smoothstep(uContract, 1.0, cycle);
+  float bellCycle = fract(uPhase / 6.28318530718);
+  float bellSqueeze = bellCycle < uContract ? smoothstep(0.0, uContract, bellCycle) : 1.0 - smoothstep(uContract, 1.0, bellCycle);
+  float strength = uAnimal == 7.0 ? 0.15 : uAnimal == 8.0 ? 0.24 : uAnimal == 9.0 ? 0.28 : 0.22;
+  float attached = (1.0 - w) * (1.0 - w);
+  transformed.xz *= 1.0 - bellSqueeze * strength * attached;
+  transformed.y += bellSqueeze * uLength * 0.11 * attached;
+  transformed.x += (sin(lag + wave.z) * 0.035 + sin(uTime * 0.65 + wave.z) * 0.022 - uTurn * w * 0.055) * w * uLength;
+  transformed.z += cos(lag * 0.85 + wave.z) * w * w * uLength * 0.055;
+  transformed.y -= squeeze * w * uLength * 0.065;
+} else if (part == 9.0) {
+  // Independent claw arms and palms use time, so pauses retain expression.
+  transformed.y += (0.5 + 0.5 * sin(uTime * 1.3 + wave.z * 2.2)) * w * uLength * 0.055;
+  transformed.x += sin(uTime * 1.1 + wave.z * 2.0) * w * uLength * 0.025;
+} else if (part == 10.0) {
+  // Morays pump water with their jaws even when resting at a den entrance.
+  float gape = pow(0.5 + 0.5 * sin(uTime * 0.9), 4.0);
+  float jaw = clamp((vAnimalPos.x + 0.08) / 0.15, 0.0, 1.0);
+  transformed.y -= gape * jaw * uLength * 0.036;
+} else if (part == 11.0) {
+  transformed.z += (-uTurn * w * w * 0.19 + sin(uPhase - w * 5.0) * w * w * 0.025) * uLength;
+  transformed.y += sin(uPhase - w * 3.5) * w * w * uLength * 0.018;
+}
+if (uGroundEnabled > 0.5) {
+  if (part == 3.0 || part == 4.0) transformed.y += uFeet[int(clamp(wave.w, 0.0, 7.0))] * w * w * w;
+  vec3 worldGround = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  vec2 dunePos = (worldGround.xz - uSand.xy) / vec2(uSand.z, uSand.z * 0.55);
+  float duneSurface = uSand.w - 0.01 + uSand.z * 0.09 * sqrt(max(0.0, 1.0 - dot(dunePos, dunePos)));
+  float sand = max(uSand.w, duneSurface);
+  transformed += vec3(modelMatrix[0][1], modelMatrix[1][1], modelMatrix[2][1]) * max(0.0, sand + 0.001 - worldGround.y);
 }`);
     shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
 uniform float uAnimal;
 uniform float uHintGlow;
 uniform float uColour;
 uniform float uTime;
+uniform float uReaction;
 varying vec3 vAnimalPos;
 varying float vAnimalPart;`).replace("#include <color_fragment>", `#include <color_fragment>
 vec3 ap = vAnimalPos;
@@ -112,6 +187,7 @@ if (uAnimal == 0.0 && part == 1.0) {
 } else if (uAnimal == 4.0) {
   // Warm orange colour changes preserve the eyes and pale suckers.
   diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 0.77, 0.88), (0.5 + 0.5 * sin(uColour)) * painted * 0.42);
+  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.98, 0.86, 0.60), painted * uReaction * 0.8);
 } else if (uAnimal == 6.0 && part == 6.0) {
   vec2 cells = ap.xz * 12.0;
   cells.x += sin(floor(cells.y) * 2.8) * 0.45;
@@ -138,6 +214,6 @@ float hintRim = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 3.0);
 outgoingLight += vec3(1.0, 0.65, 0.08) * hintRim * uHintGlow;
 #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => "expansion-animals-v2-hint-rim";
+  m.customProgramCacheKey = () => "expansion-animals-v3-articulated-motion";
   return m;
 }

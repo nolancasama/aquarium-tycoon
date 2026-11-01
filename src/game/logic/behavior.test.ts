@@ -3,9 +3,10 @@ import { SPECIES, SPECIES_ORDER } from "../data/fish";
 import { SAND_H, TANKS } from "../data/tanks";
 import type { SpeciesId, TankType } from "../types";
 import { makeRng } from "./rng";
-import { stepBehavior, type BehaviorEnv, type BehaviorState } from "./behavior";
+import { reactToAnimalTap, stepBehavior, type BehaviorEnv, type BehaviorState } from "./behavior";
 import { floorAt, frontAt, newSwimState, stepSwim, tankFishBounds, type SwimState } from "./swim";
 import { animalGeometry } from "../../scene/models/animals";
+import { jellyPulse, jellyPulseStyle } from "./motion";
 
 const expansion: SpeciesId[] = ["angelfish", "goby", "chromis", "eel", "octopus", "crab", "stingray", "moonjelly", "spottedjelly", "seanettle"];
 function setup(id: SpeciesId, type: TankType, seed: number, decoration = true) {
@@ -75,9 +76,9 @@ describe("species movement", () => {
     });
   }
 
-  for (const id of SPECIES_ORDER.filter(id => SPECIES[id].movement === "swim" || id === "jellyfish")) {
-    it(`${id} preserves the exact existing stepSwim trajectory and random draws`, () => {
-      const type = id === "jellyfish" ? "tall" : SPECIES[id].habitat[0];
+  for (const id of SPECIES_ORDER.filter(id => SPECIES[id].movement === "swim")) {
+    it(`${id} delegates to repeatable stepSwim motion without additional random draws`, () => {
+      const type = SPECIES[id].habitat[0];
       for (const seed of [7, 23, 77]) {
         const a = setup(id, type, seed), b = setup(id, type, seed);
         for (let i = 0; i < 2400; i++) {
@@ -101,7 +102,11 @@ describe("species movement", () => {
       let mouthX = 0, mouthY = 0, mouthZ = 0;
       for (let i = 0; i < 4000; i++) {
         stepBehavior(s, state, def, env, 0.05, rand);
-        if (i === 0) { mouthX = s.x; mouthY = s.y; mouthZ = s.z; mouths.push(s.x); }
+        if (i === 0) { mouthX = s.tx; mouthY = s.ty; mouthZ = s.tz; mouths.push(s.x); }
+        if (state.mode === "rest") {
+          expect(s.z).toBeGreaterThanOrEqual(mouthZ - 1e-8);
+          expect(s.z).toBeLessThanOrEqual(mouthZ + 0.025 + 1e-8);
+        }
         if (previous === "rest" && state.mode === "cruise") departures++;
         if (previous === "return" && state.mode === "rest") {
           returns++;
@@ -118,6 +123,22 @@ describe("species movement", () => {
   });
 
   for (const id of ["jellyfish", "moonjelly", "spottedjelly", "seanettle"] as const) {
+    it(`${id} contracts faster than it relaxes and applies thrust on the contraction`, () => {
+      const style = jellyPulseStyle(id), turn = Math.PI * 2;
+      expect(style.contract).toBeLessThan(0.3);
+      expect(jellyPulse(id, 0)).toBeCloseTo(0);
+      expect(jellyPulse(id, style.contract * turn)).toBeCloseTo(1);
+      expect(jellyPulse(id, turn)).toBeCloseTo(0);
+      expect(jellyPulse(id, style.contract * 0.5 * turn)).toBeCloseTo(0.5);
+      const { def, env, rand, s, state } = setup(id, "tall", 38, false);
+      s.y = (env.bounds.min.y + env.bounds.max.y) / 2;
+      s.vy = 0; state.pulsePhase = style.contract * 0.5 * turn;
+      stepBehavior(s, state, def, env, 0.01, rand);
+      expect(s.vy).toBeGreaterThan(0);
+      s.vy = 0; state.pulsePhase = (style.contract + (1 - style.contract) * 0.5) * turn;
+      stepBehavior(s, state, def, env, 0.01, rand);
+      expect(s.vy).toBeLessThan(0);
+    });
     it(`${id} pulses, sinks between beats and circulates with the jelly column current`, () => {
       const { def, env, rand, s, state } = setup(id, "cylinder", 38, false);
       s.x = 0; s.z = 0; s.vx = 0; s.vz = 0;
@@ -162,5 +183,34 @@ describe("species movement", () => {
     }
     expect(climbed).toBe(true);
     expect(state.colourPhase).toBeGreaterThan(0);
+  });
+
+  it("a tap starts one short burst without restarting it every frame", () => {
+    const { s, state } = setup("octopus", "cave", 38, false);
+    reactToAnimalTap(s, state, -10, 0);
+    expect(s.burst).toBe(0);
+    reactToAnimalTap(s, state, 3, 3.02);
+    expect(s.burst).toBe(0.55);
+    expect(s.wait).toBe(0);
+    s.burst = 0.2;
+    reactToAnimalTap(s, state, 3, 3.04);
+    expect(s.burst).toBe(0.2);
+    reactToAnimalTap(s, state, 4, 4.02);
+    expect(s.burst).toBe(0.55);
+  });
+
+  it("octopuses investigate actual den lips as well as open sand", () => {
+    const { def, env, rand, s, state } = setup("octopus", "cave", 43, false);
+    let denVisits = 0, sandVisits = 0;
+    for (let i = 0; i < 6000; i++) {
+      const previous = state.mode;
+      stepBehavior(s, state, def, env, 0.05, rand);
+      if (previous === "rest" && state.mode !== "rest") {
+        if (env.tank.dens?.some(den => Math.abs(s.tx - den.x) < 0.01 && Math.abs(s.tz - env.bounds.min.z) < 0.01)) denVisits++;
+        else sandVisits++;
+      }
+    }
+    expect(denVisits).toBeGreaterThan(0);
+    expect(sandVisits).toBeGreaterThan(0);
   });
 });

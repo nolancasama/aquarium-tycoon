@@ -982,3 +982,59 @@ these changes and decisions.
   unlock everything, open halls through the real open rules (with their
   tanks), coins, finish tutorial, fill care, crown. Not hidden from students
   by decision of the teacher.
+
+## 2026-11-01 — Animal grounding and procedural motion
+
+- **Contact follows visible sand.** The old radius-plus-3-cm model translation
+  assumed a flat floor and buried the crab on dunes. Ground models now retain
+  their real geometry. A cached lower hull and each terminal leg/arm ring sample
+  `sandSurfaceY` (subtracting stand height once). The body follows a filtered,
+  limited slope; eight independent distal corrections keep stance feet on the
+  dune while swing feet rise. Re-sampling corrected toes handles the horizontal
+  shift caused by body tilt. A final vertex projection prevents penetration
+  between support samples. Body clearance and the glass inset derive from the
+  actual geometry plus its shader displacement envelope. Goby and octopus use
+  the same support path. Existing elevated rock/back-face behavior is retained.
+  Rejected: another global crab offset, flat-floor tests, lifting every foot to
+  the highest point under the animal, and a rigid body that follows every toe.
+- **Merged animation remains the budget.** Crab leg phase follows travelled
+  distance, with opposite tetrapods, independent raised claws and timed pincers.
+  Octopus arms have continuous base/middle/tip bending, reach/pull and tip curl;
+  slow warm colour changes preserve eyes and suckers. Existing tap timestamps
+  trigger one short jet, arm gathering and a brief pale flash. Crawling explores
+  real den lips and rock edges. No new input route or saved state is needed.
+- **Morays and rays.** Eels have a continuous travelling body wave and occasional
+  jaw opening, peek from their assigned den and return after exploration. Resting
+  heads face along the rock face, trailing toward the tank centre. The renderer
+  confines the complete waving body to accessible water in front of backRock,
+  rather than letting a head-only bound hide the tail in solid rock. The full
+  body envelope also begins climbing before it reaches a freestanding rock,
+  so a trailing tail cannot cross a stone missed by the head's column test. Rays use a
+  spanwise fin wave with delayed rear edges, smoothed turn banking and a tail
+  that bends behind changes of direction. Rejected: rigid airplane flapping.
+- **Legacy animals.** Seahorses stay upright with a masked dorsal flutter and
+  gradual lower-tail curl. Other fish use species-specific swim/glide/hover
+  rhythms, speed-sensitive tail strokes, body bend and bounded heading changes.
+  Food interrupts hovering; the existing tap event adds a short startle burst.
+- **Jellyfish.** All four species use a fast contraction and slow recovery;
+  contraction fractions and pulse strengths are shared with movement logic.
+  Thrust acts during the power stroke, while tentacle/oral-arm delay grows toward
+  the tips and tank current carries the animal. The original purple jelly keeps
+  its existing face/model, with subdivided tentacles (+480 triangles, zero added
+  draws). Rejected: whole-animal scale pulsing and rigid tentacle rods.
+- **Cost and verification.** No skeletons or extra animal draws; geometry and
+  shader programs remain shared, with per-animal scalar uniforms and eight limb
+  corrections. Terrain/support data are cached; frame work reuses vectors and
+  arrays. Geometry regression tests cover every crab, octopus and goby habitat,
+  dune centres/lips, headings, gait phases, glass and the moray body envelope.
+  Gameplay-camera SwiftShader evidence and matching all-animal fixture metrics
+  are in `.tmp/motion-review/` via `scripts/expansion-review.mjs`. The normal loop
+  budget is unchanged; the all-animal fixture is a separate, heavier scene.
+  Matching fixture before → after: Hall 1 66 → 66 draws / 53,545 → 53,545
+  triangles; Ocean Hall 79 → 79 / 42,005 → 42,005; Gallery 70 → 69 /
+  34,260 → 30,236 (rendered counts depend on visibility). No loop budget was
+  raised and the loop e2e was not rerun. All 388 unit tests, typecheck and build
+  pass; build retains the existing large-bundle warning. Twenty-nine gameplay
+  frames were inspected, including three phases per tank and a real octopus tap.
+  Real Chromebook GPU performance and Claude's final aesthetic judgment remain
+  outside this SwiftShader evidence.

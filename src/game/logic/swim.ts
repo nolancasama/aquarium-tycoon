@@ -1,6 +1,7 @@
 import type { SpeciesDef } from "../data/fish";
 import type { TankDef } from "../data/tanks";
 import type { Vec3 } from "../types";
+import { swimRhythm } from "./motion";
 
 /**
  * Fish steering in water-local coordinates: x across the tank (−w/2..w/2),
@@ -69,6 +70,10 @@ export interface SwimState {
   wait: number;
   /** Short speed burst left (s). */
   burst: number;
+  /** Runtime-only swim / glide cycle; never serialized with the aquarium. */
+  rhythmPhase?: number;
+  /** Smoothed propulsion, shared with the renderer's tail-beat amplitude. */
+  effort?: number;
 }
 
 export interface SwimEnv {
@@ -189,6 +194,14 @@ export function newSwimState(def: SpeciesDef, env: SwimEnv, rand: () => number):
 /** Advance one fish by dt seconds (mutates `s`). */
 export function stepSwim(s: SwimState, def: SpeciesDef, env: SwimEnv, dt: number, rand: () => number): void {
   const step = Math.min(dt, 0.1);
+  const rhythm = swimRhythm(def.id);
+  const cycle = ((s.rhythmPhase ?? Math.abs(s.x * 1.7 + s.z * 2.1 + s.wait * 0.13)) + step / rhythm[0]) % 1;
+  s.rhythmPhase = cycle;
+  // Ease propulsion in and out so hovering fish retain momentum through the
+  // recovery. Food and a tap burst interrupt the resting part immediately.
+  const active = cycle < rhythm[1] ? Math.sin(cycle / rhythm[1] * Math.PI) : 0;
+  const effort = env.attract || s.burst > 0 ? 1 : rhythm[2] + (1.3 - rhythm[2]) * active;
+  s.effort = (s.effort ?? 1) + (effort - (s.effort ?? 1)) * Math.min(1, step * 4);
   s.wait -= step;
   s.burst = Math.max(0, s.burst - step);
   let tx = s.tx;
@@ -211,7 +224,7 @@ export function stepSwim(s: SwimState, def: SpeciesDef, env: SwimEnv, dt: number
   const dist = Math.hypot(dx, dy, dz) || 1;
   // Ease off when arriving at an attraction point (a pellet) rather than overshooting.
   const arrive = env.attract ? Math.min(1, dist / 0.15) : 1;
-  const speed = def.speed * env.speedMul * (1 + (s.burst > 0 ? 1.4 : 0)) * arrive;
+  const speed = def.speed * env.speedMul * s.effort * (1 + (s.burst > 0 ? 1.4 : 0)) * arrive;
   let wx = (dx / dist) * speed;
   let wy = (dy / dist) * speed * 0.6;
   let wz = (dz / dist) * speed;
@@ -230,10 +243,22 @@ export function stepSwim(s: SwimState, def: SpeciesDef, env: SwimEnv, dt: number
       wz += (oz / d) * push;
     }
   }
+  // Rotate propulsion toward a new target instead of reversing a swimming
+  // animal's velocity across its body when a wander/food target changes.
+  const horizontal = Math.hypot(s.vx, s.vz), wanted = Math.hypot(wx, wz);
   const k = Math.min(1, def.turn * step);
-  s.vx += (wx - s.vx) * k;
+  if (horizontal > def.speed * 0.12 && wanted > 0.001) {
+    const current = Math.atan2(s.vz, s.vx);
+    const delta = Math.atan2(Math.sin(Math.atan2(wz, wx) - current), Math.cos(Math.atan2(wz, wx) - current));
+    const heading = current + clamp(delta, -def.turn * step, def.turn * step);
+    const magnitude = horizontal + (wanted - horizontal) * k;
+    s.vx = Math.cos(heading) * magnitude;
+    s.vz = Math.sin(heading) * magnitude;
+  } else {
+    s.vx += (wx - s.vx) * k;
+    s.vz += (wz - s.vz) * k;
+  }
   s.vy += (wy - s.vy) * k;
-  s.vz += (wz - s.vz) * k;
   s.x += s.vx * step;
   s.y += s.vy * step;
   s.z += s.vz * step;

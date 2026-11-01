@@ -1,12 +1,12 @@
 // Deterministic material review. Start npx vite --port 5320 first.
-// Usage: node scripts/visual.mjs before|after [baseUrl] [seed]
+// Usage: node scripts/visual.mjs before|after [baseUrl] [seed] [full|perf]
 import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const [label = "before", base = "http://localhost:5320/", seed = "7"] = process.argv.slice(2);
+const [label = "before", base = "http://localhost:5320/", seed = "7", review = "full"] = process.argv.slice(2);
 if (!/^[a-zA-Z0-9_-]+$/.test(label)) throw new Error("Use a simple label (before/after).");
 const out = path.join(root, ".tmp", "visual", label);
 fs.mkdirSync(out, { recursive: true });
@@ -72,11 +72,22 @@ try {
   await page.getByTestId("btn-continue").dispatchEvent("click");
   await step(800);
   await call("visitors", false);
-  const state = await call("state");
+  let state = await call("state");
+  // Level-8 continuations now introduce the expansion before ordinary play.
+  if (state.line?.en === "New tanks and animals!") {
+    await page.keyboard.press("Space");
+    await step(300);
+    state = await call("state");
+  }
   if (state.tanks.length !== 5 || state.mode !== "play") throw new Error("Phase-2 fixture failed to load");
   await view(null, 0);
   await shot("01-original-hall");
   perf.halls.original = (await call("state")).perf;
+  if (review === "perf") {
+    await view(null, 1);
+    await shot("09-ocean-hall");
+    perf.halls.ocean = (await call("state")).perf;
+  } else {
   await view(tanks[0].id);
   await shot("02-small-clean-plant-shell-rock");
   await view(tanks[1].id);
@@ -129,6 +140,7 @@ try {
   }
   if (!framed) throw new Error("Could not frame the staged trio");
   await shot("13-staged-ocean-animal-trio");
+  }
   fs.writeFileSync(path.join(out, "perf.json"), JSON.stringify(perf, null, 2) + "\n");
   fs.writeFileSync(path.join(out, "errors.json"), JSON.stringify(errors, null, 2) + "\n");
   if (errors.length) throw new Error(errors.join("\n"));

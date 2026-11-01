@@ -1,6 +1,7 @@
 import type { SpeciesDef } from "../data/fish";
 import type { TankDef } from "../data/tanks";
 import { clampToBounds, floorAt, frontAt, pickTarget, stepSwim, type SwimEnv, type SwimState } from "./swim";
+import { jellyPulseStyle } from "./motion";
 
 /** Followers only; the caller's SwimState is always the school's leader. */
 export interface SchoolMember extends SwimState { ox: number; oy: number; oz: number }
@@ -13,6 +14,8 @@ export interface BehaviorState {
   pulsePhase?: number;
   /** Signed turn lean, in radians, used by the ray renderer. */
   bank?: number;
+  /** Last tap reacted to; presentation runtime only. */
+  reactedTapT0?: number;
 }
 export interface BehaviorEnv extends SwimEnv {
   tank: TankDef;
@@ -24,6 +27,14 @@ export interface BehaviorEnv extends SwimEnv {
 const TAU = Math.PI * 2;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const duration = (def: SpeciesDef, rand: () => number) => def.wander[0] + rand() * (def.wander[1] - def.wander[0]);
+
+/** Consume the existing tap timestamp once, without changing input or saves. */
+export function reactToAnimalTap(s: SwimState, state: BehaviorState, tapT0: number, now: number): void {
+  if (tapT0 < 0 || tapT0 === state.reactedTapT0 || now - tapT0 > 0.3 || now < tapT0) return;
+  state.reactedTapT0 = tapT0;
+  s.burst = Math.max(s.burst, 0.55);
+  s.wait = 0;
+}
 
 /** Project a target without allocating a temporary point or changing velocity. */
 function project(s: SwimState, env: BehaviorEnv, radius: number): void {
@@ -85,7 +96,7 @@ function stepGround(s: SwimState, state: BehaviorState, def: SpeciesDef, env: Be
   }
   if (state.mode === "move") {
     // Perchers make a quick short dart; walkers retain a steady sideways pace.
-    const speed = env.show ? Math.max(0.5, def.speed * env.speedMul) : def.speed * env.speedMul * (def.movement === "perch" ? 1.8 : 1);
+    const speed = env.show ? Math.max(0.5, def.speed * env.speedMul) : def.speed * env.speedMul * (def.movement === "perch" ? 1.8 : 1) * (s.burst > 0 ? 1.8 : 1);
     steer(s, s.tx, s.y, s.tz, speed, def.turn * 2, dt);
     if (!env.attract && Math.hypot(s.tx - s.x, s.tz - s.z) < 0.025) {
       state.mode = "rest"; state.modeTimer = duration(def, rand); stop(s);
@@ -141,7 +152,9 @@ function stepSchool(s: SwimState, state: BehaviorState, def: SpeciesDef, env: Be
 }
 
 function stepCrawl(s: SwimState, state: BehaviorState, def: SpeciesDef, env: BehaviorEnv, dt: number, rand: () => number): void {
-  const speed = env.show ? Math.max(0.5, def.speed * env.speedMul) : def.speed * env.speedMul;
+  // The arm reach is followed by a body pull, rather than a uniform slide.
+  const pull = env.attract || s.burst > 0 ? 1 : 0.55 + 0.65 * Math.max(0, Math.sin((env.phase ?? 0) * 2));
+  const speed = env.show ? Math.max(0.5, def.speed * env.speedMul) : def.speed * env.speedMul * pull * (s.burst > 0 ? 2.8 : 1);
   state.colourPhase = ((state.colourPhase ?? env.phase ?? 0) + dt * 0.35) % TAU;
   if (state.mode === undefined) { ground(s, def, env); state.mode = "rest"; state.modeTimer = duration(def, rand); }
   if (env.attract) {
@@ -151,7 +164,20 @@ function stepCrawl(s: SwimState, state: BehaviorState, def: SpeciesDef, env: Beh
     stop(s); state.modeTimer = (state.modeTimer ?? 0) - dt;
     if (state.modeTimer <= 0 || s.burst > 0) {
       groundTarget(s, def, env, rand, false);
-      if (rand() < 0.65) {
+      if (env.tank.dens?.length && rand() < 0.55) {
+        // Investigate a real den's lip, on the accessible side of rockwork.
+        const den = env.tank.dens[Math.floor(rand() * env.tank.dens.length)];
+        s.tx = den.x; s.tz = env.bounds.min.z;
+        s.ty = den.y + def.radius;
+        project(s, env, def.radius);
+      } else if (env.columns.length && rand() < 0.5) {
+        const rock = env.columns[Math.floor(rand() * env.columns.length)];
+        const angle = rand() * TAU;
+        s.tx = rock.x + Math.cos(angle) * (rock.r + def.radius * 0.7);
+        s.tz = rock.z + Math.sin(angle) * (rock.r + def.radius * 0.7);
+        s.ty = env.bounds.min.y;
+        project(s, env, def.radius);
+      } else if (rand() < 0.65) {
         s.tz = env.bounds.min.z;
         s.ty = env.bounds.min.y + (env.bounds.max.y - env.bounds.min.y) * (0.2 + rand() * 0.5);
         project(s, env, def.radius);
@@ -183,8 +209,8 @@ function stepCrawl(s: SwimState, state: BehaviorState, def: SpeciesDef, env: Beh
   clampToBounds(s, env.bounds, env.columns, def.radius);
 }
 
-/** Den mouths lie inside the back rock. The pickable head stays in the
- * accessible bounds; its long rendered body extends back into that mouth. */
+/** Head targets on the accessible side of assigned den mouths. The renderer
+ * additionally keeps the complete deformed body outside the solid rock. */
 function denTarget(s: SwimState, state: BehaviorState, def: SpeciesDef, env: BehaviorEnv): void {
   const dens = env.tank.dens;
   const index = state.denIndex ?? 0;
@@ -207,7 +233,11 @@ function stepDen(s: SwimState, state: BehaviorState, def: SpeciesDef, env: Behav
     state.mode = "cruise"; state.modeTimer = 3;
     steer(s, env.attract.x, env.attract.y, env.attract.z, env.show ? Math.max(0.5, def.speed * env.speedMul) : def.speed * env.speedMul * 1.5, def.turn * 2, dt);
   } else if (state.mode === "rest") {
-    denTarget(s, state, def, env); s.x = s.tx; s.y = s.ty; s.z = s.tz; stop(s);
+    denTarget(s, state, def, env);
+    // A short, smooth peek from the lip makes a resting moray breathe and
+    // explore. It never moves backwards through the rock plane.
+    const peek = 0.025 * Math.sin((env.phase ?? (15 - (state.modeTimer ?? 15)) * 0.8) * 0.45) ** 2;
+    s.x = s.tx; s.y = s.ty; s.z = Math.min(frontAt(env.bounds, s.x), s.tz + peek); stop(s);
     state.modeTimer = (state.modeTimer ?? 0) - dt;
     if (state.modeTimer <= 0 || s.burst > 0) {
       state.mode = "cruise"; state.modeTimer = 4 + rand() * 4;
@@ -233,25 +263,27 @@ function stepDrift(s: SwimState, state: BehaviorState, def: SpeciesDef, env: Beh
   const previous = state.pulsePhase ?? env.phase ?? 0;
   const phase = previous + dt * def.tailHz * TAU;
   state.pulsePhase = phase % TAU;
+  const style = jellyPulseStyle(def.id);
   if (env.attract) {
     steer(s, env.attract.x, env.attract.y, env.attract.z, env.show ? Math.max(0.4, def.speed * env.speedMul) : Math.max(0.09, def.speed * 2) * env.speedMul, def.turn * 4, dt);
   } else {
     const r = Math.hypot(s.x, s.z);
-    const ring = (env.bounds.round ?? (env.bounds.max.x - env.bounds.min.x) / 2) * 0.62;
+    const ring = (env.bounds.round ?? Math.min(env.bounds.max.x - env.bounds.min.x, env.bounds.max.z - env.bounds.min.z) / 2) * 0.62;
     // A weak radial component establishes an orbit even for a jelly starting
     // directly on the axis; tangential flow then carries it around the tank.
     const nx = r > 0.001 ? s.x / r : 1, nz = r > 0.001 ? s.z / r : 0;
     const radial = (ring - r) * 0.25;
-    const current = (env.tank.current ?? 0) * env.speedMul;
+    const current = (env.tank.current ?? 0.012) * env.speedMul;
     const k = Math.min(1, dt * 2);
     s.vx += (-nz * current + nx * radial - s.vx) * k;
     s.vz += (nx * current + nz * radial - s.vz) * k;
     const low = env.bounds.min.y + (env.bounds.max.y - env.bounds.min.y) * def.depth[0];
     const high = env.bounds.min.y + (env.bounds.max.y - env.bounds.min.y) * def.depth[1];
-    // A brief contraction gives an upward kick; drag and gravity dominate
-    // between pulses. A gentle depth restoring force keeps it off the glass.
-    if (phase >= TAU) s.vy += 0.045 / def.tailHz;
-    s.vy += (-0.04 - s.vy * 1.1 + (s.y < low ? (low - s.y) * 0.7 : s.y > high ? (high - s.y) * 0.7 : 0)) * dt;
+    // Thrust coincides with the fast bell contraction, then drag lets the
+    // animal sink while the bell slowly refills. No discrete velocity jump.
+    const cycle = state.pulsePhase / TAU;
+    const thrust = cycle < style.contract ? style.power * Math.sin(cycle / style.contract * Math.PI) : 0;
+    s.vy += (thrust * env.speedMul - 0.06 - s.vy * style.drag + (s.y < low ? (low - s.y) * 0.7 : s.y > high ? (high - s.y) * 0.7 : 0)) * dt;
     s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
   }
   s.burst = Math.max(0, s.burst - dt);
@@ -260,8 +292,7 @@ function stepDrift(s: SwimState, state: BehaviorState, def: SpeciesDef, env: Beh
 
 /** Pure caller-owned movement: no clock, global state, or per-frame objects. */
 export function stepBehavior(s: SwimState, state: BehaviorState, def: SpeciesDef, env: BehaviorEnv, dt: number, rand: () => number): void {
-  // Preserve both numerical results and random draws for all existing motion.
-  if (def.movement === "swim" || (def.movement === "drift" && !env.tank.current)) {
+  if (def.movement === "swim") {
     stepSwim(s, def, env, dt, rand); return;
   }
   const step = Math.min(dt, 0.1);

@@ -11,8 +11,10 @@ import { fishMaterial } from "./materials";
 import { animalGeometry } from "./models/animals";
 import { animalMaterial } from "./animalMaterials";
 import { COUNT_BEAT, COUNT_LABEL_SIZE, countLabelPosition } from "../game/logic/counting";
-import { TANKS } from "../game/data/tanks";
+import { SAND_H, STAND_H, TANKS } from "../game/data/tanks";
 import { tankOrigin } from "../game/world";
+import { sandDune } from "../game/logic/tankLayout";
+import { containEel, createGroundPose, groundAnimal } from "./grounding";
 
 /** Every animal's mesh and its per-frame pose (positions come from rt.fish, set by the sim). */
 
@@ -138,6 +140,10 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
   const mat = useMemo(() => animalMaterial(species), [species]);
   useEffect(() => () => mat.dispose(), [mat]);
   const glow = useRef(0);
+  const support = useMemo(createGroundPose, [species]);
+  const travel = useRef({ phase: 0, x: NaN, z: NaN });
+  const turn = useRef(0);
+  const terrain = useRef({ tank: "", slot: "" });
   useFrame((_, dt) => {
     const f = rt.fish.get(id);
     const mesh = ref.current;
@@ -146,21 +152,51 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
     const ht = t - f.happyT0;
     const tt = t - f.tapT0;
     const et = t - f.eatT0;
-    const ground = def.body === "crab" || def.body === "octopus" || (def.movement === "perch" && f.mode === "rest");
+    const ground = def.body === "crab" || def.body === "octopus" || def.movement === "perch";
     const happy = ht >= 0 && ht < 1.2 ? Math.sin(ht / 1.2 * Math.PI) : 0;
     const tap = tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0;
     const eat = et >= 0 && et < 0.35 ? Math.sin(et / 0.35 * Math.PI) : 0;
     const motion = Math.min(1.5, Math.hypot(f.s.vx, f.s.vy, f.s.vz) / def.speed);
+    const tank = tankFor(tankId);
+    if (!tank) return;
+    const tankDef = TANKS[tank.type];
+    if (Number.isFinite(travel.current.x)) {
+      const distance = Math.hypot(f.s.x - travel.current.x, f.s.z - travel.current.z);
+      travel.current.phase += Math.min(distance, 0.08) / (def.length * (species === "crab" ? 0.28 : 0.45)) * Math.PI * 2;
+    }
+    travel.current.x = f.s.x; travel.current.z = f.s.z;
+    const phase = species === "crab" || species === "octopus" ? travel.current.phase : def.movement === "drift" ? f.pulsePhase ?? f.phase : f.phase;
+    const reaction = Math.max(tap, eat * 0.5);
     mesh.position.set(f.s.x, f.s.y + (ground ? 0 : happy * 0.035 + tap * 0.025), f.s.z);
     // Ground animals acknowledge taps by rocking their shell/mantle above planted feet.
     const roll = ground ? 0 : f.bank + happy * 0.18;
     const pitch = ground ? (happy + tap) * 0.08 : f.pitch * 0.7;
     mesh.rotation.set(roll, f.yaw, pitch, "YZX");
-    mesh.scale.setScalar(1 + eat * 0.07);
-    mat.userData.uPhase.value = def.movement === "drift" ? f.pulsePhase ?? f.phase : f.phase;
-    mat.userData.uMotion.value = motion + happy * 0.5 + tap * 0.5;
+    mesh.scale.setScalar(ground ? 1 : 1 + eat * 0.07);
+    mat.userData.uGroundEnabled.value = ground ? 1 : 0;
+    if (ground) {
+      const elevated = Math.max(0, f.s.y - (SAND_H + def.radius + 0.03));
+      groundAnimal(support, species, tankDef, f.s.x, f.s.z, f.yaw, phase, motion, reaction, t, dt, elevated);
+      mesh.position.set(support.x, support.y, support.z);
+      mesh.rotation.copy(support.euler);
+      mat.userData.uFeet.value.set(support.feet);
+      if (terrain.current.tank !== tank.type || terrain.current.slot !== tank.slot) {
+        const dune = sandDune(tankDef), origin = tankOrigin(tank.slot);
+        mat.userData.uSand.value.set(origin.x + dune.x, origin.z + dune.z, dune.radius, STAND_H + SAND_H);
+        terrain.current.tank = tank.type; terrain.current.slot = tank.slot;
+      }
+    } else if (species === "eel") {
+      containEel(support.point, tankDef, f.s.x, f.s.y, f.s.z, f.yaw);
+      mesh.position.copy(support.point);
+      mesh.rotation.set(0, f.yaw, 0, "YZX");
+      mesh.scale.setScalar(1);
+    }
+    mat.userData.uPhase.value = phase;
+    mat.userData.uMotion.value = motion;
     mat.userData.uColour.value = f.colourPhase ?? 0;
-    const tank = tankFor(tankId);
+    mat.userData.uReaction.value = reaction;
+    turn.current += (THREE.MathUtils.clamp(f.bank * 2.5, -1, 1) - turn.current) * Math.min(1, dt * 3);
+    mat.userData.uTurn.value = turn.current;
     glow.current += (glowFor(id, tank, t) - glow.current) * Math.min(1, dt * 10);
     mat.userData.uHintGlow.value = hintRim(id);
     mat.emissive.setRGB(glow.current * 0.6, glow.current * 0.5, glow.current * 0.12);
@@ -198,6 +234,8 @@ function SchoolMesh({ id, species, tankId }: { id: string; species: SpeciesId; t
     mesh.instanceMatrix.needsUpdate = true;
     mat.userData.uPhase.value = f.phase;
     mat.userData.uMotion.value = 1 + response;
+    mat.userData.uReaction.value = response;
+    mat.userData.uTurn.value = THREE.MathUtils.clamp(f.bank * 2.5, -1, 1);
     const tank = tankFor(tankId);
     glow.current += (glowFor(id, tank, rt.time) - glow.current) * Math.min(1, dt * 10);
     mat.userData.uHintGlow.value = hintRim(id);
@@ -248,6 +286,10 @@ function BendingFish({ id, species, tankId }: { id: string; species: SpeciesId; 
     m.rotation.set(roll, f.yaw, pitch, "YZX");
     m.scale.setScalar(scale);
     mat.userData.uPhase.value = f.phase;
+    const reaction = Math.max(tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0, et >= 0 && et < 0.35 ? Math.sin(et / 0.35 * Math.PI) : 0);
+    mat.userData.uMotion.value = Math.min(1.8, Math.hypot(f.s.vx, f.s.vy, f.s.vz) / def.speed);
+    mat.userData.uTurn.value = THREE.MathUtils.clamp(f.bank * 2.5, -1, 1);
+    mat.userData.uReaction.value = reaction;
     mat.userData.uAmp.value = upright ? 0 : def.tailAmp * (hungry ? 0.75 : 1) * (1 - puff.current * 0.7);
     glow.current += (glowFor(id, tank, t) - glow.current) * Math.min(1, dt * 10);
     mat.userData.uHintGlow.value = hintRim(id);
@@ -275,12 +317,12 @@ function JellyMesh({ id, tankId }: { id: string; tankId: string }) {
     const m = ref.current;
     if (!f || !m) return;
     const t = rt.time;
-    const p = Math.sin(f.pulsePhase ?? f.phase);
-    const happy = t - f.happyT0 < 1.2 || t - f.tapT0 < 1.2;
-    m.position.set(f.s.x, f.s.y + p * 0.02, f.s.z);
+    m.position.set(f.s.x, f.s.y, f.s.z);
     m.rotation.set(Math.sin(t * 0.7 + f.phase * 0.01) * 0.1, f.yaw * 0.3, Math.cos(t * 0.6) * 0.08);
-    const k = happy ? 0.2 : 0.12;
-    m.scale.set(1 + p * k, 1 - p * k * 0.8, 1 + p * k);
+    m.scale.setScalar(1);
+    mat.userData.uPhase.value = f.pulsePhase ?? f.phase;
+    mat.userData.uMotion.value = Math.min(1.8, Math.hypot(f.s.vx, f.s.vy, f.s.vz) / SPECIES.jellyfish.speed);
+    mat.userData.uTurn.value = THREE.MathUtils.clamp(f.bank * 2.5, -1, 1);
     const tank = getGame().model.tanks.find((x) => x.id === tankId);
     glow.current += (glowFor(id, tank, t) - glow.current) * Math.min(1, dt * 10);
     mat.userData.uHintGlow.value = hintRim(id);
