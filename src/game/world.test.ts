@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BENCH_FACING, BENCH_FOOTPRINT, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, insideRoom, requestEligible } from "./world";
 import type { Vec2 } from "./types";
-import { ATRIUM_OBSTACLES, ATRIUM_REST_SPOTS, crossesObstacle, lookSpot, reefLoop, route } from "./world";
+import { ATRIUM_OBSTACLES, SEATS, crossesObstacle, lookSpot, reefLoop, route, seatApproach, seatExit } from "./world";
 import { DOOR_W, DOOR_Z, ROOMS } from "./data/rooms";
 
 /** Slab intersection: includes the edges, so touching furniture also fails. */
@@ -43,6 +43,25 @@ describe("request bench routing (one seat)", () => {
 
   it("can exit forward and walk to the door without crossing the bench", () => {
     expect(crossesBench(BENCH_FRONT, ENTRY)).toBe(false);
+  });
+
+  it("approaches ordinary side seats from the room side without walking along seated knees", () => {
+    for (const seat of SEATS.filter((seat) => seat.room === 0 && !seat.requestOnly)) {
+      expect(seat.approach.x).toBeLessThan(seat.front.x - 0.6);
+      for (const from of [ENTRY, { x: 4.9, z: -0.8 }, { x: 14, z: -0.8 }]) {
+        const path = seatApproach(from, seat);
+        expect(path.slice(-2)).toEqual([seat.approach, seat.front]);
+        let previous = from;
+        for (const point of path) {
+          expect(crossesBench(previous, point)).toBe(false);
+          // All vertical travel beside the bench remains behind the room-side lane.
+          if (point.z !== previous.z && Math.max(point.z, previous.z) > 2) {
+            expect(Math.max(point.x, previous.x)).toBeLessThanOrEqual(seat.approach.x);
+          }
+          previous = point;
+        }
+      }
+    }
   });
 });
 
@@ -97,7 +116,43 @@ describe("Atrium visitor routes", () => {
     expect(loop.some((p) => p.x > 41)).toBe(true);
   });
   it("connects all exhibit faces and both benches in either direction", () => {
-    const points = [lookSpot("I"), lookSpot("J"), lookSpot("K"), { x: 38, z: -3.15 }, ...ATRIUM_REST_SPOTS];
+    const points = [lookSpot("I"), lookSpot("J"), lookSpot("K"), { x: 38, z: -3.15 }, ...SEATS.filter((seat) => seat.room === 3).map((seat) => seat.approach)];
     for (const a of points) for (const b of points) clearPath(a, route(a, b), b);
+  });
+
+  it("routes every seat through its approach, allowing only the deliberate front stub inside obstacles", () => {
+    const starts = [ENTRY, lookSpot("I"), lookSpot("J"), lookSpot("K"), { x: 38, z: -3.15 }];
+    for (const seat of SEATS.filter((seat) => seat.room === 3)) {
+      expect(ATRIUM_OBSTACLES.some((box) => crossesObstacle(seat.front, seat.front, box))).toBe(true);
+      for (const from of starts) {
+        const path = seatApproach(from, seat);
+        expect(path.slice(-2)).toEqual([seat.approach, seat.front]);
+        clearPath(from, path.slice(0, -1), seat.approach);
+        for (const obstacle of ATRIUM_OBSTACLES) {
+          // The short stub enters only this bench's expanded footprint.
+          if (crossesObstacle(seat.approach, seat.front, obstacle)) {
+            expect(crossesObstacle(seat.front, seat.front, obstacle)).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  it("exits seated and partially approaching visitors through the stub before routing onward", () => {
+    for (const seat of SEATS.filter((seat) => seat.room === 3)) {
+      for (const destination of [ENTRY, lookSpot("I"), lookSpot("J"), lookSpot("K")]) {
+        const seatedExit = seatExit(seat, destination, seat, true);
+        expect(seatedExit.slice(0, 2)).toEqual([seat.front, seat.approach]);
+        clearPath(seat.approach, seatedExit.slice(2), destination);
+        for (const t of [0.25, 0.5, 0.9, 1]) {
+          const from = { x: seat.approach.x + (seat.front.x - seat.approach.x) * t, z: seat.approach.z + (seat.front.z - seat.approach.z) * t };
+          const interrupted = seatExit(from, destination, seat, false);
+          expect(interrupted[0]).toEqual(seat.approach);
+          clearPath(seat.approach, interrupted.slice(1), destination);
+        }
+        const outsideStub = { x: seat.approach.x, z: seat.approach.z - 0.2 };
+        clearPath(outsideStub, seatExit(outsideStub, destination, seat, false), destination);
+      }
+    }
   });
 });

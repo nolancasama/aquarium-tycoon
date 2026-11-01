@@ -43,6 +43,47 @@ export const BENCH_FOOTPRINT = { minX: BENCH.x - 0.25, maxX: BENCH.x + 0.28, min
 export const BENCH_FRONT: Vec2 = { x: BENCH_SEAT.x - 0.38, z: BENCH_SEAT.z };
 export const BENCH_FACING = -Math.PI / 2;
 
+export interface Seat extends Vec2 {
+  id: string;
+  benchId: string;
+  room: number;
+  facing: number;
+  front: Vec2;
+  approach: Vec2;
+  requestOnly: boolean;
+}
+
+export const REQUEST_SEAT: Seat = {
+  id: "hall-request", benchId: "hall-bench", room: 0, ...BENCH_SEAT,
+  facing: BENCH_FACING, front: BENCH_FRONT,
+  approach: { x: BENCH_FRONT.x, z: ENTRY.z }, requestOnly: true
+};
+/** Shared with the rendered furniture, whose back faces +z. */
+export const ATRIUM_BENCHES = [{ x: 36, z: 4.65 }, { x: 42, z: 4.65 }];
+export const SEATS: Seat[] = [
+  REQUEST_SEAT,
+  ...[-0.52, 0.52].map((offset, i): Seat => ({
+    id: `hall-side-${i}`, benchId: "hall-bench", room: 0,
+    x: BENCH_SEAT.x, z: BENCH_SEAT.z + offset, facing: BENCH_FACING,
+    front: { x: BENCH_FRONT.x, z: BENCH_SEAT.z + offset },
+    approach: { x: 3.15, z: BENCH_SEAT.z + offset }, requestOnly: false
+  })),
+  ...ATRIUM_BENCHES.flatMap((bench, b) => [-0.52, 0, 0.52].map((offset, i): Seat => ({
+    id: `atrium-${b}-${i}`, benchId: `atrium-bench-${b}`, room: 3,
+    x: bench.x + offset, z: bench.z - 0.18, facing: Math.PI,
+    front: { x: bench.x + offset, z: bench.z - 0.56 },
+    approach: { x: bench.x + offset, z: 3.65 }, requestOnly: false
+  })))
+];
+
+export const seatById = (id?: string): Seat => SEATS.find((s) => s.id === id) ?? REQUEST_SEAT;
+
+/** Reservations exist only on live visitors, including those still approaching. */
+export function chooseSeat(room: number, visitors: readonly { state: string; seatId?: string }[], random: () => number): Seat | null {
+  const free = SEATS.filter((s) => s.room === room && !s.requestOnly && !visitors.some((v) => v.state !== "gone" && v.seatId === s.id));
+  return free.length ? free[Math.floor(random() * free.length)] : null;
+}
+
 const ease = (x: number) => { const t = Math.max(0, Math.min(1, x)); return t * t * (3 - 2 * t); };
 
 const overreachCache = new Map<number, number>();
@@ -70,19 +111,20 @@ function overreach(hip: number): number {
  * two-bone IK to the planted foot. `hip` is the model's leg-pivot height
  * (thigh and shin are each half of it); `lean` rotates the torso about the hips.
  */
-export function benchPose(progress: number, hip: number) {
+export function benchPose(progress: number, hip: number, seat: Seat = REQUEST_SEAT) {
   const back = ease(progress / 0.7);
   const down = ease((progress - 0.12) / 0.88);
   let settle = ease((progress - 0.65) / 0.35);
   const radius = hip * (0.075 / 0.74);
-  const x = BENCH_FRONT.x + (BENCH_SEAT.x - BENCH_FRONT.x) * back;
+  const travel = (BENCH_SEAT.x - BENCH_FRONT.x) * back;
+  const x = seat.front.x + (seat.x - seat.front.x) * back;
   const bodyY = (BENCH_SEAT_H + radius - hip) * down;
   let thigh = 0;
   let knee = 0;
   if (hip > 0) {
     // Hip-to-foot vector in the body frame (forward is +z, foot on the floor);
     // equal thigh and shin lengths make the knee bend symmetric.
-    const f = x - BENCH_FRONT.x;
+    const f = BENCH_FRONT.x + travel - BENCH_FRONT.x;
     const h = hip + bodyY;
     const d = Math.min(Math.hypot(f, h), hip - 1e-6);
     // Short legs (children) cannot keep the foot planted, so they scoot back and lift them early.
@@ -94,7 +136,7 @@ export function benchPose(progress: number, hip: number) {
   }
   return {
     x,
-    z: BENCH_SEAT.z,
+    z: seat.front.z + (seat.z - seat.front.z) * back,
     bodyY,
     thigh: thigh + (-Math.PI / 2 - thigh) * settle,
     knee: knee + (Math.PI / 2 - knee) * settle,
@@ -104,7 +146,26 @@ export function benchPose(progress: number, hip: number) {
 
 /** Keep walking outside the furniture; the final seat placement is a seated pose. */
 export function benchApproach(from: Vec2): Vec2[] {
-  return [...route(from, { x: BENCH_FRONT.x, z: ENTRY.z }), BENCH_FRONT];
+  return seatApproach(from, REQUEST_SEAT);
+}
+
+export function seatApproach(from: Vec2, seat: Seat): Vec2[] {
+  const lane = seat.room === 0 && !seat.requestOnly ? [{ x: seat.approach.x, z: ENTRY.z }] : [];
+  return lane.length
+    ? [...route(from, lane[0]), seat.approach, seat.front]
+    : [...route(from, seat.approach), seat.front];
+}
+
+/** A partial approach can be interrupted too: back out of its stub first. */
+export function seatExit(from: Vec2, to: Vec2, seat: Seat, seated: boolean): Vec2[] {
+  const dx = seat.front.x - seat.approach.x, dz = seat.front.z - seat.approach.z;
+  const length2 = dx * dx + dz * dz;
+  const along = ((from.x - seat.approach.x) * dx + (from.z - seat.approach.z) * dz) / length2;
+  const cross = Math.abs((from.x - seat.approach.x) * dz - (from.z - seat.approach.z) * dx);
+  const inStub = along > 0 && along <= 1.001 && cross < 0.001;
+  if (seated) return [seat.front, seat.approach, ...route(seat.approach, to)];
+  if (inStub) return [seat.approach, ...route(seat.approach, to)];
+  return route(from, to);
 }
 
 /** A body-width inset avoids offering a visitor still passing through a wall. */
@@ -185,7 +246,6 @@ function atriumRoute(from: Vec2, to: Vec2): Vec2[] {
   return [];
 }
 
-export const ATRIUM_REST_SPOTS: Vec2[] = [{ x: 36, z: 3.65 }, { x: 42, z: 3.65 }];
 /** Walk all four viewing faces, keeping the secondary pads outside the loop. */
 export function reefLoop(from: Vec2, to: Vec2): Vec2[] {
   const points = [{ x: 34.5, z: 1.25 }, { x: 34.5, z: -3.15 }, { x: 41.4, z: -3.15 }, { x: 41.4, z: 1.25 }, to];
