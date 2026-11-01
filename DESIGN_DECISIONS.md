@@ -1125,3 +1125,89 @@ these changes and decisions.
   "Do you like shrimp?" and show-me requests already draw on any owned named
   animal; counting stays capped at eight animals, so the busy reef is not
   counted. No new tutorial: the atrium's short arrival reveal is the introduction.
+
+## 2026-11-01 — Eel, octopus, multi-bench seating and species feeding (design freeze)
+
+Frozen before implementation. Review of the supplied plan: its goals are kept;
+the changes below are deliberate.
+
+### Changes to the plan
+
+- **Feed stays one tap; no food-selection panel.** Rejected: a chooser in mixed
+  tanks. Per-species diets make a blue tang + clownfish tank "mixed", so the panel
+  would appear around Level 2 on the most repeated action, and it breaks the
+  guide's `btn-feed` steps. Its options could also never be wrong (it lists only
+  needed foods), so the plan's "inappropriate food" hint has no trigger and is
+  dropped. Instead one tap always equals Feed All. A small, non-blocking food strip
+  (picture, English word, small Japanese) appears for about 4 s after feeding, and
+  tapping a word says it and drops a small free pinch of that food (no meter effect).
+- **Smile and arm gestures are not added.** Visitor faces and arms are merged into
+  one body mesh. Seated life uses torso turns toward a tank, slow posture shifts and
+  an occasional existing heart bubble.
+- **Seat reservations are derived, not stored.** A seat is taken when a live visitor
+  has `seatId`, so leaving, rerouting or disappearing cannot leak a reservation.
+- **The moray's den is a hidden tunnel.** Rejected: a body-length cave that fits in
+  0.28 m of rock. The opaque rock and dark mouth disc hide the part of the body
+  behind the hole, so the whole eel can really go in through the aperture.
+
+### Shared rig (one merged mesh, one draw call, no skeletons)
+
+`animalMaterial` gains one `uniform vec4 uRig[16]` for both rigs, plus `uEat`
+(0..1 feeding response). Normals must be deformed in `beginnormal_vertex`, before
+Lambert uses them, with the same frame as the positions. Pure rig maths lives in
+`src/game/logic/` with no three.js scene dependency, allocates nothing per frame and
+has a CPU mirror of the shader's vertex mapping for tests.
+
+### Moray eel (part 12)
+
+- **Head first, body on the path.** `stepDen` drives only the head, as a bicycle
+  model: a heading with a limited turn rate and a minimum turn radius of about 0.1 m,
+  so it can never reverse on the spot. A ring buffer of distance-sampled head
+  positions gives 16 arc-length control points (`uRig[i].xyz`), so body length is
+  constant and turns reach the tail only as it arrives there. The lateral swim wave
+  is added to the control points on the CPU and fades to nothing inside a den.
+- **Mesh.** Rest pose lies along -x. Every vertex stores a spine parameter
+  `s = clamp(-x / L, 0, 1)`; shader position is
+  `P(s) + T*(x + s*L) + U*y + S*z`, with Catmull-Rom `P`, `T`. Body, head, eyes,
+  jaw and fins all use it, so the dorsal fin is one lofted strip sharing body `s`
+  values and cannot detach. Jaw vertices rotate about a hinge by a gape uniform.
+- **Collision.** The head steers ahead of solids using a corridor of body radius
+  plus wave amplitude, so a body on its path inherits clearance. Then each control
+  point gets a soft continuous correction against glass, rock face, sand and dunes,
+  and columns (rocks and decorations placed while the eel is near). Never teleport.
+  The eel no longer uses `tankFishBounds`' length inset, which squeezed it into a
+  plane at z = 0.11 in the cave tank. `containEel` is removed.
+- **Den.** Each mouth gets a rail: out along +z through the hole, and behind it a
+  hidden curve inside the rock long enough for the whole body. Return lines up on the
+  mouth axis in open water, then enters within the 0.12 x 0.085 m hole. Once the tail
+  is hidden the rail is reversed unseen and the eel rests with head and neck out,
+  peeking and pumping its jaw. Eels beyond the third den rest on open sand instead.
+
+### Octopus (part 13 arms, part 14 mantle/head)
+
+- **Arms.** `uRig[i]` = control point (w: curl), `uRig[i+8]` = tip (w unused), in body
+  space. Each arm is a quadratic Bezier from a fixed root, with arch computed to
+  preserve arm length, a curled tip region, a tapered tube and fragment-shader suckers
+  on the underside. Eight independent arm controllers: stance, swing, reach, curl.
+- **Gait.** Stance tips stay fixed in water space. Arms step in alternating groups
+  with variation, at most about half lifted, and `stepCrawl` speed follows the gait so
+  the body is pulled toward planted tips rather than sliding.
+- **Contacts.** Tips land on sand (`sandSurfaceY`), rock columns or the rock face while
+  climbing. Idle arms reach into den lips, curl round rocks or rest. Tap picks one of:
+  raise an arm, colour change, curl, look toward the player.
+
+### Seating
+
+`Seat { id, benchId, room, x, z, facing, front, approach, requestOnly }` in
+`world.ts`. Hall 1 keeps its centre request seat with the exact existing constants;
+side seats at z ±0.52 are for ordinary visitors. Each atrium bench seats three. Paths
+go `approach → front`, and exit `front → approach → route(...)`, because atrium fronts
+lie inside the walking obstacle boxes. `benchPose` gains a seat argument with the
+request seat as default. `ATRIUM_REST_SPOTS` standing rests are replaced by sitting.
+
+### Food
+
+`FoodId = flakes | seaweed | shrimp | seafood | plankton`; `DIET` per species in
+data. Animals target only pieces their diet accepts. Each food has its own fall
+behaviour and instanced shape (a mesh draws only while that food exists). The food
+meter, happiness, saves and the first-time "Feed the fish!" are unchanged.
