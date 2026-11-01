@@ -49,6 +49,15 @@ habitat decorations, remodelling of placed tanks, and the Jellyfish Gallery.
 Fish never die and nothing is lost; there are no timers. Happiness comes from
 food, clean water and decorations (each fish has a favourite decoration).
 
+## Planned expansions
+
+See [EXPANSION_ROADMAP.md](EXPANSION_ROADMAP.md) for the proposed roadmap beyond
+Jellyfish Gallery: Coral Reef Atrium, Shark Tunnel, Coastal & Polar Zone,
+Outdoor Dolphin Lagoon, and a large Grand Ocean Sanctuary for orcas (with
+belugas in separate suitable habitats), plus near-term crab, animal animation,
+shop pronunciation and hexagonal tank polish. This is a design plan, **not** an
+implemented feature list or locked level sequence.
+
 ## Development
 
 ```sh
