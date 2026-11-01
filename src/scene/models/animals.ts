@@ -31,7 +31,7 @@ class AnimalBuilder {
     return this.add(new THREE.SphereGeometry(1, seg, 6), colour, pos, scale, rot, kind, wave);
   }
 
-  tube(points: V3[], radius: number, colour: string, kind = 0, phase = 0, segments = 10, sides = 5, taper = 0.8) {
+  tube(points: V3[], radius: number, colour: string, kind = 0, phase = 0, segments = 10, sides = 5, taper = 0.8, limb = 0) {
     const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p)));
     const g = new THREE.TubeGeometry(curve, segments, radius, sides, false);
     // Taper the tube around its centreline, preserving its smooth normals.
@@ -45,7 +45,7 @@ class AnimalBuilder {
       const k = (1 - t * taper) * frill;
       p.setXYZ(i, c.x + (p.getX(i) - c.x) * k, c.y + (p.getY(i) - c.y) * k, c.z + (p.getZ(i) - c.z) * k);
     }
-    return this.add(g, colour, [0, 0, 0], [1, 1, 1], [0, 0, 0], kind, (_x, _y, _z, u) => [u, phase, 0]);
+    return this.add(g, colour, [0, 0, 0], [1, 1, 1], [0, 0, 0], kind, (_x, _y, _z, u) => [u, phase, limb]);
   }
 
   /** Thin closed triangular fins retain a clear silhouette from either side. */
@@ -123,7 +123,7 @@ function eel() {
   const b = new AnimalBuilder();
   b.tube([[0, -0.005, 0], [-0.19, -0.005, 0], [-0.39, -0.018, 0.014], [-0.63, -0.026, -0.015], [-0.88, -0.02, 0]], 0.067, "#84ab41", 2, 0, 28, 8, 0.94);
   b.ell([0.081, 0.041, 0.056], [-0.012, 0.026, 0], "#9cb951", 0, undefined, 12);
-  b.ell([0.072, 0.023, 0.047], [-0.012, -0.046, 0], "#83a33e", 0, undefined, 10, [0, 0, 0.15]);
+  b.ell([0.072, 0.023, 0.047], [-0.012, -0.046, 0], "#83a33e", 10, undefined, 10, [0, 0, 0.15]);
   b.ell([0.055, 0.022, 0.043], [0.015, -0.009, 0], "#493b38");
   // A continuous dorsal ribbon follows the long S-wave, behind the fixed head.
   for (let i = 0; i < 12; i++) {
@@ -141,8 +141,8 @@ function octopus() {
   for (let i = 0; i < 8; i++) {
     const a = i * Math.PI / 4;
     const x = Math.cos(a), z = Math.sin(a);
-    b.tube([[x * 0.11, -0.22, z * 0.11], [x * 0.29, -0.4, z * 0.29], [x * 0.46, -0.46, z * 0.46], [x * 0.53 + z * 0.07, -0.38, z * 0.53 - x * 0.07]], 0.075, i % 2 ? "#e87538" : "#f4974d", 3, a, 12, 5, 0.87);
-    for (let j = 1; j <= 3; j++) b.add(new THREE.CircleGeometry(0.025, 6), "#ffd3a0", [x * (0.18 + j * 0.075), -0.445, z * (0.18 + j * 0.075)], [1, 1, 1], [Math.PI / 2, 0, 0], 3, () => [0.4 + j * 0.13, a, 0]);
+    b.tube([[x * 0.11, -0.22, z * 0.11], [x * 0.29, -0.4, z * 0.29], [x * 0.46, -0.46, z * 0.46], [x * 0.53 + z * 0.07, -0.38, z * 0.53 - x * 0.07]], 0.075, i % 2 ? "#e87538" : "#f4974d", 3, a, 12, 5, 0.87, i);
+    for (let j = 1; j <= 3; j++) b.add(new THREE.CircleGeometry(0.025, 6), "#ffd3a0", [x * (0.18 + j * 0.075), -0.445, z * (0.18 + j * 0.075)], [1, 1, 1], [Math.PI / 2, 0, 0], 3, () => [0.4 + j * 0.13, a, i]);
   }
   b.eyes(0.15, -0.12, 0.18, 0.09);
   return b;
@@ -155,12 +155,12 @@ function crab() {
   // Eight jointed legs: alternating phase per leg and opposite side.
   for (const s of [-1, 1]) for (let i = 0; i < 4; i++) {
     const x = 0.17 - i * 0.12;
-    b.tube([[x, -0.31, s * 0.25], [x - 0.08, -0.29, s * 0.53], [x - 0.18, -0.69, s * 0.66]], 0.037, "#df5635", 4, i * Math.PI + (s < 0 ? Math.PI : 0), 5, 5, 0.55);
+    b.tube([[x, -0.31, s * 0.25], [x - 0.08, -0.29, s * 0.53], [x - 0.18, -0.69, s * 0.66]], 0.037, "#df5635", 4, i * Math.PI + (s < 0 ? Math.PI : 0), 5, 5, 0.55, (s < 0 ? 0 : 4) + i);
   }
   for (const s of [-1, 1]) {
-    b.tube([[0.16, -0.28, s * 0.25], [0.37, -0.18, s * 0.42], [0.51, -0.11, s * 0.34]], 0.045, "#ef7542", 4, s, 5, 5, 0);
-    b.ell([0.13, 0.09, 0.11], [0.5, -0.09, s * 0.35], "#ff9250");
-    for (const pincer of [-1, 1]) b.ell([0.13, 0.043, 0.045], [0.62, -0.09 + pincer * 0.06, s * 0.35], "#ffb46d", 5, () => [1, pincer, 0], 8, [0, 0, pincer * -0.2]);
+    b.tube([[0.16, -0.28, s * 0.25], [0.37, -0.18, s * 0.42], [0.51, -0.11, s * 0.34]], 0.045, "#ef7542", 9, s, 5, 5, 0);
+    b.ell([0.13, 0.09, 0.11], [0.5, -0.09, s * 0.35], "#ff9250", 9, () => [1, s, 0]);
+    for (const pincer of [-1, 1]) b.ell([0.13, 0.043, 0.045], [0.62, -0.09 + pincer * 0.06, s * 0.35], "#ffb46d", 5, () => [1, pincer, s], 8, [0, 0, pincer * -0.2]);
     b.tube([[0.18, -0.23, s * 0.18], [0.24, -0.07, s * 0.19]], 0.028, "#ee7c49", 0, 0, 2, 5, 0);
   }
   b.eyes(0.26, -0.035, 0.195, 0.073);
@@ -172,15 +172,15 @@ function ray() {
   // Wide, nearly round disc: the wing wave grows continuously toward its tips.
   b.ell([0.4, 0.053, 0.49], [0, -0.02, 0], "#538db2", 6, (_x, _y, z) => [Math.abs(z) / 0.49, 0, 0], 24);
   b.ell([0.27, 0.07, 0.13], [0.08, 0.01, 0], "#699fc0", 6, (_x, _y, z) => [Math.abs(z) * 1.4, 0, 0], 12);
-  b.tube([[-0.3, -0.02, 0], [-0.65, -0.015, 0], [-0.93, 0.01, 0.035], [-1.15, 0.03, 0.02]], 0.018, "#375d78", 1, 0, 14, 5, 0.88);
+  b.tube([[-0.3, -0.02, 0], [-0.65, -0.015, 0], [-0.93, 0.01, 0.035], [-1.15, 0.03, 0.02]], 0.018, "#375d78", 11, 0, 14, 5, 0.88);
   b.eyes(0.25, 0.075, 0.09, 0.044);
   return b;
 }
 
 function jelly(kind: SpeciesId) {
   const b = new AnimalBuilder();
-  const moon = kind === "moonjelly", spotted = kind === "spottedjelly";
-  const colour = moon ? "#edf6ff" : spotted ? "#66bbec" : "#f7a154";
+  const moon = kind === "moonjelly", spotted = kind === "spottedjelly", original = kind === "jellyfish";
+  const colour = moon ? "#edf6ff" : spotted ? "#66bbec" : original ? "#b595f4" : "#f7a154";
   // Open hemisphere with a rounded rim; substantially flatter in the moon jelly.
   const height = moon ? 0.14 : spotted ? 0.35 : 0.26;
   b.add(new THREE.SphereGeometry(1, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), colour, [0, 0, 0], [0.44, height, 0.44], [0, 0, 0], 7, (_x, y) => [Math.max(0, 1 - y / height), 0, 0]);
@@ -203,11 +203,12 @@ function jelly(kind: SpeciesId) {
   } else {
     for (let i = 0; i < 12; i++) {
       const a = i * Math.PI / 6, x = Math.cos(a), z = Math.sin(a);
-      b.tube([[x * 0.38, 0, z * 0.38], [x * 0.35, -0.38, z * 0.35], [x * 0.27, -0.8, z * 0.27], [x * 0.34, -1.2, z * 0.34]], 0.008, "#86394e", 8, a, 12, 4, 0.6);
+      const trail = original ? 0.65 : 1;
+      b.tube([[x * 0.38, 0, z * 0.38], [x * 0.35, -0.38 * trail, z * 0.35], [x * 0.27, -0.8 * trail, z * 0.27], [x * 0.34, -1.2 * trail, z * 0.34]], 0.008, original ? "#d8baff" : "#86394e", 8, a, 12, 4, 0.6);
     }
     for (let i = 0; i < 4; i++) {
       const a = i * Math.PI / 2;
-      b.tube([[Math.cos(a) * 0.05, 0, Math.sin(a) * 0.05], [Math.cos(a + 0.6) * 0.1, -0.25, Math.sin(a + 0.6) * 0.1], [Math.cos(a) * 0.12, -0.56, Math.sin(a) * 0.12]], 0.035, "#e8a476", 8, a, 8, 4, 0.4);
+      b.tube([[Math.cos(a) * 0.05, 0, Math.sin(a) * 0.05], [Math.cos(a + 0.6) * 0.1, -0.25, Math.sin(a + 0.6) * 0.1], [Math.cos(a) * 0.12, -0.56, Math.sin(a) * 0.12]], 0.035, original ? "#e9d4ff" : "#e8a476", 8, a, 8, 4, 0.4);
     }
   }
   // Friendly eyes on the front of the bell are visible through its soft surface.
@@ -216,6 +217,34 @@ function jelly(kind: SpeciesId) {
 }
 
 const geometries = new Map<SpeciesId, THREE.BufferGeometry>();
+
+/** CPU mirror of flexible ground limbs, before per-foot terrain corrections.
+ * Mutates a reusable vector, so terrain support sampling makes no frame garbage.
+ * Keep the part 3 / 4 formulas in animalMaterials.ts in step with this helper. */
+export function deformGroundVertex(
+  target: THREE.Vector3, species: SpeciesId, part: number, w: number, phaseTag: number,
+  phase: number, motion: number, reaction = 0, time = 0
+): THREE.Vector3 {
+  const length = SPECIES[species].length;
+  const speed = Math.max(0, Math.min(1.8, motion));
+  const ph = phase + phaseTag;
+  if (part === 4) {
+    const swing = Math.max(0, Math.sin(ph));
+    target.y += swing * swing * w * w * length * 0.13 * speed;
+    target.z += Math.cos(ph) * w * w * length * 0.075 * speed;
+  } else if (part === 3) {
+    const reach = Math.sin(ph - w * 3.2);
+    const curl = (0.5 + 0.5 * Math.sin(time * 0.8 + phaseTag * 1.7)) * 0.55 + reaction;
+    const t = Math.max(0, Math.min(1, (w - 0.42) / 0.58));
+    const tip = t * t * (3 - 2 * t);
+    const radial = (reach * speed * 0.055 - tip * tip * curl * 0.14 - reaction * w * 0.12) * w;
+    const tangent = Math.sin(ph - w * 6) * w * w * 0.028 * (0.35 + speed);
+    target.x += (Math.cos(phaseTag) * radial - Math.sin(phaseTag) * tangent) * length;
+    target.z += (Math.sin(phaseTag) * radial + Math.cos(phaseTag) * tangent) * length;
+    target.y += (Math.max(0, reach) * w * w * 0.095 * speed + tip * tip * curl * 0.11 + reaction * w * 0.09) * length;
+  }
+  return target;
+}
 
 export function animalGeometry(species: SpeciesId): THREE.BufferGeometry {
   const cached = geometries.get(species);
@@ -229,18 +258,13 @@ export function animalGeometry(species: SpeciesId): THREE.BufferGeometry {
     case "octopus": builder = octopus(); break;
     case "crab": builder = crab(); break;
     case "stingray": builder = ray(); break;
-    case "moonjelly": case "spottedjelly": case "seanettle": builder = jelly(species); break;
+    case "jellyfish": case "moonjelly": case "spottedjelly": case "seanettle": builder = jelly(species); break;
     default: throw new Error(`No expansion animal geometry for ${species}`);
   }
   const g = builder.build(SPECIES[species].length);
-  // For animals on the sand the runtime point is floor + radius + 3 cm.
-  if (species === "goby" || species === "octopus" || species === "crab") {
-    g.computeBoundingBox();
-    const foot = -(SPECIES[species].radius + 0.03);
-    g.translate(0, foot - g.boundingBox!.min.y, 0);
-    g.computeBoundingSphere();
-    if (g.boundingSphere) g.boundingSphere.radius += SPECIES[species].length * 0.18;
-  }
+  // Grounding uses the actual raw geometry and its animated extent. Translating
+  // models to an assumed radius would hide the feet's real support height.
+  g.computeBoundingBox();
   geometries.set(species, g);
   return g;
 }

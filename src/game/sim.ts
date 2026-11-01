@@ -4,7 +4,7 @@ import { SPECIES } from "./data/fish";
 import { SAND_H, TANKS } from "./data/tanks";
 import { decay, happiness, latchHappy, mood, type TankRec } from "./logic/model";
 import { newSwimState, tankFishBounds, frontAt, floorAt, type Bounds, type SwimEnv, type Column } from "./logic/swim";
-import { stepBehavior, type BehaviorEnv } from "./logic/behavior";
+import { reactToAnimalTap, stepBehavior, type BehaviorEnv } from "./logic/behavior";
 import { makeRng } from "./logic/rng";
 import { columnsOf, feedSpot } from "./world";
 import { stepVisitors, visitorsTick } from "./flow/visitors";
@@ -168,6 +168,7 @@ function stepFish(dt: number, tanks: TankRec[]) {
       }
       const assignedDen = def.movement === "den" ? denIndex++ : undefined;
       if (!rt.freezeFish) {
+        reactToAnimalTap(s, f, f.tapT0, rt.time);
         others.length = 0;
         for (const o of fishes) if (o !== f) others.push(o.s);
         behaviorEnv.tank = TANKS[t.type];
@@ -216,7 +217,11 @@ function stepFish(dt: number, tanks: TankRec[]) {
         f.bank += (THREE_clamp(-turn / Math.max(dt, 1e-3) * 0.08, -0.5, 0.5) - f.bank) * Math.min(1, dt * 4);
       }
       if (def.body === "eel" && f.mode === "rest") {
-        f.yaw = -Math.PI / 2;
+        // Lie along the den face: a depth-facing tail would disappear into
+        // solid back rock. Left mouths trail right, right mouths trail left.
+        const want = s.x < 0 ? Math.PI : 0;
+        const delta = Math.atan2(Math.sin(want - f.yaw), Math.cos(want - f.yaw));
+        f.yaw += delta * Math.min(1, dt * 3);
         f.bank = 0;
       }
       f.pitch += (THREE_clamp(s.vy * 2.2, -0.5, 0.5) - f.pitch) * Math.min(1, dt * 4);

@@ -65,4 +65,44 @@ describe("fish swimming", () => {
     };
     expect(run()).toEqual(run());
   });
+
+  it("seahorses hover between propulsion strokes while tangs keep gliding", () => {
+    for (const id of ["seahorse", "bluetang"] as const) {
+      const def = SPECIES[id], tank = TANKS.tall;
+      const env: SwimEnv = { bounds: fishBounds(tank.w, tank.d, tank.h, SAND_H, def), columns: [], others: [], speedMul: 1, attract: null, depthBias: 0 };
+      const rand = makeRng(16), s = newSwimState(def, env, rand);
+      s.rhythmPhase = 0; s.burst = 0;
+      let minimum = 2, maximum = 0;
+      for (let i = 0; i < 800; i++) {
+        // Isolate the propulsion rhythm from optional spontaneous bursts.
+        s.burst = 0;
+        stepSwim(s, def, env, 0.025, rand);
+        minimum = Math.min(minimum, s.effort ?? 1);
+        maximum = Math.max(maximum, s.effort ?? 1);
+      }
+      expect(maximum).toBeGreaterThan(1);
+      if (id === "seahorse") expect(minimum).toBeLessThan(0.1);
+      else expect(minimum).toBeGreaterThanOrEqual(0.56);
+      env.attract = { x: 0, y: 0.5, z: 0 };
+      s.burst = 0.55;
+      for (let i = 0; i < 20; i++) stepSwim(s, def, env, 0.025, rand);
+      expect(s.effort).toBeGreaterThan(0.85);
+    }
+  });
+
+  it("turns through a heading change instead of reversing at a new target", () => {
+    const def = SPECIES.bluetang, tank = TANKS.ocean;
+    const env: SwimEnv = { bounds: fishBounds(tank.w, tank.d, tank.h, SAND_H, def), columns: [], others: [], speedMul: 1, attract: { x: -0.8, y: 0.5, z: 0 }, depthBias: 0 };
+    const rand = makeRng(4), s = newSwimState(def, env, rand);
+    s.x = 0; s.y = 0.5; s.z = 0; s.vx = 0.2; s.vz = 0;
+    let previous = Math.atan2(s.vz, s.vx);
+    for (let i = 0; i < 60; i++) {
+      stepSwim(s, def, env, 1 / 60, rand);
+      const heading = Math.atan2(s.vz, s.vx);
+      const change = Math.atan2(Math.sin(heading - previous), Math.cos(heading - previous));
+      expect(Math.abs(change)).toBeLessThanOrEqual(def.turn / 60 + 1e-8);
+      previous = heading;
+    }
+    expect(s.vz).not.toBe(0);
+  });
 });

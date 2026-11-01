@@ -45,6 +45,7 @@ class FishBuilder {
     const g = this.b.build();
     // Keep the primitives' smooth normals: recomputing on merged,
     // non-indexed triangles turns every rounded body into flat facets.
+    g.setAttribute("fishMotion", new THREE.BufferAttribute(new Float32Array(g.attributes.position.count), 1));
     g.computeBoundingSphere();
     return g;
   }
@@ -209,7 +210,9 @@ function jellyfish(L: number) {
   }
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * Math.PI * 2;
-    b.add(new THREE.CylinderGeometry(r * 0.025, r * 0.012, r * 1.9, 4), "#d9a8ff", [Math.cos(a) * r * 0.85, -r * 1.0, Math.sin(a) * r * 0.85], [0, 0, 0], [1, 1, 1], { vary: false });
+    // Height subdivisions let the shared shader bend the tentacles along
+    // their length instead of translating ten rigid rods below the bell.
+    b.add(new THREE.CylinderGeometry(r * 0.025, r * 0.012, r * 1.9, 4, 7), "#d9a8ff", [Math.cos(a) * r * 0.85, -r * 1.0, Math.sin(a) * r * 0.85], [0, 0, 0], [1, 1, 1], { vary: false });
   }
   // Cute face on the front of the bell.
   for (const x of [-1, 1]) b.add(new THREE.SphereGeometry(r * 0.09, 8, 6), "#3a1a5a", [x * r * 0.28, r * 0.25, r * 0.78], [0, 0, 0], [1, 1.2, 0.6], { vary: false });
@@ -253,6 +256,7 @@ function turtle(L: number): TurtleModel {
     const b = new PartBuilder(0);
     b.add(new THREE.SphereGeometry(1, 12, 8), "#86c25a", [len * 0.12, 0, len * 0.5], [0, -0.35, 0], [len * 0.22, len * 0.06, len * 0.5], { vary: false });
     const g = b.build();
+    g.setAttribute("fishMotion", new THREE.BufferAttribute(new Float32Array(g.attributes.position.count), 1));
     return g;
   };
   return { body, front: flipper(L * 0.5), back: flipper(L * 0.26) };
@@ -286,6 +290,18 @@ export function fishGeometry(s: SpeciesId): THREE.BufferGeometry {
       default:
         g = turtleModel().body;
     }
+    // Exact part masks preserve the seahorse's body while its pale dorsal
+    // fin flutters. Every merged geometry has the attribute, keeping one
+    // shared shader program and one draw call per fish.
+    const motion = new Float32Array(g.attributes.position.count);
+    if (s === "seahorse") {
+      const colour = g.attributes.color;
+      const dorsal = new THREE.Color("#ffd6e6");
+      for (let i = 0; i < motion.length; i++) {
+        if (Math.abs(colour.getX(i) - dorsal.r) < 0.0001 && Math.abs(colour.getY(i) - dorsal.g) < 0.0001 && Math.abs(colour.getZ(i) - dorsal.b) < 0.0001) motion[i] = 1;
+      }
+    }
+    g.setAttribute("fishMotion", new THREE.BufferAttribute(motion, 1));
     cache.set(s, g);
   }
   return g;

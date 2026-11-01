@@ -846,7 +846,7 @@ export function surfaceMaterial(): THREE.ShaderMaterial & { uniforms: { uDirt: {
 }
 
 export interface FishMaterial extends THREE.MeshLambertMaterial {
-  userData: { uPhase: { value: number }; uAmp: { value: number }; uLen: { value: number }; uHintGlow: { value: number } };
+  userData: { uPhase: { value: number }; uAmp: { value: number }; uLen: { value: number }; uHintGlow: { value: number }; uMotion: { value: number }; uTurn: { value: number }; uReaction: { value: number } };
 }
 
 /**
@@ -856,12 +856,16 @@ export interface FishMaterial extends THREE.MeshLambertMaterial {
  */
 export function fishMaterial(length: number, species: SpeciesId = "clownfish"): FishMaterial {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true }) as FishMaterial;
-  m.userData = { uPhase: { value: 0 }, uAmp: { value: 0.3 }, uLen: { value: length }, uHintGlow: { value: 0 } };
+  m.userData = { uPhase: { value: 0 }, uAmp: { value: 0.3 }, uLen: { value: length }, uHintGlow: { value: 0 }, uMotion: { value: 1 }, uTurn: { value: 0 }, uReaction: { value: 0 } };
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uPhase = m.userData.uPhase;
     shader.uniforms.uAmp = m.userData.uAmp;
     shader.uniforms.uLen = m.userData.uLen;
     shader.uniforms.uHintGlow = m.userData.uHintGlow;
+    shader.uniforms.uMotion = m.userData.uMotion;
+    shader.uniforms.uTurn = m.userData.uTurn;
+    shader.uniforms.uReaction = m.userData.uReaction;
+    shader.uniforms.uTime = shaderTime;
     shader.uniforms.uSpecies = { value: ["clownfish", "bluetang", "yellowfish", "pufferfish", "turtle", "seahorse", "jellyfish"].indexOf(species) };
     shader.vertexShader = shader.vertexShader
       .replace(
@@ -870,18 +874,74 @@ export function fishMaterial(length: number, species: SpeciesId = "clownfish"): 
 uniform float uPhase;
 uniform float uAmp;
 uniform float uLen;
+uniform float uSpecies;
+uniform float uTime;
+uniform float uMotion;
+uniform float uTurn;
+uniform float uReaction;
+attribute float fishMotion;
 varying vec3 vFishPos;
 varying vec3 vFishNormal;
-varying vec2 vFishUv;`
+varying vec2 vFishUv;
+// Species keep their existing beat frequency. This envelope adds a gliding
+// butterflyfish, steady tang, busy clownfish and small puffer tail strokes.
+float fishStroke() {
+  float strength = 0.22 + 0.78 * clamp(uMotion, 0.0, 1.5);
+  if (uSpecies == 0.0) strength *= 0.86 + 0.14 * sin(uPhase * 0.43);
+  if (uSpecies == 1.0) strength *= 0.82;
+  if (uSpecies == 2.0) strength *= 0.42 + 0.58 * smoothstep(-0.6, 0.4, sin(uTime * 1.6));
+  if (uSpecies == 3.0) strength *= 0.62;
+  return uAmp * (strength + uReaction * 0.55);
+}
+float seaTailAngle(vec3 p) {
+  return (1.0 - smoothstep(-0.46, -0.23, p.y / uLen)) * (sin(uTime * 1.15) * 0.30 + uReaction * 0.24);
+}`
       )
+      .replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
+if (uSpecies < 4.0) {
+  float bt = clamp((uLen * 0.22 - position.x) / uLen, 0.0, 1.3);
+  float phase = uPhase - bt * 2.6;
+  float slope = fishStroke() * (2.6 * cos(phase) * bt * bt - 2.0 * sin(phase) * bt)
+    - clamp(uTurn, -1.0, 1.0) * bt * 0.36;
+  objectNormal = normalize(vec3(objectNormal.x - slope * objectNormal.z, objectNormal.yz));
+} else if (uSpecies == 5.0) {
+  float a = seaTailAngle(position);
+  objectNormal.xy = mat2(cos(a), sin(a), -sin(a), cos(a)) * objectNormal.xy;
+}`)
       .replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
 vFishPos = position / uLen;
 vFishNormal = normal;
 vFishUv = uv;
-float bt = clamp((uLen * 0.22 - transformed.x) / uLen, 0.0, 1.3);
-transformed.z += sin(uPhase - bt * 2.6) * uAmp * bt * bt * uLen;`
+if (uSpecies < 4.0) {
+  float bt = clamp((uLen * 0.22 - transformed.x) / uLen, 0.0, 1.3);
+  transformed.z += (sin(uPhase - bt * 2.6) * fishStroke() + clamp(uTurn, -1.0, 1.0) * 0.18) * bt * bt * uLen;
+  // Pectoral fins keep working during a hover, especially on the puffer.
+  float pectoral = smoothstep(0.055, 0.13, abs(position.z / uLen)) * (1.0 - smoothstep(0.08, 0.25, abs(position.x / uLen)));
+  transformed.y += sin(uTime * (uSpecies == 3.0 ? 30.0 : 19.0) + sign(position.z)) * pectoral * uLen * 0.008;
+} else if (uSpecies == 5.0) {
+  // Only the pale dorsal fin flutters; the upright body is stable.
+  float finReach = clamp((-position.x / uLen - 0.055) / 0.12, 0.0, 1.0);
+  transformed.z += fishMotion * sin(uTime * 43.0 - position.y / uLen * 12.0) * finReach * uLen * 0.045;
+  float a = seaTailAngle(position);
+  vec2 tail = transformed.xy - vec2(0.0, -0.25 * uLen);
+  transformed.xy = mat2(cos(a), sin(a), -sin(a), cos(a)) * tail + vec2(0.0, -0.25 * uLen);
+} else if (uSpecies == 6.0) {
+  // A quick squeeze followed by a long recovery, with tentacles lagging
+  // progressively farther behind the bell. No whole-mesh squash.
+  float cycle = fract(uPhase / 6.28318530718);
+  float squeeze = cycle < 0.20 ? smoothstep(0.0, 0.20, cycle) : 1.0 - smoothstep(0.20, 1.0, cycle);
+  squeeze *= 1.0 + uReaction * 0.2;
+  float bell = smoothstep(-0.10, -0.01, position.y / uLen);
+  float depth = max(0.0, -position.y / uLen - 0.025);
+  transformed.xz *= 1.0 - squeeze * 0.20 * (bell + (1.0 - bell) * exp(-depth * 2.8));
+  transformed.y += bell * squeeze * (position.y * 0.16 + uLen * 0.025);
+  float trail = depth * depth;
+  transformed.x += sin(uTime * 1.35 - depth * 3.3 + position.z / uLen * 2.5) * trail * uLen * 0.13;
+  transformed.z += sin(uTime * 1.08 - depth * 3.8 + position.x / uLen * 3.0) * trail * uLen * 0.10;
+  transformed.y += (1.0 - bell) * sin(uPhase - depth * 2.2) * depth * uLen * 0.035;
+}`
       );
     shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
 uniform float uSpecies;
@@ -965,7 +1025,7 @@ if (uSpecies == 6.0) outgoingLight += vec3(0.13, 0.07, 0.2) * rim;
 outgoingLight += vec3(1.0, 0.65, 0.08) * rim * uHintGlow;
 #include <opaque_fragment>`);
   };
-  m.customProgramCacheKey = () => "fish-painted-v3-hint-rim";
+  m.customProgramCacheKey = () => "fish-painted-v4-procedural-motion";
   return m;
 }
 

@@ -55,8 +55,11 @@ export function sandDune(tank: TankDef) {
   return { radius: tank.w * 0.32, x: -tank.w * 0.18, z: -tank.d * 0.18, y: STAND_H + SAND_H - 0.01 };
 }
 
+// Tank definitions are immutable; terrain queries also run for animated feet.
+const surfaceDunes = new WeakMap<TankDef, ReturnType<typeof sandDune>>();
 export function sandSurfaceY(tank: TankDef, x: number, z: number): number {
-  const dune = sandDune(tank);
+  let dune = surfaceDunes.get(tank);
+  if (!dune) { dune = sandDune(tank); surfaceDunes.set(tank, dune); }
   const k = 1 - ((x - dune.x) / dune.radius) ** 2 - ((z - dune.z) / (dune.radius * 0.55)) ** 2;
   return Math.max(STAND_H + SAND_H, dune.y + dune.radius * 0.09 * Math.sqrt(Math.max(0, k)));
 }
