@@ -5,6 +5,7 @@ import { SAND_H, TANKS } from "./data/tanks";
 import { decay, happiness, latchHappy, mood, type TankRec } from "./logic/model";
 import { newSwimState, tankFishBounds, frontAt, floorAt, type Bounds, type SwimEnv, type Column } from "./logic/swim";
 import { reactToAnimalTap, stepBehavior, type BehaviorEnv } from "./logic/behavior";
+import { eelBounds } from "./logic/eelBody";
 import { makeRng } from "./logic/rng";
 import { columnsOf, feedSpot } from "./world";
 import { stepVisitors, visitorsTick } from "./flow/visitors";
@@ -37,7 +38,7 @@ function boundsFor(type: TankType, species: SpeciesId): Bounds {
   const key = `${type}:${species}`;
   let b = boundsCache.get(key);
   if (!b) {
-    b = tankFishBounds(TANKS[type], SAND_H, SPECIES[species]);
+    b = species === "eel" ? eelBounds(TANKS[type]) : tankFishBounds(TANKS[type], SAND_H, SPECIES[species]);
     boundsCache.set(key, b);
   }
   return b;
@@ -198,11 +199,13 @@ function stepFish(dt: number, tanks: TankRec[]) {
       // Eat a pellet the mouth reaches.
       if (target) {
         const mouth = def.body === "eel" ? 0 : def.length * 0.45;
-        const mx = s.x + Math.cos(f.yaw) * mouth;
-        const mz = s.z - Math.sin(f.yaw) * mouth;
-        const d = Math.hypot(target.x - mx, target.y - s.y, target.z - mz);
+        const mx = f.eel?.mouth.x ?? s.x + Math.cos(f.yaw) * mouth;
+        const my = f.eel?.mouth.y ?? s.y;
+        const mz = f.eel?.mouth.z ?? s.z - Math.sin(f.yaw) * mouth;
+        const d = Math.hypot(target.x - mx, target.y - my, target.z - mz);
         let reached = d < 0.07 || Math.hypot(target.x - s.x, target.y - s.y, target.z - s.z) < def.radius * 0.9;
         if (surfaceFeeder && attract) reached ||= Math.hypot(attract.x - s.x, attract.y - s.y, attract.z - s.z) < 0.07;
+        if (f.species === "eel") reached = d < 0.07;
         // A landed pellet is below a bottom animal's representative centre.
         if (ground || def.movement === "perch" || def.movement === "glide") {
           reached ||= target.landedT >= 0 && Math.hypot(target.x - s.x, target.z - s.z) < def.radius + 0.04 && s.y <= bounds.min.y + 0.09;
@@ -227,14 +230,6 @@ function stepFish(dt: number, tanks: TankRec[]) {
         const turn = d * Math.min(1, dt * 6);
         f.yaw += turn;
         f.bank += (THREE_clamp(-turn / Math.max(dt, 1e-3) * 0.08, -0.5, 0.5) - f.bank) * Math.min(1, dt * 4);
-      }
-      if (def.body === "eel" && f.mode === "rest") {
-        // Lie along the den face: a depth-facing tail would disappear into
-        // solid back rock. Left mouths trail right, right mouths trail left.
-        const want = s.x < 0 ? Math.PI : 0;
-        const delta = Math.atan2(Math.sin(want - f.yaw), Math.cos(want - f.yaw));
-        f.yaw += delta * Math.min(1, dt * 3);
-        f.bank = 0;
       }
       f.pitch += (THREE_clamp(s.vy * 2.2, -0.5, 0.5) - f.pitch) * Math.min(1, dt * 4);
       const effort = 0.55 + Math.min(1.5, Math.hypot(s.vx, s.vy, s.vz) / def.speed) * 0.6;

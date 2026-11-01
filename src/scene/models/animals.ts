@@ -121,17 +121,58 @@ function chromis() {
 
 function eel() {
   const b = new AnimalBuilder();
-  b.tube([[0, -0.005, 0], [-0.19, -0.005, 0], [-0.39, -0.018, 0.014], [-0.63, -0.026, -0.015], [-0.88, -0.02, 0]], 0.067, "#84ab41", 2, 0, 28, 8, 0.94);
-  b.ell([0.081, 0.041, 0.056], [-0.012, 0.026, 0], "#9cb951", 0, undefined, 12);
-  b.ell([0.072, 0.023, 0.047], [-0.012, -0.046, 0], "#83a33e", 10, undefined, 10, [0, 0, 0.15]);
-  b.ell([0.055, 0.022, 0.043], [0.015, -0.009, 0], "#493b38");
-  // A continuous dorsal ribbon follows the long S-wave, behind the fixed head.
-  for (let i = 0; i < 12; i++) {
-    const x = -0.1 - i * 0.055, h = 0.065 * (1 + x);
-    b.fin([x, h, 0], [x - 0.07, h * 1.9, 0], [x - 0.09, h * 0.8, 0], "#c3d25c", 2);
+  const skin: Wave = x => [Math.max(0, Math.min(1, -x)), 0, 0];
+  const jaw: Wave = x => [Math.max(0, Math.min(1, -x)), 1, 0];
+  // Every body ring and both edges of the continuous dorsal ribbon share x/s.
+  // No animated offsets live in the mesh: the head's recorded path is the spine.
+  const rings = 29, sides = 10;
+  const body: number[] = [], fin: number[] = [], indices: number[] = [];
+  for (let i = 0; i < rings; i++) {
+    const s = 0.1 + i / (rings - 1) * 0.9;
+    const y = eelBodyTop(s);
+    for (let j = 0; j <= sides; j++) {
+      const a = j / sides * Math.PI * 2;
+      body.push(-s, Math.cos(a) * y, Math.sin(a) * y * 0.83);
+    }
+    const crest = Math.sin((s - 0.1) / 0.9 * Math.PI) * 0.041;
+    fin.push(-s, y, 0, -s, y + crest, 0);
+    if (i < rings - 1) for (let j = 0; j < sides; j++) {
+      const k = i * (sides + 1) + j;
+      indices.push(k, k + sides + 1, k + 1, k + 1, k + sides + 1, k + sides + 2);
+    }
   }
-  b.eyes(0.012, 0.04, 0.045, 0.027);
+  const loft = new THREE.BufferGeometry();
+  loft.setAttribute("position", new THREE.Float32BufferAttribute(body, 3));
+  loft.setIndex(indices); loft.computeVertexNormals();
+  b.add(loft, "#92b64f", [0, 0, 0], [1, 1, 1], [0, 0, 0], 12, skin);
+  const ribbon = new THREE.BufferGeometry();
+  ribbon.setAttribute("position", new THREE.Float32BufferAttribute(fin, 3));
+  const ribbonIndices: number[] = [];
+  for (let i = 0; i < rings - 1; i++) {
+    const k = i * 2;
+    ribbonIndices.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+  }
+  ribbon.setIndex(ribbonIndices); ribbon.computeVertexNormals();
+  b.add(ribbon, "#c0d66e", [0, 0, 0], [1, 1, 1], [0, 0, 0], 12,
+    (x, y) => [-x, 0, Math.abs(y - eelBodyTop(-x)) < 1e-6 ? 1 : 2]);
+  // Long blunt snout and broad lower jaw enclose an actual open, dark gape.
+  b.ell([0.112, 0.039, 0.061], [-0.033, 0.025, 0], "#a3bf57", 12, skin, 12);
+  b.ell([0.091, 0.019, 0.055], [-0.019, -0.036, 0], "#8fa947", 12, jaw, 10);
+  b.ell([0.086, 0.004, 0.047], [-0.014, -0.018, 0], "#684444", 12, jaw, 10);
+  b.ell([0.018, 0.024, 0.043], [-0.095, -0.013, 0], "#493c38", 12, skin, 8);
+  for (const side of [-1, 1]) {
+    b.ell([0.022, 0.022, 0.014], [0.018, 0.045, side * 0.049], "#fffbe7", 12, skin, 8);
+    b.ell([0.012, 0.014, 0.005], [0.023, 0.045, side * 0.061], "#19373e", 12, skin, 8);
+    b.ell([0.004, 0.004, 0.002], [0.026, 0.05, side * 0.066], "#ffffff", 12, skin, 6);
+    // Small nostrils distinguish the blunt moray face from a generic snake.
+    b.ell([0.006, 0.004, 0.004], [0.066, 0.032, side * 0.025], "#536c31", 12, skin, 6);
+  }
   return b;
+}
+
+/** Normalised top of the moray's body rings; the dorsal base uses it verbatim. */
+export function eelBodyTop(s: number): number {
+  return 0.003 + 0.061 * Math.pow(Math.max(0, 1 - s), 0.78);
 }
 
 function octopus() {

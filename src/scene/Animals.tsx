@@ -14,7 +14,7 @@ import { COUNT_BEAT, COUNT_LABEL_SIZE, countLabelPosition } from "../game/logic/
 import { SAND_H, STAND_H, TANKS } from "../game/data/tanks";
 import { tankOrigin } from "../game/world";
 import { sandDune } from "../game/logic/tankLayout";
-import { containEel, createGroundPose, groundAnimal } from "./grounding";
+import { createGroundPose, groundAnimal } from "./grounding";
 
 /** Every animal's mesh and its per-frame pose (positions come from rt.fish, set by the sim). */
 
@@ -186,10 +186,17 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
         terrain.current.tank = tank.type; terrain.current.slot = tank.slot;
       }
     } else if (species === "eel") {
-      containEel(support.point, tankDef, f.s.x, f.s.y, f.s.z, f.yaw);
-      mesh.position.copy(support.point);
-      mesh.rotation.set(0, f.yaw, 0, "YZX");
+      mesh.position.set(0, 0, 0);
+      mesh.rotation.set(0, 0, 0);
       mesh.scale.setScalar(1);
+      mesh.visible = !!f.eel;
+      if (f.eel) {
+        mat.userData.uRig.value = f.eel.rig;
+        // Slow respiratory gape, followed by a quick feeding closure.
+        mat.userData.uEat.value = et >= 0 && et < 0.35
+          ? (et < 0.07 ? et / 0.07 : Math.max(0, 1 - (et - 0.07) / 0.12))
+          : f.eel.gape;
+      }
     }
     mat.userData.uPhase.value = phase;
     mat.userData.uMotion.value = motion;
@@ -201,7 +208,7 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
     mat.userData.uHintGlow.value = hintRim(id);
     mat.emissive.setRGB(glow.current * 0.6, glow.current * 0.5, glow.current * 0.12);
   });
-  return <mesh ref={ref} geometry={animalGeometry(species)} material={mat} renderOrder={def.body === "jelly" ? 1 : 0} dispose={null} />;
+  return <mesh ref={ref} geometry={animalGeometry(species)} material={mat} frustumCulled={species !== "eel"} renderOrder={def.body === "jelly" ? 1 : 0} dispose={null} />;
 }
 
 /** Six chromis share geometry, material and one instanced draw call. */

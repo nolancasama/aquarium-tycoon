@@ -3,8 +3,9 @@ import * as THREE from "three";
 import { SPECIES } from "../game/data/fish";
 import { STAND_H, TANKS } from "../game/data/tanks";
 import { footprintContains, sandDune, sandSurfaceY } from "../game/logic/tankLayout";
+import { deformEelVertex, EEL_LENGTH } from "../game/logic/eelBody";
 import { animalGeometry, deformGroundVertex } from "./models/animals";
-import { containEel, createGroundPose, groundAnimal, groundedVertex } from "./grounding";
+import { createGroundPose, groundAnimal, groundedVertex } from "./grounding";
 
 describe("visible sand grounding", () => {
   for (const species of ["crab", "octopus", "goby"] as const) for (const habitat of SPECIES[species].habitat) {
@@ -49,20 +50,33 @@ describe("visible sand grounding", () => {
     }
     expect(Math.abs(pose.pitch)).toBeGreaterThan(.001);
   });
-  it("contains the moray's complete waving envelope in front of solid back rock", () => {
-    const tank = TANKS.cave, g = animalGeometry("eel"), p=g.getAttribute("position"), out=new THREE.Vector3(), v=new THREE.Vector3();
-    for (let yaw=0;yaw<Math.PI*2;yaw+=.3) for (const x of [0,.7]) {
-      containEel(out,tank,x,.2,0,yaw);
-      for(let i=0;i<p.count;i++) {
-        v.fromBufferAttribute(p,i);
-        const back = Math.max(0, Math.min(1, -v.x/SPECIES.eel.length-.05));
-        v.z += (Math.sin(i)*(.036+.045*1.8)+back*.09)*back*SPECIES.eel.length;
-        v.applyAxisAngle(THREE.Object3D.DEFAULT_UP,yaw).add(out);
-        expect(v.z).toBeGreaterThanOrEqual(-tank.d/2+(tank.backRock??0));
-        expect(v.z).toBeLessThan(tank.d/2);
-        expect(Math.abs(v.x)).toBeLessThan(tank.w/2);
-        for (const rock of tank.rocks ?? []) if (Math.hypot(v.x-rock.x,v.z-rock.z)<rock.r) expect(v.y).toBeGreaterThan(rock.top);
+  it("keeps the lofted moray dorsal base on the actual body top through every bend", () => {
+    const geometry = animalGeometry("eel"), positions = geometry.getAttribute("position"), wave = geometry.getAttribute("wave");
+    const rig = new Float32Array(16 * 4), body = new THREE.Vector3(), fin = new THREE.Vector3();
+    const sampledRings = new Set<number>();
+    for (const curvature of [0, 2, -2, Math.PI / EEL_LENGTH, -Math.PI / EEL_LENGTH]) {
+      for (let i = 0; i < 16; i++) {
+        const distance = i / 15 * EEL_LENGTH;
+        rig[i * 4] = curvature ? -Math.sin(distance * curvature) / curvature : -distance;
+        rig[i * 4 + 1] = .25 + Math.sin(distance * 2) * .045;
+        rig[i * 4 + 2] = curvature ? (1 - Math.cos(distance * curvature)) / curvature : 0;
+      }
+      for (let i = 0; i < positions.count; i++) {
+        if (wave.getX(i) !== 12 || wave.getW(i) !== 1) continue;
+        const s = wave.getY(i);
+        sampledRings.add(Math.round(s * 10000));
+        let top = -1;
+        for (let j = 0; j < positions.count; j++) {
+          if (wave.getX(j) === 12 && wave.getW(j) === 0 && wave.getZ(j) === 0
+            && Math.abs(wave.getY(j) - s) < 1e-6 && Math.abs(positions.getZ(j)) < 1e-7
+            && Math.abs(positions.getY(j) - positions.getY(i)) < 1e-7) { top = j; break; }
+        }
+        expect(top, `body ring at s=${s}`).toBeGreaterThanOrEqual(0);
+        deformEelVertex(fin, rig, positions.getX(i), positions.getY(i), positions.getZ(i), s);
+        deformEelVertex(body, rig, positions.getX(top), positions.getY(top), positions.getZ(top), wave.getY(top));
+        expect(fin.distanceTo(body), `dorsal attachment at s=${s}, bend=${curvature}`).toBeLessThan(1e-6);
       }
     }
+    expect(sampledRings.size).toBe(29);
   });
 });
