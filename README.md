@@ -89,7 +89,8 @@ fish, time, visitors); `?fast=1` shortens waits; `?seed=N` fixes randomness.
 
 Debug overlay (always on): Ctrl+Alt+D toggles a panel to jump to any level,
 unlock everything, open all halls (with their tanks), add coins, finish the
-tutorial, fill care and give the crown.
+tutorial, fill care and give the crown. Ctrl+Alt+U unlocks everything
+directly (Level 8, both halls with their tanks, tickets) without the panel.
 
 ### Code map
 
