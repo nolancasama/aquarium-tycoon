@@ -15,6 +15,7 @@ const WOOD = "#c58a55";
 /** Stand, glass frame, lamp bar and sand for one tank type (tank-local: pad centre on the floor). */
 export function tankShellGeometry(type: TankType): THREE.BufferGeometry {
   const t = TANKS[type];
+  if (type === "reef") return reefShellGeometry(t);
   if (t.group === "special") return specialShellGeometry(t);
   const b = new PartBuilder(0.4);
   const w = t.w;
@@ -83,17 +84,18 @@ export function tankShellGeometry(type: TankType): THREE.BufferGeometry {
 /** The water volume (centred on its own middle; the caller lifts it to STAND_H + h / 2). */
 export function waterGeometry(type: TankType): THREE.BufferGeometry {
   const t = TANKS[type];
-  return t.shape === "box" ? new THREE.BoxGeometry(t.w, t.h, t.d) : footprintPrism(footprintPoints(t), t.h, true);
+  return t.shape === "box" ? new THREE.BoxGeometry(t.w, t.h, t.d) : footprintPrism(t.shape === "reef" ? reefFootprint(t) : footprintPoints(t), t.h, true);
 }
 
 /** Vertical glass only: no top or bottom; local y is centred on the water. */
 export function glassGeometry(type: TankType, inset = 0): THREE.BufferGeometry {
-  return footprintPrism(footprintPoints(TANKS[type], inset), TANKS[type].h, false);
+  const t = TANKS[type];
+  return footprintPrism(t.shape === "reef" ? reefFootprint(t, inset) : footprintPoints(t, inset), t.h, false);
 }
 
 /** Horizontal footprint, already in x/z with upward-facing normals. */
 export function surfaceGeometry(type: TankType, inset = 0.015): THREE.BufferGeometry {
-  const p = footprintPoints(TANKS[type], inset);
+  const p = TANKS[type].shape === "reef" ? reefFootprint(TANKS[type], inset) : footprintPoints(TANKS[type], inset);
   const positions: number[] = [];
   const uv: number[] = [];
   const t = TANKS[type];
@@ -262,5 +264,206 @@ function caveRockwork(b: PartBuilder, t: TankDef) {
     geometry.translate(0, -(bounds.min.y + bounds.max.y) / 2, 0);
     b.add(geometry, "#7c8985", [rock.x, floor + height / 2, rock.z],
       [0, 0, 0], [Math.min(rock.r, t.w / 2 - Math.abs(rock.x) - 0.012), height / span, rock.r * 0.8]);
+  }
+}
+
+/** Eight individually glazed faces on a freestanding stone island. The small
+ * corner cut stays outside the existing rectangular swim bounds for every
+ * reef species (minimum body-centre inset 0.09 m along both axes). */
+export function reefFootprint(t: Pick<TankDef, "w" | "d">, inset = 0) {
+  const x = t.w / 2 - inset, z = t.d / 2 - inset;
+  const cut = Math.max(0.01, 0.16 - inset * (2 - Math.SQRT2));
+  return [{ x: -x + cut, z: -z }, { x: x - cut, z: -z },
+    { x, z: -z + cut }, { x, z: z - cut },
+    { x: x - cut, z }, { x: -x + cut, z },
+    { x: -x, z: z - cut }, { x: -x, z: -z + cut }];
+}
+
+function reefShellGeometry(t: TankDef): THREE.BufferGeometry {
+  const b = new PartBuilder(0.16);
+  const slab = (height: number, y: number, inset: number, color: string) =>
+    b.add(footprintPrism(reefFootprint(t, inset), height, true), color, [0, y + height / 2, 0]);
+  const trim = (y: number, color: string, height: number, thickness: number) => {
+    const p = reefFootprint(t);
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i], c = p[(i + 1) % p.length];
+      b.box(Math.hypot(c.x - a.x, c.z - a.z) + 0.01, height, thickness,
+        (a.x + c.x) / 2, y, (a.z + c.z) / 2, color, -Math.atan2(c.z - a.z, c.x - a.x));
+    }
+  };
+  slab(0.09, 0, -0.12, "#577d7b");
+  slab(STAND_H - 0.17, 0.09, -0.065, "#dfcaa1");
+  slab(0.08, STAND_H - 0.08, -0.105, "#e8e1c9");
+  trim(0.12, "#c58e59", 0.024, 0.15);
+  trim(STAND_H - 0.075, "#b58150", 0.025, 0.16);
+  trim(STAND_H - 0.012, "#457f82", 0.055, 0.06);
+  trim(STAND_H + t.h - 0.012, "#387276", 0.045, 0.045);
+  for (const p of reefFootprint(t)) b.box(0.023, t.h, 0.023, p.x, STAND_H, p.z, "#72a7aa");
+  // Recessed turquoise panels on both long viewing faces; no back wall.
+  for (const side of [-1, 1]) for (const x of [-1.7, 0, 1.7]) {
+    b.box(1.28, 0.32, 0.012, x, 0.23, side * (t.d / 2 + 0.067), "#639b94");
+    b.box(1.08, 0.018, 0.016, x, 0.27, side * (t.d / 2 + 0.075), "#8dbbb0");
+  }
+  slab(SAND_H, STAND_H, 0.008, "#ecd9a4");
+  const dune = sandDune(t);
+  b.sphere(dune.radius, dune.x, dune.y, dune.z, "#e6cf94", [1, 0.09, 0.55], 24);
+  // The whole reef (rock bank, arch, ledges, coral) is one opaque batch. Every
+  // solid stays inside its 'rocks' avoidance column, and nothing overhangs the
+  // column-free lane between the arch towers below the animals' ceiling.
+  const rocks = t.rocks ?? [];
+  const towers = rocks.filter((r) => r.top >= t.h - 0.05);
+  rocks.forEach((rock, i) => {
+    const floor = sandSurfaceY(t, rock.x, rock.z);
+    const top = STAND_H + rock.top;
+    if (rock.top <= 0.25) return reefLedge(b, t, rock, floor, top, i);
+    if (towers.includes(rock)) return reefMound(b, t, rock, floor, STAND_H + 1.74, i, true);
+    // Coral grows up to the column top; the rock under it stops short.
+    reefMound(b, t, rock, floor, top - 0.24, i, false);
+    reefCoral(b, t, rock, floor, top, i);
+  });
+  if (towers.length === 2) reefArch(b, t, towers);
+  // Sparse sand rubble avoids both the purchasing rings and the open passage.
+  for (let i = 0; i < 30; i++) {
+    const x = Math.sin(i * 2.4) * 2.35, z = Math.cos(i * 1.7) * 0.96;
+    if (clearOfSlots(t, x, z) && Math.abs(x) > 0.4) {
+      b.add(new THREE.IcosahedronGeometry(0.018, 0), i % 2 ? "#e4d0a3" : "#c8bca4",
+        [x, sandSurfaceY(t, x, z), z], [0, 0, 0], [1.3, 0.5, 1]);
+    }
+  }
+  return b.build();
+}
+
+type ReefRock = NonNullable<TankDef["rocks"]>[number];
+
+const REEF_ROCK = ["#b9a48a", "#a89480", "#c6ae94"];
+const REEF_LIME = ["#c98aa6", "#a688c4", "#d69c8c"];
+const REEF_COLOR = ["#f08a5d", "#f4c64e", "#ee7ea3", "#5fbfae", "#a77ad3", "#ff9f6e"];
+
+/** Seeded 0..1 noise, so a jittered vertex shared by several faces moves once. */
+function hash3(x: number, y: number, z: number, seed: number) {
+  const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719 + seed * 19.31) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+/** A lumpy boulder: a jittered icosphere, radius 0.84–1.06 before scaling. */
+function lump(seed: number, detail = 1) {
+  const g = new THREE.IcosahedronGeometry(1, detail);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const k = 0.84 + 0.22 * hash3(Math.round(x * 100), Math.round(y * 100), Math.round(z * 100), seed);
+    p.setXYZ(i, x * k, y * k, z * k);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+/** How far a formation may spread: its avoidance column, kept off the glass. */
+function reefReach(t: TankDef, rock: ReefRock) {
+  return Math.min(rock.r, t.w / 2 - Math.abs(rock.x) - 0.05, t.d / 2 - Math.abs(rock.z) - 0.05);
+}
+
+/** A tilted cylinder from a base point (branches, stalks). */
+function branch(b: PartBuilder, base: THREE.Vector3, len: number, rBot: number, rTop: number, tiltX: number, tiltZ: number, color: string) {
+  const rot = new THREE.Euler(tiltX, 0, tiltZ);
+  const mid = new THREE.Vector3(0, len / 2, 0).applyEuler(rot).add(base);
+  b.add(new THREE.CylinderGeometry(rTop, rBot, len, 5, 1, true), color, [mid.x, mid.y, mid.z], [tiltX, 0, tiltZ]);
+  return new THREE.Vector3(0, len, 0).applyEuler(rot).add(base);
+}
+
+/** Stacked, overlapping boulders tapering to `top`, with coralline and colour patches. */
+function reefMound(b: PartBuilder, t: TankDef, rock: ReefRock, floor: number, top: number, i: number, tower: boolean) {
+  const R = reefReach(t, rock) * 0.8;
+  const h = top - floor;
+  const layers = tower ? 6 : 4;
+  for (let l = 0; l < layers; l++) {
+    const f = l / layers;
+    const rad = R * (1 - f * (tower ? 0.42 : 0.55));
+    const a = i * 1.7 + l * 2.1;
+    const off = R * 0.16;
+    b.add(lump(i * 31 + l), (i + l) % 3 === 0 ? REEF_LIME[(i + l) % 3] : REEF_ROCK[(i + l) % 3],
+      [rock.x + Math.cos(a) * off, floor + h * (0.12 + f * 0.86), rock.z + Math.sin(a) * off],
+      [0, a, 0], [rad, h / layers * (tower ? 1.05 : 0.8), rad * 0.9]);
+  }
+  // Encrusting colour on the visible faces.
+  for (let k = 0; k < (tower ? 7 : 5); k++) {
+    const f = 0.15 + 0.75 * hash3(i, k, 2, 5);
+    const rad = R * (1 - f * (tower ? 0.42 : 0.55)) * 0.86;
+    const a = -Math.PI / 2 + (hash3(i, k, 3, 7) - 0.5) * 2.6 + Math.PI; // front half (+z)
+    b.add(lump(i * 7 + k, 0), REEF_COLOR[(i + k) % REEF_COLOR.length],
+      [rock.x + Math.sin(a) * rad, floor + h * f, rock.z - Math.cos(a) * rad],
+      [0, a, 0], [0.06 + 0.03 * hash3(k, i, 4, 1), 0.04, 0.05]);
+  }
+  // A dark crevice at the foot of some formations, where small fish hide.
+  if (!tower && i % 3 === 1) {
+    b.add(lump(i, 0), "#3b302c", [rock.x + R * 0.1, floor + 0.07, rock.z + R * 0.82], [0, 0, 0], [0.11, 0.07, 0.05], { vary: false });
+  }
+}
+
+/** Branching coral on top, and a table-coral shelf on the bigger formations. */
+function reefCoral(b: PartBuilder, t: TankDef, rock: ReefRock, floor: number, top: number, i: number) {
+  const R = reefReach(t, rock) * 0.8;
+  const color = REEF_COLOR[(i * 2) % REEF_COLOR.length];
+  const tip = ["#ffe0c8", "#fff1b8", "#ffd3e2", "#c9f2ea", "#e7d4f7", "#ffe1cc"][(i * 2) % 6];
+  const base = top - 0.27;
+  for (let k = 0; k < 6; k++) {
+    const a = k * Math.PI * 2 / 6 + i;
+    const s = R * 0.42 * hash3(i, k, 5, 2);
+    const start = new THREE.Vector3(rock.x + Math.cos(a) * s, base, rock.z + Math.sin(a) * s);
+    const tiltX = Math.sin(a) * 0.32, tiltZ = -Math.cos(a) * 0.32;
+    const len = 0.16 + 0.07 * hash3(k, i, 6, 3);
+    const end = branch(b, start, len, 0.022, 0.014, tiltX, tiltZ, color);
+    const fork = branch(b, end, 0.08, 0.013, 0.009, tiltX * 1.6, tiltZ * 1.6, color);
+    b.add(new THREE.IcosahedronGeometry(0.016, 0), tip, [fork.x, fork.y, fork.z]);
+    b.add(new THREE.IcosahedronGeometry(0.014, 0), tip, [end.x, end.y, end.z]);
+  }
+  if (rock.r >= 0.45 && i % 2 === 0) {
+    // A table coral cantilevered toward the visitors, inside the column.
+    const y = floor + (top - floor) * 0.5;
+    const r = Math.min(0.26, R * 0.62);
+    const x = rock.x + R * 0.12, z = rock.z + R - r;
+    branch(b, new THREE.Vector3(x, y - 0.12, z - r * 0.4), 0.13, 0.03, 0.022, 0.35, 0, "#c99a6c");
+    b.cyl(r, r * 0.86, 0.028, x, y, z, i % 4 ? "#e0a96e" : "#86c4a2", 12);
+    b.cyl(r * 0.7, r * 0.6, 0.02, x, y + 0.028, z, i % 4 ? "#efc596" : "#a9dcbf", 12);
+  }
+}
+
+/** A low flat-topped ledge (a placement surface) skirted with rock. */
+function reefLedge(b: PartBuilder, t: TankDef, rock: ReefRock, floor: number, top: number, i: number) {
+  const r = Math.min(reefReach(t, rock) * 0.7, 0.22);
+  const h = top - floor;
+  b.cyl(r, r * 1.05, h - 0.02, rock.x, floor, rock.z, REEF_ROCK[i % 3], 14);
+  b.cyl(r, r, 0.02, rock.x, top - 0.02, rock.z, "#dcc6a2", 14);
+  for (let k = 0; k < 8; k++) {
+    const a = k * Math.PI / 4 + i;
+    b.add(lump(i * 13 + k, 0), k % 3 ? REEF_ROCK[k % 3] : REEF_LIME[k % 3],
+      [rock.x + Math.cos(a) * r * 0.86, floor + h * 0.38, rock.z + Math.sin(a) * r * 0.86],
+      [0, a, 0], [0.07, h * 0.5, 0.06]);
+  }
+}
+
+/** A thin organic bridge between the two towers. Over the column-free lane
+ * (|x| below the towers' inner edge) its underside stays at the surface, above
+ * the highest animal body (h - 0.07); it bends down only inside the towers. */
+function reefArch(b: PartBuilder, t: TankDef, towers: ReefRock[]) {
+  const [l, r] = [...towers].sort((a, c) => a.x - c.x);
+  const z = (l.z + r.z) / 2;
+  const inner = r.x - r.r;
+  const crown = STAND_H + t.h - 0.025;
+  const pts = [
+    [l.x - 0.08, STAND_H + 1.6], [l.x + 0.1, STAND_H + 1.84], [-inner, crown - 0.004],
+    [0, crown], [inner, crown - 0.004], [r.x - 0.1, STAND_H + 1.84], [r.x + 0.08, STAND_H + 1.6]
+  ].map(([x, y]) => new THREE.Vector3(x, y, z));
+  b.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.04, 7), "#bba68d", [0, 0, 0]);
+  // Shoulders thicken where the arch meets each tower.
+  for (const tw of [l, r]) for (let k = 0; k < 3; k++) {
+    const s = Math.sign(tw.x);
+    b.add(lump(k + (s > 0 ? 50 : 60)), k === 1 ? REEF_LIME[k] : REEF_ROCK[k],
+      [tw.x - s * (0.06 + k * 0.07), STAND_H + 1.66 + k * 0.08, z],
+      [0, k, 0], [0.15 - k * 0.025, 0.12, 0.13]);
+  }
+  for (let k = 0; k < 5; k++) {
+    const x = (k - 2) * inner * 0.45;
+    b.add(lump(k + 70, 0), REEF_COLOR[k], [x, crown + 0.03, z], [0, k, 0], [0.05, 0.025, 0.04]);
   }
 }

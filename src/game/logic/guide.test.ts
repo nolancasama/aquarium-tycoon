@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SPECIES } from "../data/fish";
-import { HALL_PRICE, TANKS } from "../data/tanks";
+import { ATRIUM_PRICE, HALL_PRICE, TANKS } from "../data/tanks";
 import type { StageId } from "../types";
 import { nextStep } from "./guide";
 import { buyFish, goals, newModel, newTank, openHall, placeFish, UPGRADE_PRICE, type Goal, type Model, type Result } from "./model";
@@ -47,6 +47,19 @@ function finish(m: Model, id: Goal["id"]) {
 }
 
 describe("state-derived progression guide", () => {
+  it("suggests an affordable Atrium in free play and locates its Gallery doorway", () => {
+    const m = level(8);
+    m.progress = { ...m.progress, star: true, superStar: true, freePlay: true, hallOpen: true, galleryOpen: true };
+    m.coins = ATRIUM_PRICE;
+    const action = nextStep(m);
+    expect(action?.title.en).toBe("Open the Coral Reef Atrium!");
+    expect(action?.where.en).toContain("Jellyfish Gallery");
+    expect(action?.target).toBe("door-atrium");
+    expect(action?.shopItem).toBe("atrium");
+    expect(nextStep({ ...m, coins: ATRIUM_PRICE - 1 })).toBeNull();
+    expect(nextStep({ ...m, progress: { ...m.progress, atriumOpen: true } })).toBeNull();
+  });
+
   for (const stage of [1, 2, 3, 4, 5, 6, 7, 8] as const) {
     it(`guides each Level ${stage} goal in the same order as the goal panel`, () => {
       const m = level(stage);

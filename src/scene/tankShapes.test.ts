@@ -6,10 +6,12 @@ import { sandDune, sandSurfaceY } from "../game/logic/tankLayout";
 import type { DecorKind } from "../game/types";
 import { decorRadius } from "../game/world";
 import { decorModel } from "./models/decor";
+import { SPECIES } from "../game/data/fish";
+import { tankFishBounds } from "../game/logic/swim";
 import { glassGeometry, surfaceGeometry, tankShellGeometry, waterGeometry } from "./models/tankShell";
 
 const special = Object.values(TANKS).filter((tank) => tank.group === "special");
-const newDecor: DecorKind[] = ["kelp", "arch", "cave", "driftwood"];
+const newDecor: DecorKind[] = ["kelp", "arch", "cave", "driftwood", "staghorn", "brain", "fan", "table"];
 const EPS = 0.00001;
 
 // Deliberately independent of the production footprint helper: a wrong shared
@@ -23,6 +25,8 @@ function inside(tank: TankDef, x: number, z: number): boolean {
       return Math.abs(z) <= tank.d / 2 + EPS && Math.abs(x) <= tank.w / 2 - Math.abs(z) * tank.w / (2 * tank.d) + EPS;
     case "bow":
       return z <= tank.d / 2 + (tank.bulge ?? 0) * (1 - (2 * x / tank.w) ** 2) + EPS;
+    case "reef":
+      return Math.abs(z) <= tank.d / 2 + EPS && Math.abs(x) + Math.abs(z) <= tank.w / 2 + tank.d / 2 - 0.16 + EPS;
     default:
       return z <= tank.d / 2 + EPS;
   }
@@ -63,7 +67,11 @@ describe("special tank footprints", () => {
       }
       const normal = glass.getAttribute("normal");
       for (let i = 0; i < normal.count; i++) expect(Math.abs(normal.getY(i)), "open-ended glass walls").toBeLessThan(EPS);
-      if (tank.shape === "hex") {
+      if (tank.shape === "reef") {
+        const p = glass.getAttribute("position");
+        const corners = new Set(Array.from({ length: p.count }, (_, i) => `${p.getX(i).toFixed(5)},${p.getZ(i).toFixed(5)}`));
+        expect(corners.size, "eight panes, including the clipped corners").toBe(8);
+      } else if (tank.shape === "hex") {
         const p = glass.getAttribute("position");
         const corners = new Set(Array.from({ length: p.count }, (_, i) => `${p.getX(i).toFixed(5)},${p.getZ(i).toFixed(5)}`));
         expect(corners.size, "six panes meeting at six footprint corners").toBe(6);
@@ -101,11 +109,13 @@ describe("special tank footprints", () => {
       material.dispose();
     });
 
-    it(`${tank.type}: merged shell, glass and water stay below 6,000 triangles`, () => {
+    // The giant reef is one fixed centrepiece per aquarium with its whole reef baked in.
+    const budget = tank.type === "reef" ? 12000 : 6000;
+    it(`${tank.type}: merged shell, glass and water stay below ${budget} triangles`, () => {
       const geometries = [tankShellGeometry(tank.type), glassGeometry(tank.type), waterGeometry(tank.type)];
       // Include the two 32-by-4 torus display bands built by JellyDisplay.
       const lightBands = tank.lights ? 2 * 32 * 4 * 2 : 0;
-      expect(geometries.reduce((total, geometry) => total + triangles(geometry), lightBands)).toBeLessThanOrEqual(6000);
+      expect(geometries.reduce((total, geometry) => total + triangles(geometry), lightBands)).toBeLessThanOrEqual(budget);
       geometries.forEach((geometry) => geometry.dispose());
     });
   }
@@ -138,6 +148,45 @@ describe("special tank footprints", () => {
     geometry.dispose();
     material.dispose();
   });
+
+  it("reef: its open arch is passable, and conservative swim bounds stay within all eight glass faces", () => {
+    const tank = TANKS.reef;
+    for (const species of Object.values(SPECIES).filter((animal) => animal.habitat.includes("reef"))) {
+      const bounds = tankFishBounds(tank, SAND_H, species);
+      for (const x of [bounds.min.x, bounds.max.x]) for (const z of [bounds.min.z, bounds.max.z]) {
+        expect(inside(tank, x, z), `${species.id} at a swim-bound corner`).toBe(true);
+      }
+      // No collision column occupies the centre of the tall open arch.
+      expect(tank.rocks!.every((rock) => Math.hypot(rock.x, rock.z - 0.06) > rock.r + species.radius)).toBe(true);
+    }
+    const geometry = tankShellGeometry("reef");
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.updateMatrixWorld();
+    const ray = new THREE.Raycaster(new THREE.Vector3(0, STAND_H + 0.6, 1), new THREE.Vector3(0, 0, -1), 0, 2);
+    expect(ray.intersectObject(mesh), "open water through the arch, with no solid rock slab").toHaveLength(0);
+    geometry.dispose(); material.dispose();
+  });
+
+  it("reef: two low shelf slots have rendered platforms and matching solid-rock clearance", () => {
+    const tank = TANKS.reef;
+    const shelves = tank.slots.filter((slot) => slot.y !== undefined);
+    expect(shelves).toHaveLength(2);
+    const geometry = tankShellGeometry("reef");
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.updateMatrixWorld();
+    for (const shelf of shelves) {
+      const column = tank.rocks!.find((rock) => rock.x === shelf.x && rock.z === shelf.z);
+      expect(column?.top).toBe(shelf.y);
+      expect(column!.r).toBeGreaterThanOrEqual(0.44);
+      for (const dx of [-0.15, 0, 0.15]) for (const dz of [-0.15, 0, 0.15]) {
+        const ray = new THREE.Raycaster(new THREE.Vector3(shelf.x + dx, STAND_H + 0.4, shelf.z + dz), new THREE.Vector3(0, -1, 0));
+        expect(ray.intersectObject(mesh)[0].point.y).toBeCloseTo(STAND_H + shelf.y!, 5);
+      }
+    }
+    geometry.dispose(); material.dispose();
+  });
 });
 
 describe("new decoration clearance", () => {
@@ -148,8 +197,8 @@ describe("new decoration clearance", () => {
       model.geo.computeBoundingBox();
       expect(model.geo.boundingBox!.min.y).toBeCloseTo(0, 5);
       expect(model.geo.boundingBox!.max.y).toBeCloseTo(DECOR[kind].versions[0].height, 5);
-      const radius = decorRadius(kind, null);
       for (const tank of Object.values(TANKS).filter((entry) => decorFits(kind, entry.type))) {
+        const radius = decorRadius(kind, null, tank.type);
         for (let i = 0; i < p.count; i++) {
           const x = p.getX(i) * tank.h;
           const z = p.getZ(i) * tank.h;

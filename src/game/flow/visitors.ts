@@ -7,7 +7,7 @@ import { IT_COLOR_IDS, IT_COLOR_PHRASE, ITS_IDS, ITS_IDS_BASE, ITS_PHRASE, LIKE_
 import { makeRng, shuffle } from "../logic/rng";
 import { SPECIES } from "../data/fish";
 import { SLOT_POS, STAND_H, TANKS } from "../data/tanks";
-import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, benchPose, lookSpot, requestEligible, route, tankOrigin } from "../world";
+import { ATRIUM_REST_SPOTS, BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, benchPose, lookSpot, reefLoop, requestEligible, route, tankOrigin } from "../world";
 import { ask, fastMode, say, speak, wait } from "./ask";
 import { openTank } from "./actions";
 import { audio } from "../../audio/audio";
@@ -118,7 +118,7 @@ function tankSlot(tankId: string): SlotId | null {
 export function cornerSpot(t: TankRec, side: 1 | -1 = 1): Vec2 {
   const o = tankOrigin(t.slot);
   // In front of the rope (z −1.4), beside the glass.
-  return { x: o.x + side * (TANKS[t.type].w / 2 + 0.3), z: o.z + 1.25 };
+  return { x: o.x + side * (TANKS[t.type].w / 2 + 0.3), z: o.z + (t.type === "reef" ? 1.9 : 1.25) };
 }
 
 function startLook(v: VisitorRt, tankId: string) {
@@ -168,7 +168,16 @@ function nextLookOrLeave(v: VisitorRt) {
     const slot = tankSlot(next)!;
     v.state = "walk";
     v.at = next;
-    v.path = route(v, lookSpot(slot, visitorNo + v.seen.length));
+    const spot = lookSpot(slot, visitorNo + v.seen.length);
+    v.path = slot === "I" ? reefLoop(v, spot) : route(v, spot);
+    return;
+  }
+  if (!v.atriumRested && v.x > 30 && v.seen.some((id) => tankSlot(id) === "I")) {
+    v.atriumRested = true;
+    v.restingAt = ATRIUM_REST_SPOTS[visitorNo % ATRIUM_REST_SPOTS.length];
+    v.at = null;
+    v.state = "walk";
+    v.path = route(v, v.restingAt);
     return;
   }
   leave(v);
@@ -231,6 +240,13 @@ function arrive(v: VisitorRt) {
     return;
   }
   if (v.scripted) return;
+  if (v.restingAt) {
+    v.restingAt = undefined;
+    v.state = "look";
+    v.face = { x: 38, z: -1 };
+    v.until = rt.time + (fastMode() ? 0.5 : 3);
+    return;
+  }
   if (v.state === "leave") {
     v.state = "gone";
     return;

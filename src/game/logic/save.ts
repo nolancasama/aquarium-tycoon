@@ -141,6 +141,8 @@ function readProgress(raw: unknown, version: number): Progress {
   p.handShown = [...new Set(arr(src.handShown).filter((id): id is string => typeof id === "string" && ["fish-shop", "place-animal", "visitor", "decor-ring", "room-navigation"].includes(id)))];
   p.seenPatterns = [...new Set(arr(src.seenPatterns).filter(isSentencePattern))];
   p.galleryOpen = src.galleryOpen === true && p.stage >= 8 && p.hallOpen;
+  p.atriumOpen = src.atriumOpen === true && p.galleryOpen;
+  p.atriumIntroSeen = src.atriumIntroSeen === true && p.atriumOpen;
   p.said = [...new Set(arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES))];
   return p;
 }
@@ -179,6 +181,13 @@ export function decodeSave(text: string | null): SaveData | null {
     tanks.push(newTank(`t${950 + n}`, "cylinder", "G"));
     ids.add(`t${950 + n}`);
   }
+  // The central reef is permanent, including when repairing an incomplete save.
+  if (m.progress.atriumOpen && !tanks.some((t) => t.slot === "I")) {
+    let n = 1;
+    while (ids.has(`t${980 + n}`)) n++;
+    tanks.push(newTank(`t${980 + n}`, "reef", "I"));
+    ids.add(`t${980 + n}`);
+  }
   m.tanks = tanks;
   const inv = isObj(src.inv) ? src.inv : {};
   const freePads = SLOT_ORDER.filter((s) => !tanks.some((t) => t.slot === s) && roomOpen(HALL_OF[s], m.progress) && !BUILT_IN_PADS.includes(s)).length;
@@ -190,7 +199,7 @@ export function decodeSave(text: string | null): SaveData | null {
       .map((d) => readDecor(d, ids))
       .filter((d): d is DecorRec => Boolean(d)),
     tanks: arr(inv.tanks)
-      .filter((t): t is TankType => isTankType(t) && t !== "small" && t !== "ocean" && m.progress.stage >= TANKS[t].fromStage)
+      .filter((t): t is TankType => isTankType(t) && t !== "small" && t !== "ocean" && t !== "reef" && m.progress.stage >= TANKS[t].fromStage)
       .slice(0, freePads)
   };
   m.coins = Math.max(0, Math.min(99999, Math.floor(num(src.coins, 0))));

@@ -24,6 +24,8 @@ export interface DecorDef {
   fromStage: StageId;
   /** Size class: a tank takes decorations up to its own class (the shipwreck only big tanks; the jelly column small things only). */
   size: DecorSize;
+  /** Conservative horizontal radius in metres, including the tallest fitting tank's scale. */
+  footprint?: number;
 }
 
 export const DECOR: Record<DecorKind, DecorDef> = {
@@ -168,10 +170,36 @@ export const DECOR: Record<DecorKind, DecorDef> = {
     ja: "りゅうぼく",
     size: "medium",
     versions: [{ variant: null, price: 8, joy: 6, color: null, height: 0.18 }]
+  },
+  staghorn: {
+    kind: "staghorn", name: "Branch coral", ja: "えだサンゴ", fromStage: 8,
+    size: "medium", footprint: 0.28, question: "Red or blue?",
+    versions: [
+      { variant: "red", price: 14, joy: 10, color: "red", height: 0.46 },
+      { variant: "blue", price: 14, joy: 10, color: "blue", height: 0.46 }
+    ]
+  },
+  brain: {
+    kind: "brain", name: "Brain coral", ja: "のうみそサンゴ", fromStage: 8,
+    size: "medium", footprint: 0.25, question: null,
+    versions: [{ variant: null, price: 12, joy: 9, color: "green", height: 0.19 }]
+  },
+  fan: {
+    kind: "fan", name: "Sea fan", ja: "うみの うちわ", fromStage: 8,
+    size: "medium", footprint: 0.28, question: "Red or blue?",
+    versions: [
+      { variant: "red", price: 14, joy: 10, color: "red", height: 0.39 },
+      { variant: "blue", price: 14, joy: 10, color: "blue", height: 0.39 }
+    ]
+  },
+  table: {
+    kind: "table", name: "Table coral", ja: "テーブルサンゴ", fromStage: 8,
+    size: "medium", footprint: 0.28, question: null,
+    versions: [{ variant: null, price: 16, joy: 11, color: "yellow", height: 0.26 }]
   }
 };
 
-export const DECOR_ORDER: DecorKind[] = ["plant", "coral", "rock", "shell", "chest", "bubbler", "starfish", "castle", "anemone", "shipwreck", "kelp", "arch", "cave", "driftwood"];
+export const DECOR_ORDER: DecorKind[] = ["plant", "coral", "rock", "shell", "chest", "bubbler", "starfish", "castle", "anemone", "shipwreck", "kelp", "arch", "cave", "driftwood", "staghorn", "brain", "fan", "table"];
 
 /** Can this decoration go in this kind of tank? */
 export function decorFits(kind: DecorKind, tank: TankType): boolean {

@@ -1,8 +1,8 @@
 import { DECOR, decorFits } from "../data/decor";
 import { FISH_ORDER, SPECIES } from "../data/fish";
-import { HALL_PRICE, TANKS } from "../data/tanks";
+import { ATRIUM_PRICE, HALL_PRICE, TANKS } from "../data/tanks";
 import type { SpeciesId } from "../types";
-import { canLive, goals, happiness, HAPPY, hasSpace, isSpeciesUnlocked, padsFor, UPGRADE_PRICE, type Goal, type Model, type TankRec, type TutorialStep } from "./model";
+import { atriumUnlocked, canLive, goals, happiness, HAPPY, hasSpace, isSpeciesUnlocked, padsFor, UPGRADE_PRICE, type Goal, type Model, type TankRec, type TutorialStep } from "./model";
 
 /** Placement completes before the feed step; old saves need no extra flag. */
 export const objectivesUnlocked = (step: TutorialStep) => step === "feed" || step === "visitor" || step === "decorate" || step === "done";
@@ -157,6 +157,12 @@ export function nextStep(m: Model): Step | null {
       return step("allHappy", line("The judge is coming!", "しんさの おきゃくさんが くるよ！"),
         line("Your goals are done. Watch for the judge!", "もくひょう クリア！ しんさの おきゃくさんを まとう！"),
         line("Keep your fish happy. Pico will welcome the judge soon.", "さかなを ハッピーに して まとう。もうすぐ ピコが おむかえするよ！"));
+    }
+    if (m.progress.freePlay && atriumUnlocked(m) && !m.progress.atriumOpen && m.coins >= ATRIUM_PRICE) {
+      return step("openHall", line("Open the Coral Reef Atrium!", "サンゴの アトリウムを ひらこう！"),
+        line("In the Jellyfish Gallery, tap the door on the right.", "クラゲの ギャラリーの みぎの ドアを タップしよう！"),
+        line(`Tap Tank, then choose Coral Reef Atrium for ${ATRIUM_PRICE} coins. A giant reef tank comes with it!`, `「タンク」で サンゴの アトリウムを えらぼう。${ATRIUM_PRICE} コインで おおきな サンゴの タンクが ついてくるよ！`),
+        "door-atrium", "atrium");
     }
     return null;
   }

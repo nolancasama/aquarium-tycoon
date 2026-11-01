@@ -121,7 +121,8 @@ export function installE2eHook(seed: number) {
         const p = TANKS[t.type].slots[slot];
         const o = SLOT_POS[t.slot];
         const d = t.decor.find((x) => x.slot === slot);
-        const y = kind === "decor" && d ? sandSurfaceY(TANKS[t.type], p.x, p.z) + decorVersion(d.kind, d.variant).height * TANKS[t.type].h * 0.5 : slotMarkerY(TANKS[t.type], p);
+        const base = Math.max(sandSurfaceY(TANKS[t.type], p.x, p.z), STAND_H + (p.y ?? 0));
+        const y = kind === "decor" && d ? base + decorVersion(d.kind, d.variant).height * TANKS[t.type].h * 0.5 : Math.max(slotMarkerY(TANKS[t.type], p), base + 0.005);
         return project(o.x + p.x, y, o.z + p.z);
       }
       if (kind === "pad") {

@@ -27,3 +27,64 @@
     transition: none;
   }
 }
+
+/* Coral previews use the existing data-kind hooks. Portraits.tsx is shared
+   with the animal art work; these four additions need no changes there. */
+[data-kind="staghorn"] {
+  --reef-preview: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Cpath d='M30 54V22m0 20L15 26m15 7L44 17M15 26l-2-13m2 13 7-10m22 1 2-9m-2 9-8-6M30 24l-6-14m6 14 5-15' stroke='black' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  --reef-color: linear-gradient(90deg, #e78b9c 49%, #6a9fdb 51%);
+  --reef-label: "Branch coral\a えだサンゴ";
+}
+[data-kind="brain"] {
+  --reef-preview: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Cpath d='M8 48C2 20 19 13 30 17c19-7 29 10 23 31Z' fill='black'/%3E%3Cpath d='M13 44q13-9 2-16m10 18q-8-8 3-12t-1-13m10 26q9-9-1-13t5-12m7 20q-10-7-2-12' stroke='white' stroke-width='3' fill='none'/%3E%3C/svg%3E");
+  --reef-color: #94b17a;
+  --reef-label: "Brain coral\a のうみそサンゴ";
+}
+[data-kind="fan"] {
+  --reef-preview: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Cpath d='M30 55V9M30 46 8 31l-3-13m25 23L12 21l2-13m16 23L22 11l3-7m5 42 23-18 3-12M30 38l18-20-2-10M30 29l8-19-2-6M8 31l4-10 10-10m31 17-5-10-10-8' stroke='black' stroke-width='2.8' stroke-linejoin='round' stroke-linecap='round' fill='none'/%3E%3C/svg%3E");
+  --reef-color: linear-gradient(90deg, #e78b9c 49%, #6a9fdb 51%);
+  --reef-label: "Sea fan\a うみの うちわ";
+}
+[data-kind="table"] {
+  --reef-preview: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Cpath d='M28 54V24h5v30z' fill='black'/%3E%3Cellipse cx='30' cy='41' rx='25' ry='5' fill='black'/%3E%3Cellipse cx='30' cy='30' rx='20' ry='5' fill='black'/%3E%3Cellipse cx='30' cy='20' rx='15' ry='4' fill='black'/%3E%3C/svg%3E");
+  --reef-color: #dfad75;
+  --reef-label: "Table coral\a テーブルサンゴ";
+}
+.decor-card:is([data-kind="staghorn"], [data-kind="brain"], [data-kind="fan"], [data-kind="table"]) .pics {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 104px;
+}
+.decor-card:is([data-kind="staghorn"], [data-kind="brain"], [data-kind="fan"], [data-kind="table"]) .pics::before,
+.tray-item:is([data-kind="staghorn"], [data-kind="brain"], [data-kind="fan"], [data-kind="table"])::before {
+  content: "";
+  display: block;
+  width: 66px;
+  height: 66px;
+  background: var(--reef-color);
+  mask: var(--reef-preview) center / contain no-repeat;
+}
+.decor-card:is([data-kind="staghorn"], [data-kind="brain"], [data-kind="fan"], [data-kind="table"]) .pics::after {
+  content: var(--reef-label);
+  white-space: pre-line;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #365b64;
+}
+.tray-item:is([data-kind="staghorn"], [data-kind="brain"], [data-kind="fan"], [data-kind="table"])::before {
+  width: 56px;
+  height: 56px;
+}
+.tray-item[aria-label*="(red)"] { --reef-color: #e78b9c; }
+.tray-item[aria-label*="(blue)"] { --reef-color: #6a9fdb; }
+/* Only the new coral models lack an SVG in the shared choice component. */
+[data-testid="decor-choice"] > .fish-card:not(:has(> svg))::before {
+  content: "";
+  display: block;
+  width: 92px;
+  height: 92px;
+  background: #e78b9c;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Cpath d='M30 54V18m0 24L12 24m18 8L46 14M12 24V12m0 12 9-9m25-1V6m0 8-8-5M30 21l-6-14m6 14 6-13' stroke='black' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+[data-testid="decor-choice"] > .fish-card:not(:has(> svg)):nth-child(2)::before { background: #6a9fdb; }

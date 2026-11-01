@@ -10,6 +10,7 @@ import {
   newModel,
   newTank,
   openGallery,
+  openAtrium,
   openHall,
   placeDecor,
   placeFish,
@@ -22,7 +23,7 @@ import {
 } from "./model";
 import { decorFits } from "../data/decor";
 import { SPECIES, SPECIES_ORDER } from "../data/fish";
-import { PAD_TYPES, TANKS } from "../data/tanks";
+import { ATRIUM_PRICE, PAD_TYPES, TANKS } from "../data/tanks";
 import { route } from "../world";
 import { ROOMS, roomAtX } from "../data/rooms";
 import { frontAt, stepSwim, newSwimState, tankFishBounds, type SwimEnv } from "./swim";
@@ -91,6 +92,21 @@ describe("habitats and reasons", () => {
 });
 
 describe("special tanks, the Gallery and remodelling", () => {
+  it("the Atrium requires the Gallery and its price, adds two pads and a permanent reef exactly once", () => {
+    expect(openAtrium(level8())).toEqual({ ok: false, reason: "locked" });
+    const gallery = ok(openGallery(level8()));
+    expect(openAtrium({ ...gallery, coins: ATRIUM_PRICE - 1 })).toEqual({ ok: false, reason: "coins" });
+    const m = ok(openAtrium({ ...gallery, coins: ATRIUM_PRICE }));
+    expect(m.coins).toBe(0);
+    expect(m.progress.atriumOpen).toBe(true);
+    expect(m.tanks.find((t) => t.slot === "I")?.type).toBe("reef");
+    expect(freeSlots(m)).toEqual(expect.arrayContaining(["J", "K"]));
+    expect(freeSlots(m)).not.toContain("I");
+    expect(openAtrium(m)).toEqual({ ok: false, reason: "owned" });
+    expect(buyTank(m, "reef")).toEqual({ ok: false, reason: "locked" });
+    expect(remodelPlan(m, m.lastId!, "hex").reason).toBe("locked");
+  });
+
   it("special tanks are Level 8 and go only on pads that take them", () => {
     const early = { ...level8(), progress: { ...level8().progress, stage: 7 as const } };
     expect(buyTank(early, "hex").ok).toBe(false);
@@ -182,7 +198,7 @@ describe("rooms and shapes", () => {
     const p = route({ x: 0, z: 0 }, { x: 24, z: 0 });
     expect(p.map((q) => roomAtX(q.x))).toEqual([0, 1, 1, 2, 2]);
     expect(route({ x: 24, z: 0 }, { x: 25, z: 1 })).toEqual([{ x: 25, z: 1 }]);
-    expect(ROOMS.map((r) => r.id)).toEqual(["hall", "ocean", "gallery"]);
+    expect(ROOMS.map((r) => r.id)).toEqual(["hall", "ocean", "gallery", "atrium"]);
   });
 
   it("keeps animals inside round, six-sided and bowed glass, and in front of the cave rockwork", () => {

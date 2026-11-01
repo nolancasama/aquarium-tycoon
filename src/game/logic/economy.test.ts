@@ -25,9 +25,11 @@ import {
   earnSuperStar,
   happiness,
   openHall,
+  openGallery,
+  openAtrium,
   UPGRADE_PRICE
 } from "./model";
-import { HALL_PRICE, TANKS } from "../data/tanks";
+import { ATRIUM_PRICE, GALLERY_PRICE, HALL_PRICE, TANKS } from "../data/tanks";
 import { SPECIES } from "../data/fish";
 import type { SpeciesId } from "../types";
 
@@ -241,5 +243,26 @@ describe("economy simulation", () => {
     m = decay(m, 10_000);
     const tips = m.tanks.reduce((n, t) => n + tipFor(t), 0);
     expect(tips).toBeGreaterThanOrEqual(1);
+  });
+
+  it("free play reaches the Atrium in 8–12 minutes after opening and stocking the Gallery", () => {
+    const { m: starred } = play("bluetang", "bluetang", true);
+    let { m } = playPhase2(starred);
+    while (m.coins < GALLERY_PRICE) m = helpOne(m);
+    m = ok(openGallery(m));
+    const started = m.stats.seconds;
+    // A student first gives the Gallery its own jellyfish, then saves for the centrepiece.
+    while (m.coins < SPECIES.moonjelly.price) m = helpOne(m);
+    m = buyAndPlace(m, "moonjelly", m.tanks.find((t) => t.slot === "G")!.id);
+    while (m.coins < ATRIUM_PRICE) {
+      m = helpOne(m);
+      if (m.stats.seconds - started > 15 * 60) throw new Error("the Atrium takes too long to afford");
+    }
+    const minutes = (m.stats.seconds - started) / 60;
+    expect(minutes).toBeGreaterThanOrEqual(8);
+    expect(minutes).toBeLessThanOrEqual(12);
+    const opened = ok(openAtrium(m));
+    expect(opened.progress.atriumOpen).toBe(true);
+    expect(opened.coins).toBeGreaterThanOrEqual(0);
   });
 });

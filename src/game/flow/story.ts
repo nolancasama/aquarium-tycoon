@@ -182,6 +182,7 @@ function enter(m: Model) {
     settingsOpen: false,
     confirmNew: false,
     saveLost: false,
+    atriumArrival: false,
     guide: null,
     nudge: null
   });
@@ -739,6 +740,11 @@ export function showGuideHint() {
   hintTier = hintTier === 0 ? 1 : 2;
   let text = hintTier === 1 ? step.where : step.exact;
   let target = step.target;
+  if (target === "door-atrium") {
+    if (g.view === "tank") target = "btn-back";
+    else if (g.hall < 2) target = "btn-hall-next";
+    else if (g.hall > 2) target = "btn-hall-prev";
+  }
   if (g.view === "tank" && ["btn-fish-shop", "btn-animal-shop", "btn-decor-shop", "btn-tank-shop", "chip-box"].includes(target ?? "") && !g.panel) {
     target = "btn-back";
     text = { en: `Tap Back. ${text.en}`, ja: `「もどる」を おそう。${text.ja}` };
