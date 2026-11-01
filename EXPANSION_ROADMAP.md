@@ -18,6 +18,7 @@ Maintain the original audience: Japanese Grade 3 beginner EFL students on touch 
 - **Coral Reef Atrium (2026-11-01):** fourth, taller sunlit room with a freestanding giant reef habitat, coral decorations, parrotfish and (cleaner) shrimp, and two open pads for secondary exhibits.
 - Existing special tanks: hexagonal, panoramic, jellyfish cylinder, rocky cave.
 - Existing expansion animals include angelfish, goby, chromis school, moray eel, octopus, crab, stingray and distinct jellyfish species.
+- **Animals and visitors (2026-11-01):** head-led moray eel that really enters its den, octopus that crawls on eight independent arms, visitors resting on different benches, and species-appropriate food with one-tap feeding (no food chooser, by design: see `DESIGN_DECISIONS.md`).
 - The four existing rooms are declared in `src/game/data/rooms.ts` (pads may now carry their own layout) and still connect in a straight line; future large areas should not be forced into an endless row of identical rooms.
 
 See `CURRENT_STATE.md` for actual implemented/tested status and `DESIGN_DECISIONS.md` for established design decisions. Do not mistake this roadmap for completed work.

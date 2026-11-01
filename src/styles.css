@@ -2326,3 +2326,33 @@ mark.key {
 .atrium-arrival > b { font-size: clamp(22px, 3vw, 34px); white-space: nowrap; }
 .atrium-arrival > span { font-size: 18px; }
 .atrium-arrival button { margin-top: 5px; min-height: 40px; padding: 5px 18px; border: 0; border-radius: 12px; background: #167c85; color: white; cursor: pointer; }
+
+/* After a feed: the foods that went in, above the action bar. Never blocks it. */
+.food-strip {
+  position: fixed;
+  left: 50%;
+  bottom: 118px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 30;
+  pointer-events: none;
+}
+.food-chip {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 4px 14px 4px 10px;
+  border: 2px solid #b9e6f2;
+  border-radius: 24px;
+  background: #fffffff2;
+  color: #17384a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.food-chip-icon { font-size: 24px; line-height: 1; }
+.food-chip-word { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; }
+.food-chip-en { font-size: 17px; font-weight: 800; }
+.food-chip-word .ja { font-size: 11px; }

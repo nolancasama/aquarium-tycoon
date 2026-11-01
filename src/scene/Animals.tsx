@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { getGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { SPECIES } from "../game/data/fish";
+import { eatResponse } from "../game/data/food";
 import { isHungry, type TankRec } from "../game/logic/model";
 import type { SpeciesId } from "../game/types";
 import { fishGeometry, turtleModel } from "./models/fish";
@@ -158,7 +159,7 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
     const ground = octopus || def.body === "crab" || def.movement === "perch";
     const happy = ht >= 0 && ht < 1.2 ? Math.sin(ht / 1.2 * Math.PI) : 0;
     const tap = tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0;
-    const eat = et >= 0 && et < 0.35 ? Math.sin(et / 0.35 * Math.PI) : 0;
+    const eat = eatResponse(species, et);
     const motion = Math.min(1.5, Math.hypot(f.s.vx, f.s.vy, f.s.vz) / def.speed);
     const tank = tankFor(tankId);
     if (!tank) return;
@@ -170,12 +171,15 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
     travel.current.x = f.s.x; travel.current.z = f.s.z;
     const phase = def.body === "crab" || species === "octopus" ? travel.current.phase : def.movement === "drift" ? f.pulsePhase ?? f.phase : f.phase;
     const reaction = Math.max(tap, eat * 0.5);
-    mesh.position.set(f.s.x, f.s.y + (ground ? 0 : happy * 0.035 + tap * 0.025), f.s.z);
+    // An angelfish darts its nose at the food; a ray settles down over it.
+    const lunge = species === "angelfish" ? eat * def.length * 0.14 : 0;
+    const settle = species === "stingray" ? eat : 0;
+    mesh.position.set(f.s.x + Math.cos(f.yaw) * lunge, f.s.y + (ground ? 0 : happy * 0.035 + tap * 0.025) - settle * 0.02, f.s.z - Math.sin(f.yaw) * lunge);
     // Ground animals acknowledge taps by rocking their shell/mantle above planted feet.
     const roll = ground ? 0 : f.bank + happy * 0.18;
-    const pitch = ground ? (happy + tap) * 0.08 : f.pitch * 0.7;
+    const pitch = ground ? (happy + tap) * 0.08 : f.pitch * 0.7 - settle * 0.2 - (species === "angelfish" ? eat * 0.25 : 0);
     mesh.rotation.set(roll, f.yaw, pitch, "YZX");
-    mesh.scale.setScalar(ground ? 1 : 1 + eat * 0.07);
+    mesh.scale.setScalar(1);
     mat.userData.uGroundEnabled.value = ground ? 1 : 0;
     if (ground) {
       if (octopus) {
@@ -194,6 +198,9 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
         mesh.position.set(support.x, support.y, support.z);
         mesh.rotation.copy(support.euler);
         mat.userData.uFeet.value.set(support.feet);
+        // Walkers and perchers dip their heads to pick food up from the sand.
+        mesh.rotation.z -= eat * 0.22;
+        mat.userData.uEat.value = eat;
       }
       if (terrain.current.tank !== tank.type || terrain.current.slot !== tank.slot) {
         const dune = sandDune(tankDef), origin = tankOrigin(tank.slot);
@@ -213,6 +220,7 @@ function ExpansionMesh({ id, species, tankId }: { id: string; species: SpeciesId
           : f.eel.gape;
       }
     }
+    if (def.body === "jelly") mat.userData.uEat.value = eat;
     mat.userData.uPhase.value = phase;
     mat.userData.uMotion.value = motion;
     mat.userData.uColour.value = f.colourPhase ?? 0;
@@ -245,7 +253,7 @@ function SchoolMesh({ id, species, tankId }: { id: string; species: SpeciesId; t
     if (!f || !mesh) return;
     const ht = rt.time - f.happyT0;
     const tt = rt.time - f.tapT0;
-    const response = Math.max(ht >= 0 && ht < 1 ? Math.sin(ht * Math.PI) : 0, tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0);
+    const response = Math.max(ht >= 0 && ht < 1 ? Math.sin(ht * Math.PI) : 0, tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0, eatResponse(species, rt.time - f.eatT0));
     for (let i = 0; i < (def.school ?? 1); i++) {
       const s = i === 0 ? f.s : f.members?.[i - 1] ?? f.s;
       const heading = Math.hypot(s.vx, s.vz) > 0.01 ? Math.atan2(-s.vz, s.vx) : f.yaw;
@@ -298,18 +306,20 @@ function BendingFish({ id, species, tankId }: { id: string; species: SpeciesId; 
       roll += THREE.MathUtils.smootherstep(ht / 0.9, 0, 1) * Math.PI * 2;
     }
     if (tt >= 0 && tt < 0.5) lift += Math.sin((tt / 0.5) * Math.PI) * 0.06;
-    const et = t - f.eatT0;
-    if (et >= 0 && et < 0.35) scale *= 1 + Math.sin((et / 0.35) * Math.PI) * 0.14;
+    // Nose down and a short dart at the food; grazers do it several times.
+    const eat = eatResponse(species, t - f.eatT0);
+    pitch -= eat * 0.28;
     const tank = getGame().model.tanks.find((x) => x.id === tankId);
     const hungry = tank ? isHungry(tank) : false;
     if (hungry && !upright) pitch -= 0.12;
     // Idle bob so a resting animal still looks alive.
     const bob = Math.sin(t * 2 + f.phase * 0.1) * (upright ? 0.015 : 0.006);
-    m.position.set(f.s.x, f.s.y + lift + bob, f.s.z);
+    const lunge = eat * def.length * 0.14;
+    m.position.set(f.s.x + Math.cos(f.yaw) * lunge, f.s.y + lift + bob, f.s.z - Math.sin(f.yaw) * lunge);
     m.rotation.set(roll, f.yaw, pitch, "YZX");
     m.scale.setScalar(scale);
     mat.userData.uPhase.value = f.phase;
-    const reaction = Math.max(tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0, et >= 0 && et < 0.35 ? Math.sin(et / 0.35 * Math.PI) : 0);
+    const reaction = Math.max(tt >= 0 && tt < 0.6 ? Math.sin(tt / 0.6 * Math.PI) : 0, eat);
     mat.userData.uMotion.value = Math.min(1.8, Math.hypot(f.s.vx, f.s.vy, f.s.vz) / def.speed);
     mat.userData.uTurn.value = THREE.MathUtils.clamp(f.bank * 2.5, -1, 1);
     mat.userData.uReaction.value = reaction;
@@ -342,7 +352,9 @@ function JellyMesh({ id, tankId }: { id: string; tankId: string }) {
     const t = rt.time;
     m.position.set(f.s.x, f.s.y, f.s.z);
     m.rotation.set(Math.sin(t * 0.7 + f.phase * 0.01) * 0.1, f.yaw * 0.3, Math.cos(t * 0.6) * 0.08);
-    m.scale.setScalar(1);
+    // The bell draws in a little as the tentacles gather food.
+    const eat = eatResponse("jellyfish", t - f.eatT0);
+    m.scale.set(1 - eat * 0.08, 1 + eat * 0.08, 1 - eat * 0.08);
     mat.userData.uPhase.value = f.pulsePhase ?? f.phase;
     mat.userData.uMotion.value = Math.min(1.8, Math.hypot(f.s.vx, f.s.vy, f.s.vz) / SPECIES.jellyfish.speed);
     mat.userData.uTurn.value = THREE.MathUtils.clamp(f.bank * 2.5, -1, 1);
@@ -375,7 +387,8 @@ function TurtleMesh({ id, tankId }: { id: string; tankId: string }) {
     const ht = t - f.happyT0;
     const roll = ht >= 0 && ht < 1.4 ? Math.sin((ht / 1.4) * Math.PI * 2) * 0.35 : f.bank * 0.6;
     g.position.set(f.s.x, f.s.y + Math.sin(t * 0.9 + f.phase * 0.1) * 0.01, f.s.z);
-    g.rotation.set(roll, f.yaw, f.pitch * 0.6, "YZX");
+    // A slow double nod: a turtle bites at seaweed with its whole front end.
+    g.rotation.set(roll, f.yaw, f.pitch * 0.6 - eatResponse("turtle", t - f.eatT0) * 0.3, "YZX");
     // Front flippers sweep together; back flippers steer a little.
     const sweep = Math.sin(f.phase);
     flippers.current.forEach((m, i) => {

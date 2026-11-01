@@ -1,5 +1,40 @@
 # Current State
 
+## Eel, octopus, multi-bench seating, species feeding (2026-11-01)
+
+- **Moray eel**: head-led spine rig (`logic/eelBody.ts`, part 12 in
+  `animalMaterials.ts`). The body follows the head's path, turns reach the tail
+  last, length is constant, the dorsal fin shares the body's spine parameters.
+  Collision: head corridor plus soft per-point correction against glass, rock,
+  sand and columns. The eel really enters its den through the round apertures;
+  the body behind the dark mouth disc runs in a hidden rail inside the rock.
+- **Octopus**: eight independent arms (`logic/octopusRig.ts`, parts 13/14). Stance
+  tips stay fixed in the water; the body speed follows how many arms are planted.
+  Arms land on sand, the rock face and round rocks; idle arms reach and curl. Taps
+  pick raise, curl, look or colour. The rig owns the body pose, not `groundAnimal`.
+- **Seating**: `SEATS` in `world.ts` (Hall 1 side seats, three on each atrium bench;
+  the request seat is unchanged). Reservations are derived from live visitors'
+  `seatId`. About a third of ordinary visitors rest once per visit, 6-14 s.
+- **Food**: `data/food.ts` has five foods and a diet per species. Feed stays one tap
+  and brings every resident's food; a small strip then names the foods for 4 s of
+  game time (tap: says the word, adds a free pinch). Each food has its own shape and
+  fall. Feeding motion differs by species: eel jaw snap, octopus arm to mouth, crab
+  claws, grazers nibble, ray settles, jelly tentacles gather, turtle nods.
+- Verified: typecheck, `npm test` 517/517, build, Playwright 65/65 on the production
+  build (16 min, incl. new `feeding.spec.ts`; its layout check was shown to fail on
+  the off-screen strip bug, then pass). Loop budget 62 draw calls / 40.1k triangles.
+  Frames checked by eye at 1366x768, plus the strip at 1280x720 and 1024x768 (software
+  renderer): `.tmp/eel-review/`, `.tmp/octopus-review/`, `.tmp/seating-review/`,
+  `.tmp/feeding-review/`.
+- Known limits: motion was judged from frame strips, not watched in real time, and
+  real Chromebook fps is unmeasured. Eels and octopuses live only in the cave tank,
+  so that is the only tank tested for them. Octopus den-lip reach, each tap reaction
+  other than raise and curl, and the shrimp and parrotfish feeding motions passed
+  checks or tests but were not all individually viewed. Eels beyond the third den
+  rest on open sand. Visitor faces and arms are one mesh, so no smile or gesture.
+- Tests running against an old preview: a leftover `vite preview` on port 4177 is
+  reused by Playwright, silently testing a stale build. Set `BASE_URL` or stop it.
+
 ## Small polish fixes (2026-11-01)
 
 - Ocean Hall's Jellyfish Gallery door opens nearer its wall, reducing obstruction of the adjacent tank.
