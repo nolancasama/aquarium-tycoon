@@ -1,11 +1,11 @@
 import * as THREE from "three";
 import { DOOR_W, DOOR_Z, ROOMS } from "../../game/data/rooms";
-import { BENCH_SEAT_H } from "../../game/world";
+import { ATRIUM_BENCHES, BENCH_SEAT_H } from "../../game/world";
+export { ATRIUM_BENCHES } from "../../game/world";
 import { PartBuilder } from "../partBuilder";
 
 /** Ground footprints are also consumed by the walking graph. */
 export const ATRIUM_PALMS = [{ x: 31, z: -4.65 }, { x: 45, z: 4.65 }, { x: 45, z: -0.4 }];
-export const ATRIUM_BENCHES = [{ x: 36, z: 4.65 }, { x: 42, z: 4.65 }];
 export const ATRIUM_BOARDS = [{ x: 32.7, z: -4.75 }, { x: 40.9, z: -4.75 }];
 
 const CREAM = "#ffe6bf";
@@ -96,7 +96,8 @@ export function atriumFurnitureGeometry(): THREE.BufferGeometry {
     // Separate the back, seat and armrest faces: touching/coplanar faces
     // flickered as the management camera moved.
     b.box(1.92, 0.39, 0.075, p.x, BENCH_SEAT_H + 0.035, p.z + 0.33, "#d59b68");
-    for (const dx of [-0.76, 0.76]) {
+    // End-mounted arms leave three usable places, including visitors' bags.
+    for (const dx of [-0.98, 0.98]) {
       b.box(0.12, BENCH_SEAT_H - 0.08, 0.43, p.x + dx, 0, p.z - 0.025, "#2e8f93");
       b.box(0.08, 0.12, 0.34, p.x + dx, BENCH_SEAT_H + 0.14, p.z - 0.045, "#2e8f93");
     }

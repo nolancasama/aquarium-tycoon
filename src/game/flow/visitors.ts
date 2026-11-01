@@ -7,7 +7,8 @@ import { IT_COLOR_IDS, IT_COLOR_PHRASE, ITS_IDS, ITS_IDS_BASE, ITS_PHRASE, LIKE_
 import { makeRng, shuffle } from "../logic/rng";
 import { SPECIES } from "../data/fish";
 import { SLOT_POS, STAND_H, TANKS } from "../data/tanks";
-import { ATRIUM_REST_SPOTS, BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, benchPose, lookSpot, reefLoop, requestEligible, route, tankOrigin } from "../world";
+import { BENCH_FACING, BENCH_SEAT, ENTRY, OUTSIDE, REQUEST_SEAT, benchApproach, benchPose, hallOfX, lookSpot, reefLoop, requestEligible, route, seatApproach, seatById, seatExit, tankOrigin } from "../world";
+import { planRest, restDuration } from "../logic/seating";
 import { ask, fastMode, say, speak, wait } from "./ask";
 import { openTank } from "./actions";
 import { audio } from "../../audio/audio";
@@ -75,7 +76,9 @@ export function spawnVisitor(type: VisitorType, request: Request | null, opts: {
     face: null,
     bornT: rt.time
   };
+  if (!request && !opts.scripted) v.restAfter = 1 + Math.floor(rand() * Math.max(1, plan.length));
   if (opts.atBench) {
+    v.seatId = REQUEST_SEAT.id;
     v.x = BENCH_SEAT.x;
     v.z = BENCH_SEAT.z;
     v.state = "sit";
@@ -84,6 +87,7 @@ export function spawnVisitor(type: VisitorType, request: Request | null, opts: {
     v.yaw = BENCH_FACING;
     v.face = { x: BENCH_SEAT.x - 3, z: BENCH_SEAT.z };
   } else if (request) {
+    v.seatId = REQUEST_SEAT.id;
     v.path = [ENTRY, ...benchApproach(ENTRY)];
   } else if (!opts.scripted) {
     v.path = [ENTRY];
@@ -99,7 +103,13 @@ export function spawnVisitor(type: VisitorType, request: Request | null, opts: {
 
 /** Walk a visitor along `path`; resolves on arrival. */
 export function walkTo(v: VisitorRt, path: Vec2[]): Promise<void> {
-  v.path = [...path];
+  const seat = seatById(v.seatId ?? v.poseSeatId);
+  const seated = v.seat > 0 || v.seatTarget === 1;
+  v.path = v.seatId && path.length
+    ? [...seatExit(v, path[0], seat, seated), ...path.slice(1)] : [...path];
+  if (v.seatId) v.poseSeatId = v.seatId;
+  v.seatId = undefined;
+  v.seatTarget = 0;
   v.face = null;
   return new Promise((resolve) => {
     if (!v.path.length) {
@@ -163,23 +173,41 @@ function startLook(v: VisitorRt, tankId: string) {
 }
 
 function nextLookOrLeave(v: VisitorRt) {
+  if (v.state === "look" && v.at && v.seen.length >= (v.restAfter ?? 1)) {
+    const rest = planRest(v, hallOfX(v.x), v.plan.length === 0, rt.visitors, rand);
+    if (rest.decided) v.restDecided = true;
+    if (rest.seat) {
+      v.seatId = rest.seat.id;
+      v.poseSeatId = undefined;
+      v.at = null;
+      v.face = null;
+      v.anim = null;
+      v.state = "walk";
+      v.path = seatApproach(v, rest.seat);
+      return;
+    }
+  }
+  // Finish standing and clear the approach before continuing the tour.
+  const seat = v.seatId ? seatById(v.seatId) : null;
+  const seated = v.seat > 0 || v.seatTarget === 1;
+  if (seat) {
+    v.poseSeatId = seat.id;
+    v.seatId = undefined;
+    v.seatTarget = 0;
+  }
   const next = v.plan.shift();
   if (next && tankById(model(), next)) {
     const slot = tankSlot(next)!;
     v.state = "walk";
     v.at = next;
     const spot = lookSpot(slot, visitorNo + v.seen.length);
-    v.path = slot === "I" ? reefLoop(v, spot) : route(v, spot);
+    const from = seat ? seat.approach : v;
+    const onward = slot === "I" ? reefLoop(from, spot) : route(from, spot);
+    v.path = seat ? [...(seated ? [seat.front] : []), seat.approach, ...onward] : onward;
     return;
   }
-  if (!v.atriumRested && v.x > 30 && v.seen.some((id) => tankSlot(id) === "I")) {
-    v.atriumRested = true;
-    v.restingAt = ATRIUM_REST_SPOTS[visitorNo % ATRIUM_REST_SPOTS.length];
-    v.at = null;
-    v.state = "walk";
-    v.path = route(v, v.restingAt);
-    return;
-  }
+  // leave() needs the seat metadata to construct the same safe exit.
+  if (seat) v.seatId = seat.id;
   leave(v);
 }
 
@@ -187,6 +215,7 @@ function nextLookOrLeave(v: VisitorRt) {
 export function leave(v: VisitorRt) {
   if (v.state === "leave" || v.state === "gone") return;
   const seated = v.seat > 0 || v.seatTarget === 1;
+  const seat = v.seatId || v.poseSeatId ? seatById(v.seatId ?? v.poseSeatId) : null;
   if (!v.helped && !v.scripted) payTips(v);
   v.state = "leave";
   v.request = null;
@@ -194,7 +223,9 @@ export function leave(v: VisitorRt) {
   v.face = null;
   // Stand in front of the seat before walking, never through the seat/backrest.
   if (seated) v.seatTarget = 0;
-  v.path = [...route(seated ? BENCH_FRONT : v, ENTRY), OUTSIDE];
+  v.path = [...(seat ? seatExit(v, ENTRY, seat, seated) : route(v, ENTRY)), OUTSIDE];
+  v.poseSeatId = seat?.id;
+  v.seatId = undefined;
   syncWaiting();
 }
 
@@ -240,21 +271,22 @@ function arrive(v: VisitorRt) {
     return;
   }
   if (v.scripted) return;
-  if (v.restingAt) {
-    v.restingAt = undefined;
-    v.state = "look";
-    v.face = { x: 38, z: -1 };
-    v.until = rt.time + (fastMode() ? 0.5 : 3);
-    return;
-  }
   if (v.state === "leave") {
     v.state = "gone";
+    v.seatId = undefined;
+    v.poseSeatId = undefined;
     return;
   }
   if (v.request && !v.helped) {
+    v.seatId = REQUEST_SEAT.id;
     v.seatTarget = 1;
     v.face = { x: BENCH_SEAT.x - 3, z: BENCH_SEAT.z };
     syncWaiting();
+    return;
+  }
+  if (v.seatId) {
+    v.seatTarget = 1;
+    v.face = null;
     return;
   }
   if (v.at) {
@@ -271,18 +303,36 @@ export function stepVisitors(dt: number) {
     if (v.state === "gone") continue;
     if (v.seat !== v.seatTarget) {
       // Turn at the spot in front of the seat, then sit back onto it over planted feet.
-      let turn = BENCH_FACING - v.yaw;
+      const seat = seatById(v.seatId ?? v.poseSeatId);
+      let turn = seat.facing - v.yaw;
       while (turn > Math.PI) turn -= Math.PI * 2;
       while (turn < -Math.PI) turn += Math.PI * 2;
       v.yaw += turn * Math.min(1, dt * 8);
       if (v.seat > 0 || Math.abs(turn) < 0.04) {
         v.seat += Math.sign(v.seatTarget - v.seat) * Math.min(Math.abs(v.seatTarget - v.seat), dt / 1.3);
-        const pose = benchPose(v.seat, 0);
+        const pose = benchPose(v.seat, 0, seat);
         v.x = pose.x;
         v.z = pose.z;
       }
       v.moving = false;
-      if (v.seat === 1) { v.state = "sit"; v.yaw = BENCH_FACING; }
+      if (v.seat === 1) {
+        v.state = "sit";
+        v.yaw = seat.facing;
+        if (!v.request && !v.scripted) {
+          v.rested = true;
+          v.restDecided = true;
+          v.until = rt.time + restDuration(fastMode(), rand);
+          v.seatedHeartAt = rt.time + 3 + rand() * 4;
+          // Nearest tank, computed once on arrival rather than in the renderer.
+          let nearest = Infinity;
+          for (const tank of model().tanks) {
+            const p = tankOrigin(tank.slot);
+            const distance = Math.hypot(p.x - v.x, p.z - v.z);
+            if (distance < nearest) { nearest = distance; v.face = { x: p.x, z: p.z }; }
+          }
+        }
+      }
+      if (v.seat === 0) v.poseSeatId = undefined;
       continue;
     }
     if (v.path.length) {
@@ -309,7 +359,7 @@ export function stepVisitors(dt: number) {
       v.step += dt * 9 * speedUp;
     } else {
       v.moving = false;
-      if (v.face) {
+      if (v.face && v.seat === 0) {
         const want = Math.atan2(v.face.x - v.x, v.face.z - v.z);
         let a = want - v.yaw;
         while (a > Math.PI) a -= Math.PI * 2;
@@ -319,6 +369,14 @@ export function stepVisitors(dt: number) {
       if (v.state === "look" && rt.time > v.until) {
         v.bubble = null;
         nextLookOrLeave(v);
+      }
+      if (v.state === "sit" && !v.request && !v.scripted) {
+        if (rt.time > v.until) { v.bubble = null; nextLookOrLeave(v); }
+        else if (v.seatedHeartAt !== undefined && rt.time > v.seatedHeartAt) {
+          v.bubble = "heart";
+          v.bubbleT0 = rt.time;
+          v.seatedHeartAt = rt.time + 7 + rand() * 5;
+        }
       }
     }
     if (v.bubble && v.bubble !== "!" && rt.time - v.bubbleT0 > 2.5) v.bubble = null;
@@ -434,6 +492,8 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
     // Close-up questions use a camera cut to place the visitor beside the tank.
     v.seat = 0;
     v.seatTarget = 0;
+    v.seatId = undefined;
+    v.poseSeatId = undefined;
     v.state = "help";
     v.x = spot.x;
     v.z = spot.z;
@@ -486,6 +546,8 @@ export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable
     // Close-up questions use a camera cut to place the visitor beside the tank.
     v.seat = 0;
     v.seatTarget = 0;
+    v.seatId = undefined;
+    v.poseSeatId = undefined;
     v.state = "help";
     v.x = spot.x;
     v.z = spot.z;
@@ -662,6 +724,8 @@ export async function celebrate(v: VisitorRt, tankId: string | null) {
     // The close-up celebration is a camera cut; finish any bench pose there.
     v.seat = 0;
     v.seatTarget = 0;
+    v.seatId = undefined;
+    v.poseSeatId = undefined;
     v.state = "help";
     v.x = spot.x;
     v.z = spot.z;
@@ -749,6 +813,7 @@ export async function openRequest(id: string) {
       v.face = null;
       v.bubble = "!";
       v.path = benchApproach(v);
+      v.seatId = REQUEST_SEAT.id;
     }
     syncWaiting();
   }

@@ -83,7 +83,7 @@ export function installE2eHook(seed: number) {
           : null,
         stageCard: g.stageCard,
         waiting: g.waiting,
-        visitors: rt.visitors.map((v) => ({ id: v.id, type: v.type, state: v.state, request: v.request?.kind ?? null, helped: v.helped, x: v.x, z: v.z, yaw: v.yaw, seat: v.seat })),
+        visitors: rt.visitors.map((v) => ({ id: v.id, type: v.type, state: v.state, request: v.request?.kind ?? null, helped: v.helped, x: v.x, z: v.z, yaw: v.yaw, seat: v.seat, seatId: v.seatId })),
         pellets: rt.pellets.length,
         countGlow: Boolean(rt.countGlow),
         countNumbers: visibleCountNumbers(rt.countGlow, rt.time).filter((x) => rt.fish.has(x.fishId)),

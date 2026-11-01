@@ -63,6 +63,14 @@ export interface VisitorRt {
   /** Bench pose 0..1 and its target; transient, never part of a saved model. */
   seat: number;
   seatTarget: 0 | 1;
+  seatId?: string;
+  /** Retain the pose while standing after releasing the reservation. */
+  poseSeatId?: string;
+  restDecided?: boolean;
+  /** Chosen tank-view count at which to consider resting, spreading use across rooms. */
+  restAfter?: number;
+  rested?: boolean;
+  seatedHeartAt?: number;
   /** The current look ends at this rt.time. */
   until: number;
   /** Tank ids still to look at. */
@@ -82,8 +90,6 @@ export interface VisitorRt {
   face: Vec2 | null;
   /** Fade in at the door. */
   bornT: number;
-  atriumRested?: boolean;
-  restingAt?: Vec2;
 }
 
 export interface CameraShot {

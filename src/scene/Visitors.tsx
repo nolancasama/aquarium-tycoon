@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { getGame } from "../game/store";
 import { rt, type VisitorRt } from "../game/runtime";
 import { SLOT_POS, TANKS } from "../game/data/tanks";
-import { benchPose, requestEligible } from "../game/world";
+import { benchPose, requestEligible, seatById } from "../game/world";
 import { tapVisitor } from "../game/flow/actions";
 import { paletteCount, personModel } from "./models/people";
 import { additiveSprite, bubbleTexture, shadowMaterial, smoothMat } from "./materials";
@@ -58,7 +58,7 @@ function Visitor({ id }: { id: string }) {
   const glow = useRef<THREE.Sprite>(null);
   const glowMat = useMemo(() => additiveSprite("#fff19a", 0), []);
   useEffect(() => () => glowMat.dispose(), [glowMat]);
-  useFrame(() => {
+  useFrame((_, dt) => {
     const v = rt.visitors.find((x) => x.id === id);
     const r = root.current;
     if (!v || !r || !model) return;
@@ -94,7 +94,7 @@ function Visitor({ id }: { id: string }) {
       else if (a.kind === "wave" && k < 1.2) y += Math.abs(Math.sin(k * Math.PI * 3)) * 0.04;
       else if (k > 1.5) v.anim = null;
     }
-    const pose = benchPose(v.seat, model.hip);
+    const pose = benchPose(v.seat, model.hip, seatById(v.seatId ?? v.poseSeatId));
     if (v.seat > 0) {
       y = pose.bodyY;
       lean = 0;
@@ -107,7 +107,15 @@ function Visitor({ id }: { id: string }) {
       body.current.rotation.x = lean;
       body.current.rotation.z = tilt;
     }
-    if (torso.current) torso.current.rotation.x = v.seat > 0 ? pose.lean : 0;
+    if (torso.current) {
+      const life = v.state === "sit" && !v.request && !v.scripted && !REDUCED_MOTION;
+      let turn = v.face ? Math.atan2(v.face.x - v.x, v.face.z - v.z) - v.yaw : 0;
+      while (turn > Math.PI) turn -= Math.PI * 2;
+      while (turn < -Math.PI) turn += Math.PI * 2;
+      const target = life ? Math.max(-0.13, Math.min(0.13, turn)) * (0.75 + Math.sin(t * 0.43 + v.bornT) * 0.25) : 0;
+      torso.current.rotation.y += (target - torso.current.rotation.y) * Math.min(1, dt * 2);
+      torso.current.rotation.x = v.seat > 0 ? pose.lean + (life ? 0.012 * (1 + Math.sin(t * 0.62 + v.bornT)) : 0) : 0;
+    }
     if (legL.current && legR.current) {
       legL.current.rotation.x = legs;
       legR.current.rotation.x = legs - 2 * swing;

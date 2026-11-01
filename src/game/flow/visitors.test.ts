@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { buyFish, newModel, placeFish } from "../logic/model";
+import { buyFish, newModel, newTank, placeFish } from "../logic/model";
 import { requestReward, type Request } from "../logic/requests";
 import { resetRuntime, rt } from "../runtime";
 import { getGame, model, setGame } from "../store";
-import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY } from "../world";
-import { answerShow, cancelShow, helped, openRequest, leave, resetVisitors, scripted, spawnVisitor, stepVisitors } from "./visitors";
+import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, SEATS, seatApproach, seatExit } from "../world";
+import { answerShow, cancelShow, helped, openRequest, leave, resetVisitors, scripted, seedVisitors, spawnVisitor, stepVisitors, walkTo } from "./visitors";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn() } }));
 vi.mock("./actions", () => ({ openTank: vi.fn() }));
@@ -158,4 +158,119 @@ describe("first tutorial visitor bench movement", () => {
     expect(v.x).toBe(BENCH_FRONT.x);
     expect(v.z).toBe(BENCH_FRONT.z);
   });
+});
+
+describe("ordinary seating lifecycle", () => {
+  const advance = (seconds: number) => {
+    for (let i = 0; i < Math.ceil(seconds * 60); i++) { rt.time += 1 / 60; stepVisitors(1 / 60); }
+  };
+
+  it("spreads rest opportunities across the tour, so later-room benches get visitors too", () => {
+    const m = model();
+    m.tanks.push(newTank("reef", "reef", "I"));
+    m.tanks[1].fish = [{ id: "reef-fish", species: "clownfish" }];
+    let hallRests = 0, atriumRests = 0, skipped = 0;
+    for (let seed = 1; seed <= 80; seed++) {
+      rt.visitors = [];
+      seedVisitors(seed);
+      const v = spawnVisitor("adult", null);
+      Object.assign(v, { x: 0, z: 0.9, path: [], state: "look", at: "t1", seen: ["t1"], plan: ["reef"], until: -1 });
+      stepVisitors(0);
+      if (v.seatId) { hallRests++; continue; }
+      Object.assign(v, { x: 38, z: 1.25, path: [], state: "look", at: "reef", seen: ["t1", "reef"], plan: [], until: -1 });
+      stepVisitors(0);
+      if (v.seatId) atriumRests++;
+      else skipped++;
+    }
+    expect(hallRests).toBeGreaterThan(0);
+    expect(atriumRests).toBeGreaterThan(0);
+    expect(skipped).toBeGreaterThan(hallRests + atriumRests);
+  });
+
+  it("sometimes rests after a tank, resumes sightseeing, and pays the same tips once", async () => {
+    seedVisitors(1);
+    // A deterministic sweep demonstrates both decisions through the real controller.
+    let sat = 0, skipped = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      rt.visitors = [];
+      seedVisitors(seed);
+      const v = spawnVisitor("adult", null);
+      Object.assign(v, { x: 0, z: 0.9, path: [], state: "look", at: "t1", seen: ["t1"], plan: ["t1"], until: -1 });
+      stepVisitors(0);
+      if (!v.seatId) { skipped++; continue; }
+      sat++;
+      const seat = SEATS.find((s) => s.id === v.seatId)!;
+      const before = model().coins;
+      advance(8);
+      expect(v.state).toBe("sit");
+      expect(v.until - rt.time).toBeGreaterThan(0);
+      expect(v.until - rt.time).toBeLessThanOrEqual(14);
+      expect(v.x).toBe(seat.x);
+      expect(v.yaw).toBe(seat.facing);
+      await openRequest(v.id);
+      expect(getGame().request).toBeNull();
+      expect(v.state).toBe("sit");
+      rt.time = v.until + 0.01;
+      stepVisitors(0);
+      expect(v.seatId).toBeUndefined();
+      advance(8);
+      expect(v.seat).toBe(0);
+      expect(v.restDecided).toBe(true);
+      leave(v);
+      const paid = model().coins;
+      expect(paid).toBeGreaterThan(before);
+      leave(v);
+      expect(model().coins).toBe(paid);
+    }
+    expect(sat).toBeGreaterThan(0);
+    expect(skipped).toBeGreaterThan(0);
+  });
+
+  it("carries on when every ordinary seat is already reserved", () => {
+    for (const seat of SEATS.filter((s) => s.room === 0 && !s.requestOnly)) {
+      const occupied = spawnVisitor("child", null);
+      occupied.seatId = seat.id;
+    }
+    seedVisitors(1);
+    const v = spawnVisitor("adult", null);
+    Object.assign(v, { x: 0, z: 0.9, path: [], state: "look", at: "t1", seen: ["t1"], plan: ["t1"], until: -1 });
+    stepVisitors(0);
+    expect(v.seatId).toBeUndefined();
+    expect(v.state).toBe("walk");
+    expect(v.at).toBe("t1");
+    expect(v.path.length).toBeGreaterThan(0);
+  });
+
+  for (const seat of SEATS.filter((s) => s.room === 3)) {
+    it(`${seat.id}: sits and stands continuously, releasing on leave or reroute`, () => {
+      const v = spawnVisitor("child", null);
+      Object.assign(v, { ...seat.approach, yaw: seat.facing, seatId: seat.id, path: seatApproach(seat.approach, seat), plan: [], restDecided: true });
+      let previous = { x: v.x, z: v.z };
+      for (let i = 0; i < 240; i++) {
+        advance(1 / 60);
+        expect(Math.hypot(v.x - previous.x, v.z - previous.z)).toBeLessThan(0.04);
+        previous = { x: v.x, z: v.z };
+      }
+      expect(v.state).toBe("sit");
+      expect(v.seat).toBe(1);
+      expect(v.yaw).toBe(seat.facing);
+      leave(v);
+      expect(v.seatId).toBeUndefined();
+      expect(v.path.slice(0, -1)).toEqual(seatExit(v, ENTRY, seat, true));
+      advance(1.4);
+      expect(v.seat).toBe(0);
+      expect(v.state).toBe("leave");
+
+      const walker = spawnVisitor("adult", null);
+      Object.assign(walker, { x: seat.front.x, z: (seat.front.z + seat.approach.z) / 2, seatId: seat.id });
+      leave(walker);
+      expect(walker.seatId).toBeUndefined();
+      expect(walker.path[0]).toEqual(seat.approach);
+      const rerouted = spawnVisitor("adult", null);
+      Object.assign(rerouted, { ...seat.front, seatId: seat.id });
+      void walkTo(rerouted, [ENTRY]);
+      expect(rerouted.seatId).toBeUndefined();
+      expect(rerouted.path[0]).toEqual(seat.approach);
+    });
+  }
 });
