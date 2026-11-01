@@ -2321,3 +2321,8 @@ mark.key {
    (150 ms) and back (200 ms) in place. Position and size never change. */
 .view-tank .tank-status { transition: transform 0.35s ease, opacity 0.2s ease; }
 .view-tank .tank-status.celebrating { opacity: 0; transition: transform 0.35s ease, opacity 0.15s ease; }
+/* A small arrival card leaves the reef visible and keeps skipping within reach. */
+.atrium-arrival { position: absolute; z-index: 40; left: 50%; top: 17%; transform: translateX(-50%); display: grid; justify-items: center; gap: 5px; padding: 16px 28px; border: 2px solid #d6eee0; border-radius: 20px; color: #125f66; background: #fff9e9f2; box-shadow: 0 8px 30px #123f5233; text-align: center; }
+.atrium-arrival > b { font-size: clamp(22px, 3vw, 34px); white-space: nowrap; }
+.atrium-arrival > span { font-size: 18px; }
+.atrium-arrival button { margin-top: 5px; min-height: 40px; padding: 5px 18px; border: 0; border-radius: 12px; background: #167c85; color: white; cursor: pointer; }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast, updateModel, useGame } from "../game/store";
-import { openGallery, openHall, type Model } from "../game/logic/model";
+import { openAtrium, openGallery, openHall, type Model } from "../game/logic/model";
 import type { StageId } from "../game/types";
 import "./DebugPanel.css";
 
@@ -29,8 +29,8 @@ function openFree(m: Model, open: (m: Model) => ReturnType<typeof openHall>): Mo
   return r.ok ? { ...r.m, coins: m.coins } : m;
 }
 
-/** Both halls need their levels (Ocean Hall 6, Gallery 8), so this also moves to Level 8 when below it. */
-const openAll = (m: Model) => openFree(openFree(m.progress.stage < 8 ? toStage(m, 8) : m, openHall), openGallery);
+/** Open every room in order, including the Atrium's permanent reef. */
+const openAll = (m: Model) => openFree(openFree(openFree(m.progress.stage < 8 ? toStage(m, 8) : m, openHall), openGallery), openAtrium);
 
 function unlockAll(m: Model): Model {
   const o = openAll(toStage(m, 8));

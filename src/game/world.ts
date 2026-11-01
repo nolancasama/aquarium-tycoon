@@ -1,5 +1,5 @@
 import type { SlotId, TankType, Vec2, Vec3 } from "./types";
-import { SAND_H, SLOT_POS, STAND_H, TANKS } from "./data/tanks";
+import { SAND_H, SLOT_FACING, SLOT_POS, STAND_H, TANKS } from "./data/tanks";
 import { DECOR, decorVersion } from "./data/decor";
 import { DOOR_W, DOOR_Z, ROOMS, ROOM_CENTER_X, doorX, roomAtX } from "./data/rooms";
 import type { TankRec } from "./logic/model";
@@ -17,6 +17,7 @@ export const ROOM = ROOMS[0].bounds;
 export const HALL2 = ROOMS[1].bounds;
 /** The Jellyfish Gallery (Expansion 1), right of the Ocean Hall. */
 export const GALLERY = ROOMS[2].bounds;
+export const ATRIUM = ROOMS[3].bounds;
 /** Management-view centre of each room. */
 export const HALL_X = ROOM_CENTER_X;
 
@@ -30,6 +31,7 @@ export const DOOR_WEST: Vec2 = { x: doorX(1) - 0.7, z: DOOR_Z };
 export const DOOR_EAST: Vec2 = { x: doorX(1) + 0.7, z: DOOR_Z };
 /** The doorway between the Ocean Hall and the Jellyfish Gallery. */
 export const GALLERY_DOOR = { x: doorX(2), z: DOOR_Z, w: DOOR_W };
+export const ATRIUM_DOOR = { x: doorX(3), z: DOOR_Z, w: DOOR_W };
 /** The bench where request visitors wait (they sit facing the room centre). */
 export const BENCH: Vec2 = { x: 4.4, z: 2.95 };
 export const BENCH_SEAT: Vec2 = { x: 4.22, z: 2.95 };
@@ -122,15 +124,92 @@ export const hallOfX = (x: number): number => roomAtX(x);
 export const doorWest = (i: number): Vec2 => ({ x: doorX(i) - 0.7, z: DOOR_Z });
 export const doorEast = (i: number): Vec2 => ({ x: doorX(i) + 0.7, z: DOOR_Z });
 
+export interface WalkObstacle { minX: number; maxX: number; minZ: number; maxZ: number }
+/** Conservative solid footprints, including 30 cm for a visitor's body. Pads
+ * reserve the largest accepted tank even before it is installed. */
+export const ATRIUM_OBSTACLES: WalkObstacle[] = [
+  { minX: 34.95, maxX: 41.05, minZ: -2.7, maxZ: 0.7 }, // reef and plinth
+  { minX: 31.15, maxX: 34.85, minZ: 2.05, maxZ: 4.15 }, // J
+  { minX: 41.75, maxX: 45.45, minZ: -4.65, maxZ: -2.55 }, // K
+  { minX: 34.65, maxX: 37.35, minZ: 4.05, maxZ: 5.2 },
+  { minX: 40.65, maxX: 43.35, minZ: 4.05, maxZ: 5.2 },
+  { minX: 30.35, maxX: 31.65, minZ: -5.25, maxZ: -4 },
+  { minX: 44.35, maxX: 45.65, minZ: 4, maxZ: 5.25 },
+  { minX: 44.35, maxX: 45.65, minZ: -1.05, maxZ: 0.25 },
+  { minX: 31.75, maxX: 33.65, minZ: -5.25, maxZ: -4.25 },
+  { minX: 40.1, maxX: 41.9, minZ: -5.25, maxZ: -4.25 }
+];
+
+/** Segment/expanded-footprint intersection, also used by path acceptance tests. */
+export function crossesObstacle(a: Vec2, b: Vec2, r: WalkObstacle): boolean {
+  let lo = 0, hi = 1;
+  for (const [p, d, min, max] of [[a.x, b.x - a.x, r.minX, r.maxX], [a.z, b.z - a.z, r.minZ, r.maxZ]]) {
+    if (Math.abs(d) < 1e-9) { if (p < min || p > max) return false; }
+    else {
+      const t0 = (min - p) / d, t1 = (max - p) / d;
+      lo = Math.max(lo, Math.min(t0, t1)); hi = Math.min(hi, Math.max(t0, t1));
+      if (lo > hi) return false;
+    }
+  }
+  return true;
+}
+
+const atriumClear = (a: Vec2, b: Vec2) => !ATRIUM_OBSTACLES.some((r) => crossesObstacle(a, b, r));
+const atriumCorners: Vec2[] = ATRIUM_OBSTACLES.flatMap((r) => [
+  { x: r.minX - 0.025, z: r.minZ - 0.025 }, { x: r.maxX + 0.025, z: r.minZ - 0.025 },
+  { x: r.maxX + 0.025, z: r.maxZ + 0.025 }, { x: r.minX - 0.025, z: r.maxZ + 0.025 }
+]).filter((p) => p.x > ATRIUM.minX + 0.35 && p.x < ATRIUM.maxX - 0.35 && p.z > ATRIUM.minZ + 0.35 && p.z < ATRIUM.maxZ - 0.35 && atriumClear(p, p));
+
+/** Visibility graph around static furniture; calculated only when a route starts. */
+function atriumRoute(from: Vec2, to: Vec2): Vec2[] {
+  if (atriumClear(from, to)) return [to];
+  const points = [from, to, ...atriumCorners];
+  const distance = points.map(() => Infinity), previous = points.map(() => -1), visited = new Set<number>();
+  distance[0] = 0;
+  for (let step = 0; step < points.length; step++) {
+    let at = -1;
+    for (let i = 0; i < points.length; i++) if (!visited.has(i) && (at < 0 || distance[i] < distance[at])) at = i;
+    if (at < 0 || !Number.isFinite(distance[at])) break;
+    if (at === 1) {
+      const path: Vec2[] = [];
+      for (let i = 1; i > 0; i = previous[i]) path.unshift(points[i]);
+      return path;
+    }
+    visited.add(at);
+    for (let i = 1; i < points.length; i++) if (!visited.has(i) && atriumClear(points[at], points[i])) {
+      const d = distance[at] + Math.hypot(points[i].x - points[at].x, points[i].z - points[at].z);
+      if (d < distance[i]) { distance[i] = d; previous[i] = at; }
+    }
+  }
+  // A caller supplied a point inside solid scenery. Hold rather than crossing it.
+  return [];
+}
+
+export const ATRIUM_REST_SPOTS: Vec2[] = [{ x: 36, z: 3.65 }, { x: 42, z: 3.65 }];
+/** Walk all four viewing faces, keeping the secondary pads outside the loop. */
+export function reefLoop(from: Vec2, to: Vec2): Vec2[] {
+  const points = [{ x: 34.5, z: 1.25 }, { x: 34.5, z: -3.15 }, { x: 41.4, z: -3.15 }, { x: 41.4, z: 1.25 }, to];
+  const result: Vec2[] = [];
+  let previous = from;
+  for (const p of points) { result.push(...route(previous, p)); previous = p; }
+  return result;
+}
+
 /** A walking route from a point to a point, through each doorway between their rooms in turn. */
 export function route(from: Vec2, to: Vec2): Vec2[] {
   const a = hallOfX(from.x);
   const b = hallOfX(to.x);
-  if (a === b) return [to];
   const path: Vec2[] = [];
   if (a < b) for (let i = a + 1; i <= b; i++) path.push(doorWest(i), doorEast(i));
   else for (let i = a; i > b; i--) path.push(doorEast(i), doorWest(i));
-  return [...path, to];
+  path.push(to);
+  const result: Vec2[] = [];
+  let previous = from;
+  for (const p of path) {
+    result.push(...(previous.x >= ATRIUM.minX && p.x >= ATRIUM.minX ? atriumRoute(previous, p) : [p]));
+    previous = p;
+  }
+  return result;
 }
 /** The trophy pedestal by the entrance. */
 export const PEDESTAL: Vec2 = { x: -4.7, z: -0.3 };
@@ -147,7 +226,8 @@ export function tankOrigin(slot: SlotId): Vec3 {
 
 export function toWorld(slot: SlotId, local: Vec3): Vec3 {
   const o = tankOrigin(slot);
-  return { x: o.x + local.x, y: o.y + local.y, z: o.z + local.z };
+  const a = SLOT_FACING[slot], c = Math.cos(a), s = Math.sin(a);
+  return { x: o.x + local.x * c + local.z * s, y: o.y + local.y, z: o.z - local.x * s + local.z * c };
 }
 
 /** Centre of the water (camera framing, effects). */
@@ -163,7 +243,15 @@ export function feedSpot(type: TankType): Vec3 {
 }
 
 /** Decoration footprint radius (m) for fish clearance and picking. */
-export function decorRadius(kind: string, variant: string | null): number {
+export function decorRadius(kind: string, variant: string | null, tank?: TankType): number {
+  const footprint = DECOR[kind as keyof typeof DECOR]?.footprint;
+  if (footprint !== undefined) return footprint;
+  // Existing models scale with water height. Only the new giant habitat needs
+  // larger clearance; earlier tanks retain their established avoidance radii.
+  return legacyDecorRadius(kind, variant) * (tank === "reef" ? TANKS.reef.h / TANKS.ocean.h : 1);
+}
+
+function legacyDecorRadius(kind: string, variant: string | null): number {
   if (kind === "chest") return 0.17;
   if (kind === "plant") return variant === "big" ? 0.16 : 0.12;
   if (kind === "rock") return variant === "big" ? 0.17 : 0.11;
@@ -189,8 +277,8 @@ export function columnsOf(t: TankRec): Column[] {
   const placed = t.decor.map((d) => ({
     x: slots[d.slot].x,
     z: slots[d.slot].z,
-    r: decorRadius(d.kind, d.variant),
-    top: decorTop(t, d.kind, d.variant) + sandSurfaceY(def, slots[d.slot].x, slots[d.slot].z) - STAND_H - SAND_H
+    r: decorRadius(d.kind, d.variant, t.type),
+    top: decorTop(t, d.kind, d.variant) + Math.max(sandSurfaceY(def, slots[d.slot].x, slots[d.slot].z), STAND_H + (slots[d.slot].y ?? 0)) - STAND_H - SAND_H
   }));
   return def.rocks ? [...placed, ...def.rocks] : placed;
 }
@@ -198,5 +286,6 @@ export function columnsOf(t: TankRec): Column[] {
 /** Where a visitor stands to look into this tank. */
 export function lookSpot(slot: SlotId, i = 0): Vec2 {
   const p = SLOT_POS[slot];
+  if (slot === "I") return { x: p.x + (i % 2 ? 0.65 : -0.65), z: 1.25 };
   return { x: p.x + (i % 2 ? 0.55 : -0.45), z: p.z + 1.5 };
 }

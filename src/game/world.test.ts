@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { BENCH_FACING, BENCH_FOOTPRINT, BENCH_FRONT, BENCH_SEAT, ENTRY, OUTSIDE, benchApproach, insideRoom, requestEligible } from "./world";
 import type { Vec2 } from "./types";
+import { ATRIUM_OBSTACLES, ATRIUM_REST_SPOTS, crossesObstacle, lookSpot, reefLoop, route } from "./world";
+import { DOOR_W, DOOR_Z, ROOMS } from "./data/rooms";
 
 /** Slab intersection: includes the edges, so touching furniture also fails. */
 function crossesBench(a: Vec2, b: Vec2): boolean {
@@ -59,5 +61,43 @@ describe("request eligibility", () => {
     expect(requestEligible({ ...walking, scripted: true })).toBe(false);
     expect(requestEligible({ ...walking, helped: true })).toBe(false);
     for (const state of ["help", "leave", "gone", "look"]) expect(requestEligible({ ...walking, state })).toBe(false);
+  });
+});
+
+describe("Atrium visitor routes", () => {
+  function clearPath(from: Vec2, path: Vec2[], to: Vec2) {
+    expect(path.at(-1)).toEqual(to);
+    let a = from;
+    for (const b of path) {
+      if (a.x >= 30 && b.x >= 30) for (const obstacle of ATRIUM_OBSTACLES) {
+        expect(crossesObstacle(a, b, obstacle), JSON.stringify({ a, b, obstacle })).toBe(false);
+      }
+      for (const room of ROOMS.slice(1)) {
+        const wall = room.bounds.minX;
+        if ((a.x < wall && b.x > wall) || (a.x > wall && b.x < wall)) {
+          const z = a.z + (b.z - a.z) * (wall - a.x) / (b.x - a.x);
+          expect(Math.abs(z - DOOR_Z)).toBeLessThan(DOOR_W / 2 - 0.3);
+        }
+      }
+      a = b;
+    }
+  }
+  it("walks from Hall 1 to the reef's far side and returns through all three doors", () => {
+    const far = { x: 38, z: -3.15 };
+    const outward = route(ENTRY, far);
+    clearPath(ENTRY, outward, far);
+    expect(outward.filter((p) => p.z === DOOR_Z).length).toBeGreaterThanOrEqual(6);
+    clearPath(far, route(far, ENTRY), ENTRY);
+  });
+  it("keeps the complete viewing loop clear of glass, secondary exhibits and scenery", () => {
+    const start = { x: 30.7, z: DOOR_Z }, end = lookSpot("I");
+    const loop = reefLoop(start, end);
+    clearPath(start, loop, end);
+    expect(loop.some((p) => p.z < -3)).toBe(true);
+    expect(loop.some((p) => p.x > 41)).toBe(true);
+  });
+  it("connects all exhibit faces and both benches in either direction", () => {
+    const points = [lookSpot("I"), lookSpot("J"), lookSpot("K"), { x: 38, z: -3.15 }, ...ATRIUM_REST_SPOTS];
+    for (const a of points) for (const b of points) clearPath(a, route(a, b), b);
   });
 });

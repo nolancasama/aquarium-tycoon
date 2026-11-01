@@ -8,6 +8,7 @@ import { SettingsModal } from "./ui/Settings";
 import { ResultsScreen, StageCardModal, TitleScreen } from "./ui/Screens";
 import { AudioCheckModal } from "./ui/AudioCheck";
 import { DebugPanel } from "./ui/DebugPanel";
+import { AtriumArrival } from "./ui/AtriumArrival";
 import { installKeyboard } from "./input/keyboard";
 import { onKey } from "./game/flow/input";
 import { hasSaved, installAutosave, saveIsLost } from "./game/flow/story";
@@ -137,6 +138,7 @@ export function App() {
       <SettingsModal />
       <AudioCheckModal />
       <DebugPanel />
+      <AtriumArrival />
       <Fade />
     </div>
   );

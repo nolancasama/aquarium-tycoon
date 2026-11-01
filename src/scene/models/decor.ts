@@ -351,7 +351,7 @@ function shipwreck(): DecorModel {
   return { geo: painted(b.build(), "shipwreck"), mat: finishMaterial("shipwreck") };
 }
 
-type HabitatDecor = "kelp" | "arch" | "cave" | "driftwood";
+type HabitatDecor = "kelp" | "arch" | "cave" | "driftwood" | "staghorn" | "brain" | "fan" | "table";
 
 /** New models use the exact clearance height and put their lowest vertex on sand. */
 function habitatModel(b: PartBuilder, kind: HabitatDecor, finish: DecorFinish, mat: THREE.Material): DecorModel {
@@ -472,6 +472,69 @@ function driftwood(): DecorModel {
   return habitatModel(b, "driftwood", "shipwreck", finishMaterial("shipwreck"));
 }
 
+/** Small coral silhouettes stay narrow enough for the existing hex slots.
+ * Each model is merged once, and the published footprint covers h=2 m. */
+function reefCoral(kind: "staghorn" | "brain" | "fan" | "table", blue: boolean): DecorModel {
+  const b = new PartBuilder(0.07);
+  const main = blue ? "#6a9fdb" : "#e78b9c";
+  const tip = blue ? "#c6e2ec" : "#ffd5c7";
+  const up = new THREE.Vector3(0, 1, 0);
+  const branch = (from: [number, number, number], to: [number, number, number], radius: number, color: string) => {
+    const start = new THREE.Vector3(...from), end = new THREE.Vector3(...to);
+    const dir = end.clone().sub(start);
+    const rotation = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(up, dir.clone().normalize()));
+    const middle = start.add(end).multiplyScalar(0.5);
+    b.add(new THREE.CylinderGeometry(radius * 0.65, radius, dir.length(), 6), color,
+      [middle.x, middle.y, middle.z], [rotation.x, rotation.y, rotation.z]);
+  };
+  b.sphere(0.048, 0, 0.015, 0, "#b1aa8d", [1.4, 0.4, 1], 8);
+  if (kind === "staghorn") {
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3;
+      const x = Math.cos(a) * 0.065, z = Math.sin(a) * 0.065;
+      const height = 0.34 + (i % 3) * 0.055;
+      branch([0, 0.035, 0], [x, height * 0.62, z], 0.019, main);
+      branch([x, height * 0.62, z], [x * 1.5, height, z * 1.5], 0.011, main);
+      branch([x, height * 0.65, z], [x * 0.5 - z * 0.5, height * 0.91, z * 0.5 + x * 0.5], 0.009, tip);
+      b.sphere(0.014, x * 1.5, height, z * 1.5, tip, [1, 0.65, 1], 6);
+    }
+  } else if (kind === "brain") {
+    b.sphere(0.115, 0, 0.085, 0, "#94b17a", [1, 0.83, 1], 14);
+    // Paired meandering ridges distinguish this from the ordinary rock.
+    for (let row = -2; row <= 2; row++) {
+      for (let i = 0; i < 9; i++) {
+        const x = -0.09 + i * 0.0225;
+        const z = row * 0.034 + Math.sin(i * 1.8 + row) * 0.009;
+        const y = 0.085 + 0.095 * Math.sqrt(Math.max(0, 1 - (x * x + z * z) / 0.014));
+        const nextX = x + 0.0225, nextZ = row * 0.034 + Math.sin((i + 1) * 1.8 + row) * 0.009;
+        const nextY = 0.085 + 0.095 * Math.sqrt(Math.max(0, 1 - (nextX * nextX + nextZ * nextZ) / 0.014));
+        branch([x, y, z], [nextX, nextY, nextZ], 0.005, "#d0d39a");
+      }
+    }
+  } else if (kind === "fan") {
+    branch([0, 0.02, 0], [0, 0.31, 0], 0.012, main);
+    for (const side of [-1, 1]) for (let i = 0; i < 5; i++) {
+      const y = 0.08 + i * 0.042;
+      const endX = side * (0.12 - i * 0.012), endY = y + 0.11;
+      branch([0, y, 0], [endX, endY, 0], 0.0065, main);
+      branch([endX * 0.55, y + 0.061, 0], [endX * 0.85, endY + 0.035, 0], 0.004, tip);
+      if (i < 4) branch([endX, endY, 0], [side * (0.108 - i * 0.012), endY + 0.042, 0], 0.0035, tip);
+    }
+  } else {
+    b.cyl(0.018, 0.035, 0.20, 0, 0.02, 0, "#b78e6a", 8);
+    for (let shelf = 0; shelf < 3; shelf++) {
+      const radius = 0.13 - shelf * 0.025, y = 0.11 + shelf * 0.062;
+      b.cyl(radius, radius * 0.92, 0.018, 0, y, 0, shelf % 2 ? "#dfad75" : "#e8c794", 12);
+      b.add(new THREE.TorusGeometry(radius * 0.9, 0.007, 4, 12), "#ffe2ae", [0, y + 0.018, 0], [Math.PI / 2, 0, 0]);
+      for (let i = 0; i < 10; i++) {
+        const a = i * Math.PI / 5;
+        b.sphere(0.006, Math.cos(a) * radius * 0.73, y + 0.02, Math.sin(a) * radius * 0.73, "#fff0cf", [1, 1, 1], 5);
+      }
+    }
+  }
+  return habitatModel(b, kind, "coral", smoothMat);
+}
+
 const cache = new Map<string, DecorModel>();
 
 export function decorModel(kind: DecorKind, variant: DecorVariant): DecorModel {
@@ -517,6 +580,12 @@ export function decorModel(kind: DecorKind, variant: DecorVariant): DecorModel {
         break;
       case "driftwood":
         m = driftwood();
+        break;
+      case "staghorn":
+      case "brain":
+      case "fan":
+      case "table":
+        m = reefCoral(kind, variant === "blue");
         break;
       default:
         m = bubbler();

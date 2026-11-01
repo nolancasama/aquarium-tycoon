@@ -22,6 +22,8 @@ import {
   moveDecor,
   openHall,
   openGallery,
+  openAtrium,
+  atriumUnlocked,
   swapDecor,
   placeFish,
   placeTank,
@@ -101,6 +103,17 @@ export function tapGalleryDoor() {
   if (model().progress.stage < 8) {
     audio.play("error");
     toast({ en: "Level 8!", ja: "レベル8で クラゲの ギャラリーが ひらけるよ", tone: "info" });
+    return;
+  }
+  openTankShop();
+}
+
+/** The Atrium's offer sits beyond the Gallery, in the same room-expansion tray. */
+export function tapAtriumDoor() {
+  if (!allowed("tankShop")) return;
+  if (!atriumUnlocked(model())) {
+    audio.play("error");
+    toast({ en: "Open the Jellyfish Gallery first!", ja: "さきに クラゲの ギャラリーを ひらこう！", tone: "info" });
     return;
   }
   openTankShop();
@@ -457,6 +470,19 @@ export function buyGallery() {
   toast({ en: "The Jellyfish Gallery!", ja: "クラゲの ギャラリーが ひらいたよ! まるい タンクに クラゲを いれよう", tone: "good" }, 4500);
 }
 
+export function buyAtrium() {
+  if (!allowed("tankShop")) return;
+  const r = commit(openAtrium(model()));
+  if (!r.ok) {
+    audio.play("error");
+    if (r.reason === "coins") toast({ en: "More coins, please!", ja: "もっと コインが ひつよう", tone: "warn" });
+    return;
+  }
+  audio.play("unlock");
+  setGame({ panel: null, view: "room", tankId: null, hall: 3 });
+  effect("confetti", 38, 3, -1, 40);
+}
+
 let lightTaught = false;
 
 /** Free display colours use the familiar shop English and prompt controls. */
@@ -590,7 +616,7 @@ export async function buyDecorKind(kind: DecorKind) {
       readQuestion: true,
       cancellable: true,
       shuffle: true,
-      help: kind === "coral" ? "いろを えいごで いおう!" : "おおきさを えいごで いおう!"
+      help: ["coral", "staghorn", "fan"].includes(kind) ? "いろを えいごで いおう!" : "おおきさを えいごで いおう!"
     });
     setGame({ decorAsk: null });
     if (!id) return;

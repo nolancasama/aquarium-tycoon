@@ -217,14 +217,23 @@ export function galleryGeometry(section: RoomSection = "all"): THREE.BufferGeome
   const { minX, maxX, minZ, maxZ, wallH } = GALLERY;
   const style: WallStyle = { skin: "#10162e", low: "#090e20", rail: "#51b9d6", base: "#060c19" };
   const backStart = minX + 0.22;
-  const backWidth = maxX + 0.11 - backStart;
+  // Stop at the shared wall's west face. The Atrium return continues behind
+  // this corner, so extending the back wall through it would duplicate faces.
+  const backWidth = maxX - backStart;
   const backX = backStart + backWidth / 2;
   b.box(backWidth, wallH, 0.22, backX, 0, minZ - 0.11, "#101c39");
   b.box(backWidth, 1.05, 0.035, backX, 0, minZ + 0.0175, style.low);
   b.box(backWidth, 0.045, 0.06, backX, 1.02, minZ + 0.03, style.rail);
   b.box(backWidth, 0.12, 0.07, backX, 0, minZ + 0.035, style.base);
-  b.box(0.22, wallH, maxZ - minZ, maxX + 0.11, 0, 0, "#201332");
-  dressWall(b, maxX, -1, minZ, maxZ, { ...style, skin: undefined }, wallH);
+  const doorA = DOOR_Z - DOOR_W / 2;
+  const doorB = DOOR_Z + DOOR_W / 2;
+  for (const [a, c] of [[minZ, doorA], [doorB, maxZ]]) {
+    b.box(0.22, wallH, c - a, maxX + 0.11, 0, (a + c) / 2, "#201332");
+    dressWall(b, maxX, -1, a, c, { ...style, skin: undefined }, wallH);
+  }
+  b.box(0.22, wallH - 2.3, DOOR_W, maxX + 0.11, 2.3, DOOR_Z, "#201332");
+  for (const z of [doorA, doorB]) b.box(0.3, 2.4, 0.16, maxX, 0, z, "#69cbc4");
+  b.box(0.3, 0.18, DOOR_W + 0.16, maxX, 2.3, DOOR_Z, "#69cbc4");
   const face = minX + 0.22;
   for (const [a, c] of [[minZ, DOOR_Z - DOOR_W / 2], [DOOR_Z + DOOR_W / 2, maxZ]]) {
     dressWall(b, face, 1, a, c, style, wallH);

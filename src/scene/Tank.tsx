@@ -5,7 +5,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { getGame, useGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { decorVersion } from "../game/data/decor";
-import { SAND_H, SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
+import { SAND_H, SLOT_POS, SLOT_FACING, STAND_H, TANKS, type TankDef } from "../game/data/tanks";
 import { happiness, isDirty, isHungry, mood, type PlacedDecor, type TankRec } from "../game/logic/model";
 import { tapDecor, tapFish, tapSlot, tapTank } from "../game/flow/actions";
 import { glassGeometry, surfaceGeometry, tankShellGeometry, waterGeometry } from "./models/tankShell";
@@ -13,7 +13,7 @@ import { FishMesh } from "./Animals";
 import { decorModel } from "./models/decor";
 import { additiveSprite, algaeTexture, badgeTexture, flatMat, glassTexture, shaderTime, shadowMaterial, surfaceMaterial, tankShellMaterial, waterMaterial } from "./materials";
 import { project, FOV } from "./CameraRig";
-import { footprintContains, sandSurfaceY, slotMarkerY, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
+import { footprintContains, sandSurfaceY, slotMarkerY, SLOT_MARKER_LIFT, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
 import type { TankType } from "../game/types";
 import { PartBuilder } from "./partBuilder";
 import { currentMaterial, displayGlowMaterial, displayRingMaterial, shapedWaterMaterial } from "./tankMaterials";
@@ -32,6 +32,11 @@ export function Tanks() {
 
 const dirtOf = (clean: number) => THREE.MathUtils.clamp((60 - clean) / 60, 0, 1);
 
+/** Optional raised pads stand on the reef's low shelves; ordinary slots keep their dune. */
+function slotFloor(def: TankDef, slot: TankDef["slots"][number], x = slot.x, z = slot.z) {
+  return Math.max(sandSurfaceY(def, x, z), STAND_H + (slot.y ?? 0));
+}
+
 /** Forgiving taps in a close-up: the nearest fish, decoration or slot on screen. */
 function pickInTank(tank: TankRec, sx: number, sy: number) {
   const g = getGame();
@@ -45,7 +50,7 @@ function pickInTank(tank: TankRec, sx: number, sy: number) {
     let best = -1;
     let bd = 120;
     def.slots.forEach((s, i) => {
-      const d = near(s.x, STAND_H + SAND_H + 0.1, s.z);
+      const d = near(s.x, (s.y === undefined ? STAND_H + SAND_H : slotFloor(def, s)) + 0.1, s.z);
       if (d < bd) {
         bd = d;
         best = i;
@@ -56,7 +61,7 @@ function pickInTank(tank: TankRec, sx: number, sy: number) {
       // a target for the same slot, while a nearer circle keeps precedence.
       for (const d of tank.decor) {
         const s = def.slots[d.slot];
-        const floor = STAND_H + sandSurfaceY(def, s.x, s.z);
+        const floor = def.type === "reef" ? slotFloor(def, s) : STAND_H + sandSurfaceY(def, s.x, s.z);
         const top = decorVersion(d.kind, d.variant).height * def.h;
         const a = project(o.x + s.x, floor, o.z + s.z);
         const b = project(o.x + s.x, floor + top, o.z + s.z);
@@ -89,7 +94,8 @@ function pickInTank(tank: TankRec, sx: number, sy: number) {
   for (const d of tank.decor) {
     const s = def.slots[d.slot];
     const top = decorVersion(d.kind, d.variant).height * def.h;
-    const dist = Math.min(near(s.x, STAND_H + SAND_H + top * 0.5, s.z), near(s.x, STAND_H + SAND_H + top * 0.85, s.z));
+    const floor = s.y === undefined ? STAND_H + SAND_H : slotFloor(def, s);
+    const dist = Math.min(near(s.x, floor + top * 0.5, s.z), near(s.x, floor + top * 0.85, s.z));
     if (dist < dd) {
       dd = dist;
       slot = d.slot;
@@ -114,7 +120,7 @@ function Tank({ tank }: { tank: TankRec }) {
       setVisible(next);
     }
   }, -1);
-  return <group ref={ref} position={[o.x, 0, o.z]} visible={visible}>{visible && <TankContents tank={tank} />}</group>;
+  return <group ref={ref} position={[o.x, 0, o.z]} rotation={[0, SLOT_FACING[tank.slot], 0]} visible={visible}>{visible && <TankContents tank={tank} />}</group>;
 }
 
 function TankContents({ tank }: { tank: TankRec }) {
@@ -129,7 +135,17 @@ function TankContents({ tank }: { tank: TankRec }) {
   useEffect(() => () => {
     shell.dispose(); waterGeo.dispose(); overlayGeo?.dispose(); algaeGeo?.dispose(); surfaceGeo?.dispose();
   }, [shell, waterGeo, overlayGeo, algaeGeo, surfaceGeo]);
-  const water = useMemo(() => special ? shapedWaterMaterial(def.h) : waterMaterial(def.h), [def.h, special]);
+  const water = useMemo(() => {
+    const material = special ? shapedWaterMaterial(def.h) : waterMaterial(def.h);
+    if (tank.type === "reef") {
+      // Slow daylight shafts in the existing water shader: no extra pass/mesh.
+      material.fragmentShader = material.fragmentShader.replace("col = mix(col, vec3(0.33, 0.43, 0.16)", `
+        float shaft = pow(max(0.0, sin(vPos.x * 5.7 + vPos.y * 0.7 + vPos.z * 1.9 + sin(uTime * 0.19) * 0.4)), 18.0);
+        col += vec3(0.10, 0.14, 0.10) * shaft * t * (1.0 - uDirt);
+        col = mix(col, vec3(0.33, 0.43, 0.16)`);
+    }
+    return material;
+  }, [def.h, special, tank.type]);
   const surface = useMemo(() => surfaceMaterial(), []);
   const dirt = useRef(dirtOf(tank.clean));
   const cleanRef = useRef(tank.clean);
@@ -257,17 +273,22 @@ function ContactShadows({ tank }: { tank: TankRec }) {
   const geo = useMemo(() => {
     const parts = tank.decor.map((d) => {
       const slot = def.slots[d.slot];
-      const width = ({ plant: 0.3, coral: 0.28, rock: d.variant === "big" ? 0.46 : 0.3, shell: 0.22, chest: 0.4, bubbler: 0.24, starfish: 0.25, castle: 0.4, anemone: 0.3, shipwreck: 0.52, kelp: 0.26, arch: 0.5, cave: 0.5, driftwood: 0.4 })[d.kind] * def.h;
+      const width = ({ plant: 0.3, coral: 0.28, rock: d.variant === "big" ? 0.46 : 0.3, shell: 0.22, chest: 0.4, bubbler: 0.24, starfish: 0.25, castle: 0.4, anemone: 0.3, shipwreck: 0.52, kelp: 0.26, arch: 0.5, cave: 0.5, driftwood: 0.4, staghorn: 0.28, brain: 0.25, fan: 0.28, table: 0.28 })[d.kind] * def.h;
       const g = new THREE.PlaneGeometry(width, width * 0.72, 8, 8);
       g.rotateX(-Math.PI / 2);
       const p = g.attributes.position;
       for (let i = 0; i < p.count; i++) {
         let dx = p.getX(i), dz = p.getZ(i);
+        if (slot.y !== undefined) {
+          // The blob stays on its circular stone shelf, including wide decor.
+          const radius = Math.hypot(dx, dz);
+          if (radius > 0.425) { dx *= 0.425 / radius; dz *= 0.425 / radius; }
+        }
         if (def.group === "special") {
           while (!footprintContains(def, slot.x + dx, slot.z + dz, 0.012)) { dx *= 0.9; dz *= 0.9; }
         }
         const x = slot.x + dx, z = slot.z + dz;
-        p.setXYZ(i, x, sandSurfaceY(def, x, z) + 0.002, z);
+        p.setXYZ(i, x, slotFloor(def, slot, x, z) + 0.002, z);
       }
       return g;
     });
@@ -295,15 +316,15 @@ function DecorMesh({ tank, d }: { tank: TankRec; d: PlacedDecor }) {
   const s = def.slots[d.slot];
   const model = decorModel(d.kind, d.variant);
   const grounded = useMemo(() => {
-    if (d.kind !== "kelp" && d.kind !== "arch" && d.kind !== "cave" && d.kind !== "driftwood") return null;
+    if (!["kelp", "arch", "cave", "driftwood", "staghorn", "brain", "fan", "table"].includes(d.kind)) return null;
     // Drape only the feet / roots over the actual dune. A wide arch must plant
     // both legs, even when the centre of its slot is higher than either foot.
     const geo = model.geo.clone();
     const p = geo.getAttribute("position");
-    const floor = sandSurfaceY(def, s.x, s.z);
+    const floor = slotFloor(def, s);
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-      const dy = (sandSurfaceY(def, s.x + x * def.h, s.z + z * def.h) - floor) / def.h;
+      const dy = (slotFloor(def, s, s.x + x * def.h, s.z + z * def.h) - floor) / def.h;
       p.setY(i, y + dy * (1 - THREE.MathUtils.smoothstep(y, 0, 0.1)));
     }
     geo.computeVertexNormals();
@@ -326,7 +347,7 @@ function DecorMesh({ tank, d }: { tank: TankRec; d: PlacedDecor }) {
     const lifted = st.placing?.kind === "move" && st.placing.tankId === tank.id && st.placing.slot === d.slot;
     const age = rt.time - born.current;
     const pop = age < 0.35 ? 0.6 + 0.4 * Math.sin((age / 0.35) * Math.PI * 0.5) + Math.sin((age / 0.35) * Math.PI) * 0.15 : 1;
-    g.position.set(s.x, sandSurfaceY(def, s.x, s.z) - 0.004 + (lifted ? 0.06 + Math.sin(rt.time * 5) * 0.015 : 0), s.z);
+    g.position.set(s.x, slotFloor(def, s) - 0.004 + (lifted ? 0.06 + Math.sin(rt.time * 5) * 0.015 : 0), s.z);
     g.scale.setScalar(scale * pop);
     if (lid.current) {
       // The chest opens now and then and lets a few bubbles out.
@@ -392,7 +413,7 @@ function SlotMarkers({ tank }: { tank: TankRec }) {
       for (let v = 0; v < pos.count; v++) {
         const x = base.getX(v) * scale;
         const z = base.getZ(v) * scale;
-        pos.setXYZ(v, x, slotMarkerY(def, { x: s.x + x, z: s.z + z }), z);
+        pos.setXYZ(v, x, Math.max(slotMarkerY(def, { x: s.x + x, z: s.z + z }), STAND_H + (s.y ?? 0) + SLOT_MARKER_LIFT), z);
       }
       pos.needsUpdate = true;
       geos[i].computeBoundingSphere();

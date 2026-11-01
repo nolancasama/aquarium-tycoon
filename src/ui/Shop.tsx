@@ -2,12 +2,12 @@ import { useMemo } from "react";
 import { setGame, useGame } from "../game/store";
 import { ANIMAL_ORDER, FISH_ORDER, JELLY_BY_COLOR, SPECIES } from "../game/data/fish";
 import { DECOR, DECOR_ORDER } from "../game/data/decor";
-import { GALLERY_PRICE, HALL_PRICE, TANKS, TANK_ORDER, TICKETS_PRICE } from "../game/data/tanks";
-import { EXPANSION_FROM, galleryUnlocked, homesFor, isSpeciesUnlocked, padsFor, remodelPlan, tankById, UPGRADE_PRICE, type UpgradeKind } from "../game/logic/model";
+import { ATRIUM_PRICE, GALLERY_PRICE, HALL_PRICE, TANKS, TANK_ORDER, TICKETS_PRICE } from "../game/data/tanks";
+import { atriumUnlocked, EXPANSION_FROM, galleryUnlocked, homesFor, isSpeciesUnlocked, padsFor, remodelPlan, tankById, UPGRADE_PRICE, type UpgradeKind } from "../game/logic/model";
 import { SHOP_COLOR_PHRASE } from "../game/logic/english";
 import { nextStep } from "../game/logic/guide";
 import type { ColorId, SpeciesId, TankType } from "../game/types";
-import { bagRemodelAnimal, buyDecorKind, buyGallery, buyHall, buyTankType, buyTankUpgrade, buyTicketGate, confirmRemodel, doneDecorate, HOME_REASON_TEXT, openDecorShop, pickTrayItem, putAway, shopHomeReason, startRemodel } from "../game/flow/actions";
+import { bagRemodelAnimal, buyAtrium, buyDecorKind, buyGallery, buyHall, buyTankType, buyTankUpgrade, buyTicketGate, confirmRemodel, doneDecorate, HOME_REASON_TEXT, openDecorShop, pickTrayItem, putAway, shopHomeReason, startRemodel } from "../game/flow/actions";
 import { Icon, type IconId } from "./icons";
 import { DecorPicture, FishPicture, LampPicture, TankPicture as ShapePicture } from "./Portraits";
 import { Ja } from "./Talk";
@@ -255,6 +255,7 @@ function ExpansionTankShop() {
     </div>;
   };
   const rooms = [
+    ...(atriumUnlocked(m) && !m.progress.atriumOpen ? [{ type: "atrium" as const, name: "Coral Reef Atrium", ja: "サンゴの アトリウム", price: ATRIUM_PRICE, info: "Includes a giant reef tank", help: "おおきな サンゴの タンクが ついてくるよ", buy: buyAtrium, id: "btn-buy-atrium" }] : []),
     ...(!m.progress.hallOpen ? [{ type: "hall" as const, name: "Ocean Hall", ja: "うみの ホール", price: HALL_PRICE, info: "Includes an Ocean tank", help: "うみの タンクが ついてくるよ", buy: buyHall, id: "btn-buy-hall" }] : []),
     ...(galleryUnlocked(m) && !m.progress.galleryOpen ? [{ type: "gallery" as const, name: "Jellyfish Gallery", ja: "クラゲの ギャラリー", price: GALLERY_PRICE, info: "Includes a Jelly column", help: "クラゲの まるい タンクが ついてくるよ", buy: buyGallery, id: "btn-buy-gallery" }] : []),
     ...(!m.progress.tickets ? [{ type: "tickets" as const, name: "Ticket Gate", ja: "チケットゲート", price: TICKETS_PRICE, info: "More visitors!", help: "おきゃくさんが ふえるよ", buy: buyTicketGate, id: "btn-buy-tickets" }] : [])

@@ -389,9 +389,22 @@ export function DecorPicture({ kind, variant, size = 72 }: { kind: DecorKind; va
 }
 
 /** A shared silhouette for shop offers, habitat chips and remodel previews. */
-export function TankPicture({ type, size = 92 }: { type: TankType | "gallery" | "hall" | "tickets"; size?: number }) {
+export function TankPicture({ type, size = 92 }: { type: TankType | "atrium" | "gallery" | "hall" | "tickets"; size?: number }) {
   const p = { width: size, height: size * 0.78, viewBox: "0 0 100 78", "aria-hidden": true } as const;
+  if (type === "atrium") return <AtriumPicture size={size} />;
   if (type === "gallery") return <GalleryPicture size={size} />;
+  if (type === "reef") return (
+    <svg {...p}>
+      <path d="M7 61l10-7h66l10 7v8l-10 6H17L7 69z" fill="#d4ae78" stroke="#a27b4d" strokeWidth="2" />
+      <path d="M7 21l10-8h66l10 8v40l-10 7H17L7 61z" fill="#65d4d2" stroke="#288e9b" strokeWidth="2" />
+      <path d="M10 56l8-5h64l8 5v5l-8 5H18l-8-5z" fill="#f0ddae" />
+      <path d="M22 56l4-19 12-5 9 11 10-11 16 5 6 19H62V46a9 9 0 0 0-18 0v10z" fill="#809d97" />
+      <path d="M30 43V24m0 11-8-7m8 2 8-8M69 48V29m0 11 9-8m-9 1-7-8" stroke="#ec8b89" strokeWidth="4" fill="none" strokeLinecap="round" />
+      <ellipse cx="51" cy="32" rx="13" ry="3" fill="#d8a1cc" />
+      <path d="M7 21l10 7h66l10-7M17 28v39m66-39v39M7 21l10-8h66l10 8" fill="none" stroke="#c2f4ed" strokeWidth="2" />
+      <path d="M13 28v17m73-17v14" stroke="#fff" strokeWidth="3" opacity=".7" strokeLinecap="round" />
+    </svg>
+  );
   if (type === "hall")
     return (
       <svg {...p}>
@@ -452,6 +465,23 @@ export function TankPicture({ type, size = 92 }: { type: TankType | "gallery" | 
       <path d={`M${x} ${y}l7-6h${w - 7}v6z`} fill="#c6edf5" stroke="#3e9bbc" strokeWidth="2" />
       <path d={`M${x + 7} ${y + 7}v${tall ? 33 : 20}M${100 - x - 7} ${y + 6}v10`} stroke="#fff" strokeWidth="3" opacity="0.7" strokeLinecap="round" />
       {bow && <path d={`M${x} 61q${w / 2} 14 ${w} 0`} stroke="#795331" strokeWidth="2" fill="none" />}
+    </svg>
+  );
+}
+
+export function AtriumPicture({ size = 92 }: { size?: number }) {
+  return (
+    <svg width={size} height={size * 0.78} viewBox="0 0 100 78" aria-hidden>
+      <path d="M6 71V18L50 3l44 15v53z" fill="#efd9ae" stroke="#bd9463" strokeWidth="2" />
+      <path d="M17 19L50 8l33 11-33 9z" fill="#a2dfe2" stroke="#55aeb8" strokeWidth="2" />
+      <path d="M50 8v20M33 14l34 11M67 14L33 25" fill="none" stroke="#fff7e2" strokeWidth="2" />
+      <path d="M14 31h72" stroke="#dc9784" strokeWidth="5" />
+      <path d="M19 44l10-5h42l10 5v19l-10 7H29l-10-7z" fill="#63cdd2" stroke="#318d98" strokeWidth="2" />
+      <path d="M22 61l8-4h40l8 4v3l-8 5H30l-8-5z" fill="#ebd8aa" />
+      <path d="M36 60V42m0 10-7-7m7 2 8-8M64 60V44m0 8 7-7" fill="none" stroke="#e98788" strokeWidth="4" strokeLinecap="round" />
+      <ellipse cx="52" cy="49" rx="11" ry="3" fill="#b197c7" />
+      <path d="M19 44l10 5h42l10-5M29 49v20m42-20v20" fill="none" stroke="#c5f1ee" strokeWidth="1.5" />
+      <path d="M8 71h84" stroke="#d3b28a" strokeWidth="3" strokeLinecap="round" />
     </svg>
   );
 }

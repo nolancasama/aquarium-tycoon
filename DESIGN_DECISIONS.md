@@ -1028,7 +1028,7 @@ these changes and decisions.
   arrays. Geometry regression tests cover every crab, octopus and goby habitat,
   dune centres/lips, headings, gait phases, glass and the moray body envelope.
   Gameplay-camera SwiftShader evidence and matching all-animal fixture metrics
-  are in `.tmp/motion-review/` via `scripts/expansion-review.mjs`. The normal loop
+  are in `.tmp/motion-review/` via `scripts/motion-review.mjs`. The normal loop
   budget is unchanged; the all-animal fixture is a separate, heavier scene.
   Matching fixture before → after: Hall 1 66 → 66 draws / 53,545 → 53,545
   triangles; Ocean Hall 79 → 79 / 42,005 → 42,005; Gallery 70 → 69 /
@@ -1038,3 +1038,60 @@ these changes and decisions.
   frames were inspected, including three phases per tank and a real octopus tap.
   Real Chromebook GPU performance and Claude's final aesthetic judgment remain
   outside this SwiftShader evidence.
+
+## 2026-11-01 — Coral Reef Atrium
+
+- The fourth room follows the Gallery along +x: x 30–46, z −5.5–5.5,
+  walls 5.5 m. Its 176 m² floor is 1.83 times the original 96 m² hall, with a clearly
+  taller public-aquarium scale. Room bounds and explicit optional `padLayout`
+  positions/facing replace the assumption that every exhibit sits at the back.
+  The Gallery owns the lower shared wall; the Atrium owns the taller step and
+  deeper returns, with separate exposed faces. No map or branching wing.
+- Opening costs 260 coins and requires the Gallery. It includes permanent pad I's
+  reef; there is no separate purchase, removal or remodel. The existing simulated
+  student continues from the crown, buys the Gallery, stocks its jelly column,
+  then earns through ordinary 45-second help/tip cycles. A regression measures
+  the 8–12-minute target from Gallery purchase, including stocking. This price
+  gives saving a short free-play goal without adding a campaign level.
+- I is freestanding at (38, −1). J at (33, 3) is a secondary foreground exhibit;
+  K at (43.6, −3.7) is a rear corner exhibit. Both accept existing hex, panorama
+  and cave tanks. Moving K farther right preserves a body-width corridor even
+  with the panorama installed. Visitor routes reserve maximum footprints and
+  use obstacle corners, tour all reef faces, and pause beside either front bench.
+- The 5.2×2.3×2 m reef holds 14 places and ten decoration rings. An eight-pane
+  island shell, sandstone plinth and all-sided glass replace a stretched box.
+  Nine column formations bound solid rock, layered shelves, branches and
+  crevices, including two low platforms with actual shelf-top slots (`slot.y`).
+  Eight slots sit on sand; all rings, picking, shadows and animal clearance
+  follow their respective surface. Adjacent sand rings stay clear of shelf edges.
+  Two tall supports frame a genuine open swim passage; its thin bridge
+  cap sits above animals' upper swim clearance, keeping the passage column-free.
+  Small clipped glass corners remain outside existing conservative swim bounds.
+  Open sand and upper water preserve room for animals and purchased corals.
+- Branch coral, brain coral, sea fan and table coral use simple bilingual names,
+  existing variant orders and direct swapping. Their declared footprints feed
+  animal clearance. Existing species gain only the reef habitat; no new species.
+- Warm sand, coral and turquoise architecture uses merged baked colours,
+  clerestories, a cutaway glazed skylight and additive textured daylight shafts.
+  Palms, benches and short information boards make the extra floor purposeful.
+  Existing halls retain their light rig. A full opaque ceiling, real volumetrics,
+  shadows and post-processing were rejected for visibility and Chromebook cost.
+- A 3.6-second skippable reef sweep and bilingual arrival card play on first
+  entry; reduced motion holds the reveal camera. Optional `atriumOpen` and
+  `atriumIntroSeen` flags preserve the existing save version and old purchases.
+  Separate later expansions and the hex lamp fixture are outside this change.
+- Reef rebuilt after review (Claude): the first pass read as grey post-and-lintel
+  "Stonehenge" pillars with corals standing apart on bare sand. The fixed reef is
+  now jittered warm-tan boulders stacked into a continuous back bank and two
+  towers, with coralline tint, colour patches, crevices, branching coral on each
+  mound and table corals, all inside their avoidance columns (12 columns). The
+  arch is a thin curved bridge whose underside stays at or above h − 0.07 over the
+  column-free lane and dips only inside the towers, because swim avoidance knows
+  only vertical columns; a low overhanging arch was rejected (fish would clip it).
+  The reef alone has a 12k-triangle budget (other tanks keep 6k): it is one
+  fixed centrepiece. Front-corner ledges are capped at 0.22 m so their rings and
+  the neighbouring sand ring both stay supported.
+- The atrium door swings into the atrium, not into the previous room like the
+  older doors: an open bright-teal leaf in the dark Gallery read as a stray slab.
+- Floor detail (mosaic rays from the reef ring, wave border, starfish medallion
+  at the entrance) is painted into the single floor texture rather than geometry.

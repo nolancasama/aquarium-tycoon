@@ -17,15 +17,17 @@ export interface RoomBounds {
 }
 
 /** What a room needs from the saved progress to be open (the first hall always is). */
-export type RoomUnlock = null | "hallOpen" | "galleryOpen";
+export type RoomUnlock = null | "hallOpen" | "galleryOpen" | "atriumOpen";
 
 export interface RoomDef {
   id: RoomId;
   name: string;
   ja: string;
   bounds: RoomBounds;
-  /** Tank pads along its back wall. */
+  /** Tank pads in this room, including freestanding and side exhibits. */
   pads: SlotId[];
+  /** Optional world-space pad placements; facing is rotation about +y in radians. */
+  padLayout?: Partial<Record<SlotId, { x: number; z: number; facing?: number }>>;
   unlock: RoomUnlock;
 }
 
@@ -36,7 +38,9 @@ export const DOOR_W = 1.8;
 export const ROOMS: RoomDef[] = [
   { id: "hall", name: "Hall 1", ja: "はじめの ホール", bounds: { minX: -6, maxX: 6, minZ: -4, maxZ: 4, wallH: 3.2 }, pads: ["A", "B"], unlock: null },
   { id: "ocean", name: "Ocean Hall", ja: "うみの ホール", bounds: { minX: 6, maxX: 18, minZ: -4, maxZ: 4, wallH: 3.2 }, pads: ["C", "D", "E"], unlock: "hallOpen" },
-  { id: "gallery", name: "Jellyfish Gallery", ja: "クラゲの ギャラリー", bounds: { minX: 18, maxX: 30, minZ: -4, maxZ: 4, wallH: 3.2 }, pads: ["F", "G", "H"], unlock: "galleryOpen" }
+  { id: "gallery", name: "Jellyfish Gallery", ja: "クラゲの ギャラリー", bounds: { minX: 18, maxX: 30, minZ: -4, maxZ: 4, wallH: 3.2 }, pads: ["F", "G", "H"], unlock: "galleryOpen" },
+  { id: "atrium", name: "Coral Reef Atrium", ja: "サンゴの アトリウム", bounds: { minX: 30, maxX: 46, minZ: -5.5, maxZ: 5.5, wallH: 5.5 }, pads: ["I", "J", "K"],
+    padLayout: { I: { x: 38, z: -1 }, J: { x: 33, z: 3 }, K: { x: 43.6, z: -3.7 } }, unlock: "atriumOpen" }
 ];
 
 export type RoomIndex = number;
@@ -50,10 +54,10 @@ export const ROOM_CENTER_X: number[] = ROOMS.map((r) => (r.bounds.minX + r.bound
 export const ROOM_OF: Record<SlotId, RoomIndex> = Object.fromEntries(ROOMS.flatMap((r, i) => r.pads.map((p) => [p, i]))) as Record<SlotId, RoomIndex>;
 
 /** Is this room open with this progress? */
-export function roomOpen(i: RoomIndex, progress: { hallOpen: boolean; galleryOpen: boolean }): boolean {
+export function roomOpen(i: RoomIndex, progress: { hallOpen: boolean; galleryOpen: boolean; atriumOpen?: boolean }): boolean {
   const r = ROOMS[i];
   if (!r) return false;
-  return r.unlock === null || progress[r.unlock];
+  return r.unlock === null || progress[r.unlock] === true;
 }
 
 /** The room containing world x (rooms tile the x axis). */

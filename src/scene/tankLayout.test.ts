@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { SAND_H, STAND_H, TANKS } from "../game/data/tanks";
 import { hall2Geometry, roomGeometry } from "./models/room";
 import { tankShellGeometry } from "./models/tankShell";
-import { slotMarkerY, SLOT_MARKER_MAX_SCALE, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
+import { slotMarkerY, SLOT_MARKER_LIFT, SLOT_MARKER_MAX_SCALE, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
 
 describe("decoration circles rest on the sand", () => {
   for (const tank of Object.values(TANKS)) {
@@ -13,9 +13,10 @@ describe("decoration circles rest on the sand", () => {
       mesh.updateMatrixWorld();
       const ray = new THREE.Raycaster();
       const down = new THREE.Vector3(0, -1, 0);
-      const sandTop = (x: number, z: number) => {
+      const sandTop = (x: number, z: number, shelf?: number) => {
         ray.set(new THREE.Vector3(x, STAND_H + SAND_H + 0.2, z), down);
-        const hit = ray.intersectObject(mesh).find((h) => h.point.y < STAND_H + SAND_H + 0.1);
+        const ceiling = shelf === undefined ? STAND_H + SAND_H + 0.1 : STAND_H + shelf + 0.01;
+        const hit = ray.intersectObject(mesh).find((h) => h.point.y < ceiling);
         return hit ? hit.point.y : -Infinity;
       };
       for (const slot of tank.slots) {
@@ -28,8 +29,10 @@ describe("decoration circles rest on the sand", () => {
             for (let a = 0; a < Math.PI * 2; a += Math.PI / 32) {
               const x = slot.x + Math.cos(a) * r;
               const z = slot.z + Math.sin(a) * r;
-              const y = slotMarkerY(tank, { x, z });
-              const gap = y - sandTop(x, z);
+              const y = Math.max(slotMarkerY(tank, { x, z }), STAND_H + (slot.y ?? 0) + SLOT_MARKER_LIFT);
+              const surface = sandTop(x, z, slot.y);
+              if (slot.y !== undefined) expect(surface, "flat raised shelf supports the whole ring").toBeCloseTo(STAND_H + slot.y, 5);
+              const gap = y - surface;
               const where = JSON.stringify({ slot, scale, r, a });
               expect(gap, `visible above sand/pebbles ${where}`).toBeGreaterThan(0.002);
               expect(gap, `resting, not floating ${where}`).toBeLessThan(0.014);

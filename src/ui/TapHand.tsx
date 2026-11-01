@@ -53,7 +53,7 @@ function screenPoint(target: TapHandTarget) {
       if (tank && s && g.view === "tank" && g.tankId === tank.id && (kind === "decor" ? decor : g.panel === "decorate" && !decor)) {
         const o = SLOT_POS[tank.slot];
         const h = decor ? decorVersion(decor.kind, decor.variant).height * TANKS[tank.type].h * 0.5 : 0.01;
-        p = { x: o.x + s.x, y: sandSurfaceY(TANKS[tank.type], s.x, s.z) + h, z: o.z + s.z };
+        p = { x: o.x + s.x, y: Math.max(sandSurfaceY(TANKS[tank.type], s.x, s.z), STAND_H + (s.y ?? 0)) + h, z: o.z + s.z };
       }
     }
   }

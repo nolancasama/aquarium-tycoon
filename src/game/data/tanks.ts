@@ -1,5 +1,5 @@
 import type { SlotId, StageId, TankShape, TankType, Vec3 } from "../types";
-import { ROOM_OF } from "./rooms";
+import { ROOMS, ROOM_OF } from "./rooms";
 
 /** Decoration size classes: a tank takes decorations up to its own class. */
 export type DecorSize = "small" | "medium" | "large";
@@ -21,8 +21,8 @@ export interface TankDef {
   w: number;
   d: number;
   h: number;
-  /** Decoration slots on the sand, as tank-local x/z (origin at the sand centre). */
-  slots: { x: number; z: number }[];
+  /** Tank-local decoration positions; optional y is a shelf top above the glass bottom. */
+  slots: { x: number; z: number; y?: number }[];
   /** Largest decoration class it takes. */
   decorSize: DecorSize;
   /** "bow": how far the curved front glass bulges past d/2 at the middle (m). */
@@ -211,6 +211,44 @@ export const TANKS: Record<TankType, TankDef> = {
       { x: -0.02, z: 0.2 },
       { x: 0.5, z: 0.26 }
     ]
+  },
+  reef: {
+    type: "reef",
+    name: "Giant reef",
+    ja: "おおきな サンゴしょう",
+    shape: "reef",
+    group: "special",
+    price: 0,
+    fromStage: 8,
+    capacity: 14,
+    w: 5.2,
+    d: 2.3,
+    h: 2,
+    decorSize: "large",
+    // Overlapping back-bank formations, with a column-free central swim lane.
+    // The organic arch's central crown is above animals' upper body clearance;
+    // its sloping shoulders are reserved by the inner two columns.
+    rocks: [
+      { x: -2.02, z: -0.61, r: 0.49, top: 0.76 },
+      { x: -1.48, z: -0.61, r: 0.52, top: 1.40 },
+      { x: -0.94, z: -0.62, r: 0.48, top: 1.32 },
+      { x: -0.70, z: -0.48, r: 0.36, top: 1.99 },
+      { x: 0.70, z: -0.48, r: 0.36, top: 1.99 },
+      { x: 1.00, z: -0.62, r: 0.48, top: 1.18 },
+      { x: 1.52, z: -0.61, r: 0.52, top: 1.36 },
+      { x: 2.06, z: -0.60, r: 0.45, top: 0.72 },
+      { x: -1.56, z: -0.04, r: 0.40, top: 0.64 },
+      { x: 1.46, z: 0.00, r: 0.42, top: 0.76 },
+      { x: -2.12, z: 0.42, r: 0.45, top: 0.20 },
+      { x: 2.12, z: 0.38, r: 0.45, top: 0.20 }
+    ],
+    slots: [
+      { x: -2.12, z: 0.42, y: 0.2 }, { x: -1.46, z: 0.60 },
+      { x: -0.94, z: 0.36 }, { x: -0.38, z: 0.38 },
+      { x: 0.26, z: 0.40 }, { x: 1.46, z: 0.63 },
+      { x: 2.12, z: 0.38, y: 0.2 }, { x: -2.1, z: -0.06 },
+      { x: 0.83, z: 0.30 }, { x: 1.95, z: -0.04 }
+    ]
   }
 };
 
@@ -221,6 +259,8 @@ export const TANK_ORDER: TankType[] = ["small", "big", "tall", "ocean", "hex", "
 export const HALL_PRICE = 100;
 /** Opening the Jellyfish Gallery (it comes with a Jelly column on pad G). */
 export const GALLERY_PRICE = 150;
+/** Opening the Coral Reef Atrium includes its giant freestanding reef. */
+export const ATRIUM_PRICE = 260;
 /** The ticket gate: more visitors, more often. */
 export const TICKETS_PRICE = 50;
 
@@ -229,7 +269,8 @@ export const STAND_H = 0.75;
 /** Sand thickness inside the tank. */
 export const SAND_H = 0.06;
 
-/** Tank pads along the back of the room (centre of the water, on the floor). */
+/** Tank pad centres, on the floor; newer rooms supply their own layouts. */
+const atriumPads = ROOMS.find((room) => room.id === "atrium")!.padLayout!;
 export const SLOT_POS: Record<SlotId, Vec3> = {
   A: { x: -2.6, y: 0, z: -2.4 },
   B: { x: 2.6, y: 0, z: -2.4 },
@@ -238,10 +279,16 @@ export const SLOT_POS: Record<SlotId, Vec3> = {
   E: { x: 15.95, y: 0, z: -2.4 },
   F: { x: 20.6, y: 0, z: -2.3 },
   G: { x: 24, y: 0, z: -2.3 },
-  H: { x: 27.4, y: 0, z: -2.3 }
+  H: { x: 27.4, y: 0, z: -2.3 },
+  I: { ...atriumPads.I!, y: 0 },
+  J: { ...atriumPads.J!, y: 0 },
+  K: { ...atriumPads.K!, y: 0 }
 };
 
-export const SLOT_ORDER: SlotId[] = ["A", "B", "C", "D", "E", "F", "G", "H"];
+export const SLOT_ORDER: SlotId[] = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"];
+export const SLOT_FACING = Object.fromEntries(SLOT_ORDER.map((slot) => [slot,
+  ROOMS.find((room) => room.pads.includes(slot))?.padLayout?.[slot]?.facing ?? 0
+])) as Record<SlotId, number>;
 
 /** Which room a pad is in (index into ROOMS: 0 the first hall, 1 the Ocean Hall, 2 the Jellyfish Gallery). */
 export const HALL_OF: Record<SlotId, number> = ROOM_OF;
@@ -262,8 +309,11 @@ export const PAD_TYPES: Record<SlotId, TankType[]> = {
   E: OCEAN_SIDE_TYPES,
   F: GALLERY_TYPES,
   G: GALLERY_TYPES,
-  H: GALLERY_TYPES
+  H: GALLERY_TYPES,
+  I: ["reef"],
+  J: ["hex", "panorama", "cave"],
+  K: ["hex", "panorama", "cave"]
 };
 
 /** Pads that are never empty once their room is open (they come with a tank). */
-export const BUILT_IN_PADS: SlotId[] = ["C", "G"];
+export const BUILT_IN_PADS: SlotId[] = ["C", "G", "I"];

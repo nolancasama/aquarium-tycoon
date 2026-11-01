@@ -7,6 +7,7 @@ import { TANKS } from "../game/data/tanks";
 import { HALL_X, PEDESTAL, tankOrigin, waterCentre } from "../game/world";
 import { tankById } from "../game/logic/model";
 import { footprintPoints } from "../game/logic/tankLayout";
+import { ROOMS } from "../game/data/rooms";
 
 /** The live camera, for projecting world points to the screen (picking, tests). */
 export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current: null };
@@ -22,8 +23,10 @@ const TAN = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
 
 /** Management view: the whole hall from the front, a little above. */
 export function roomView(aspect: number, orbit: number, zoom: number, hall = 0) {
-  const target = new THREE.Vector3(HALL_X[hall] ?? HALL_X[0], 0.6, -0.8);
-  const dist = (13.2 / zoom) * Math.max(1, 1.72 / aspect);
+  const bounds = ROOMS[hall]?.bounds ?? ROOMS[0].bounds;
+  const scale = Math.max((bounds.maxX - bounds.minX) / 12, (bounds.maxZ - bounds.minZ) / 8);
+  const target = new THREE.Vector3(HALL_X[hall] ?? HALL_X[0], hall === 3 ? 0.85 : 0.6, hall === 3 ? -0.35 : -0.8);
+  const dist = (13.2 * scale / zoom) * Math.max(1, 1.72 / aspect);
   const pitch = 0.6;
   const h = dist * Math.cos(pitch);
   return {
@@ -39,10 +42,11 @@ export function tankView(tankId: string, aspect: number) {
   const def = TANKS[t.type];
   const c = waterCentre(t.slot, t.type);
   const dw = (def.w + 0.3) / (0.72 * 2 * TAN * aspect);
-  const dh = (def.h + (def.group === "special" ? 0.4 : 0.32)) / (0.66 * 2 * TAN);
+  const dh = (def.h + (t.type === "reef" ? 1.1 : def.group === "special" ? 0.4 : 0.32)) / (0.66 * 2 * TAN);
   // Measure from the nearest glass: the panorama's centre extends beyond its sides.
-  const d = Math.max(dw, dh) + def.d / 2 + (def.bulge ?? 0);
-  return { pos: new THREE.Vector3(c.x, c.y + 0.12, c.z + d), target: new THREE.Vector3(c.x, c.y + 0.02, c.z) };
+  const d = (Math.max(dw, dh) + def.d / 2 + (def.bulge ?? 0)) * (t.type === "reef" ? 1.1 : 1);
+  // Include the giant plinth above the bottom controls, even at 720 px tall.
+  return { pos: new THREE.Vector3(c.x, c.y + (t.type === "reef" ? 1.1 : 0.12), c.z + d), target: new THREE.Vector3(c.x, c.y + (t.type === "reef" ? -0.15 : 0.02), c.z) };
 }
 
 const STATUS_GAP = 18;
@@ -134,6 +138,12 @@ export function CameraRig() {
     const c = rt.camera;
     const g = getGame();
     const aspect = size.width / Math.max(1, size.height);
+    if (rt.atriumReveal && c.shot) {
+      const p = rt.atriumReveal.reducedMotion ? 0.5 : THREE.MathUtils.smoothstep(rt.time - rt.atriumReveal.t0, 0, 3.6);
+      c.shot.pos.x = 34.5 + p * 6;
+      c.shot.pos.y = 4.2 + Math.sin(p * Math.PI) * 0.3;
+      c.shot.pos.z = 9.2 + Math.max(0, 1.72 / aspect - 1) * 4;
+    }
     if (c.shot) {
       want.current.set(c.shot.pos.x, c.shot.pos.y, c.shot.pos.z);
       wantLook.current.set(c.shot.target.x, c.shot.target.y, c.shot.target.z);

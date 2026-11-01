@@ -40,6 +40,10 @@ all models, textures and sounds are generated in the browser.
 | 4 Aquarium Designer | Place the big tank, a fish and 2 decorations in it | The fish fan's photo day |
 | 5 Aquarium Star | Help 3 visitors, make every tank happy | The judge, the trophy, free play |
 
+The Coral Reef Atrium follows the Jellyfish Gallery in free play: a bright,
+taller fourth room with a permanent giant reef, two secondary exhibit pads,
+four coral decorations and a skippable first-arrival reveal.
+
 Levels 6–8 add the Ocean Hall, sea animals, the tall tank, upgrades and the
 second judge. From Level 8 (Expansion 1) the shops also sell special tanks
 (hexagon, panorama, jelly column, rocky cave), ten more animals (angelfish,
@@ -52,7 +56,7 @@ food, clean water and decorations (each fish has a favourite decoration).
 ## Planned expansions
 
 See [EXPANSION_ROADMAP.md](EXPANSION_ROADMAP.md) for the proposed roadmap beyond
-Jellyfish Gallery: Coral Reef Atrium, Shark Tunnel, Coastal & Polar Zone,
+the Coral Reef Atrium: Shark Tunnel, Coastal & Polar Zone,
 Outdoor Dolphin Lagoon, and a large Grand Ocean Sanctuary for orcas (with
 belugas in separate suitable habitats), plus near-term crab, animal animation,
 shop pronunciation and hexagonal tank polish. This is a design plan, **not** an
@@ -117,11 +121,16 @@ Ctrl+Alt+M adds 1000 coins.
 The aquarium is data-driven; most additions are one entry plus their art.
 
 **A room.** Add a `RoomDef` to `ROOMS` in `src/game/data/rooms.ts`. Rooms sit
-in a row along +x, 12 m wide, and each shares a doorway (z = `DOOR_Z`) with the
-room before it. Give the room its pads (new `SlotId` letters in
+in a row along +x with independent width, depth and wall height, and each shares
+a doorway (z = `DOOR_Z`) with the room before it. The later room owns the extra
+wall height and depth at an unequal join; keep exposed faces disjoint. Give the room its pads (new `SlotId` letters in
 `src/game/types.ts`, positions in `SLOT_POS`, accepted types in `PAD_TYPES`,
-built-in tanks in `BUILT_IN_PADS`) and an unlock flag. The flag is a new
-boolean in `Progress` (`model.ts`), read by `roomOpen()`, defaulted and
+built-in tanks in `BUILT_IN_PADS`) and an unlock flag. New rooms can supply
+`padLayout` world x/z positions and optional facing in radians; tanks derive
+their position and facing from it. Freestanding habitats need reserved walking
+footprints and routes around every side rather than a straight back-wall lane.
+The flag is a new
+optional boolean in `Progress` (`model.ts`), read by `roomOpen()`, defaulted and
 validated in `save.ts`. An open-room action (like `openGallery`) adds any
 built-in tank. Routes (`world.ts route()`), the hall arrows, camera framing
 and "which room is this pad in" (`HALL_OF`) follow automatically. Then draw
@@ -133,7 +142,8 @@ clear; `src/scene/rooms.test.ts` checks the doorways.
 **A tank shape.** Add a `TankType` and a `TANKS` entry in
 `src/game/data/tanks.ts`: size, `shape` (box, hex, round, bow; a genuinely new
 shape also needs a case in `tankFishBounds()` in `logic/swim.ts`), capacity,
-decoration slots and `decorSize`, plus optional `bulge`, `backRock`, `dens`,
+decoration slots (optional `y` supplies a raised shelf top above the glass bottom)
+and `decorSize`, plus optional `bulge`, `backRock`, `dens`,
 `rocks`, `lights`, `current`. Add it to the pads that take it (`PAD_TYPES`)
 and to the species habitats that should live in it. Draw it in
 `src/scene/models/tankShell.ts` (`tankShellGeometry`, `waterGeometry`) and the

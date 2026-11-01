@@ -62,7 +62,7 @@ export function Markers() {
           if (visitor && rt.hand.targetId !== `visitor-${visitor.id}` && roomAtX(visitor.x) === g.hall && spots.length < MAX) spots.push({ x: visitor.x, y: 2.35 - visitor.seat * 0.25, z: visitor.z });
         }
         const roomGoal = guide === "btn-tank-shop" && nextStep(g.model)?.goal === "openHall";
-        const door = guide === "door-gallery" || guide === "gallery-door" ? 2 : guide === "door-hall" || guide === "hall-door" || roomGoal || g.nudge?.shopItem === "hall" ? 1 : null;
+        const door = guide === "door-atrium" || g.nudge?.shopItem === "atrium" ? 3 : guide === "door-gallery" || guide === "gallery-door" ? 2 : guide === "door-hall" || guide === "hall-door" || roomGoal || g.nudge?.shopItem === "hall" ? 1 : null;
         if (door && rt.hand.targetId !== `door-${door}` && g.hall === door - 1 && spots.length < MAX) spots.push({ x: doorX(door) - 0.35, y: 2.7, z: DOOR_Z });
       }
       // In the close-up the free decoration rings pulse gold themselves (Tank.tsx); room-sized arrows would hide the fish.

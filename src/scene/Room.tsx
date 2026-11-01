@@ -5,12 +5,14 @@ import { getGame, useGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { BENCH, DOOR, GALLERY, GALLERY_DOOR, HALL2, HALL_DOOR, PEDESTAL, PICO, ROOM } from "../game/world";
 import { BUILT_IN_PADS, HALL_OF, PAD_TYPES, SLOT_ORDER, SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
-import { ROOMS, ROOM_CENTER_X, roomOpen } from "../game/data/rooms";
+import { DOOR_Z, ROOMS, ROOM_CENTER_X, roomOpen } from "../game/data/rooms";
 import type { SlotId, TankType } from "../game/types";
-import { tapGalleryDoor, tapHallDoor, tapPad } from "../game/flow/actions";
+import { tapAtriumDoor, tapGalleryDoor, tapHallDoor, tapPad } from "../game/flow/actions";
 import { PartBuilder } from "./partBuilder";
 import { GALLERY_PORTHOLES, galleryGeometry, hall2Geometry, roomGeometry, ropeGeometry } from "./models/room";
 import { galleryFloorTexture, galleryJellyTexture, galleryShaftTexture, galleryWallMaterial } from "./galleryMaterials";
+import { ATRIUM_BENCHES, ATRIUM_BOARDS, ATRIUM_PALMS, atriumFurnitureGeometry, atriumShaftGeometry, atriumSkylightGeometry, atriumWallGeometry } from "./models/atrium";
+import { atriumFloorTexture, atriumGlassMaterial, atriumMaterial, atriumShaftMaterial } from "./atriumMaterials";
 import { tankShellGeometry, waterGeometry } from "./models/tankShell";
 import { flatMat, floorTexture, muralTexture, oceanFloorMaterial, oceanMuralTexture, padIconTexture, posterTexture, shadowMaterial, signMaterial, smoothMat } from "./materials";
 
@@ -100,6 +102,7 @@ export function Room() {
       <HallDoor />
       <OceanHall />
       <Gallery />
+      <Atrium />
       {SLOT_ORDER.map((s) => (
         <Pad key={s} slot={s} />
       ))}
@@ -163,6 +166,7 @@ function Gallery() {
   return (
     <group>
       <mesh geometry={walls!} material={galleryWallMaterial} />
+      <AtriumDoor />
       <NearbyRoom index={2}>
         <mesh geometry={extras!} material={galleryWallMaterial} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centre, 0, 0]}>
@@ -187,6 +191,83 @@ function Gallery() {
         ))}
       </NearbyRoom>
     </group>
+  );
+}
+
+/** Sunlit centrepiece scenery: eleven static draws including the roof, boards
+ * and contact shadows. Tall structure and all furniture are culled together. */
+function Atrium() {
+  const open = useGame((s) => Boolean(s.model.progress.atriumOpen));
+  const walls = useMemo(() => open ? atriumWallGeometry() : null, [open]);
+  const extras = useMemo(() => open ? atriumFurnitureGeometry() : null, [open]);
+  const glass = useMemo(() => open ? atriumSkylightGeometry() : null, [open]);
+  const shafts = useMemo(() => open ? atriumShaftGeometry() : null, [open]);
+  const blobs = useMemo(() => blobGeometry([
+    ...ATRIUM_PALMS.map((p): [number, number, number, number] => [p.x, p.z, 1.25, 1.25]),
+    ...ATRIUM_BENCHES.map((p): [number, number, number, number] => [p.x, p.z, 2.4, 1.0])
+  ]), []);
+  if (!open) return null;
+  const r = ROOMS[3].bounds;
+  const x = ROOM_CENTER_X[3];
+  return (
+    <NearbyRoom index={3}>
+      <mesh geometry={walls!} material={atriumMaterial} />
+      <mesh geometry={extras!} material={atriumMaterial} />
+      <mesh geometry={glass!} material={atriumGlassMaterial} />
+      <mesh geometry={shafts!} material={atriumShaftMaterial()} raycast={() => undefined} />
+      <mesh geometry={blobs} material={blobMat} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, 0, 0]}>
+        <planeGeometry args={[r.maxX - r.minX, r.maxZ - r.minZ]} />
+        <meshBasicMaterial map={atriumFloorTexture()} toneMapped={false} />
+      </mesh>
+      <mesh position={[x, 3.02, r.minZ + 0.30]}>
+        <planeGeometry args={[4.5, 1.04]} />
+        <primitive object={signMaterial("CORAL REEF ATRIUM\nサンゴの アトリウム", "#258e91", "#fff3d8", 1024, 256)} attach="material" />
+      </mesh>
+      {ATRIUM_BOARDS.map((p) => (
+        <mesh key={p.x} position={[p.x, 1.34, p.z + 0.076]}>
+          <planeGeometry args={[1.12, 0.64]} />
+          <primitive object={signMaterial("Coral Reef\nサンゴしょう", "#e5f2df", "#21777a", 512, 256)} attach="material" />
+        </mesh>
+      ))}
+    </NearbyRoom>
+  );
+}
+
+/** Both doorway faces retain their title once the lock and leaf have opened. */
+function AtriumDoor() {
+  const open = useGame((s) => Boolean(s.model.progress.atriumOpen));
+  const leaf = useRef<THREE.Group>(null);
+  const angle = useRef(open ? 1 : 0);
+  const x = ROOMS[3].bounds.minX;
+  useFrame((_, dt) => {
+    angle.current += ((open ? 1 : 0) - angle.current) * Math.min(1, dt * 2);
+    // Swings into the atrium: a bright teal leaf in the dark Gallery reads as a stray slab.
+    if (leaf.current) leaf.current.rotation.y = angle.current * 1.75;
+  });
+  const onClick = (e: ThreeEvent<MouseEvent>) => {
+    if (e.delta > 8 || open) return;
+    e.stopPropagation();
+    tapAtriumDoor();
+  };
+  return (
+    <>
+      <group position={[x - 0.02, 0, DOOR_Z - HALL_DOOR.w / 2]}>
+        <group ref={leaf}>
+          <mesh position={[0, 1.15, HALL_DOOR.w / 2]} onClick={onClick}>
+            <boxGeometry args={[0.08, 2.3, HALL_DOOR.w]} />
+            <meshBasicMaterial color="#308e91" toneMapped={false} />
+          </mesh>
+          {!open && <DoorLock onClick={onClick} />}
+        </group>
+      </group>
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[x + (side < 0 ? -0.17 : 0.36), 2.78, HALL_DOOR.z]} rotation={[0, side * Math.PI / 2, 0]}>
+          <planeGeometry args={[1.8, 0.63]} />
+          <primitive object={signMaterial("CORAL REEF\nATRIUM", "#258e91", "#fff3d8", 768, 256)} attach="material" />
+        </mesh>
+      ))}
+    </>
   );
 }
 

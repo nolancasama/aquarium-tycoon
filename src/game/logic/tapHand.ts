@@ -21,6 +21,7 @@ function guideTarget(g: GameState, id: string): HandTarget | null {
   }
   if (id === "door-hall" || id === "hall-door") return { id: "door-1", kind: "world" };
   if (id === "door-gallery" || id === "gallery-door") return { id: "door-2", kind: "world" };
+  if (id === "door-atrium") return { id: "door-3", kind: "world" };
   if (id.startsWith("pad-")) return { id, kind: "world" };
   return { id, kind: "dom" };
 }

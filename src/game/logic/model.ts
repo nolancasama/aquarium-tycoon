@@ -1,7 +1,7 @@
 import type { ColorId, DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
 import { SPECIES, SPECIES_ORDER, spaceOf, type HomeNeed } from "../data/fish";
 import { DECOR, decorFits, decorVersion } from "../data/decor";
-import { BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
+import { ATRIUM_PRICE, BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
 import type { PhraseId } from "./english";
 
@@ -99,6 +99,9 @@ export interface Progress {
   seenPatterns?: string[];
   /** Expansion 1: the Jellyfish Gallery is open. */
   galleryOpen: boolean;
+  /** Free-play expansion; absent in older saves. */
+  atriumOpen?: boolean;
+  atriumIntroSeen?: boolean;
   /** Distinct sentences said or chosen (results card). */
   said: PhraseId[];
 }
@@ -163,6 +166,8 @@ export function newProgress(): Progress {
     handShown: [],
     seenPatterns: [],
     galleryOpen: false,
+    atriumOpen: false,
+    atriumIntroSeen: false,
     said: []
   };
 }
@@ -267,10 +272,11 @@ export const decorUnlocked = (m: Model) => m.progress.stage >= 2;
 export const tanksUnlocked = (m: Model) => m.progress.stage >= 4;
 export const upgradesUnlocked = (m: Model) => m.progress.stage >= UPGRADES_FROM;
 export const isDecorUnlocked = (m: Model, kind: DecorKind) => m.progress.stage >= DECOR[kind].fromStage;
-export const isTankUnlocked = (m: Model, type: TankType) => type !== "ocean" && type !== "small" && m.progress.stage >= TANKS[type].fromStage;
+export const isTankUnlocked = (m: Model, type: TankType) => type !== "ocean" && type !== "small" && type !== "reef" && m.progress.stage >= TANKS[type].fromStage;
 /** Expansion 1 content (special tanks, new animals and decorations, the Gallery) opens at Level 8. */
 export const EXPANSION_FROM: StageId = 8;
 export const galleryUnlocked = (m: Model) => m.progress.stage >= EXPANSION_FROM && m.progress.hallOpen;
+export const atriumUnlocked = (m: Model) => galleryUnlocked(m) && m.progress.galleryOpen;
 
 export function cheapestFish(m: Model): number {
   return Math.min(...unlockedSpecies(m).map((s) => SPECIES[s].price));
@@ -515,6 +521,25 @@ export function openGallery(m: Model): Result {
   };
 }
 
+/** Free play: the Atrium opens beyond the Gallery with its permanent central reef. */
+export function openAtrium(m: Model): Result {
+  if (!atriumUnlocked(m)) return fail("locked");
+  if (m.progress.atriumOpen) return fail("owned");
+  if (m.coins < ATRIUM_PRICE) return fail("coins");
+  const id = `t${m.nextId}`;
+  return {
+    ok: true,
+    id,
+    m: {
+      ...m,
+      coins: m.coins - ATRIUM_PRICE,
+      nextId: m.nextId + 1,
+      tanks: [...m.tanks, newTank(id, "reef", "I")],
+      progress: { ...m.progress, atriumOpen: true }
+    }
+  };
+}
+
 // ---------------------------------------------------------------- remodelling
 
 /** What remodelling a placed tank into another type would do (nothing is changed). */
@@ -537,7 +562,7 @@ export function remodelPlan(m: Model, tankId: string, type: TankType): RemodelPl
   const tradeIn = t ? Math.floor(TANKS[t.type].price / 2) : 0;
   const cost = Math.max(0, TANKS[type].price - tradeIn);
   const plan: RemodelPlan = { reason: null, blockers: [], keep: [], toTray: [], tradeIn, cost };
-  if (!t || t.type === "ocean" || !isTankUnlocked(m, type) || m.progress.stage < EXPANSION_FROM) return { ...plan, reason: "locked" };
+  if (!t || t.type === "ocean" || t.type === "reef" || !isTankUnlocked(m, type) || m.progress.stage < EXPANSION_FROM) return { ...plan, reason: "locked" };
   if (t.type === type) return { ...plan, reason: "same" };
   if (!PAD_TYPES[t.slot].includes(type)) return { ...plan, reason: "pad" };
   plan.blockers = t.fish.filter((f) => !SPECIES[f.species].habitat.includes(type));

@@ -164,6 +164,7 @@ export interface GameState {
   /** A save existed but could not be read. */
   saveLost: boolean;
   fade: number;
+  atriumArrival: boolean;
 
   model: Model;
 
@@ -255,6 +256,7 @@ export const useGame = create<GameState>(() => ({
   confirmNew: false,
   saveLost: false,
   fade: 0,
+  atriumArrival: false,
   model: newModel(),
   prompt: null,
   line: null,

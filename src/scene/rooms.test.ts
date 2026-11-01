@@ -8,6 +8,7 @@ import {
   galleryGeometry,
   hall2Geometry
 } from "./models/room";
+import { atriumFurnitureGeometry, atriumSkylightGeometry, atriumWallGeometry } from "./models/atrium";
 
 /** Test individual triangles: a merged room's bounding box spans every doorway. */
 function intersectsGeometry(geometry: THREE.BufferGeometry, box: THREE.Box3): boolean {
@@ -91,5 +92,62 @@ describe("room scenery clearance", () => {
   it("leaves triangle budget for the Gallery's decorative planes", () => {
     const triangles = (gallery.getIndex()?.count ?? gallery.getAttribute("position").count) / 3;
     expect(triangles).toBeLessThanOrEqual(25_000 - 500);
+  });
+});
+
+describe("Atrium shell and public walkway", () => {
+  let walls: THREE.BufferGeometry;
+  let furniture: THREE.BufferGeometry;
+  let gallery: THREE.BufferGeometry;
+  beforeAll(() => {
+    walls = atriumWallGeometry();
+    furniture = atriumFurnitureGeometry();
+    gallery = galleryGeometry("walls");
+  });
+  afterAll(() => { walls.dispose(); furniture.dispose(); gallery.dispose(); });
+
+  it("opens the Gallery's east wall and keeps both doorframes off the walking line", () => {
+    const passage = bounds(29.2, 30.8, 0.1, 1.8, DOOR_Z - 0.3, DOOR_Z + 0.3);
+    expect(intersectsGeometry(gallery, passage)).toBe(false);
+    expect(intersectsGeometry(walls, passage)).toBe(false);
+    expect(intersectsGeometry(furniture, passage)).toBe(false);
+  });
+
+  it("closes both deeper returns and the taller shared-wall step", () => {
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(walls, material);
+    mesh.updateMatrixWorld();
+    for (const [y, z] of [[1.4, -4.8], [1.4, 4.8], [4.4, -2], [4.4, DOOR_Z]]) {
+      const ray = new THREE.Raycaster(new THREE.Vector3(31, y, z), new THREE.Vector3(-1, 0, 0), 0, 2);
+      const hit = ray.intersectObject(mesh)[0];
+      expect(hit, `missing wall return at y=${y}, z=${z}`).toBeDefined();
+      expect(hit.point.x).toBeCloseTo(30.24, 4);
+    }
+    material.dispose();
+  });
+
+  it.each(["I", "J", "K"] as const)("keeps furniture outside the full allowed exhibit footprint on %s", (slot) => {
+    const p = SLOT_POS[slot];
+    const halfW = Math.max(...PAD_TYPES[slot].map((t) => TANKS[t].w)) / 2 + 0.12;
+    const halfD = Math.max(...PAD_TYPES[slot].map((t) => TANKS[t].d + (TANKS[t].bulge ?? 0))) / 2 + 0.12;
+    expect(intersectsGeometry(furniture, bounds(p.x - halfW, p.x + halfW, 0.03, 3.2, p.z - halfD, p.z + halfD))).toBe(false);
+  });
+
+  it("preserves continuous body-width viewing paths on all four sides of the reef", () => {
+    for (const area of [
+      bounds(34.35, 34.95, 0.1, 1.8, -3.1, 1.5),
+      bounds(41.05, 41.65, 0.1, 1.8, -3.1, 1.5),
+      bounds(34.35, 41.65, 0.1, 1.8, -3.35, -2.75),
+      bounds(34.35, 41.65, 0.1, 1.8, 1.2, 1.8)
+    ]) expect(intersectsGeometry(furniture, area)).toBe(false);
+  });
+
+  it("keeps the glazed ceiling above the fish and leaves a Chromebook geometry budget", () => {
+    const roof = atriumSkylightGeometry();
+    roof.computeBoundingBox();
+    expect(roof.boundingBox!.min.y).toBeGreaterThan(5.4);
+    const triangles = [walls, furniture, roof].reduce((sum, g) => sum + (g.getIndex()?.count ?? g.getAttribute("position").count) / 3, 0);
+    expect(triangles).toBeLessThan(11_000);
+    roof.dispose();
   });
 });

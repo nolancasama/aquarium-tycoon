@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decodeSave, encodeSave, VERSION } from "./save";
-import { buyDecor, buyFish, buyTank, buyTickets, buyUpgrade, newModel, openGallery, openHall, placeDecor, placeFish, placeTank, remodelTank, setLight, type Model, type Result } from "./model";
+import { buyDecor, buyFish, buyTank, buyTickets, buyUpgrade, newModel, openAtrium, openGallery, openHall, placeDecor, placeFish, placeTank, remodelTank, setLight, type Model, type Result } from "./model";
 
 type M = Model & { lastId?: string };
 
@@ -25,6 +25,56 @@ function played(): Model {
 }
 
 describe("save", () => {
+  it("loads a pre-Atrium save with all existing rooms, animals and purchases intact", () => {
+    let m: M = { ...played(), coins: 3000, progress: { ...played().progress, stage: 8, star: true, freePlay: true } };
+    m = ok(openHall(m));
+    m = ok(openGallery(m));
+    m = ok(buyTickets(m));
+    m = ok(setLight(m, m.tanks.find((t) => t.slot === "G")!.id, "pink"));
+    const { lastId: _drop, ...model } = m;
+    void _drop;
+    const raw = JSON.parse(encodeSave(model));
+    delete raw.model.progress.atriumOpen;
+    delete raw.model.progress.atriumIntroSeen;
+    const back = decodeSave(JSON.stringify(raw))!;
+    expect(back.v).toBe(VERSION);
+    expect(back.model).toEqual(model);
+    expect(back.model.progress.atriumOpen).toBe(false);
+    expect(back.model.progress.atriumIntroSeen).toBe(false);
+  });
+
+  it("round-trips an open Atrium, stocked reef, its decorations and arrival history", () => {
+    let m: M = { ...newModel(), coins: 3000, progress: { ...newModel().progress, stage: 8, star: true, freePlay: true, tutorial: "done" } };
+    m = ok(openHall(m));
+    m = ok(openGallery(m));
+    m = ok(openAtrium(m));
+    const reef = m.lastId!;
+    for (const species of ["clownfish", "chromis", "stingray", "seahorse"] as const) {
+      m = ok(buyFish(m, species));
+      m = ok(placeFish(m, m.lastId!, reef));
+    }
+    m = ok(buyDecor(m, "coral", "red"));
+    m = ok(placeDecor(m, m.lastId!, reef, 0));
+    m = ok(buyTank(m, "hex"));
+    m = ok(placeTank(m, "hex", "J"));
+    const { lastId: _drop, ...model } = m;
+    void _drop;
+    model.progress.atriumIntroSeen = true;
+    const back = decodeSave(encodeSave(model))!;
+    expect(back.v).toBe(VERSION);
+    expect(back.model).toEqual(model);
+    expect(back.model.tanks.find((t) => t.slot === "I")?.fish).toHaveLength(4);
+    // Repair a missing permanent exhibit, but never invent another paid room.
+    const raw = JSON.parse(encodeSave(model));
+    raw.model.tanks = raw.model.tanks.filter((t: { slot: string }) => t.slot !== "I");
+    expect(decodeSave(JSON.stringify(raw))!.model.tanks.find((t) => t.slot === "I")?.type).toBe("reef");
+    raw.model.progress.galleryOpen = false;
+    const locked = decodeSave(JSON.stringify(raw))!.model;
+    expect(locked.progress.atriumOpen).toBe(false);
+    expect(locked.progress.atriumIntroSeen).toBe(false);
+    expect(locked.tanks.some((t) => ["I", "J", "K"].includes(t.slot))).toBe(false);
+  });
+
   it("round-trips everything that matters", () => {
     const m = played();
     const back = decodeSave(encodeSave(m))!.model;
