@@ -389,17 +389,14 @@ function TankStatusPanel({ name, animals, spaces, capacity, food, clean, happy }
   return (
     <div className="panel tank-status ui" data-testid="status" ref={(el) => void (tankStatusEl.current = el)}>
       <header>
-        {name}
-      </header>
-      <div className="capacity-row">
-        <span className="capacity-label">Spaces <span lang="ja">ばしょ</span></span>
-        <span className="fishcount" data-testid="fish-count" aria-label={`${spaces} of ${capacity} spaces used by ${animals} animals`}>
+        <span>{name}</span>
+        <span className="fishcount" data-testid="fish-count" aria-label={`${spaces} of ${capacity} tank spaces used`}>
           <Icon id="fish" size={20} /> {spaces}/{capacity}
         </span>
-      </div>
+      </header>
       {spaces !== animals && (
-        <small className="capacity-detail" data-testid="animal-count">
-          {animals} animals <span lang="ja">・${animals} いきもの</span> · Rays and schools use 2 spaces
+        <small className="capacity-detail" lang="ja">
+          エイと さかなの むれは 2つぶん つかうよ
         </small>
       )}
       <Bar value={food} icon="food" id="bar-food" />

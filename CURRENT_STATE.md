@@ -1,5 +1,11 @@
 # Current State
 
+## Compact tank capacity panel (2026-11-06)
+
+- Tank status shows the correct occupied-space count (e.g. 8/8) on the same header line as the tank name, without a separate "Spaces / ばしょ" row.
+- When a ray or Chromis school makes the space count differ from the animal count, a short Japanese-only hint explains that rays and schools take two places. The redundant "N animals" line is removed.
+- The existing fish-count test ID remains on the numeric counter; core capacity and placement rules are unchanged.
+
 ## Correct capacity displays and two-place animal eligibility (2026-11-06)
 
 - Tank close-up now shows **occupied spaces / capacity** rather than mistakenly comparing the raw animal count with space-based capacity. Where they differ, show the actual animal count and explain that rays and schools take two spaces.
