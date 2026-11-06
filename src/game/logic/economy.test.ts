@@ -30,6 +30,7 @@ import {
   UPGRADE_PRICE
 } from "./model";
 import { ATRIUM_PRICE, GALLERY_PRICE, HALL_PRICE, TANKS } from "../data/tanks";
+import { openSharkTunnel, SHARK_TUNNEL_PRICE, tunnelUnlocked } from "./tunnel";
 import { SPECIES } from "../data/fish";
 import type { SpeciesId } from "../types";
 
@@ -263,6 +264,34 @@ describe("economy simulation", () => {
     expect(minutes).toBeLessThanOrEqual(12);
     const opened = ok(openAtrium(m));
     expect(opened.progress.atriumOpen).toBe(true);
+    expect(opened.coins).toBeGreaterThanOrEqual(0);
+  });
+
+  it("free play reaches the Shark Tunnel in 9–14 minutes after opening the Atrium, including four reef animals", () => {
+    const { m: starred } = play("bluetang", "bluetang", true);
+    let { m } = playPhase2(starred);
+    while (m.coins < GALLERY_PRICE) m = helpOne(m);
+    m = ok(openGallery(m));
+    while (m.coins < ATRIUM_PRICE) m = helpOne(m);
+    m = ok(openAtrium(m));
+    const started = m.stats.seconds;
+    const reef = () => m.tanks.find((t) => t.slot === "I")!;
+    // The unlock asks for four animals in the giant reef: a student buys them one by one.
+    for (const s of ["clownfish", "parrotfish", "angelfish", "goby"] as SpeciesId[]) {
+      if (reef().fish.length >= 4) break;
+      while (m.coins < SPECIES[s].price) m = helpOne(m);
+      m = buyAndPlace(m, s, reef().id);
+    }
+    expect(tunnelUnlocked(m)).toBe(true);
+    while (m.coins < SHARK_TUNNEL_PRICE) {
+      m = helpOne(m);
+      if (m.stats.seconds - started > 20 * 60) throw new Error("the Shark Tunnel takes too long to afford");
+    }
+    const minutes = (m.stats.seconds - started) / 60;
+    expect(minutes).toBeGreaterThanOrEqual(9);
+    expect(minutes).toBeLessThanOrEqual(14);
+    const opened = ok(openSharkTunnel(m));
+    expect(opened.progress.tunnelOpen).toBe(true);
     expect(opened.coins).toBeGreaterThanOrEqual(0);
   });
 });

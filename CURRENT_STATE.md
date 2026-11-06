@@ -1,5 +1,74 @@
 # Current State
 
+## Shark Tunnel expansion (2026-11-06)
+
+Design: DESIGN_DECISIONS.md "Shark Tunnel expansion (design freeze)" and its
+"Decided while building" list.
+
+- **Wing:** the fifth area, entered through a doorway in the Coral Reef Atrium's
+  back wall (x 32.55), not a sixth room on the +x row. A `RoomDef` with
+  `wing: "atrium"`, at index `SHARKS_HALL`. Unlock: free play, Atrium open, giant
+  reef with ≥4 animals, then 300 coins. Hall arrows go Atrium ↔ Shark Tunnel, with
+  a short fade. Only the active area is drawn and tappable (`scene/tunnel/wing.ts`).
+- **Habitat:** a built-in `sharks` tank on pad L (capacity 16; sharks 3 places,
+  eagle ray 2), shown as occupied/total. Geometry and collision live in
+  `game/data/sharkTunnel.ts`: a closed walkway loop through a 32 × 29.5 m habitat,
+  a 4.2 × 3.2 m tube, the Grand Viewing Chamber dome, six placement zones and five
+  structures (arch, pinnacle, reef shelf, resting ledge, sand bank). The scene is
+  `scene/tunnel/` (SharkTunnel, habitatGeometry, tunnelMaterials).
+- **Animals:** blacktip shark, zebra shark (after milestone 4) and eagle ray. Their
+  3D swim is `game/tunnel/swim3d.ts`: head-led spine, look-ahead avoidance of the
+  tube, rocks, structures and each other, rests, attract/hold for activities. The
+  models are `scene/models/sharks.ts`, with vertex-shader bend, tail beat and wing
+  wave. The contract is `game/tunnel/contract.ts`.
+- **Management:** viewpoints (All/Left/Right/Entrance), Animals and Rocks with
+  English buying, Place (rings on the zones), Feed (food falls from the surface;
+  the animals come up), Clean, a habitat status card, and a first-visit reveal.
+- **Exploration:** "Explore Tunnel" → camera move and fade → the player (a child in
+  a teal staff cap) walks the loop. Input is the joystick, arrows or WASD; tapping
+  a glowing viewing spot walks there. Authored per-section cameras stay inside the
+  tube and tilt up for sharks overhead; they reframe at viewing spots. "Back to
+  Aquarium" (or Escape) returns. Code: `game/tunnel/explore.ts`,
+  `scene/tunnel/ExplorePlayer.tsx`, `ui/TunnelHud.tsx`.
+- **Tunnel visitors:** 3–6 people (more as the habitat matures) in lanes. They stop
+  at viewing spots to look up, point or take photos, come in parent-and-child
+  pairs, make way for the player, react rarely to a shark overhead ("Wow! A
+  shark!") and tip on leaving. Code: `game/tunnel/tunnelVisitors.ts`.
+- **English:** in `game/tunnel/activities.ts`.
+  - Find / show: "Where is the shark?", "Find a ray!" and "Look at the big shark!"
+    are answered by tapping the animal. Help climbs from a clue to the camera
+    turning, then an arrow and ring, then a hand.
+  - Where: "It's above me!" or "It's by me!", asked once a shark is clearly placed
+    and held there.
+  - Can: "Yes, it can!" or "No, it can't!".
+  - Count: "One shark!" to "Six sharks!", with the sharks gathered and numbered first.
+  - All are mic-free through the usual ask() prompt.
+- **Milestones:** shown in the goals card while in the wing.
+  1. Grand Opening: a blacktip.
+  2. First Tunnel Tour: answer 3 questions; reward, the big arch.
+  3. Help Visitors (3): an eagle ray.
+  4. Habitat happy with 3 structures: the zebra shark.
+  5. Final Tour (find, where, count in a row): the trophy, shown in the lobby.
+
+  Everything stays open afterwards.
+- **Saves:** optional `tunnelOpen`, `tunnelIntroSeen` and `tunnel`; the save version
+  is unchanged and old saves load with the wing closed.
+- Verified: typecheck, `npm test` 551/551 (incl. `sharkTunnel.test.ts`,
+  `swim3d.test.ts` with the real habitat, `sharks.test.ts`, `tunnel.test.ts` and
+  the price regression), build. `tests/e2e/tunnel.spec.ts` (2 tests) passes on the
+  dev server and fails on a known-bad save (tunnel not restored).
+  `node scripts/tunnel-review.mjs <url> [manage|explore]` writes
+  `.tmp/tunnel-review/`. Frames were checked by eye at 1366×768, 1280×720 and
+  1024×768 (management) and 1366×768 (exploration), on SwiftShader.
+- Known limits:
+  - Real Chromebook fps in the wing is unmeasured.
+  - Motion was judged from frames, not watched live.
+  - The zebra shark's fins carry no spots.
+  - Rest drops assume open water below a rest spot (true for the current spots).
+  - The resting ledge and reef shelf are slab-like.
+  - Visitors' reactions are text bubbles; the voice is only used for questions.
+  - "Under" is reserved for a future glass-floor section.
+
 ## Compact tank capacity panel (2026-11-06)
 
 - Tank status shows the correct occupied-space count (e.g. 8/8) on the same header line as the tank name, without a separate "Spaces / ばしょ" row.
@@ -382,9 +451,16 @@ approach frames, the trophy from front/side/rear.
    reachable, and whether children notice the reef animals' names.
 5. Optional reef follow-ups: parrotfish grazing peck, shrimp cleaning a fish,
    a reef lighting choice; move the atrium sign/left board clear of the reef.
+6. Shark Tunnel on a real Chromebook: fps while exploring with 6 visitors and a
+   full habitat; whether children find the joystick, the "!" visitors and the
+   Final Tour. Is 300 coins / about 13 minutes right?
+7. Shark Tunnel follow-ups: spots on the zebra shark's fins, rockier ledge and
+   shelf shapes, a glass-floor section for "under", spoken visitor reactions.
 
 ## Codex / Delegated Work
-None pending (Coral Reef Atrium slices merged 2026-11-01). The 2026-10-24 guidance pass was split into four Codex runs
+None pending. The Shark Tunnel's two Codex slices (worktrees aq-st1 and aq-st2) stopped
+on a usage limit on 2026-11-06; Claude finished and integrated all of it on branch
+st1-habitat. The 2026-10-24 guidance pass was split into four Codex runs
 (guide + shop + level cards; visitors + bench; wall + trophy; request card),
 all reviewed and accepted; layout fixes, the bench glide and test repairs were
 done by Claude.

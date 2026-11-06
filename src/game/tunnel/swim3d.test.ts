@@ -161,9 +161,9 @@ describe('large-animal three dimensional swim', () => {
     const swim = createTunnelSwim(v, 2026); swim.sync(animals);
     const pts = new Float32Array(39), overhead = new Set<string>(), rested = new Set<string>(), beside = new Set<string>();
     const travelled = new Map<string, number>(), last = new Map<string, [number, number, number]>();
-    let gap = Infinity, slowest = 0;
+    let gap = Infinity, spent = 0, steps = 0;
     for (let frame = 0; frame < 60 * 420; frame++) {
-      const t0 = performance.now(); swim.step(1 / 60); slowest = Math.max(slowest, performance.now() - t0);
+      const t0 = performance.now(); swim.step(1 / 60); spent += performance.now() - t0; steps++;
       for (const p of swim.poses()) {
         swim.spine(p.id, pts, 13);
         for (let j = 0; j < 39; j += 3) gap = Math.min(gap, tunnelClearance(v, pts[j], pts[j + 1], pts[j + 2]) - TUNNEL_SPECIES[p.species].radius);
@@ -182,7 +182,8 @@ describe('large-animal three dimensional swim', () => {
     for (const id of ['b0', 'b1', 'z0', 'z1']) expect(beside.has(id), `${id} passes beside the glass`).toBe(true);
     expect(rested.size, 'zebra sharks rest on the sand').toBe(2);
     for (const a of animals) expect(travelled.get(a.id)!, `${a.id} keeps swimming`).toBeGreaterThan(a.species === 'zebrashark' ? 70 : 150);
-    expect(slowest).toBeLessThan(25);
+    // Six animals: well under a millisecond per frame on average (generous for loaded CI machines).
+    expect(spent / steps).toBeLessThan(2);
   }, 120_000);
 });
 

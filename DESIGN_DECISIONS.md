@@ -1386,3 +1386,54 @@ Four slices: (1) data, rules, save, wing, habitat scene and management mode;
 against a frozen geometry contract (`src/game/tunnel/contract.ts`); (3) integration,
 exploration mode and tunnel visitors; (4) English activities, milestones, reactions
 and the celebration.
+
+### Decided while building (2026-11-06)
+
+- **Who built it.** Both Codex slices stopped on a usage limit a few minutes in.
+  The owner chose to have Claude build it instead of waiting. Claude kept the
+  drafts' sound parts (data, rules, save fields, swim simulation, models) and wrote
+  the rest. The four slices were not dispatched separately.
+- **Price 300, not 400.** The simulated student (`economy.test.ts`) needed 15.75
+  minutes at 400 coins after opening the Atrium, including the four reef animals the
+  unlock asks for. 300 is the bottom of the frozen range and still above the
+  Atrium's 260 for a bigger attraction. It takes about 13 minutes, so the
+  regression band is 9–14 minutes, not 8–12.
+- **"Help Visitors" counts only after the First Tunnel Tour.** Otherwise visitor
+  questions counted for milestones 2 and 3 at once and both completed together.
+  Pico also asks an observation question when the player lingers at a viewing spot
+  (at most every 40 s), so milestone 2 does not depend on visitors.
+- **Geometry.** The walkway is a closed centripetal Catmull-Rom loop sampled every
+  0.5 m. The tube is 4.2 m wide and 3.2 m high: at 2.9 m an adult at the walking
+  edge was under 1.85 m of glass. People may walk 1.25 m either side of the centre
+  (3.35 m in the dome). Zones carry a yaw: every structure stands parallel to the
+  side walls, and an arch's opening faces the tube. The Atrium's left "Coral Reef"
+  board moved from x 32.7 to 34.5; it stood in front of the new doorway.
+- **Rocks are drawn from their collision solids,** inset 5–34% and never outward.
+  The swim avoidance and the picture cannot disagree.
+- **Resting zebra sharks.** Their dive angle is limited, so they stop up to about
+  1.2 m above a rest spot. The simulation then reports a `restDrop` (optional
+  contract field) and the renderer eases the body down onto the surface below,
+  which is open water by construction.
+- **Only the active area is drawn, and only it can be tapped.** react-three-fiber
+  raycasts invisible objects, so hidden areas are also moved off layer 0
+  (`scene/tunnel/wing.ts`). Moving into or out of the wing is a short fade and a cut.
+- **No front rim in the management view.** The habitat's front edge is open (a low
+  base and faint glass). A rim hid the two front placement zones from the elevated
+  camera. Light shafts only show inside the tunnel; from above they read as flat
+  sheets.
+- **Zone taps hit a filled disc.** The visible ring is hollow; children tap the
+  middle of rings.
+- **Exploration camera.** It lives on the loop behind the player, 3.2–4.4 m back
+  depending on the section. A final projection keeps it inside the tube's cross-section
+  even while smoothing cuts a corner. At a viewing spot it turns only part-way (35%)
+  toward the window, so the player stays in frame. Visitors within 1.15 m of the
+  camera are hidden for that moment. Fog FogExp2 0.052 makes the habitat walls fade
+  into blue water from inside.
+- **Count questions wait for the sharks.** Every shark is called to a point just
+  ahead of the player and held there. The question opens when they have all arrived
+  (or after 25 s), with a numbered tag on each.
+- **Tunnel visitors run in the game tick** (not only when the wing is shown), so the
+  habitat earns tips while the player is elsewhere, like other exhibits.
+- **The player model.** Visitor models gained an optional separate right arm
+  (`tunnelPersonModel`, `bossModel`) so tunnel visitors can point and hold up a
+  phone. Ordinary visitors are unchanged.

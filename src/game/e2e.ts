@@ -18,7 +18,7 @@ import { ROOMS } from "./data/rooms";
 import { SHARK_DOOR, TUNNEL_SECTIONS, TUNNEL_VIEWING_SPOTS, TUNNEL_ZONES, sectionAt, walkwayFrame, walkwayLength, type TunnelSection } from "./data/sharkTunnel";
 import { tunnelRuntime } from "./tunnel/contract";
 import { cameraTubeCheck, playerWorld, snapCamera } from "./tunnel/explore";
-import { locate, runActivity } from "./tunnel/activities";
+import { findTargetId, locate, runActivity } from "./tunnel/activities";
 import { personWorld, tunnelPeople } from "./tunnel/tunnelVisitors";
 
 /**
@@ -235,7 +235,7 @@ const tunnelApi = {
       player: p, cam: { ...e.cam }, tube: e.active ? cameraTubeCheck() : null, length: walkwayLength,
       animals: swim ? swim.poses().map((a) => ({ id: a.id, species: a.species, x: a.x, y: a.y - (a.restDrop ?? 0), z: a.z, resting: a.resting, where: e.active ? locate(a) : null })) : [],
       visitors: tunnelPeople.map((v) => ({ id: v.id, type: v.type, s: v.s, lateral: v.lateral, state: v.state, activity: v.activity, request: v.request, ...personWorld(v) })),
-      activity: getGame().tunnelActivity, waiting: getGame().tunnelWaiting, tilt: e.tilt
+      activity: getGame().tunnelActivity, waiting: getGame().tunnelWaiting, tilt: e.tilt, findTarget: findTargetId()
     };
   },
   /** Put the player at distance s along the loop (lateral offset optional). */

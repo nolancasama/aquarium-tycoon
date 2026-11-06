@@ -4,8 +4,8 @@ import { HAPPY, happiness, hasSpace, newTank, newTunnelProgress, tankAt, type Mo
 
 export { newTunnelProgress } from "./model";
 
-/** Tuned with the same student/help/tip cycles as the Atrium. */
-export const SHARK_TUNNEL_PRICE = 400;
+/** Simulated student (economy.test.ts): about 13 minutes from opening the Atrium, including four reef animals. */
+export const SHARK_TUNNEL_PRICE = 300;
 
 export const tunnelUnlocked = (m: Model): boolean => Boolean(
   m.progress.freePlay && m.progress.atriumOpen && (tankAt(m, "I")?.fish.length ?? 0) >= 4

@@ -130,7 +130,7 @@ try {
     await step(27000);
     await shot("31-find-help-tier3");
     st = await tun("state");
-    const target = st.activity && st.animals.find((a) => a.species !== "eagleray");
+    const target = st.findTarget && st.animals.find((a) => a.id === st.findTarget);
     if (target) {
       const pos = await tun("animalOnScreen", target.id);
       if (pos) await page.mouse.click(pos.x, pos.y);

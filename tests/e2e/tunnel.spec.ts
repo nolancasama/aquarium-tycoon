@@ -64,7 +64,7 @@ test("open, stock, decorate and care for the Shark Tunnel; everything survives a
   expect(t.tunnelMilestone).toBe(1);
   const habitat = s.tanks.find((x) => x.type === "sharks")!;
   expect(habitat.fish).toEqual(["blacktip"]);
-  expect(s.coins).toBe(700 - 400);
+  expect(s.coins).toBe(700 - 300);
   // The arrival reveal and its card, then skip.
   await expect(page.getByTestId("tunnel-arrival")).toBeVisible();
   await page.getByTestId("tunnel-arrival").getByRole("button").click();

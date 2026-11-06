@@ -212,7 +212,7 @@ export function exploreShot(): { x: number; y: number; z: number; tx: number; ty
     let tx: number, ty: number, tz: number;
     const f = walkwayFrame(e.s);
     if (frame?.kind === "point") { tx = frame.x; ty = frame.y; tz = frame.z; }
-    else if (spot!.side === 0) { tx = p.x; ty = 5.6; tz = p.z; }
+    else if (spot!.side === 0) { tx = p.x + f.dx * travel * 4; ty = 3.8; tz = p.z + f.dz * travel * 4; }
     else {
       const side = spot!.side;
       tx = f.x - f.dz * side * 6; ty = 1.9; tz = f.z + f.dx * side * 6;
@@ -225,7 +225,7 @@ export function exploreShot(): { x: number; y: number; z: number; tx: number; ty
     const cp = pointAt(camS, c.l, c.y);
     const head = { x: p.x, y: 1.3, z: p.z };
     // Overhead (the dome): look up past the player. Side windows: turn only partly, so the player stays in frame.
-    const w = frame?.kind === "point" ? 0.6 : spot!.side === 0 ? 0.85 : 0.35;
+    const w = frame?.kind === "point" ? 0.6 : spot!.side === 0 ? 0.7 : 0.35;
     return { ...cp, tx: head.x + (tx - head.x) * w, ty: head.y + (ty - head.y) * w, tz: head.z + (tz - head.z) * w };
   }
   const camS = e.s - travel * shot.back;

@@ -9,7 +9,8 @@ import { SPECIES } from "../../game/data/fish";
 import { tapSharkTunnelDoor, tapSlot, tapTank } from "../../game/flow/actions";
 import type { SwimAnimal, TunnelSpecies } from "../../game/tunnel/contract";
 import type { TunnelDecorKind } from "../../game/types";
-import { padIconTexture, signMaterial } from "../materials";
+import { padIconTexture, signMaterial, smoothMat } from "../materials";
+import { PartBuilder } from "../partBuilder";
 import { TunnelAnimals } from "./TunnelAnimals";
 import { habitatStaticGeometry, lobbyGeometry, shaftGeometry, structureGeometry, tunnelGlassGeometry, zoneRingGeometry } from "./habitatGeometry";
 import { habitatRock, habitatSand, lobbyMat, moteMat, shaftMat, tunnelGlass, tunnelStruct, waterSection, waterSurface, zoneRingBusyMat, zoneRingMat } from "./tunnelMaterials";
@@ -236,6 +237,7 @@ export function SharkTunnel() {
         <ZoneRings placed={placed} />
         <Animals placed={placed} />
         <FeedChunks />
+        <TunnelTrophy />
         <TunnelVisitors />
         <ExplorePlayer />
         {/* Transparent parts last: glass, front water section, surface, shafts, motes. */}
@@ -270,3 +272,31 @@ function Shafts({ geometry }: { geometry: THREE.BufferGeometry }) {
 
 const zoneHitGeo = new THREE.CircleGeometry(2.7, 24).rotateX(-Math.PI / 2);
 const zoneHitMat = new THREE.MeshBasicMaterial({ visible: false });
+
+/** The Shark Tunnel trophy (milestone 5): a gold cup with a little shark, on a pedestal in the lobby. */
+export function TunnelTrophy() {
+  const won = useGame((s) => Boolean(s.model.progress.tunnel?.trophy));
+  const geo = useMemo(() => {
+    const b = new PartBuilder(0.2);
+    b.cyl(0.42, 0.5, 0.9, 0, 0, 0, "#e8ecf2", 16);
+    b.cyl(0.36, 0.42, 0.08, 0, 0.9, 0, "#c9a227", 16);
+    b.cyl(0.07, 0.16, 0.32, 0, 0.98, 0, "#f2c641", 12);
+    b.add(new THREE.CylinderGeometry(0.3, 0.12, 0.42, 16, 1, true), "#f2c641", [0, 1.5, 0]);
+    b.sphere(0.12, 0, 1.3, 0, "#f2c641", [1.6, 0.5, 1.6], 12);
+    // The shark on the rim.
+    b.sphere(0.16, 0, 1.86, 0, "#9fb6bb", [1.9, 0.62, 0.7], 12);
+    b.add(new THREE.ConeGeometry(0.07, 0.17, 4), "#7f969b", [0.02, 2.0, 0], [0, 0, -0.25]);
+    b.add(new THREE.ConeGeometry(0.08, 0.16, 4), "#7f969b", [-0.33, 1.88, 0], [0, 0, Math.PI / 2.3]);
+    return b.build();
+  }, []);
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => { if (ref.current) ref.current.rotation.y = rt.time * 0.4; });
+  if (!won) return null;
+  return (
+    <group position={[40.4, 0, -6.6]} name="tunnel-trophy">
+      <group ref={ref}>
+        <mesh geometry={geo} material={smoothMat} raycast={() => undefined} />
+      </group>
+    </group>
+  );
+}

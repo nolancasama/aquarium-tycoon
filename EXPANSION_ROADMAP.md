@@ -15,6 +15,7 @@ Maintain the original audience: Japanese Grade 3 beginner EFL students on touch 
 - **First Hall:** starter fish, care, decorations, visitors and small tanks.
 - **Ocean Hall:** bigger tanks, sea turtle, additional animals, upgrades.
 - **Jellyfish Gallery:** third room, glowing displays, specialized tank types.
+- **Shark Tunnel (2026-11-06):** a wing behind the Atrium: one huge shark habitat with a walk-through glass tunnel, blacktip and zebra sharks, eagle rays, structures, tunnel visitors and English activities.
 - **Coral Reef Atrium (2026-11-01):** fourth, taller sunlit room with a freestanding giant reef habitat, coral decorations, parrotfish and (cleaner) shrimp, and two open pads for secondary exhibits.
 - Existing special tanks: hexagonal, panoramic, jellyfish cylinder, rocky cave.
 - Existing expansion animals include angelfish, goby, chromis school, moray eel, octopus, crab, stingray and distinct jellyfish species.
@@ -85,7 +86,9 @@ These are **distinct types of experiences**, not merely additional copies of the
 
 **English opportunities:** colors, quantities, likes, simple descriptions, identifying animals; keep controls distinct from assessed words.
 
-### B. Shark Tunnel
+### B. Shark Tunnel — implemented 2026-11-06
+
+**Status:** built as a branching wing behind the Atrium with management and walk-through exploration modes (see `DESIGN_DECISIONS.md` "Shark Tunnel expansion" and `CURRENT_STATE.md`). Not yet built: a glass-floor section ("under"), more species, spoken visitor reactions.
 
 **Visual identity:** a huge underwater habitat with visitors walking through a transparent tunnel, water and animals above and beside them.
 

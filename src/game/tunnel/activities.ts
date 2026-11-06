@@ -245,7 +245,9 @@ export function runActivity(kind: TunnelActKind, target: Target, visitorId: stri
   }
   return new Promise<boolean>((resolve) => {
     const ui: TunnelActivityUi = {
-      id: activityNo++, kind, by, question: QUESTION[target], todo: TODO[target], tier: 0, clue: null, status: "seek"
+      id: activityNo++, kind, by, tier: 0, clue: null, status: "seek",
+      question: kind === "count" ? { en: "How many sharks?", ja: "サメは なんびき？" } : kind === "can" ? { en: "Can it swim?", ja: "およげる？" } : QUESTION[target],
+      todo: kind === "count" ? { en: "Count the sharks!", ja: "サメを かぞえよう！" } : kind === "can" ? { en: "Look at it!", ja: "よく みて！" } : TODO[target]
     };
     live = { ui, visitorId, target, t0: rt.time, animalId: null, tour, resolve };
     if (kind === "find" || kind === "show") return startFind(by);
@@ -297,7 +299,7 @@ export function tapForFind(hit: { id: string; species: TunnelSpecies } | null): 
   }
   const l = live;
   const kind = l.ui.kind;
-  setUi({ status: "done" });
+  setUi({ status: "done", clue: null, tier: 0, todo: { en: "You found it!", ja: "みつけた！" } });
   void (async () => {
     await succeed(kind, Boolean(l.visitorId), l.ui.by);
     finish(true);
@@ -389,10 +391,20 @@ async function startCount(by: VisitorType | "pico", tour: boolean) {
   const l = live;
   const n = poses().filter((a) => isShark(a.species)).length;
   if (n < 1 || n > 6) return finish(false);
-  rt.explore.frame = { kind: "chamber", x: CHAMBER.x, y: 3, z: CHAMBER.z };
+  // Gather every shark just ahead of the player, above and beside the tube, and look
+  // there. The question waits until they have all arrived (or 25 s), so a child counts
+  // what is on the screen; each shark carries a number tag meanwhile.
+  const pw = playerWorld(), f = walkwayFrame(rt.explore.s);
+  const gx = pw.x + f.dx * 5, gz = pw.z + f.dz * 5, gy = f.height + 2.4;
+  rt.explore.frame = { kind: "point", x: gx, y: gy, z: gz };
   countTags.on = true;
-  // Bring every shark into view of the chamber while the question is up.
-  for (const a of poses()) if (isShark(a.species)) tunnelRuntime.swim?.attract(a.id, { x: CHAMBER.x + (Math.random() - 0.5) * 6, y: 5.5, z: CHAMBER.z + (Math.random() - 0.5) * 4 }, 20);
+  setUi({ status: "wait", todo: { en: "Watch! Here they come!", ja: "みて！ サメが くるよ！" } });
+  const sharks = () => poses().filter((a) => isShark(a.species));
+  sharks().forEach((a, i) => tunnelRuntime.swim?.attract(a.id, { x: gx + (i - 2) * 1.8, y: gy + (i % 2) * 1.2, z: gz + ((i * 1.7) % 3) - 1.5 }, 40));
+  const t0 = rt.time;
+  while (live === l && rt.time - t0 < 25 && !sharks().every((a) => Math.hypot(a.x - gx, a.y - gy, a.z - gz) < 7)) await nextFrames(6);
+  if (live !== l) return;
+  for (const a of sharks()) tunnelRuntime.swim?.hold(a.id, 12);
   setUi({ status: "ask" });
   const lo = Math.max(1, Math.min(n - 1, 4));
   const id = await ask({
