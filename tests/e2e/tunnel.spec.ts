@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { answer, boot, click3d, hook, state, waitFor } from "./helpers";
+import { walkHalfWidth } from "../../src/game/data/sharkTunnel";
 
 /**
  * Shark Tunnel: unlock and open it from the Atrium, the arrival, a structure
@@ -41,7 +42,8 @@ async function load(page: Page, model: unknown) {
   const errors = await boot(page, "fast=1&seed=3");
   await page.getByTestId("btn-continue").click();
   await waitFor(page, (s) => s.screen === "game", 20_000, "game");
-  for (let i = 0; i < 4 && (await page.getByTestId("next").count()); i++) await page.getByTestId("next").click();
+  // A welcome line may close by itself between counting and clicking: never wait on it.
+  for (let i = 0; i < 4 && (await page.getByTestId("next").count()); i++) await page.getByTestId("next").click({ timeout: 2000 }).catch(() => undefined);
   await hook(page, "visitors", false);
   return errors;
 }
@@ -125,11 +127,15 @@ test("walk the tunnel, stay on the walkway, help a visitor, come back; progress 
   void st;
   await expect(page.getByTestId("btn-back-aquarium")).toBeVisible();
   await expect(page.getByTestId("joystick")).toBeVisible();
-  const s0 = await tun<{ s: number; section: string }>(page, "state");
-  expect(s0.section).toBe("entrance");
+  expect((await tun<{ section: string }>(page, "state")).section).toBe("entrance");
+  await tun(page, "goTo", (await tun<number>(page, "sectionStart", "firstView")) + 2, 0);
+  await page.waitForTimeout(1500);
+  const s0 = await tun<{ s: number }>(page, "state");
   // Walk with the keyboard: forward goes along the loop.
+  // Hold until 2 m are covered: SwiftShader can drop below 10 fps, where the 0.1 s frame
+  // clamp slows game time, so a fixed wall-clock hold under-measures the walk.
   await page.keyboard.down("ArrowUp");
-  await page.waitForTimeout(2500);
+  await page.waitForFunction((from) => (window as never as { __tunnel: { state(): { s: number } } }).__tunnel.state().s - from > 2, s0.s, { timeout: 10_000 }).catch(() => undefined);
   await page.keyboard.up("ArrowUp");
   const s1 = await tun<{ s: number }>(page, "state");
   expect(s1.s - s0.s).toBeGreaterThan(2);
@@ -137,8 +143,8 @@ test("walk the tunnel, stay on the walkway, help a visitor, come back; progress 
   await page.keyboard.down("ArrowLeft");
   await page.waitForTimeout(2500);
   await page.keyboard.up("ArrowLeft");
-  const s2 = await tun<{ lateral: number; tube: { lateral: number; y: number; maxLateral: number; maxY: number } }>(page, "state");
-  expect(Math.abs(s2.lateral)).toBeLessThanOrEqual(1.26);
+  const s2 = await tun<{ s: number; lateral: number; tube: { lateral: number; y: number; maxLateral: number; maxY: number } }>(page, "state");
+  expect(Math.abs(s2.lateral)).toBeLessThanOrEqual(walkHalfWidth(s2.s) + 0.01);
   for (const sec of ["mainCurve", "grandChamber", "returnLeg"]) {
     await tun(page, "goTo", (await tun<number>(page, "sectionStart", sec)) + 2, 0);
     await page.waitForTimeout(1500);

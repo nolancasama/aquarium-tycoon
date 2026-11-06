@@ -13,7 +13,7 @@ import type { Obstacle, P3, SwimVolume, TunnelShape } from "../tunnel/contract";
 export const SHARK_DOOR = { x: 32.55, z: -5.5, w: 1.8, h: 2.65 };
 
 /** The dry entrance lobby between the Atrium and the habitat. */
-export const TUNNEL_LOBBY = { minX: 29.5, maxX: 41.5, minZ: -10.5, maxZ: -5.5, height: 4.2 };
+export const TUNNEL_LOBBY = { minX: 29.5, maxX: 42.6, minZ: -10.5, maxZ: -5.5, height: 4.2 };
 
 /** The water: inner faces of the habitat walls, the seabed's lowest level and the surface. */
 export const HABITAT = {
@@ -27,25 +27,40 @@ export const seabedY = (x: number, z: number): number => -0.45 + 0.1 * Math.sin(
 /** Glass tube outer dimensions (half-width at the floor, height of the crown). */
 export const TUBE = { halfWidth: 2.1, height: 3.2 };
 /** The Grand Viewing Chamber dome. */
-export const CHAMBER = { x: 36.5, z: -32, halfWidth: 4.5, height: 4.5, blendFrom: 6, blendTo: 2.2 };
+export const CHAMBER = { x: 36.4, z: -32.3, halfWidth: 4.5, height: 4.5, blendFrom: 6, blendTo: 2.2 };
+/** The bottom of the U is a true circular arc around this centre, its radius well above the
+ * dome's half-width, so the tube's inner side never folds back on itself (it did at r 3.4). */
+const ARC = { x: 36.4, z: -25.5, r: 6.8 };
+const arc = (deg: number): [number, number] => [ARC.x + ARC.r * Math.cos((deg * Math.PI) / 180), ARC.z - ARC.r * Math.sin((deg * Math.PI) / 180)];
+
+/** Where the tube passes through the lobby's back wall (x of each mouth's centre). */
+export const MOUTHS = { entrance: 32.45, exit: 40.2 };
 
 /** Control points in walking order (closed); z > lobby edge means inside the lobby. */
 const CONTROL: Array<[number, number]> = [
-  [32.55, -7.4], // lobby, from the Atrium door
-  [32.45, -10.6], // entrance mouth
-  [30.8, -14.6], // first viewing section
-  [29.2, -19.6],
-  [29.4, -25], // main underwater curve
-  [31.6, -29.4],
-  [CHAMBER.x, CHAMBER.z], // Grand Viewing Chamber
-  [41.3, -29.4],
-  [43.4, -25], // return leg
-  [43.3, -19.6],
-  [41.4, -14.6],
-  [38.65, -10.6], // exit mouth
-  [38.5, -7.6],
-  [35.55, -6.9] // lobby, back past the Atrium door
+  [32.55, -7.4], // 0 lobby, from the Atrium door
+  // Straight through the lobby wall at both mouths, so each glass ring meets the
+  // wall squarely instead of slanting through it.
+  [MOUTHS.entrance, -10.6], // 1 entrance mouth
+  [MOUTHS.entrance, -12.4], // 2
+  [30.7, -15.8], // 3 first viewing section
+  [29.4, -20.4], // 4
+  arc(180), // 5 main underwater curve (the arc starts)
+  arc(150), // 6
+  arc(120), // 7
+  arc(90), // 8 Grand Viewing Chamber (= CHAMBER)
+  arc(60), // 9
+  arc(30), // 10
+  arc(0), // 11 return leg
+  [43.3, -20.4], // 12 rock window
+  [41.7, -15.6], // 13
+  [MOUTHS.exit, -12.8], // 14
+  [MOUTHS.exit, -10.6], // 15 exit mouth
+  [40.0, -7.6], // 16
+  [35.55, -6.9] // 17 lobby, back past the Atrium door
 ];
+/** Named places on the loop (indices into CONTROL). */
+const C = { start: 0, firstView: 3, mainCurve: 5, chamber: 8, rockWindow: 12, returnEnd: 13, exitEnd: 16 };
 
 /** Centripetal Catmull-Rom on the closed control loop. */
 function curvePoint(i: number, t: number): [number, number] {
@@ -111,7 +126,7 @@ const wrap = (s: number) => ((s % walkwayLength) + walkwayLength) % walkwayLengt
 
 export interface WalkwayFrame {
   x: number; y: number; z: number;
-  /** Unit tangent in walking direction; the left normal is (-dz, dx)... see walkwayPoint. */
+  /** Unit tangent in walking direction; (-dz, dx) is the +lateral direction (the walker's right). */
   dx: number; dz: number;
   halfWidth: number; height: number;
   inside: boolean;
@@ -146,7 +161,7 @@ export function walkHalfWidth(s: number): number {
   return WALKWAY_HALF_WIDTH + 2.1 * f.chamber;
 }
 
-/** A point on the walkway: s along the loop, lateral offset (+ is left of walking direction), clamped. */
+/** A point on the walkway: s along the loop, lateral offset (+ is right of walking direction), clamped. */
 export function walkwayPoint(s: number, lateral: number): P3 {
   const f = walkwayFrame(s), w = walkHalfWidth(s), l = Math.max(-w, Math.min(w, lateral));
   return { x: f.x - f.dz * l, y: 0, z: f.z + f.dx * l };
@@ -170,13 +185,13 @@ const S = CONTROL.map((_, i) => sAtControl(i));
 export type TunnelSection = "lobby" | "entrance" | "firstView" | "mainCurve" | "grandChamber" | "returnLeg" | "exit";
 /** Distance ranges along the loop (the lobby wraps past 0). */
 export const TUNNEL_SECTIONS: Record<TunnelSection, { from: number; to: number }> = {
-  entrance: { from: S[0], to: S[2] - 1.5 },
-  firstView: { from: S[2] - 1.5, to: S[4] - 1.5 },
-  mainCurve: { from: S[4] - 1.5, to: S[6] - 4 },
-  grandChamber: { from: S[6] - 4, to: S[6] + 4 },
-  returnLeg: { from: S[6] + 4, to: S[10] + 1 },
-  exit: { from: S[10] + 1, to: S[12] },
-  lobby: { from: S[12], to: walkwayLength }
+  entrance: { from: S[C.start], to: S[C.firstView] - 1.5 },
+  firstView: { from: S[C.firstView] - 1.5, to: S[C.mainCurve] - 1.5 },
+  mainCurve: { from: S[C.mainCurve] - 1.5, to: S[C.chamber] - 4 },
+  grandChamber: { from: S[C.chamber] - 4, to: S[C.chamber] + 4 },
+  returnLeg: { from: S[C.chamber] + 4, to: S[C.returnEnd] + 1 },
+  exit: { from: S[C.returnEnd] + 1, to: S[C.exitEnd] },
+  lobby: { from: S[C.exitEnd], to: walkwayLength }
 };
 export function sectionAt(distance: number): TunnelSection {
   const s = wrap(distance);
@@ -184,25 +199,25 @@ export function sectionAt(distance: number): TunnelSection {
   return "lobby";
 }
 /** Where exploration starts: just inside the lobby, facing the entrance mouth. */
-export const EXPLORE_START_S = S[0] + 0.4;
+export const EXPLORE_START_S = S[C.start] + 0.4;
 /** The middle of the Grand Viewing Chamber. */
-export const CHAMBER_S = S[6];
+export const CHAMBER_S = S[C.chamber];
 
 /** Interesting views: walk up to them and the camera reframes; tap to walk there. */
 export interface ViewingSpot {
   id: string;
   s: number;
-  /** +1: the view is to the left of walking direction, -1 right, 0 overhead. */
+  /** +1: the view is on the +lateral side (right of walking direction), -1 the other side, 0 overhead. */
   side: 1 | -1 | 0;
   section: TunnelSection;
   en: string;
   ja: string;
 }
 export const TUNNEL_VIEWING_SPOTS: ViewingSpot[] = [
-  { id: "first", s: S[2], side: -1, section: "firstView", en: "First window", ja: "さいしょの まど" },
-  { id: "curve", s: S[4] + 1, side: 1, section: "mainCurve", en: "Big curve", ja: "おおきな カーブ" },
-  { id: "chamber", s: S[6], side: 0, section: "grandChamber", en: "Grand chamber", ja: "おおきな ドーム" },
-  { id: "return", s: S[9], side: -1, section: "returnLeg", en: "Rock window", ja: "いわの まど" }
+  { id: "first", s: S[C.firstView], side: -1, section: "firstView", en: "First window", ja: "さいしょの まど" },
+  { id: "curve", s: S[C.mainCurve] + 1, side: 1, section: "mainCurve", en: "Big curve", ja: "おおきな カーブ" },
+  { id: "chamber", s: S[C.chamber], side: 0, section: "grandChamber", en: "Grand chamber", ja: "おおきな ドーム" },
+  { id: "return", s: S[C.rockWindow], side: -1, section: "returnLeg", en: "Rock window", ja: "いわの まど" }
 ];
 
 export type TunnelView = "whole" | "left" | "right" | "entrance";

@@ -133,7 +133,7 @@ export const rt = {
   /** Shark Tunnel exploration (runtime only, never saved). See game/tunnel/explore.ts. */
   explore: {
     active: false,
-    /** Distance along the walkway loop and lateral offset (+ left of walking direction). */
+    /** Distance along the walkway loop and lateral offset (+ right of increasing s: -dz, dx). */
     s: 0,
     lateral: 0,
     /** Avatar yaw (radians, three.js rotation.y) and walking speed (m/s). */
@@ -141,7 +141,7 @@ export const rt = {
     speed: 0,
     /** Walking animation phase. */
     phase: 0,
-    /** Combined joystick + keyboard input: x right, y forward, -1..1, camera-relative. */
+    /** Joystick input, combined with keyboard when walking: x right, y forward, -1..1, tunnel-relative. */
     input: { x: 0, y: 0 },
     /** Auto-walk target (distance along the loop), from tapping a viewing spot. */
     walkTo: null as number | null,

@@ -1437,3 +1437,10 @@ and the celebration.
 - **The player model.** Visitor models gained an optional separate right arm
   (`tunnelPersonModel`, `bossModel`) so tunnel visitors can point and hold up a
   phone. Ordinary visitors are unchanged.
+- **Tunnel walking controls are tunnel-relative (2026-11-07).** Up/W walks along the
+  loop in the current travel direction, Down/S against it, Left/Right/A/D across the
+  walkway; the joystick maps the same way. The travel reference is held while any
+  direction is held and only changes after a metre walked the other way. Why:
+  camera-relative input made "back" swing the camera, which reversed "back" (jitter),
+  and freezing the camera yaw instead pushed the player into the walkway edge on
+  curves. Rejected: camera-relative input with a locked yaw.

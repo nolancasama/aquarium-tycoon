@@ -3,7 +3,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import type { Obstacle } from "../../game/tunnel/contract";
 import type { TunnelDecorKind } from "../../game/types";
 import {
-  CHAMBER, HABITAT, placeObstacle, placePoint, seabedY, TUNNEL_LOBBY, TUNNEL_ROCKS, TUNNEL_STRUCTURES, TUNNEL_ZONES, WALKWAY_SAMPLES, walkwayLength
+  CHAMBER, HABITAT, MOUTHS, placeObstacle, placePoint, seabedY, TUBE, TUNNEL_LOBBY, TUNNEL_ROCKS, TUNNEL_STRUCTURES, TUNNEL_ZONES, WALKWAY_SAMPLES, walkwayLength
 } from "../../game/data/sharkTunnel";
 
 /**
@@ -215,13 +215,31 @@ const DECK = new THREE.Color("#c8c2b4"), DECK_EDGE = new THREE.Color("#7fd6e6"),
 const KERB_FOOT_INSET = 0.05;
 
 /** Points of the loop outside the lobby, plus their frames. */
+/** The lobby's back wall (z of its middle): the tube's surfaces start and end inside it. */
+const MOUTH_Z = HABITAT.max.z;
+
 function tubeSamples() {
   const n = WALKWAY_SAMPLES.length;
-  return WALKWAY_SAMPLES.map((p, i) => {
+  const framed = WALKWAY_SAMPLES.map((p, i) => {
     const a = WALKWAY_SAMPLES[(i - 1 + n) % n], b = WALKWAY_SAMPLES[(i + 1) % n];
     const dx = b.x - a.x, dz = b.z - a.z, l = Math.hypot(dx, dz) || 1;
     return { ...p, tx: dx / l, tz: dz / l, nx: -dz / l, nz: dx / l };
   });
+  // Where the loop passes through the lobby wall, add a sample exactly in the wall,
+  // so the glass, kerbs and floor meet the wall instead of stopping short in the water.
+  const out: typeof framed = [];
+  for (let i = 0; i < n; i++) {
+    const p = framed[i], q = framed[(i + 1) % n];
+    out.push(p);
+    if (Boolean(p.inside) !== Boolean(q.inside)) {
+      const t = (MOUTH_Z - p.z) / (q.z - p.z || 1e-6);
+      if (t > 0 && t < 1) {
+        const w = p.inside ? q : p;
+        out.push({ ...w, x: p.x + (q.x - p.x) * t, z: MOUTH_Z, s: p.s + (q.s - p.s) * t, inside: undefined });
+      }
+    }
+  }
+  return out;
 }
 
 /** A ribbon along the loop: for each sample, `cross(sample)` gives points (lateral, y) across. */
@@ -247,7 +265,11 @@ function sweep(cross: (s: ReturnType<typeof tubeSamples>[number]) => Array<[numb
   for (let i = 0; i < rows.length - 1; i++) {
     const a = rows[i], b = rows[i + 1];
     if (a < 0 || b < 0) continue;
-    for (let j = 0; j < width - 1; j++) idx.push(a + j, b + j, a + j + 1, a + j + 1, b + j, b + j + 1);
+    // Rows run in walking order and each cross-section from -lateral to +lateral (the
+    // profiles are written so): this winding makes every face point out of the solid
+    // (floor and kerb tops up, kerb faces toward the walkway, plinth outward). The
+    // material is single-sided, so the opposite winding hid the walkway from inside.
+    for (let j = 0; j < width - 1; j++) idx.push(a + j, a + j + 1, b + j, a + j + 1, b + j + 1, b + j);
   }
   void runStart;
   const g = new THREE.BufferGeometry();
@@ -270,7 +292,7 @@ function tunnelStructureGeometry(): THREE.BufferGeometry {
   parts.push(sweep((s) => {
     const w = s.halfWidth - 0.42;
     return [[-w, 0], [-w * 0.94, 0], [w * 0.94, 0], [w, 0]];
-  }, (_i, j) => (j === 1 || j === 2 ? DECK : DECK_EDGE), () => true));
+  }, (_i, j) => (j === 1 || j === 2 ? DECK : DECK_EDGE), inWater));
   for (const side of [-1, 1]) {
     // Kerb: inner face, top, then the glass foot.
     parts.push(sweep((s) => {
@@ -340,11 +362,12 @@ export function tunnelGlassGeometry(): THREE.BufferGeometry {
     rows.push(base);
     for (let k = 0; k <= K; k++) {
       const a = (k / K) * Math.PI;
-      const w = s.halfWidth - 0.08, h = s.height - 0.08;
-      // Glass starts above the kerb (y 0.5) and follows the ellipse to the crown.
-      const l = Math.cos(a) * w, y = Math.max(0.5, Math.sin(a) * h);
+      // The glass stands on the kerb top near its outer edge and rises vertically from it
+      // (the same profile as the ribs): no flat sliver at kerb height to z-fight with it.
+      const w = s.halfWidth - 0.08, rise = s.height - 0.58;
+      const l = Math.cos(a) * w, y = 0.5 + Math.sin(a) * rise;
       pos.push(s.x + s.nx * l, y, s.z + s.nz * l);
-      const nl = Math.cos(a) / w, ny = Math.sin(a) / h, nlen = Math.hypot(nl, ny) || 1;
+      const nl = Math.cos(a) / w, ny = Math.sin(a) / rise, nlen = Math.hypot(nl, ny) || 1;
       nor.push((s.nx * nl) / nlen, ny / nlen, (s.nz * nl) / nlen);
     }
     base += K + 1;
@@ -379,7 +402,7 @@ export function lobbyGeometry(): THREE.BufferGeometry {
   box(0.25, L.height, L.maxZ - L.minZ, L.minX - 0.125, 0, (L.minZ + L.maxZ) / 2, LOBBY_WALL);
   box(0.25, L.height, L.maxZ - L.minZ, L.maxX + 0.125, 0, (L.minZ + L.maxZ) / 2, LOBBY_WALL);
   // Back wall with the two mouths (each 4.2 m wide, 3.2 m high, an arch frame).
-  const mouths = [32.45, 38.65], hw = 2.1;
+  const mouths = [MOUTHS.entrance, MOUTHS.exit], hw = TUBE.halfWidth;
   const edges = [L.minX, mouths[0] - hw, mouths[0] + hw, mouths[1] - hw, mouths[1] + hw, L.maxX];
   for (let i = 0; i < edges.length; i += 2) box(edges[i + 1] - edges[i], L.height, 0.3, (edges[i] + edges[i + 1]) / 2, 0, L.minZ - 0.15, LOBBY_WALL);
   for (const x of mouths) {

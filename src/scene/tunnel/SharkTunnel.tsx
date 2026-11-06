@@ -3,7 +3,7 @@ import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { getGame, useGame } from "../../game/store";
 import { rt } from "../../game/runtime";
-import { HABITAT, SHARK_DOOR, sharkSwimVolume, TUNNEL_LOBBY, TUNNEL_ZONES } from "../../game/data/sharkTunnel";
+import { HABITAT, MOUTHS, SHARK_DOOR, sharkSwimVolume, TUNNEL_LOBBY, TUNNEL_ZONES } from "../../game/data/sharkTunnel";
 import { isTunnelDecor } from "../../game/data/decor";
 import { SPECIES } from "../../game/data/fish";
 import { tapSharkTunnelDoor, tapSlot, tapTank } from "../../game/flow/actions";
@@ -248,11 +248,11 @@ export function SharkTunnel() {
         <Surface />
         <Shafts geometry={shafts} />
         <Motes />
-        <mesh position={[32.45, 3.7, TUNNEL_LOBBY.minZ + 0.04]} raycast={() => undefined}>
+        <mesh position={[MOUTHS.entrance, 3.7, TUNNEL_LOBBY.minZ + 0.04]} raycast={() => undefined}>
           <planeGeometry args={[2.6, 0.62]} />
           <primitive object={signMaterial("SHARK TUNNEL\nサメの トンネル", "#0f4c66", "#e8fbff", 768, 184)} attach="material" />
         </mesh>
-        <mesh position={[38.65, 3.7, TUNNEL_LOBBY.minZ + 0.04]} raycast={() => undefined}>
+        <mesh position={[MOUTHS.exit, 3.7, TUNNEL_LOBBY.minZ + 0.04]} raycast={() => undefined}>
           <planeGeometry args={[1.7, 0.5]} />
           <primitive object={signMaterial("EXIT  でぐち", "#2b7a3c", "#ffffff", 512, 150)} attach="material" />
         </mesh>
@@ -293,7 +293,7 @@ export function TunnelTrophy() {
   useFrame(() => { if (ref.current) ref.current.rotation.y = rt.time * 0.4; });
   if (!won) return null;
   return (
-    <group position={[40.4, 0, -6.6]} name="tunnel-trophy">
+    <group position={[42.0, 0, -6.1]} name="tunnel-trophy">
       <group ref={ref}>
         <mesh geometry={geo} material={smoothMat} raycast={() => undefined} />
       </group>

@@ -34,6 +34,9 @@ const angleTo = (a: number, b: number) => Math.atan2(Math.sin(b - a), Math.cos(b
 
 /** Direction the player last travelled along the loop (+1 walking order, -1 against it). */
 let travel = 1;
+/** Distance walked against `travel` (the camera swings round past 1 m), and the locked input direction. */
+let reverse = 0;
+let inputTravel: number | null = null;
 /** Visitor bodies the player must not walk into (set by the tunnel visitor simulation). */
 export const tunnelBodies: Array<{ x: number; z: number; r: number }> = [];
 
@@ -73,6 +76,8 @@ export function stepTransition(): { fade: number } {
     const f = walkwayFrame(EXPLORE_START_S);
     rt.explore.heading = Math.atan2(f.dx, f.dz);
     travel = 1;
+    reverse = 0;
+    inputTravel = null;
     snapCamera();
     setGame({ exploring: true, hall: SHARKS_HALL, view: "room", tankId: null });
   }
@@ -97,18 +102,24 @@ export function walkToSpot(id: string) {
   rt.explore.walkTo = spot.s;
 }
 
-/** One frame of walking. `camYaw`: the camera's horizontal facing (rotation.y convention). */
-export function stepExplore(dt: number, camYaw: number, blocked = false) {
+/** One frame of walking. Camera yaw is retained for callers; controls follow the tunnel. */
+export function stepExplore(dt: number, _camYaw: number, blocked = false) {
   const e = rt.explore;
   if (!e.active) return;
   const k = keyboardMove();
   const ix = blocked ? 0 : Math.max(-1, Math.min(1, e.input.x + k.x));
   const iy = blocked ? 0 : Math.max(-1, Math.min(1, e.input.y + k.y));
   const f = walkwayFrame(e.s);
-  // Camera-relative input in world space (three.js: yaw 0 looks toward -z).
-  const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw), rx = Math.cos(camYaw), rz = -Math.sin(camYaw);
-  let mx = fx * iy + rx * ix, mz = fz * iy + rz * ix;
-  const mag = Math.min(1, Math.hypot(mx, mz));
+  // Hold the travel reference until input is released, even if backing up swings the
+  // camera behind the player. Rebuild the world-space basis from the current tangent
+  // each frame so holding forward follows curves without drifting toward the glass.
+  const held = Math.hypot(ix, iy) > 0.05;
+  if (!held) inputTravel = null;
+  else if (inputTravel === null) inputTravel = travel;
+  const direction = inputTravel ?? travel;
+  let mx = direction * (f.dx * iy - f.dz * ix), mz = direction * (f.dz * iy + f.dx * ix);
+  const inputLength = Math.hypot(ix, iy);
+  const mag = Math.min(1, inputLength);
   if (mag > 0.08) e.walkTo = null;
   let speedWanted = mag * WALK_SPEED;
   if (e.walkTo !== null && mag <= 0.08) {
@@ -122,13 +133,13 @@ export function stepExplore(dt: number, camYaw: number, blocked = false) {
       mx /= l; mz /= l;
       speedWanted = Math.min(AUTO_WALK_SPEED, 0.6 + Math.abs(d));
     }
-  } else if (mag > 0.08) { mx /= mag; mz /= mag; }
+  } else if (mag > 0.08) { mx /= inputLength; mz /= inputLength; }
   // Ease speed (a child's walk: quick to start, quick to stop).
   e.speed += (speedWanted - e.speed) * Math.min(1, dt * (speedWanted > e.speed ? 6 : 9));
   if (e.speed < 0.02 && speedWanted === 0) e.speed = 0;
   if (e.speed > 0) {
     const step = e.speed * dt;
-    // Project onto the loop: tangent changes s, the left normal changes the lateral offset.
+    // Project onto the loop: tangent changes s, the right normal changes the lateral offset.
     let ds = (mx * f.dx + mz * f.dz) * step;
     let dl = (mx * -f.dz + mz * f.dx) * step;
     // Slide around visitors instead of walking through them.
@@ -148,13 +159,21 @@ export function stepExplore(dt: number, camYaw: number, blocked = false) {
         }
       }
     }
-    if (Math.abs(ds) > 1e-4) travel = Math.sign(ds);
+    // The camera swings behind only after a metre of walking the other way (no flip-flop).
+    if (Math.abs(ds) > 1e-4) {
+      if (Math.sign(ds) === travel) reverse = 0;
+      else if ((reverse += Math.abs(ds)) > 1) { travel = Math.sign(ds); reverse = 0; }
+    }
     e.s = wrap(e.s + ds);
     const w = walkHalfWidth(e.s);
     e.lateral = Math.max(-w, Math.min(w, e.lateral + dl));
-    // Face the walking direction.
-    const want = Math.atan2(mx, mz);
-    e.heading += angleTo(e.heading, want) * Math.min(1, dt * TURN_RATE);
+    // Face the actual displacement, including visitor sliding and the lateral clamp.
+    const there = playerWorld();
+    const dx = there.x - here.x, dz = there.z - here.z;
+    if (Math.hypot(dx, dz) > 1e-6) {
+      const want = Math.atan2(dx, dz);
+      e.heading += angleTo(e.heading, want) * Math.min(1, dt * TURN_RATE);
+    }
     e.phase += step * 3.2;
   }
   // Which viewing spot (if any) the player stands at.
