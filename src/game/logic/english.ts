@@ -128,6 +128,9 @@ const JELLYFISH = ["jellyfish", "jellyfishes", "jellyfish's", "jerryfish", "jell
 const EEL = ["eel", "eels", "eel's", "eal", "iel", "moray", "morays", "eeru", "iiru"];
 const OCTOPUS = ["octopus", "octopuses", "octopi", "octopus's", "octopuss", "octapus", "oktopus", "okutopasu", "tako"];
 const CRAB = ["crab", "crabs", "crab's", "krab", "crabb", "kurabu", "grab"];
+/** "A ray" from Japanese speakers often comes back as one word ("array", "hooray") or as "rei", "rey", "re". Only
+ * the Shark Tunnel offers the ray, beside "A shark" and "A zebra shark", so these sound-alikes are safe there. */
+const RAY = ["ray", "rays", "rei", "rey", "rae", "wray", "re", "ree", "array", "arrays", "aray", "arey", "hooray", "hurray", "eagle", "eagles", "rain", "rate", "raid"];
 const STINGRAY = ["stingray", "stingrays", "stingray's", "sting", "ray", "rays", "sutingurei", "stingrey"];
 const PARROTFISH = ["parrotfish", "parrotfishes", "parrot", "parrots", "parrotfish's", "parotfish", "perrot", "paratto", "parotto", "parrotto"];
 const SHRIMP = ["shrimp", "shrimps", "shrimp's", "srimp", "schrimp", "shrimpu", "shurimpu", "shurinpu", "ebi"];
@@ -310,14 +313,14 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   shrimpPlease: animal("shrimpPlease", "A shrimp, please!", SHRIMP, "shrimp"),
   blacktipPlease: { ...animal("blacktipPlease", "A shark, please!", ["shark", "sharks", "shaaku"], "shark"), forbid: ["zebra"] },
   zebrasharkPlease: { id: "zebrasharkPlease", en: "A zebra shark, please!", keys: [["zebra", "zeebra"], ["shark", "sharks", "shaaku"]], key: "zebra shark" },
-  eaglerayPlease: animal("eaglerayPlease", "A ray, please!", ["ray", "rays", "rei"], "ray"),
+  eaglerayPlease: animal("eaglerayPlease", "A ray, please!", RAY, "ray"),
   archPlease: animal("archPlease", "An arch, please!", ["arch", "aachi"], "arch"),
   rockPlease: animal("rockPlease", "A rock, please!", ["rock", "rocks", "rokku"], "rock"),
   reefPlease: animal("reefPlease", "A reef, please!", ["reef", "reefs", "riifu"], "reef"),
   ledgePlease: animal("ledgePlease", "A ledge, please!", ["ledge", "ledges", "rejji"], "ledge"),
   sandPlease: animal("sandPlease", "Sand, please!", ["sand", "sando"], "sand"),
   itsShark: animal("itsShark", "It's a shark.", ["shark", "sharks", "shaaku"], "shark"),
-  itsRay: animal("itsRay", "It's a ray.", ["ray", "rays", "rei"], "ray"),
+  itsRay: animal("itsRay", "It's a ray.", RAY, "ray"),
   // Shark Tunnel: location (judged on the location word), abilities (yes / no), counting sharks.
   aboveMe: { id: "aboveMe", en: "It's above me!", keys: [["above", "abub", "a bob", "abov", "of"]], forbid: ["by", "bye", "buy"], key: "above" },
   byMe: { id: "byMe", en: "It's by me!", keys: [["by", "bye", "buy", "bai"]], forbid: ["above", "abub"], key: "by" },

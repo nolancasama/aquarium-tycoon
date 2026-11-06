@@ -111,3 +111,17 @@ describe("Phase 2 speech", () => {
     expect(judgeSpeech(["white please"], P("whitePlease", "bluePlease"))).toMatchObject({ id: "whitePlease" });
   });
 });
+
+describe("Shark Tunnel animal counter", () => {
+  const options = (["blacktipPlease", "eaglerayPlease", "zebrasharkPlease"] as PhraseId[]).map((id) => PHRASES[id]);
+  it("hears 'A ray, please!' however the recogniser spells a Japanese speaker's 'a ray'", () => {
+    for (const heard of ["a ray please", "array please", "Array, please.", "a rei please", "hooray please", "a re please", "eagle ray please", "a rain please", "ray"]) {
+      expect(judgeSpeech([heard], options), heard).toEqual({ kind: "match", id: "eaglerayPlease", heard });
+    }
+  });
+  it("still tells the sharks apart from the ray", () => {
+    expect(judgeSpeech(["a shark please"], options)).toMatchObject({ kind: "match", id: "blacktipPlease" });
+    expect(judgeSpeech(["a zebra shark please"], options)).toMatchObject({ kind: "match", id: "zebrasharkPlease" });
+    expect(judgeSpeech(["a fish please"], options)).toMatchObject({ kind: "none" });
+  });
+});
