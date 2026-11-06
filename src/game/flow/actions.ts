@@ -157,7 +157,7 @@ export const HOME_REASON_TEXT: Record<HomeReason, { en: string; ja: string }> = 
   jellyOnly: { en: "Jellyfish only!", ja: "ここは クラゲ だけの タンクだよ" },
   notSafe: { en: "Not safe here!", ja: "ウツボや タコの いえだよ。ここは あぶないよ" },
   noMix: { en: "Jellyfish live alone!", ja: "クラゲは ほかの いきものを さすよ。クラゲ だけで くらすよ" },
-  full: { en: "This tank is full!", ja: "この タンクは いっぱい" }
+  full: { en: "Not enough tank space!", ja: "タンクの あきが たりないよ" }
 };
 
 export function shopHomeReason(m: Model, species: SpeciesId): HomeReason {

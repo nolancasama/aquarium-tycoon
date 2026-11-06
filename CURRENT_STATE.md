@@ -1,5 +1,13 @@
 # Current State
 
+## Correct capacity displays and two-place animal eligibility (2026-11-06)
+
+- Tank close-up now shows **occupied spaces / capacity** rather than mistakenly comparing the raw animal count with space-based capacity. Where they differ, show the actual animal count and explain that rays and schools take two spaces.
+- Shop previews label two-space species and tank shop capacity as spaces; the 'full' hint says not enough space.
+- Fixed large-animal shop eligibility when available spaces are split between separate tanks: a two-space animal needs two contiguous spaces in one compatible tank.
+- Added a regression case for six animals occupying eight Ocean tank spaces, and for split spaces in separate tanks.
+- GitHub Actions tests/build and deployment must be checked after push; real classroom verification is still recommended.
+
 ## Eel, octopus, multi-bench seating, species feeding (2026-11-01)
 
 - **Moray eel**: head-led spine rig (`logic/eelBody.ts`, part 12 in

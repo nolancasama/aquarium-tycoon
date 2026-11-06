@@ -18,6 +18,8 @@ import {
   remodelPlan,
   remodelTank,
   setLight,
+  usedSpace,
+  homesFor,
   type Model,
   type Result
 } from "./model";
@@ -66,6 +68,24 @@ describe("habitats and reasons", () => {
     const t = tank("big", ["clownfish", "clownfish", "clownfish"]);
     expect(homeReason("chromis", t)).toBeNull();
     expect(homeReason("chromis", { ...t, fish: [...t.fish, { id: "y", species: "crab" }] })).toBe("full");
+  });
+
+  it("shows spaces used instead of the raw animal count in an Ocean tank", () => {
+    const ocean = tank("ocean", ["clownfish", "bluetang", "yellowfish", "goby", "stingray", "chromis"]);
+    expect(ocean.fish).toHaveLength(6);
+    expect(usedSpace(ocean)).toBe(8);
+    expect(homeReason("clownfish", ocean)).toBe("full");
+  });
+
+  it("does not offer a two-space animal when free places are split across tanks", () => {
+    const m = level8();
+    m.tanks = [
+      tank("big", ["clownfish", "clownfish", "clownfish", "clownfish"]),
+      { ...tank("panorama", ["clownfish", "clownfish", "clownfish", "clownfish", "clownfish", "clownfish"]), id: "ty" }
+    ];
+    expect(usedSpace(m.tanks[0])).toBe(4);
+    expect(usedSpace(m.tanks[1])).toBe(6);
+    expect(homesFor(m, "stingray")).toBe(0);
   });
 
   it("only the shipwreck-sized pieces need a large tank; the jelly column takes small things only", () => {

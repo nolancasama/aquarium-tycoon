@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { setGame, useGame } from "../game/store";
-import { ANIMAL_ORDER, FISH_ORDER, JELLY_BY_COLOR, SPECIES } from "../game/data/fish";
+import { ANIMAL_ORDER, FISH_ORDER, JELLY_BY_COLOR, SPECIES, spaceOf } from "../game/data/fish";
 import { DECOR, DECOR_ORDER } from "../game/data/decor";
 import { ATRIUM_PRICE, GALLERY_PRICE, HALL_PRICE, TANKS, TANK_ORDER, TICKETS_PRICE } from "../game/data/tanks";
 import { atriumUnlocked, EXPANSION_FROM, galleryUnlocked, homesFor, isSpeciesUnlocked, padsFor, remodelPlan, tankById, UPGRADE_PRICE, type UpgradeKind } from "../game/logic/model";
@@ -58,6 +58,7 @@ function AnimalCards({ list, testid, title }: { list: SpeciesId[]; testid: strin
           <div key={s} className={`card fish-card ${locked ? "locked" : ""} ${short || homeless ? "short" : ""} ${shopItem === s ? "guide shop-recommended" : ""}`} data-testid="shop-card" data-species={s} aria-disabled={Boolean(reason)}>
             <NamePreview species={s} />
             {expansion && <small className="animal-ja" lang="ja">{def.ja}</small>}
+            {spaceOf(s) > 1 && <small className="need" aria-label={`Uses ${spaceOf(s)} tank spaces`}>{spaceOf(s)} spaces <Ja>{spaceOf(s)} ばしょ</Ja></small>}
             {expansion && <span className="habitat-chips" aria-label="Habitats">
               {def.habitat.map((type) => <span key={type} className="habitat-chip" title={TANKS[type].ja} aria-label={TANKS[type].ja}><ShapePicture type={type} size={26} /></span>)}
             </span>}
@@ -245,7 +246,7 @@ function ExpansionTankShop() {
     return <div key={type} className={`card expansion-tank-offer ${reason ? "short" : ""}`} data-shop-item={type}>
       <ShapePicture type={type} size={88} />
       <strong className="tank-offer-title">{def.name}<Ja>{def.ja}</Ja></strong>
-      <div className="tank-capacities"><span className="cap"><Icon id="fish" size={20} /> × {def.capacity}</span><span className="cap"><Icon id="decor" size={20} /> × {def.slots.length}</span></div>
+      <div className="tank-capacities"><span className="cap"><Icon id="fish" size={20} /> {def.capacity} spaces</span><span className="cap"><Icon id="decor" size={20} /> × {def.slots.length}</span></div>
       <small className="tank-residents" lang="ja">{TANK_RESIDENTS[type]}</small>
       <Price n={def.price} short={!remodel && m.coins < def.price} />
       <DisabledReason reason={reason} />

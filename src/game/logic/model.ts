@@ -237,6 +237,9 @@ export function canLive(species: SpeciesId, t: TankRec): boolean {
 /** Places for this animal in placed tanks, after the bagged animals that would need the same places. */
 export function homesFor(m: Model, species: SpeciesId): number {
   const homes = m.tanks.filter((t) => canLive(species, t));
+  // A large animal must fit entirely in *one* tank. Adding up free spaces
+  // across multiple nearly-full tanks could incorrectly enable its shop card.
+  if (!homes.some((t) => hasSpace(t, species))) return 0;
   const free = homes.reduce((n, t) => n + TANKS[t.type].capacity - usedSpace(t), 0);
   const waiting = m.inv.fish.filter((f) => homes.some((t) => canLive(f.species, t))).reduce((n, f) => n + spaceOf(f.species), 0);
   return free - waiting - (spaceOf(species) - 1);

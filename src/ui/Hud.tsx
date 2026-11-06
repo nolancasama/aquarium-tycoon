@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { setGame, toast, useGame } from "../game/store";
 import { nextStep, objectivesUnlocked } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
-import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, type Goal } from "../game/logic/model";
+import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, usedSpace, type Goal } from "../game/logic/model";
 import { HALL_OF, TANKS } from "../game/data/tanks";
 import { ROOMS, roomOpen } from "../game/data/rooms";
 import type { VisitorType } from "../game/types";
@@ -375,11 +375,11 @@ function TankStatus() {
   if (!tank) return null;
   const def = TANKS[tank.type];
   const h = happiness(tank);
-  return <TankStatusPanel key={tank.id} name={def.name} fish={tank.fish.length} capacity={def.capacity} food={tank.fish.length ? tank.food : 100} clean={tank.clean} happy={h} />;
+  return <TankStatusPanel key={tank.id} name={def.name} animals={tank.fish.length} spaces={usedSpace(tank)} capacity={def.capacity} food={tank.fish.length ? tank.food : 100} clean={tank.clean} happy={h} />;
 }
 
 /** The close-up card; the happiness bar pulses when the value rises (not on opening). */
-function TankStatusPanel({ name, fish, capacity, food, clean, happy }: { name: string; fish: number; capacity: number; food: number; clean: number; happy: number | null }) {
+function TankStatusPanel({ name, animals, spaces, capacity, food, clean, happy }: { name: string; animals: number; spaces: number; capacity: number; food: number; clean: number; happy: number | null }) {
   const prev = useRef(happy);
   const [pulse, setPulse] = useState(0);
   useEffect(() => {
@@ -390,10 +390,18 @@ function TankStatusPanel({ name, fish, capacity, food, clean, happy }: { name: s
     <div className="panel tank-status ui" data-testid="status" ref={(el) => void (tankStatusEl.current = el)}>
       <header>
         {name}
-        <span className="fishcount" data-testid="fish-count">
-          <Icon id="fish" size={22} /> {fish}/{capacity}
-        </span>
       </header>
+      <div className="capacity-row">
+        <span className="capacity-label">Spaces <span lang="ja">ばしょ</span></span>
+        <span className="fishcount" data-testid="fish-count" aria-label={`${spaces} of ${capacity} spaces used by ${animals} animals`}>
+          <Icon id="fish" size={20} /> {spaces}/{capacity}
+        </span>
+      </div>
+      {spaces !== animals && (
+        <small className="capacity-detail" data-testid="animal-count">
+          {animals} animals <span lang="ja">・${animals} いきもの</span> · Rays and schools use 2 spaces
+        </small>
+      )}
       <Bar value={food} icon="food" id="bar-food" />
       <Bar value={clean} icon="sponge" id="bar-clean" />
       <Bar value={happy ?? 0} icon="happy" id="bar-happy" pulse={pulse} />
