@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { phonePitchForArm } from "./TunnelFigure";
+import { phonePitchForArm } from "./phonePose";
 
 describe("Shark Tunnel visitor photo pose", () => {
   it("keeps the phone upright while the visitor raises their arm", () => {

@@ -3,6 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { PersonModel } from "../models/people";
 import { smoothMat, shadowMaterial } from "../materials";
+import { phonePitchForArm } from "./phonePose";
 
 /** What a tunnel figure is doing this frame (written by the owner, read here). */
 export interface FigurePose {
@@ -30,10 +31,6 @@ const shadow = shadowMaterial(0.32);
 const phoneGeo = new THREE.BoxGeometry(0.08, 0.13, 0.015);
 const phoneMat = new THREE.MeshLambertMaterial({ color: "#2b2f3a" });
 
-/** Keep the phone's long axis vertical relative to the torso while the arm reaches forward. */
-export function phonePitchForArm(armPitch: number): number {
-  return -armPitch;
-}
 
 /** A walking person built from the shared visitor rig (body, two legs with knees, a free right arm). */
 export function TunnelFigure({ model, pose, name }: { model: PersonModel; pose: { current: FigurePose }; name?: string }) {
