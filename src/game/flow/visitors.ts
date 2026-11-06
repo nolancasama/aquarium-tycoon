@@ -50,7 +50,7 @@ function syncWaiting() {
 export function spawnVisitor(type: VisitorType, request: Request | null, opts: { atBench?: boolean; scripted?: boolean } = {}): VisitorRt {
   const m = model();
   const id = `v${visitorNo++}`;
-  const plan = m.tanks.filter((t) => t.fish.length > 0).map((t) => t.id);
+  const plan = m.tanks.filter((t) => t.type !== "sharks" && t.fish.length > 0).map((t) => t.id);
   const v: VisitorRt = {
     id,
     type,

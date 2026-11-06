@@ -5,7 +5,7 @@ import { BUILT_IN_PADS, HALL_OF, PAD_TYPES, SLOT_ORDER, TANKS } from "../data/ta
 import { roomOpen } from "../data/rooms";
 import { PHRASES, type PhraseId } from "./english";
 import { isSentencePattern } from "./sentenceTeaching";
-import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep } from "./model";
+import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep, type TunnelProgress } from "./model";
 
 /**
  * Versioned save. Version 1 (Phase 1) and 2 (Phase 2) saves are migrated; a
@@ -143,6 +143,21 @@ function readProgress(raw: unknown, version: number): Progress {
   p.galleryOpen = src.galleryOpen === true && p.stage >= 8 && p.hallOpen;
   p.atriumOpen = src.atriumOpen === true && p.galleryOpen;
   p.atriumIntroSeen = src.atriumIntroSeen === true && p.atriumOpen;
+  p.tunnelOpen = src.tunnelOpen === true && p.atriumOpen && p.freePlay;
+  p.tunnelIntroSeen = src.tunnelIntroSeen === true && p.tunnelOpen;
+  if (p.tunnelOpen) {
+    const tunnel = isObj(src.tunnel) ? src.tunnel : {};
+    const milestone = Math.max(1, Math.min(5, Math.floor(num(tunnel.milestone, 1)))) as TunnelProgress["milestone"];
+    const findDone = milestone >= 4 && tunnel.findDone === true;
+    const whereDone = findDone && tunnel.whereDone === true;
+    p.tunnel = {
+      milestone,
+      observed: Math.max(0, Math.min(99999, Math.floor(num(tunnel.observed, 0)))),
+      helped: Math.max(0, Math.min(99999, Math.floor(num(tunnel.helped, 0)))),
+      findDone, whereDone, countDone: whereDone && tunnel.countDone === true,
+      trophy: milestone === 5
+    };
+  }
   p.said = [...new Set(arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES))];
   return p;
 }
@@ -188,6 +203,12 @@ export function decodeSave(text: string | null): SaveData | null {
     tanks.push(newTank(`t${980 + n}`, "reef", "I"));
     ids.add(`t${980 + n}`);
   }
+  if (m.progress.tunnelOpen && !tanks.some((t) => t.slot === "L")) {
+    let n = 1;
+    while (ids.has(`t${1000 + n}`)) n++;
+    tanks.push(newTank(`t${1000 + n}`, "sharks", "L"));
+    ids.add(`t${1000 + n}`);
+  }
   m.tanks = tanks;
   const inv = isObj(src.inv) ? src.inv : {};
   const freePads = SLOT_ORDER.filter((s) => !tanks.some((t) => t.slot === s) && roomOpen(HALL_OF[s], m.progress) && !BUILT_IN_PADS.includes(s)).length;
@@ -199,7 +220,7 @@ export function decodeSave(text: string | null): SaveData | null {
       .map((d) => readDecor(d, ids))
       .filter((d): d is DecorRec => Boolean(d)),
     tanks: arr(inv.tanks)
-      .filter((t): t is TankType => isTankType(t) && t !== "small" && t !== "ocean" && t !== "reef" && m.progress.stage >= TANKS[t].fromStage)
+      .filter((t): t is TankType => isTankType(t) && t !== "small" && t !== "ocean" && t !== "reef" && t !== "sharks" && m.progress.stage >= TANKS[t].fromStage)
       .slice(0, freePads)
   };
   m.coins = Math.max(0, Math.min(99999, Math.floor(num(src.coins, 0))));

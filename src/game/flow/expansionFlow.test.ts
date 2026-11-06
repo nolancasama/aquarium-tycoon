@@ -89,6 +89,7 @@ describe("animal counter decisions", () => {
 
 describe("habitat explanations", () => {
   const cases: [HomeReason, SpeciesId, TankType, string, string][] = [
+    ["sharks", "blacktip", "big", "Needs the Shark Tunnel!", "サメの トンネルに すむよ！"],
     ["bigger", "angelfish", "small", "Needs a bigger tank!", "もっと おおきな タンクが ひつようだよ"],
     ["rocky", "eel", "small", "Needs a rocky home!", "いわの ほらあな タンクが ひつようだよ"],
     ["jelly", "moonjelly", "small", "Needs a jellyfish tank!", "クラゲの まるい タンクが ひつようだよ"],

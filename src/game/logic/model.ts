@@ -1,6 +1,6 @@
 import type { ColorId, DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
 import { SPECIES, SPECIES_ORDER, spaceOf, type HomeNeed } from "../data/fish";
-import { DECOR, decorFits, decorVersion } from "../data/decor";
+import { DECOR, decorFits, decorVersion, isTunnelDecor } from "../data/decor";
 import { ATRIUM_PRICE, BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
 import type { PhraseId } from "./english";
@@ -102,9 +102,29 @@ export interface Progress {
   /** Free-play expansion; absent in older saves. */
   atriumOpen?: boolean;
   atriumIntroSeen?: boolean;
+  /** Shark Tunnel expansion; absent in older saves. Exploration is runtime-only. */
+  tunnelOpen?: boolean;
+  tunnelIntroSeen?: boolean;
+  tunnel?: TunnelProgress;
   /** Distinct sentences said or chosen (results card). */
   said: PhraseId[];
 }
+
+export interface TunnelProgress {
+  /** Number completed, in strict order. */
+  milestone: 0 | 1 | 2 | 3 | 4 | 5;
+  observed: number;
+  helped: number;
+  findDone: boolean;
+  whereDone: boolean;
+  countDone: boolean;
+  trophy: boolean;
+}
+
+export const newTunnelProgress = (): TunnelProgress => ({
+  milestone: 0, observed: 0, helped: 0,
+  findDone: false, whereDone: false, countDone: false, trophy: false
+});
 
 export interface Stats {
   coinsEarned: number;
@@ -168,6 +188,9 @@ export function newProgress(): Progress {
     galleryOpen: false,
     atriumOpen: false,
     atriumIntroSeen: false,
+    tunnelOpen: false,
+    tunnelIntroSeen: false,
+    tunnel: newTunnelProgress(),
     said: []
   };
 }
@@ -216,6 +239,8 @@ export function homeReason(species: SpeciesId, t: TankRec): HomeReason | null {
   const def = SPECIES[species];
   const jelly = def.group === "jelly";
   if (!def.habitat.includes(t.type)) {
+    if (def.needs === "sharks") return "sharks";
+    if (t.type === "sharks") return "notSafe";
     if (t.type === "cylinder" && !jelly) return "jellyOnly";
     if (t.type === "cave") return "notSafe";
     return def.needs;
@@ -266,6 +291,7 @@ export function padsFor(m: Model, type: TankType): SlotId[] {
 
 export function isSpeciesUnlocked(m: Model, s: SpeciesId): boolean {
   const def = SPECIES[s];
+  if (def.needs === "sharks" && (!m.progress.tunnelOpen || (s === "zebrashark" && (m.progress.tunnel?.milestone ?? 0) < 4))) return false;
   return m.progress.stage >= def.fromStage && (!def.needsHall || m.progress.hallOpen);
 }
 
@@ -274,8 +300,8 @@ export const unlockedSpecies = (m: Model) => SPECIES_ORDER.filter((s) => isSpeci
 export const decorUnlocked = (m: Model) => m.progress.stage >= 2;
 export const tanksUnlocked = (m: Model) => m.progress.stage >= 4;
 export const upgradesUnlocked = (m: Model) => m.progress.stage >= UPGRADES_FROM;
-export const isDecorUnlocked = (m: Model, kind: DecorKind) => m.progress.stage >= DECOR[kind].fromStage;
-export const isTankUnlocked = (m: Model, type: TankType) => type !== "ocean" && type !== "small" && type !== "reef" && m.progress.stage >= TANKS[type].fromStage;
+export const isDecorUnlocked = (m: Model, kind: DecorKind) => m.progress.stage >= DECOR[kind].fromStage && (!isTunnelDecor(kind) || Boolean(m.progress.tunnelOpen));
+export const isTankUnlocked = (m: Model, type: TankType) => type !== "ocean" && type !== "small" && type !== "reef" && type !== "sharks" && m.progress.stage >= TANKS[type].fromStage;
 /** Expansion 1 content (special tanks, new animals and decorations, the Gallery) opens at Level 8. */
 export const EXPANSION_FROM: StageId = 8;
 export const galleryUnlocked = (m: Model) => m.progress.stage >= EXPANSION_FROM && m.progress.hallOpen;
@@ -565,7 +591,7 @@ export function remodelPlan(m: Model, tankId: string, type: TankType): RemodelPl
   const tradeIn = t ? Math.floor(TANKS[t.type].price / 2) : 0;
   const cost = Math.max(0, TANKS[type].price - tradeIn);
   const plan: RemodelPlan = { reason: null, blockers: [], keep: [], toTray: [], tradeIn, cost };
-  if (!t || t.type === "ocean" || t.type === "reef" || !isTankUnlocked(m, type) || m.progress.stage < EXPANSION_FROM) return { ...plan, reason: "locked" };
+  if (!t || t.type === "ocean" || t.type === "reef" || t.type === "sharks" || !isTankUnlocked(m, type) || m.progress.stage < EXPANSION_FROM) return { ...plan, reason: "locked" };
   if (t.type === type) return { ...plan, reason: "same" };
   if (!PAD_TYPES[t.slot].includes(type)) return { ...plan, reason: "pad" };
   plan.blockers = t.fish.filter((f) => !SPECIES[f.species].habitat.includes(type));

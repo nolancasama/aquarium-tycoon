@@ -13,6 +13,27 @@ export function FishPicture({ species, size = 80 }: { species: SpeciesId; size?:
       <circle cx={x + r * 0.45} cy={y - r * 0.3} r={r * 0.22} fill="#fff" />
     </>
   );
+  if (species === "blacktip" || species === "zebrashark") {
+    const zebra = species === "zebrashark";
+    return <svg {...p}>
+      <path d={zebra ? "M33 38Q12 53 3 57l12-18L6 26l25 8" : "M30 36L8 12l5 24L7 54l24-12"} fill={zebra ? "#baa77d" : "#718d9b"} stroke="#4f6875" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M43 29l8-20 13 21M53 44L42 61l27-15" fill={zebra ? "#baa77d" : "#718d9b"} stroke="#4f6875" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M25 36Q52 19 82 29l13 10-13 9q-31 9-57-12z" fill={zebra ? "#cbb990" : "#91a9b4"} stroke="#4f6875" strokeWidth="2" />
+      <path d="M30 40q30 6 58-1l-8 8q-26 6-50-7" fill="#e7eee8" />
+      {!zebra && <path d="M51 9l5 9-9 1zM8 12l9 10-6 5zM42 61l8-12 6 5z" fill="#344852" />}
+      {zebra && [[37, 35], [48, 30], [58, 35], [67, 29], [72, 38], [45, 40], [53, 22]].map(([x, y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.7" fill="#695d4b" />)}
+      <path d="M69 34l-1 7m-4-8-1 7m-4-7-1 7" stroke="#4f6875" strokeWidth="1.3" />
+      {eye(82, 33, 3.8)}
+      <path d="M84 42h7" stroke="#4f6875" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>;
+  }
+  if (species === "eagleray") return <svg {...p}>
+    <path d="M53 40q-9 17 18 26" fill="none" stroke="#344d60" strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M46 18Q30 25 5 13q9 30 38 34h15q29-5 37-34Q70 26 56 18l-2-8h-7z" fill="#566f85" stroke="#344d60" strokeWidth="2" strokeLinejoin="round" />
+    <path d="M14 24q10 18 30 19h13q20-3 29-19" fill="none" stroke="#97b4c5" strokeWidth="3" />
+    {[[24, 29], [32, 33], [39, 27], [43, 37], [60, 30], [66, 36], [73, 28], [54, 39]].map(([x, y]) => <circle key={x} cx={x} cy={y} r="1.8" fill="#e4e9dc" />)}
+    {eye(45, 22, 3)}{eye(57, 22, 3)}
+  </svg>;
   if (species === "angelfish")
     return (
       <svg {...p}>
@@ -238,6 +259,16 @@ export function DecorPicture({ kind, variant, size = 72 }: { kind: DecorKind; va
   const p = { width: size, height: size, viewBox: "0 0 60 60", "aria-hidden": true } as const;
   const sand = <ellipse cx="30" cy="54" rx="24" ry="5" fill="#ecd9a4" />;
   switch (kind) {
+    case "tunnelArch":
+      return <svg {...p}>{sand}<path d="M7 53l2-25 9-15 12-5 15 7 8 16 1 22H42l-2-22-9-10-10 9-3 23z" fill="#78938e" stroke="#486e70" strokeWidth="2" /><path d="M12 29l10-8m11-8 8 9m5 12 5 9" stroke="#adc0aa" strokeWidth="4" strokeLinecap="round" /><path d="M10 43h9m23-3h10" stroke="#d5868d" strokeWidth="3" /></svg>;
+    case "tunnelPinnacle":
+      return <svg {...p}>{sand}<path d="M13 54l5-23 6-5 4-20 9 3 2 16 7 9 3 20z" fill="#78938e" stroke="#486e70" strokeWidth="2" /><path d="M28 13l3 14-7 14m12-10 6 16" fill="none" stroke="#b0c2ad" strokeWidth="3" /><path d="M16 45h9m11-17h9" stroke="#d88e9b" strokeWidth="4" strokeLinecap="round" /></svg>;
+    case "tunnelShelf":
+      return <svg {...p}>{sand}<path d="M18 53l3-19 17-3 7 22z" fill="#73918c" stroke="#486e70" strokeWidth="2" /><path d="M7 31l8-8 33 2 7 9-17 6-27-2z" fill="#a4b8a1" stroke="#486e70" strokeWidth="2" /><path d="M19 27V12m0 9-6-5m6 1 6-7m13 18V16m0 6 7-7" stroke="#de929f" strokeWidth="4" fill="none" strokeLinecap="round" /><ellipse cx="38" cy="14" rx="10" ry="3" fill="#a98fbe" /></svg>;
+    case "tunnelLedge":
+      return <svg {...p}>{sand}<path d="M10 53l4-19 9-5 24 4 4 20H39V42H21v11z" fill="#76938d" stroke="#486e70" strokeWidth="2" /><path d="M8 30l11-6h31l5 11-17 5-28-4z" fill="#b7c6a7" stroke="#486e70" strokeWidth="2" /><path d="M24 51h11" stroke="#526b69" strokeWidth="3" strokeLinecap="round" /></svg>;
+    case "tunnelSand":
+      return <svg {...p}>{sand}<path d="M6 51q5-13 17-20 10-6 18 4l13 17z" fill="#e7d3a6" stroke="#bfa679" strokeWidth="2" /><path d="M13 47q13-13 25-5m-15 7q12-5 24 0" fill="none" stroke="#fff0cc" strokeWidth="3" strokeLinecap="round" /></svg>;
     case "kelp":
       return (
         <svg {...p}>
@@ -418,6 +449,13 @@ export function TankPicture({ type, size = 92 }: { type: TankType | "atrium" | "
   const p = { width: size, height: size * 0.78, viewBox: "0 0 100 78", "aria-hidden": true } as const;
   if (type === "atrium") return <AtriumPicture size={size} />;
   if (type === "gallery") return <GalleryPicture size={size} />;
+  if (type === "sharks") return <svg {...p}>
+    <path d="M5 67V15l19-9h53l18 9v52z" fill="#528d98" stroke="#315962" strokeWidth="2" />
+    <path d="M7 58h86v9H7z" fill="#e2d0a7" />
+    <path d="M25 63V44q0-24 25-24t25 24v19H60V44q0-10-10-10T40 44v19z" fill="#b7e7e6" fillOpacity=".7" stroke="#e3f3e9" strokeWidth="3" />
+    <path d="M19 24l8-4 10 1-5-7 10 6 10 4-9 4-14-1-10 5z" fill="#415d71" />
+    <path d="M24 63V48m15 15V48m22 15V48m15 15V48" stroke="#6a8588" strokeWidth="3" />
+  </svg>;
   if (type === "reef") return (
     <svg {...p}>
       <path d="M7 61l10-7h66l10 7v8l-10 6H17L7 69z" fill="#d4ae78" stroke="#a27b4d" strokeWidth="2" />

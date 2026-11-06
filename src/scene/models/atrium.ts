@@ -3,6 +3,7 @@ import { DOOR_W, DOOR_Z, ROOMS } from "../../game/data/rooms";
 import { ATRIUM_BENCHES, BENCH_SEAT_H } from "../../game/world";
 export { ATRIUM_BENCHES } from "../../game/world";
 import { PartBuilder } from "../partBuilder";
+import { SHARK_DOOR } from "../../game/data/sharkTunnel";
 
 /** Ground footprints are also consumed by the walking graph. */
 export const ATRIUM_PALMS = [{ x: 31, z: -4.65 }, { x: 45, z: 4.65 }, { x: 45, z: -0.4 }];
@@ -33,12 +34,16 @@ export function atriumWallGeometry(): THREE.BufferGeometry {
   }
   b.box(0.02, r.wallH - 2.3, DOOR_W, face + 0.01, 2.3, DOOR_Z, CREAM);
   const backStart = r.minX + t;
-  b.box(r.maxX + t - backStart, r.wallH, t, (backStart + r.maxX + t) / 2, 0, r.minZ - t / 2, CREAM);
+  const left = SHARK_DOOR.x - SHARK_DOOR.w / 2, right = SHARK_DOOR.x + SHARK_DOOR.w / 2;
+  for (const [a, c] of [[backStart, left], [right, r.maxX + t]]) b.box(c - a, r.wallH, t, (a + c) / 2, 0, r.minZ - t / 2, CREAM);
+  b.box(SHARK_DOOR.w, r.wallH - SHARK_DOOR.h, t, SHARK_DOOR.x, SHARK_DOOR.h, r.minZ - t / 2, CREAM);
   b.box(t, r.wallH, r.maxZ - r.minZ, r.maxX + t / 2, 0, (r.minZ + r.maxZ) / 2, CREAM);
   // Continuous low turquoise wall bands and pale coping.
-  b.box(r.maxX - backStart, 0.64, 0.055, (backStart + r.maxX) / 2, 0, r.minZ + 0.0275, TEAL);
+  for (const [a, c] of [[backStart, left], [right, r.maxX]]) b.box(c - a, 0.64, 0.055, (a + c) / 2, 0, r.minZ + 0.0275, TEAL);
   b.box(0.055, 0.64, r.maxZ - r.minZ, r.maxX - 0.0275, 0, 0, TEAL);
-  b.box(r.maxX - backStart, 0.06, 0.075, (backStart + r.maxX) / 2, 0.64, r.minZ + 0.0375, "#fff5dc");
+  for (const [a, c] of [[backStart, left], [right, r.maxX]]) b.box(c - a, 0.06, 0.075, (a + c) / 2, 0.64, r.minZ + 0.0375, "#fff5dc");
+  for (const x of [left, right]) b.box(0.12, SHARK_DOOR.h, 0.18, x, 0, r.minZ + 0.09, CORAL);
+  b.box(SHARK_DOOR.w + 0.12, 0.13, 0.18, SHARK_DOOR.x, SHARK_DOOR.h, r.minZ + 0.09, CORAL);
   for (const z of [DOOR_Z - DOOR_W / 2, DOOR_Z + DOOR_W / 2]) b.box(0.12, 2.4, 0.16, face + 0.06, 0, z, CORAL);
   b.box(0.12, 0.18, DOOR_W + 0.16, face + 0.06, 2.3, DOOR_Z, CORAL);
   // Clerestory bays, separated by broad coral pilasters. Blue panes are in

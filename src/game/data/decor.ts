@@ -1,4 +1,4 @@
-import type { ColorId, DecorKind, DecorVariant, StageId, TankType } from "../types";
+import type { ColorId, DecorKind, DecorVariant, StageId, TankType, TunnelDecorKind } from "../types";
 import { SIZE_RANK, TANKS, type DecorSize } from "./tanks";
 
 export interface DecorVersion {
@@ -29,6 +29,31 @@ export interface DecorDef {
 }
 
 export const DECOR: Record<DecorKind, DecorDef> = {
+  tunnelArch: {
+    kind: "tunnelArch", name: "Big arch", ja: "おおきな アーチ", fromStage: 8,
+    size: "habitat", question: null,
+    versions: [{ variant: null, price: 45, joy: 14, color: null, height: 0.55 }]
+  },
+  tunnelPinnacle: {
+    kind: "tunnelPinnacle", name: "Tall rock", ja: "たかい いわ", fromStage: 8,
+    size: "habitat", question: null,
+    versions: [{ variant: null, price: 30, joy: 10, color: null, height: 0.5 }]
+  },
+  tunnelShelf: {
+    kind: "tunnelShelf", name: "Reef shelf", ja: "サンゴの たな", fromStage: 8,
+    size: "habitat", question: null,
+    versions: [{ variant: null, price: 35, joy: 12, color: null, height: 0.3 }]
+  },
+  tunnelLedge: {
+    kind: "tunnelLedge", name: "Resting ledge", ja: "やすむ いわ", fromStage: 8,
+    size: "habitat", question: null,
+    versions: [{ variant: null, price: 30, joy: 10, color: null, height: 0.2 }]
+  },
+  tunnelSand: {
+    kind: "tunnelSand", name: "Sand bank", ja: "すなの やま", fromStage: 8,
+    size: "habitat", question: null,
+    versions: [{ variant: null, price: 20, joy: 8, color: null, height: 0.12 }]
+  },
   plant: {
     kind: "plant",
     fromStage: 2,
@@ -199,10 +224,13 @@ export const DECOR: Record<DecorKind, DecorDef> = {
   }
 };
 
-export const DECOR_ORDER: DecorKind[] = ["plant", "coral", "rock", "shell", "chest", "bubbler", "starfish", "castle", "anemone", "shipwreck", "kelp", "arch", "cave", "driftwood", "staghorn", "brain", "fan", "table"];
+export const TUNNEL_DECOR_ORDER: TunnelDecorKind[] = ["tunnelArch", "tunnelPinnacle", "tunnelShelf", "tunnelLedge", "tunnelSand"];
+export const isTunnelDecor = (kind: DecorKind): kind is TunnelDecorKind => (TUNNEL_DECOR_ORDER as DecorKind[]).includes(kind);
+export const DECOR_ORDER: DecorKind[] = ["plant", "coral", "rock", "shell", "chest", "bubbler", "starfish", "castle", "anemone", "shipwreck", "kelp", "arch", "cave", "driftwood", "staghorn", "brain", "fan", "table", ...TUNNEL_DECOR_ORDER];
 
 /** Can this decoration go in this kind of tank? */
 export function decorFits(kind: DecorKind, tank: TankType): boolean {
+  if (tank === "sharks" || isTunnelDecor(kind)) return tank === "sharks" && isTunnelDecor(kind);
   return SIZE_RANK[DECOR[kind].size] <= SIZE_RANK[TANKS[tank].decorSize];
 }
 

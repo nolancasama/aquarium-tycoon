@@ -65,6 +65,16 @@ export type PhraseId =
   | "stingrayPlease"
   | "parrotfishPlease"
   | "shrimpPlease"
+  | "blacktipPlease"
+  | "zebrasharkPlease"
+  | "eaglerayPlease"
+  | "archPlease"
+  | "rockPlease"
+  | "reefPlease"
+  | "ledgePlease"
+  | "sandPlease"
+  | "itsShark"
+  | "itsRay"
   | "itsEel"
   | "itsOctopus"
   | "itsCrab"
@@ -162,7 +172,10 @@ export const ANIMAL_PHRASE: Partial<Record<SpeciesId, PhraseId>> = {
   crab: "crabPlease",
   stingray: "stingrayPlease",
   parrotfish: "parrotfishPlease",
-  shrimp: "shrimpPlease"
+  shrimp: "shrimpPlease",
+  blacktip: "blacktipPlease",
+  zebrashark: "zebrasharkPlease",
+  eagleray: "eaglerayPlease"
 };
 
 /** "What's this?" answers: every fish is "a fish", every jellyfish "a jellyfish". */
@@ -183,6 +196,9 @@ export const ITS_PHRASE: Record<SpeciesId, PhraseId> = {
   stingray: "itsStingray",
   parrotfish: "itsParrotfish",
   shrimp: "itsShrimp",
+  blacktip: "itsShark",
+  zebrashark: "itsShark",
+  eagleray: "itsRay",
   moonjelly: "itsJellyfish",
   spottedjelly: "itsJellyfish",
   seanettle: "itsJellyfish"
@@ -271,6 +287,16 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   stingrayPlease: animal("stingrayPlease", "A stingray, please!", STINGRAY, "stingray"),
   parrotfishPlease: animal("parrotfishPlease", "A parrotfish, please!", PARROTFISH, "parrotfish"),
   shrimpPlease: animal("shrimpPlease", "A shrimp, please!", SHRIMP, "shrimp"),
+  blacktipPlease: { ...animal("blacktipPlease", "A shark, please!", ["shark", "sharks", "shaaku"], "shark"), forbid: ["zebra"] },
+  zebrasharkPlease: { id: "zebrasharkPlease", en: "A zebra shark, please!", keys: [["zebra", "zeebra"], ["shark", "sharks", "shaaku"]], key: "zebra shark" },
+  eaglerayPlease: animal("eaglerayPlease", "A ray, please!", ["ray", "rays", "rei"], "ray"),
+  archPlease: animal("archPlease", "An arch, please!", ["arch", "aachi"], "arch"),
+  rockPlease: animal("rockPlease", "A rock, please!", ["rock", "rocks", "rokku"], "rock"),
+  reefPlease: animal("reefPlease", "A reef, please!", ["reef", "reefs", "riifu"], "reef"),
+  ledgePlease: animal("ledgePlease", "A ledge, please!", ["ledge", "ledges", "rejji"], "ledge"),
+  sandPlease: animal("sandPlease", "Sand, please!", ["sand", "sando"], "sand"),
+  itsShark: animal("itsShark", "It's a shark.", ["shark", "sharks", "shaaku"], "shark"),
+  itsRay: animal("itsRay", "It's a ray.", ["ray", "rays", "rei"], "ray"),
   itsEel: animal("itsEel", "It's an eel.", EEL, "eel"),
   itsOctopus: animal("itsOctopus", "It's an octopus.", OCTOPUS, "octopus"),
   itsCrab: animal("itsCrab", "It's a crab.", CRAB, "crab"),

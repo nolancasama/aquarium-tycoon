@@ -15,7 +15,7 @@ export type BodyStyle = "fish" | "puffer" | "upright" | "jelly" | "turtle" | "sc
 export type Movement = "swim" | "perch" | "school" | "glide" | "walk" | "crawl" | "den" | "drift";
 
 /** Why a tank type is wrong for an animal (shown to the student as "Needs a ___!"). */
-export type HomeNeed = "bigger" | "rocky" | "jelly" | "ocean" | "tall";
+export type HomeNeed = "bigger" | "rocky" | "jelly" | "ocean" | "tall" | "sharks";
 
 export interface SpeciesDef {
   id: SpeciesId;
@@ -75,6 +75,31 @@ export interface SpeciesDef {
 const ANY: TankType[] = ["small", "big", "tall", "ocean", "hex", "panorama"];
 
 export const SPECIES: Record<SpeciesId, SpeciesDef> = {
+  // These motion fields describe their scale; only the separate tunnel simulation runs them.
+  blacktip: {
+    id: "blacktip", name: "blacktip shark", ja: "ブラックチップ・シャーク",
+    kind: "animal", counter: "animal", color: "blue", word: "shark", plural: "sharks",
+    price: 90, fromStage: 8, habitat: ["sharks"], needs: "sharks", space: 3,
+    movement: "swim", length: 1.6, radius: 0.8, speed: 0.85, turn: 0.45,
+    wander: [5, 10], depth: [0.35, 0.8], tailHz: 0.9, tailAmp: 0.14, burst: 0,
+    likes: "tunnelArch", likesLine: "I like the arch!", voice: { pitch: 0.9, rate: 0.85 }, body: "fish"
+  },
+  zebrashark: {
+    id: "zebrashark", name: "zebra shark", ja: "トラフザメ",
+    kind: "animal", counter: "animal", color: "yellow", word: "shark", plural: "sharks",
+    price: 110, fromStage: 8, habitat: ["sharks"], needs: "sharks", space: 3,
+    movement: "glide", length: 2.4, radius: 1.2, speed: 0.4, turn: 0.3,
+    wander: [8, 16], depth: [0.05, 0.4], tailHz: 0.55, tailAmp: 0.2, burst: 0,
+    likes: "tunnelLedge", likesLine: "I like the ledge!", voice: { pitch: 0.8, rate: 0.8 }, body: "fish"
+  },
+  eagleray: {
+    id: "eagleray", name: "eagle ray", ja: "マダラトビエイ",
+    kind: "animal", counter: "animal", color: "blue", word: "ray", plural: "rays",
+    price: 80, fromStage: 8, habitat: ["sharks"], needs: "sharks", space: 2,
+    movement: "glide", length: 1.8, radius: 0.9, speed: 0.65, turn: 0.35,
+    wander: [6, 12], depth: [0.25, 0.75], tailHz: 0.45, tailAmp: 0, burst: 0,
+    likes: "tunnelShelf", likesLine: "I like the reef!", voice: { pitch: 1, rate: 0.85 }, body: "ray"
+  },
   clownfish: {
     id: "clownfish",
     name: "Clownfish",
@@ -645,7 +670,10 @@ export const SPECIES_ORDER: SpeciesId[] = [
   "shrimp",
   "moonjelly",
   "spottedjelly",
-  "seanettle"
+  "seanettle",
+  "blacktip",
+  "eagleray",
+  "zebrashark"
 ];
 /** The fish counter ("What color?"). */
 export const FISH_ORDER = SPECIES_ORDER.filter((s) => SPECIES[s].counter === "fish");

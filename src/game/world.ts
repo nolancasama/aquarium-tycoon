@@ -5,6 +5,7 @@ import { DOOR_W, DOOR_Z, ROOMS, ROOM_CENTER_X, doorX, roomAtX } from "./data/roo
 import type { TankRec } from "./logic/model";
 import type { Column } from "./logic/swim";
 import { sandSurfaceY } from "./logic/tankLayout";
+import { HABITAT } from "./data/sharkTunnel";
 
 /**
  * Room layout and tank geometry in world space (metres). The room's front
@@ -281,7 +282,7 @@ export const WALK_Z = 0.9;
 /** Water-local origin of a tank: centre of the glass bottom. */
 export function tankOrigin(slot: SlotId): Vec3 {
   const p = SLOT_POS[slot];
-  return { x: p.x, y: STAND_H, z: p.z };
+  return { x: p.x, y: slot === "L" ? 0 : STAND_H, z: p.z };
 }
 
 export function toWorld(slot: SlotId, local: Vec3): Vec3 {
@@ -292,6 +293,7 @@ export function toWorld(slot: SlotId, local: Vec3): Vec3 {
 
 /** Centre of the water (camera framing, effects). */
 export function waterCentre(slot: SlotId, type: TankType): Vec3 {
+  if (type === "sharks") return { x: HABITAT.centre.x, y: (HABITAT.min.y + HABITAT.max.y) / 2, z: HABITAT.centre.z };
   const o = tankOrigin(slot);
   return { x: o.x, y: o.y + TANKS[type].h / 2, z: o.z };
 }

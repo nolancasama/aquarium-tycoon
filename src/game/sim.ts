@@ -8,6 +8,9 @@ import { reactToAnimalTap, stepBehavior, type BehaviorEnv } from "./logic/behavi
 import { eelBounds } from "./logic/eelBody";
 import { sandSurfaceY } from "./logic/tankLayout";
 import { FOOD_FALL, PELLET_SINK, PLANKTON_LIFE, eatsFood, foodsFor, type FoodId } from "./data/food";
+import { seabedY } from "./data/sharkTunnel";
+import { SLOT_POS } from "./data/tanks";
+import { checkTunnelMilestones } from "./logic/tunnel";
 import { makeRng } from "./logic/rng";
 import { columnsOf, feedSpot } from "./world";
 import { stepVisitors, visitorsTick } from "./flow/visitors";
@@ -51,6 +54,7 @@ const live = new Set<string>();
 function syncFish(tanks: TankRec[]) {
   live.clear();
   for (const t of tanks) {
+    if (t.type === "sharks") continue; // The separate tunnelRuntime owns large animals.
     const columns = columnsFor(t);
     for (const f of t.fish) {
       live.add(f.id);
@@ -101,7 +105,7 @@ function dropFood(tankId: string, type: TankType, food: FoodId, count: number) {
       vy: -sink * (0.85 + rand() * 0.3),
       sway: rand() * 6,
       drift: sink === PELLET_SINK ? 0.006 : fall.drift,
-      floor: (Math.max(SAND_H, sandSurfaceY(tank, x, z) - STAND_H)) + 0.015,
+      floor: (type === "sharks" ? seabedY(SLOT_POS.L.x + x, SLOT_POS.L.z + z) : Math.max(SAND_H, sandSurfaceY(tank, x, z) - STAND_H)) + 0.015,
       bornT: rt.time,
       eaten: false,
       landedT: -1
@@ -133,6 +137,7 @@ const behaviorEnv: BehaviorEnv = {
 
 function stepFish(dt: number, tanks: TankRec[]) {
   for (const t of tanks) {
+    if (t.type === "sharks") continue;
     fishes.length = 0;
     for (const f of rt.fish.values()) if (f.tankId === t.id) fishes.push(f);
     if (!fishes.length) continue;
@@ -295,7 +300,7 @@ export function tick(dt: number) {
     if (rt.decayAcc >= 1) {
       const s = rt.decayAcc;
       rt.decayAcc = 0;
-      updateModel((m) => latchHappy(decay(m, s)));
+      updateModel((m) => checkTunnelMilestones(latchHappy(decay(m, s))).m);
     }
   }
   visitorsTick(dt);

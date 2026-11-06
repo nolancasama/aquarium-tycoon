@@ -3,6 +3,7 @@ import { FISH_ORDER, SPECIES } from "../data/fish";
 import { ATRIUM_PRICE, HALL_PRICE, TANKS } from "../data/tanks";
 import type { SpeciesId } from "../types";
 import { atriumUnlocked, canLive, goals, happiness, HAPPY, hasSpace, isSpeciesUnlocked, padsFor, UPGRADE_PRICE, type Goal, type Model, type TankRec, type TutorialStep } from "./model";
+import { SHARK_TUNNEL_PRICE, tunnelUnlocked } from "./tunnel";
 
 /** Placement completes before the feed step; old saves need no extra flag. */
 export const objectivesUnlocked = (step: TutorialStep) => step === "feed" || step === "visitor" || step === "decorate" || step === "done";
@@ -163,6 +164,21 @@ export function nextStep(m: Model): Step | null {
         line("In the Jellyfish Gallery, tap the door on the right.", "クラゲの ギャラリーの みぎの ドアを タップしよう！"),
         line(`Tap Tank, then choose Coral Reef Atrium for ${ATRIUM_PRICE} coins. A giant reef tank comes with it!`, `「タンク」で サンゴの アトリウムを えらぼう。${ATRIUM_PRICE} コインで おおきな サンゴの タンクが ついてくるよ！`),
         "door-atrium", "atrium");
+    }
+    if (m.progress.freePlay && m.progress.atriumOpen && !m.progress.tunnelOpen) {
+      const reef = m.tanks.find((t) => t.slot === "I" && t.type === "reef");
+      if (reef && reef.fish.length < 4) {
+        return step("buyFish", line("Give the giant reef 4 animals!", "サンゴの タンクに いきものを 4ひき いれよう！"),
+          line("Visit the giant reef in the Coral Reef Atrium.", "サンゴの アトリウムの おおきな タンクを みよう！"),
+          line(`The reef has ${reef.fish.length}/4 animals. Buy animals and place them in tank I to unlock the Shark Tunnel.`, `いま ${reef.fish.length}/4ひき。いきものを かって タンク I に いれると、サメの トンネルが ひらけるよ！`),
+          "tank-I");
+      }
+      if (tunnelUnlocked(m) && m.coins >= SHARK_TUNNEL_PRICE) {
+        return step("openHall", line("Open the Shark Tunnel!", "サメの トンネルを ひらこう！"),
+          line("In the Coral Reef Atrium, tap the back-wall door.", "サンゴの アトリウムの おくの ドアを タップしよう！"),
+          line(`Tap the Shark Tunnel door. It costs ${SHARK_TUNNEL_PRICE} coins and includes a shark!`, `サメの トンネルの ドアを タップ。${SHARK_TUNNEL_PRICE} コインで サメも ついてくるよ！`),
+          "door-sharks", "sharks");
+      }
     }
     return null;
   }

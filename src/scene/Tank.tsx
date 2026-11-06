@@ -24,7 +24,7 @@ export function Tanks() {
   const tanks = useGame((s) => s.model.tanks);
   return (
     <>
-      {tanks.map((t) => (
+      {tanks.filter((t) => t.type !== "sharks").map((t) => (
         <Tank key={t.id} tank={t} />
       ))}
     </>
@@ -274,7 +274,9 @@ function ContactShadows({ tank }: { tank: TankRec }) {
   const geo = useMemo(() => {
     const parts = tank.decor.map((d) => {
       const slot = def.slots[d.slot];
-      const width = ({ plant: 0.3, coral: 0.28, rock: d.variant === "big" ? 0.46 : 0.3, shell: 0.22, chest: 0.4, bubbler: 0.24, starfish: 0.25, castle: 0.4, anemone: 0.3, shipwreck: 0.52, kelp: 0.26, arch: 0.5, cave: 0.5, driftwood: 0.4, staghorn: 0.28, brain: 0.25, fan: 0.28, table: 0.28 })[d.kind] * def.h;
+      // Habitat structures never sit in a small tank (decorFits); 0.4 keeps the map total.
+      const widths: Partial<Record<string, number>> = { plant: 0.3, coral: 0.28, rock: d.variant === "big" ? 0.46 : 0.3, shell: 0.22, chest: 0.4, bubbler: 0.24, starfish: 0.25, castle: 0.4, anemone: 0.3, shipwreck: 0.52, kelp: 0.26, arch: 0.5, cave: 0.5, driftwood: 0.4, staghorn: 0.28, brain: 0.25, fan: 0.28, table: 0.28 };
+      const width = (widths[d.kind] ?? 0.4) * def.h;
       const g = new THREE.PlaneGeometry(width, width * 0.72, 8, 8);
       g.rotateX(-Math.PI / 2);
       const p = g.attributes.position;
@@ -481,7 +483,7 @@ const FOOD_MATERIAL: Record<FoodShape, THREE.Material> = {
 };
 
 /** One instanced mesh per food shape; a mesh only draws while that food exists. */
-function Pellets({ tankId }: { tankId: string }) {
+export function Pellets({ tankId }: { tankId: string }) {
   return <>{FOOD_SHAPES.map((shape) => <FoodPieces key={shape} tankId={tankId} shape={shape} />)}</>;
 }
 

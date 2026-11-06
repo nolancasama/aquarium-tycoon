@@ -19,7 +19,11 @@ export type SpeciesId =
   | "spottedjelly"
   | "seanettle"
   | "parrotfish"
-  | "shrimp";
+  | "shrimp"
+  | "blacktip"
+  | "zebrashark"
+  | "eagleray";
+export type TunnelDecorKind = "tunnelArch" | "tunnelPinnacle" | "tunnelShelf" | "tunnelLedge" | "tunnelSand";
 export type DecorKind =
   | "plant"
   | "coral"
@@ -38,17 +42,18 @@ export type DecorKind =
   | "staghorn"
   | "brain"
   | "fan"
-  | "table";
+  | "table"
+  | TunnelDecorKind;
 /** Size for plants, rocks and castles, colour for coral and starfish, none for one-version items. */
 export type DecorVariant = "big" | "small" | "red" | "blue" | "pink" | "yellow" | null;
 /** Classic tanks (small, big, tall, ocean) and the Expansion 1 special tanks. */
-export type TankType = "small" | "big" | "tall" | "ocean" | "hex" | "panorama" | "cylinder" | "cave" | "reef";
+export type TankType = "small" | "big" | "tall" | "ocean" | "hex" | "panorama" | "cylinder" | "cave" | "reef" | "sharks";
 /** Glass shape of a tank: a box, six-sided, round, or a box with a bowed front. */
-export type TankShape = "box" | "hex" | "round" | "bow" | "reef";
+export type TankShape = "box" | "hex" | "round" | "bow" | "reef" | "tunnel";
 /** A, B: the first hall. C (the Ocean tank), D, E: the Ocean Hall. F, G (its Jelly Column), H: the Jellyfish Gallery. */
-export type SlotId = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K";
+export type SlotId = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L";
 /** Rooms in walking order; each connects to the previous one through a doorway. */
-export type RoomId = "hall" | "ocean" | "gallery" | "atrium";
+export type RoomId = "hall" | "ocean" | "gallery" | "atrium" | "sharks";
 export type StageId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type VisitorType = "child" | "adult" | "fan" | "grandma" | "explorer" | "judge";
 

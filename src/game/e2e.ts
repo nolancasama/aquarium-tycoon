@@ -14,6 +14,8 @@ import { dprState, perf } from "../scene/GameScene";
 import { sandSurfaceY, slotMarkerY } from "./logic/tankLayout";
 import type { SlotId, VisitorType } from "./types";
 import { visibleCountNumbers } from "./logic/counting";
+import { ROOMS } from "./data/rooms";
+import { SHARK_DOOR, TUNNEL_ZONES } from "./data/sharkTunnel";
 
 /**
  * Test hook (only with ?e2e=1): read game state, find where things are on
@@ -36,6 +38,16 @@ export function installE2eHook(seed: number) {
         view: g.view,
         tankId: g.tankId,
         hall: g.hall,
+        roomId: ROOMS[g.hall]?.id ?? null,
+        tunnelOpen: Boolean(m.progress.tunnelOpen),
+        tunnelIntroSeen: Boolean(m.progress.tunnelIntroSeen),
+        tunnelMilestone: m.progress.tunnel?.milestone ?? 0,
+        tunnelObserved: m.progress.tunnel?.observed ?? 0,
+        tunnelHelped: m.progress.tunnel?.helped ?? 0,
+        tunnelArrival: g.tunnelArrival,
+        tunnelView: g.tunnelView,
+        habitatTankId: m.tanks.find((t) => t.type === "sharks" && t.slot === "L")?.id ?? null,
+        camera: { pos: { ...rt.camera.pos }, target: { ...rt.camera.target } },
         panel: g.panel,
         placing: g.placing,
         micState: g.micState,
@@ -97,8 +109,9 @@ export function installE2eHook(seed: number) {
       };
     },
     /** Screen position of a thing: fish id, tank id, `tankId:slot` (decoration or slot), pad slot, visitor id, pico. */
-    where(kind: "fish" | "tank" | "badge" | "decor" | "slot" | "pad" | "visitor" | "pico", id = "") {
+    where(kind: "fish" | "tank" | "badge" | "decor" | "slot" | "pad" | "visitor" | "pico" | "tunnel-door", id = "") {
       const m = getGame().model;
+      if (kind === "tunnel-door") return project(SHARK_DOOR.x, 1.3, SHARK_DOOR.z + 0.2);
       if (kind === "fish") {
         const f = rt.fish.get(id);
         const t = f && m.tanks.find((x) => x.id === f.tankId);
@@ -110,6 +123,7 @@ export function installE2eHook(seed: number) {
         const t = m.tanks.find((x) => x.id === id);
         if (!t) return null;
         const o = SLOT_POS[t.slot];
+        if (t.type === "sharks") return project(o.x, 0, -12);
         return kind === "badge"
           ? project(o.x, STAND_H + TANKS[t.type].h + 0.5, o.z)
           : project(o.x, STAND_H + TANKS[t.type].h * 0.5, o.z + TANKS[t.type].d / 2);
@@ -119,6 +133,10 @@ export function installE2eHook(seed: number) {
         const t = m.tanks.find((x) => x.id === tankId);
         if (!t) return null;
         const slot = Number(s);
+        if (t.type === "sharks") {
+          const zone = TUNNEL_ZONES[slot];
+          return zone ? project(zone.x, zone.y + 0.06, zone.z) : null;
+        }
         const p = TANKS[t.type].slots[slot];
         const o = SLOT_POS[t.slot];
         const d = t.decor.find((x) => x.slot === slot);

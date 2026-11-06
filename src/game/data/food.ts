@@ -18,6 +18,9 @@ export const FOOD: Record<FoodId, { en: string; ja: string; icon: string }> = {
 
 /** First is what Feed brings for it; the rest it will also take if it finds them. */
 export const DIET: Record<SpeciesId, readonly FoodId[]> = {
+  blacktip: ["seafood"],
+  zebrashark: ["seafood"],
+  eagleray: ["seafood"],
   clownfish: ["flakes", "shrimp"],
   bluetang: ["seaweed", "flakes"], // grazes algae
   yellowfish: ["flakes", "shrimp"], // the butterflyfish picks at small animals
@@ -65,6 +68,7 @@ const SNAP: EatStyle = { seconds: 0.35, beats: 1 };
 const NIBBLE: EatStyle = { seconds: 1, beats: 3 };
 const SETTLE: EatStyle = { seconds: 1.1, beats: 1 };
 const EAT_STYLE: Partial<Record<SpeciesId, EatStyle>> = {
+  blacktip: SNAP, zebrashark: SETTLE, eagleray: SETTLE,
   bluetang: NIBBLE, parrotfish: NIBBLE, shrimp: NIBBLE, goby: { seconds: 0.5, beats: 1 },
   turtle: { seconds: 1.2, beats: 2 }, stingray: SETTLE, crab: { seconds: 1.4, beats: 1 },
   jellyfish: { seconds: 1.5, beats: 1 }, moonjelly: { seconds: 1.5, beats: 1 },

@@ -6,7 +6,8 @@ import { tankShellGeometry } from "./models/tankShell";
 import { slotMarkerY, SLOT_MARKER_LIFT, SLOT_MARKER_MAX_SCALE, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
 
 describe("decoration circles rest on the sand", () => {
-  for (const tank of Object.values(TANKS)) {
+  // The Shark Tunnel habitat draws its own zone rings on the seabed (scene/tunnel), not a tank shell.
+  for (const tank of Object.values(TANKS).filter((t) => t.type !== "sharks")) {
     it(`${tank.type}: every draped, pulsing circle sits just above the rendered sand`, () => {
       const geometry = tankShellGeometry(tank.type);
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));

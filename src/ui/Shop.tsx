@@ -1,13 +1,14 @@
 import { useMemo } from "react";
 import { setGame, useGame } from "../game/store";
 import { ANIMAL_ORDER, FISH_ORDER, JELLY_BY_COLOR, SPECIES, spaceOf } from "../game/data/fish";
-import { DECOR, DECOR_ORDER } from "../game/data/decor";
+import { DECOR, DECOR_ORDER, decorFits } from "../game/data/decor";
 import { ATRIUM_PRICE, GALLERY_PRICE, HALL_PRICE, TANKS, TANK_ORDER, TICKETS_PRICE } from "../game/data/tanks";
 import { atriumUnlocked, EXPANSION_FROM, galleryUnlocked, homesFor, isSpeciesUnlocked, padsFor, remodelPlan, tankById, UPGRADE_PRICE, type UpgradeKind } from "../game/logic/model";
 import { SHOP_COLOR_PHRASE } from "../game/logic/english";
 import { nextStep } from "../game/logic/guide";
+import { SHARK_TUNNEL_PRICE, tunnelUnlocked } from "../game/logic/tunnel";
 import type { ColorId, SpeciesId, TankType } from "../game/types";
-import { bagRemodelAnimal, buyAtrium, buyDecorKind, buyGallery, buyHall, buyTankType, buyTankUpgrade, buyTicketGate, confirmRemodel, doneDecorate, HOME_REASON_TEXT, openDecorShop, pickTrayItem, putAway, shopHomeReason, startRemodel } from "../game/flow/actions";
+import { bagRemodelAnimal, buyAtrium, buyDecorKind, buyGallery, buyHall, buySharkTunnel, buyTankType, buyTankUpgrade, buyTicketGate, confirmRemodel, doneDecorate, HOME_REASON_TEXT, openDecorShop, pickTrayItem, putAway, shopHomeReason, startRemodel } from "../game/flow/actions";
 import { Icon, type IconId } from "./icons";
 import { DecorPicture, FishPicture, LampPicture, TankPicture as ShapePicture } from "./Portraits";
 import { Ja } from "./Talk";
@@ -51,7 +52,9 @@ function AnimalCards({ list, testid, title }: { list: SpeciesId[]; testid: strin
         const short = model.coins < def.price;
         const homeless = !locked && homesFor(model, s) <= 0;
         const habitatReason = shopHomeReason(model, s);
-        const reason = model.progress.stage < def.fromStage ? unlocksAt(def.fromStage)
+        const reason = s === "zebrashark" && locked ? { en: "Complete milestone 4", ja: "もくひょう 4を たっせいしよう" }
+          : def.habitat.includes("sharks") && !model.progress.tunnelOpen ? { en: "Open the Shark Tunnel", ja: "サメの トンネルを ひらこう" }
+          : model.progress.stage < def.fromStage ? unlocksAt(def.fromStage)
           : def.needsHall && !model.progress.hallOpen ? hallFirst
             : homeless ? expansion ? HOME_REASON_TEXT[habitatReason] : noSpace : short ? needCoins(def.price - model.coins) : null;
         return (
@@ -97,7 +100,9 @@ export function AnimalShop() {
   const panel = useGame((s) => s.panel);
   const stage = useGame((s) => s.model.progress.stage);
   const prompt = useGame((s) => s.prompt);
+  const tunnel = useGame((s) => s.hall === 4);
   if (panel !== "animalShop") return null;
+  if (tunnel) return <AnimalCards list={ANIMAL_ORDER.filter((s) => SPECIES[s].habitat.includes("sharks"))} testid="animal-shop" title="Sharks and rays サメと エイ" />;
   if (stage < EXPANSION_FROM) return <AnimalCards list={ANIMAL_ORDER.filter((s) => SPECIES[s].fromStage < EXPANSION_FROM)} testid="animal-shop" />;
   if (prompt?.question?.en === "What color?") {
     const options = new Set(prompt.choices.map((c) => c.id).concat(prompt.sentences.map((c) => c.id)));
@@ -105,7 +110,7 @@ export function AnimalShop() {
     return <AnimalCards list={jellies} testid="jellyfish-choice" title="Jellyfish クラゲ" />;
   }
   return <div className="animal-counter-groups">
-    <AnimalCards list={ANIMAL_ORDER.filter((s) => SPECIES[s].counter === "animal")} testid="animal-shop" title="Sea animals うみの いきもの" />
+    <AnimalCards list={ANIMAL_ORDER.filter((s) => SPECIES[s].counter === "animal" && !SPECIES[s].habitat.includes("sharks"))} testid="animal-shop" title="Sea animals うみの いきもの" />
     <AnimalCards list={ANIMAL_ORDER.filter((s) => SPECIES[s].counter === "jelly")} testid="jellyfish-shop" title="Jellyfish クラゲ" />
   </div>;
 }
@@ -136,16 +141,17 @@ export function DecorShop() {
   const { coins, progress: { stage } } = model;
   const shopItem = useMemo(() => nextStep(model)?.shopItem, [model]);
   const mode = useGame((s) => s.mode);
+  const tunnel = useGame((s) => s.hall === 4);
   if (panel !== "decorShop" || mode === "ask") return null;
   // Phase 2 decorations appear (locked) from Level 6, so there is something to look forward to.
   const expansionDecor = new Set(["kelp", "arch", "cave", "driftwood"]);
-  const list = DECOR_ORDER.filter((k) => !expansionDecor.has(k) && (DECOR[k].fromStage <= 2 || stage >= 6) || stage >= EXPANSION_FROM);
+  const list = DECOR_ORDER.filter((k) => tunnel ? decorFits(k, "sharks") : !decorFits(k, "sharks") && (!expansionDecor.has(k) && (DECOR[k].fromStage <= 2 || stage >= 6) || stage >= EXPANSION_FROM));
   return (
     <div className="panel shop ui" data-testid="decor-shop" role="dialog">
       <header>
         <Icon id="decor" size={30} />
         <h2>
-          Decorations <Ja>かざり</Ja>
+          {tunnel ? "Habitat structures" : "Decorations"} <Ja>{tunnel ? "サメの かざり" : "かざり"}</Ja>
         </h2>
         <button className="round close-btn" onClick={() => setGame({ panel: null })} aria-label="Close" data-testid="shop-close">
           <Icon id="close" size={22} />
@@ -173,6 +179,7 @@ export function DecorShop() {
                   <DecorPicture key={String(v.variant)} kind={k} variant={v.variant} size={def.versions.length > 1 ? 58 : 76} />
                 ))}
               </span>
+              {tunnel && <strong className="structure-name">{def.name}<Ja>{def.ja}</Ja></strong>}
               {locked ? (
                 <span className="lockline">
                   <Icon id="lock" size={20} />
@@ -256,6 +263,7 @@ function ExpansionTankShop() {
     </div>;
   };
   const rooms = [
+    ...(tunnelUnlocked(m) && !m.progress.tunnelOpen ? [{ type: "sharks" as const, name: "Shark Tunnel", ja: "サメの トンネル", price: SHARK_TUNNEL_PRICE, info: "Includes the habitat and a shark", help: "おおきな タンクと サメが ついてくるよ", buy: buySharkTunnel, id: "btn-buy-shark-tunnel" }] : []),
     ...(atriumUnlocked(m) && !m.progress.atriumOpen ? [{ type: "atrium" as const, name: "Coral Reef Atrium", ja: "サンゴの アトリウム", price: ATRIUM_PRICE, info: "Includes a giant reef tank", help: "おおきな サンゴの タンクが ついてくるよ", buy: buyAtrium, id: "btn-buy-atrium" }] : []),
     ...(!m.progress.hallOpen ? [{ type: "hall" as const, name: "Ocean Hall", ja: "うみの ホール", price: HALL_PRICE, info: "Includes an Ocean tank", help: "うみの タンクが ついてくるよ", buy: buyHall, id: "btn-buy-hall" }] : []),
     ...(galleryUnlocked(m) && !m.progress.galleryOpen ? [{ type: "gallery" as const, name: "Jellyfish Gallery", ja: "クラゲの ギャラリー", price: GALLERY_PRICE, info: "Includes a Jelly column", help: "クラゲの まるい タンクが ついてくるよ", buy: buyGallery, id: "btn-buy-gallery" }] : []),
@@ -454,12 +462,14 @@ export function DecorTray() {
   const panel = useGame((s) => s.panel);
   const view = useGame((s) => s.view);
   const mode = useGame((s) => s.mode);
-  const inv = useGame((s) => s.model.inv.decor);
+  const allDecor = useGame((s) => s.model.inv.decor);
+  const tunnel = useGame((s) => s.hall === 4);
+  const inv = useMemo(() => allDecor.filter((d) => tunnel ? decorFits(d.kind, "sharks") : !decorFits(d.kind, "sharks")), [allDecor, tunnel]);
   const placing = useGame((s) => s.placing);
   const guide = useGame((s) => s.guide === "tray" || s.nudge?.target === "tray");
   const tutorial = useGame((s) => s.model.progress.tutorial !== "done");
   const selectedIndex = placing?.kind === "decor" ? inv.findIndex((d) => d.id === placing.decorId) : -1;
-  if (panel !== "decorate" || view !== "tank" || mode !== "play") return null;
+  if (panel !== "decorate" || (view !== "tank" && !tunnel) || mode !== "play") return null;
   const hint =
     placing?.kind === "decor"
       ? { en: "Tap a circle to place or swap!", ja: "まるを タップして おく・いれかえる！" }

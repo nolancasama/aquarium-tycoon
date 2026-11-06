@@ -101,6 +101,12 @@ export interface AnimalPose {
   speed: number;
   /** True while lying on the sand (zebra shark rest). */
   resting: boolean;
+  /**
+   * How far the renderer lowers the body below (x, y, z) so a resting animal lies on
+   * the surface under it (eased in and out by the simulation; 0 while swimming). The
+   * space below a rest spot is free, so this never moves a body into a solid.
+   */
+  restDrop?: number;
   /** Bounding radius for picking and visibility (about half the body length). */
   radius: number;
 }

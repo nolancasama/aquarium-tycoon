@@ -129,6 +129,7 @@ export const rt = {
   pendingVisitorTap: null as PendingVisitorTap | null,
   /** One-time room reveal; the shot object is mutated in place by CameraRig. */
   atriumReveal: null as { t0: number; reducedMotion: boolean } | null,
+  tunnelReveal: null as { t0: number; reducedMotion: boolean } | null,
   visitorTapAck: null as { id: string; t0: number } | null,
   /** Tokens, rather than a boolean, keep overlapping celebrations hidden. */
   celebrations: new Set<symbol>(),
@@ -226,6 +227,7 @@ export function resetRuntime() {
   rt.camera.zoom = 1;
   rt.camera.shot = null;
   rt.atriumReveal = null;
+  rt.tunnelReveal = null;
   rt.camera.snap = true;
   rt.effects = [];
   clearGlow();

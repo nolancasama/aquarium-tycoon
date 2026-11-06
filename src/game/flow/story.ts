@@ -183,6 +183,9 @@ function enter(m: Model) {
     confirmNew: false,
     saveLost: false,
     atriumArrival: false,
+    tunnelArrival: false,
+    tunnelView: "whole",
+    hall: 0,
     guide: null,
     nudge: null
   });
@@ -740,6 +743,11 @@ export function showGuideHint() {
   hintTier = hintTier === 0 ? 1 : 2;
   let text = hintTier === 1 ? step.where : step.exact;
   let target = step.target;
+  if (target === "door-sharks") {
+    if (g.view === "tank") target = "btn-back";
+    else if (g.hall < 3) target = "btn-hall-next";
+    else if (g.hall > 3) target = "btn-hall-prev";
+  }
   if (target === "door-atrium") {
     if (g.view === "tank") target = "btn-back";
     else if (g.hall < 2) target = "btn-hall-next";

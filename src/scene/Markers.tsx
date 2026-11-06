@@ -7,6 +7,7 @@ import { SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
 import { canLive, hasSpace, remodelPlan } from "../game/logic/model";
 import { HALL_OF } from "../game/data/tanks";
 import { DOOR_Z, doorX, roomAtX } from "../game/data/rooms";
+import { SHARK_DOOR } from "../game/data/sharkTunnel";
 import { nextStep } from "../game/logic/guide";
 
 /**
@@ -62,6 +63,7 @@ export function Markers() {
           if (visitor && rt.hand.targetId !== `visitor-${visitor.id}` && roomAtX(visitor.x) === g.hall && spots.length < MAX) spots.push({ x: visitor.x, y: 2.35 - visitor.seat * 0.25, z: visitor.z });
         }
         const roomGoal = guide === "btn-tank-shop" && nextStep(g.model)?.goal === "openHall";
+        if ((guide === "door-sharks" || g.nudge?.shopItem === "sharks") && g.hall === 3 && rt.hand.targetId !== "door-4" && spots.length < MAX) spots.push({ x: SHARK_DOOR.x, y: 3.1, z: SHARK_DOOR.z + 0.35 });
         const door = guide === "door-atrium" || g.nudge?.shopItem === "atrium" ? 3 : guide === "door-gallery" || guide === "gallery-door" ? 2 : guide === "door-hall" || guide === "hall-door" || roomGoal || g.nudge?.shopItem === "hall" ? 1 : null;
         if (door && rt.hand.targetId !== `door-${door}` && g.hall === door - 1 && spots.length < MAX) spots.push({ x: doorX(door) - 0.35, y: 2.7, z: DOOR_Z });
       }

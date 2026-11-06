@@ -166,6 +166,8 @@ export interface GameState {
   saveLost: boolean;
   fade: number;
   atriumArrival: boolean;
+  tunnelArrival: boolean;
+  tunnelView: "whole" | "left" | "right" | "entrance";
 
   model: Model;
 
@@ -260,6 +262,8 @@ export const useGame = create<GameState>(() => ({
   saveLost: false,
   fade: 0,
   atriumArrival: false,
+  tunnelArrival: false,
+  tunnelView: "whole",
   model: newModel(),
   prompt: null,
   line: null,
