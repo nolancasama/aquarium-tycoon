@@ -7,7 +7,9 @@ import { TANKS } from "../game/data/tanks";
 import { HALL_X, PEDESTAL, tankOrigin, waterCentre } from "../game/world";
 import { tankById } from "../game/logic/model";
 import { footprintPoints } from "../game/logic/tankLayout";
-import { ROOMS } from "../game/data/rooms";
+import { ROOMS, SHARKS_HALL } from "../game/data/rooms";
+import { TUNNEL_VIEWS, type TunnelView } from "../game/data/sharkTunnel";
+import { stepTransition } from "../game/tunnel/explore";
 
 /** The live camera, for projecting world points to the screen (picking, tests). */
 export const cameraRef: { current: THREE.PerspectiveCamera | null } = { current: null };
@@ -32,6 +34,16 @@ export function roomView(aspect: number, orbit: number, zoom: number, hall = 0) 
   return {
     pos: new THREE.Vector3(target.x + Math.sin(orbit) * h, target.y + dist * Math.sin(pitch), target.z + Math.cos(orbit) * h),
     target
+  };
+}
+
+/** Shark Tunnel management viewpoints; narrower screens step back along the view so the habitat still fits. */
+export function tunnelView(view: TunnelView, aspect: number) {
+  const v = TUNNEL_VIEWS[view];
+  const k = Math.max(1, 1.78 / aspect);
+  return {
+    pos: { x: v.target.x + (v.pos.x - v.target.x) * k, y: v.target.y + (v.pos.y - v.target.y) * k, z: v.target.z + (v.pos.z - v.target.z) * k },
+    target: v.target
   };
 }
 
@@ -130,6 +142,7 @@ export function CameraRig() {
   const ready = useRef(false);
   const shift = useRef(0);
   const shiftX = useRef(0);
+  const fadeEl = useRef<HTMLElement | null>(null);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.1);
@@ -144,9 +157,43 @@ export function CameraRig() {
       c.shot.pos.y = 4.2 + Math.sin(p * Math.PI) * 0.3;
       c.shot.pos.z = 9.2 + Math.max(0, 1.72 / aspect - 1) * 4;
     }
-    if (c.shot) {
+    // Shark Tunnel: the enter/leave fade, the reveal sweep, exploration and the wing's viewpoints.
+    const fade = stepTransition().fade;
+    if (fadeEl.current === null) fadeEl.current = document.querySelector<HTMLElement>(".fade");
+    if (fadeEl.current && (fade > 0 || fadeEl.current.dataset.tunnel)) {
+      fadeEl.current.style.opacity = String(fade);
+      if (fade > 0) fadeEl.current.dataset.tunnel = "1";
+      else delete fadeEl.current.dataset.tunnel;
+    }
+    if (rt.tunnelReveal && c.shot) {
+      const p = rt.tunnelReveal.reducedMotion ? 1 : THREE.MathUtils.smoothstep(rt.time - rt.tunnelReveal.t0, 0, 4.4);
+      const from = TUNNEL_VIEWS.entrance, to = tunnelView("whole", aspect);
+      c.shot.pos.x = THREE.MathUtils.lerp(from.pos.x, to.pos.x, p) + Math.sin(p * Math.PI) * 6;
+      c.shot.pos.y = THREE.MathUtils.lerp(from.pos.y, to.pos.y, p);
+      c.shot.pos.z = THREE.MathUtils.lerp(from.pos.z, to.pos.z, p);
+      c.shot.target.x = THREE.MathUtils.lerp(from.target.x, to.target.x, p);
+      c.shot.target.y = THREE.MathUtils.lerp(from.target.y, to.target.y, p);
+      c.shot.target.z = THREE.MathUtils.lerp(from.target.z, to.target.z, p);
+    }
+    const tunnelTr = rt.explore.transition;
+    if (rt.explore.active) {
+      // The exploration camera is smoothed (and kept inside the tube) by explore.ts.
+      const e = rt.explore.cam;
+      want.current.set(e.x, e.y, e.z);
+      wantLook.current.set(e.tx, e.ty, e.tz);
+      pos.current.copy(want.current);
+      look.current.copy(wantLook.current);
+    } else if (tunnelTr?.kind === "enter") {
+      // Toward the lobby and the tunnel entrance, then the fade.
+      want.current.set(33.4, 4.2, -2.5);
+      wantLook.current.set(32.45, 1.4, -11.5);
+    } else if (c.shot) {
       want.current.set(c.shot.pos.x, c.shot.pos.y, c.shot.pos.z);
       wantLook.current.set(c.shot.target.x, c.shot.target.y, c.shot.target.z);
+    } else if (g.screen === "game" && g.hall === SHARKS_HALL && g.view === "room") {
+      const v = tunnelView(g.tunnelView, aspect);
+      want.current.set(v.pos.x, v.pos.y, v.pos.z);
+      wantLook.current.set(v.target.x, v.target.y, v.target.z);
     } else if (g.screen === "title") {
       // A slow drift across the room behind the title card.
       const a = Math.sin(rt.time * 0.05) * 0.35;

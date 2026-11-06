@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { setGame, toast, useGame } from "../game/store";
+import { getGame, setGame, toast, useGame } from "../game/store";
 import { nextStep, objectivesUnlocked } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
 import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, usedSpace, type Goal } from "../game/logic/model";
 import { HALL_OF, TANKS } from "../game/data/tanks";
-import { ROOMS, roomOpen } from "../game/data/rooms";
+import { ROOMS, roomOpen, SHARKS_HALL } from "../game/data/rooms";
+import { ExploreHud, TunnelGoals, WingHud } from "./TunnelHud";
+import { tunnelHelp } from "../game/tunnel/activities";
 import type { VisitorType } from "../game/types";
 import {
   cancelPlacing,
@@ -32,7 +34,7 @@ import { ActionTag } from "./ActionTag";
 import { TapHand } from "./TapHand";
 import { STAGE_NAMES, STAGE_PREVIEWS, UI, goalText } from "./i18n";
 
-function Big({
+export function Big({
   id,
   icon,
   label,
@@ -116,6 +118,7 @@ function GoalRow({ g }: { g: Goal }) {
 
 function GoalCard() {
   const model = useGame((s) => s.model);
+  const inWing = useGame((s) => s.screen === "game" && (s.hall === SHARKS_HALL || s.exploring));
   const request = useGame((s) => s.request);
   const interrupted = useGame((s) => Boolean(s.prompt || s.line || s.stageCard));
   const waiting = useGame((s) => Boolean(s.waiting));
@@ -134,6 +137,7 @@ function GoalCard() {
   const step = useMemo(() => nextStep(model), [model]);
   // Start each level compact and clear an expanded list for scripted interactions.
   useEffect(() => setExpanded(false), [model.progress.stage, interrupted, Boolean(request)]);
+  if (inWing && !request) return <TunnelGoals />;
   // The tutorial's "Tap the visitor!" card takes this place; in free play the objectives stay.
   if (!unlocked || request || (waiting && !interrupted && model.progress.tutorial !== "done")) return null;
   const p = model.progress;
@@ -177,7 +181,7 @@ function HelpButton() {
   const request = useGame((s) => Boolean(s.request));
   if (request) return null;
   return (
-    <button className="chip help-btn ui" onClick={showGuideHint} disabled={!canHelp} data-testid="btn-help">
+    <button className="chip help-btn ui" onClick={() => (getGame().exploring || getGame().hall === SHARKS_HALL ? tunnelHelp() : showGuideHint())} disabled={!canHelp} data-testid="btn-help">
       <b aria-hidden="true">?</b> <span className="help-label">Help <small lang="ja">ヒント</small></span>
     </button>
   );
@@ -526,16 +530,21 @@ export function Hud() {
   const line = useGame((s) => s.line);
   const step = useGame((s) => s.model.progress.tutorial);
   const shot = useGame((s) => s.stageCard);
+  const hall = useGame((s) => s.hall);
+  const exploring = useGame((s) => s.exploring);
   if (screen !== "game") return null;
   const free = mode === "play" && !prompt && !line && !shot;
+  const wing = hall === SHARKS_HALL;
   const showRoomBar = free && view === "room" && !panel && !placing && (step === "done" || step === "buy" || step === "visitor");
   const showTankBar = free && view === "tank" && panel !== "decorate";
   return (
     <>
       <TopBar />
       {view === "tank" && <TankStatus />}
-      {showRoomBar && <RoomBar />}
-      {free && view === "room" && <HallSwitch />}
+      {showRoomBar && !wing && !exploring && <RoomBar />}
+      {free && view === "room" && !exploring && <HallSwitch />}
+      {view === "room" && wing && !exploring && <WingHud />}
+      {exploring && <ExploreHud />}
       {showTankBar && <TankBar />}
       {free && <PlacingBanner />}
       <Toasts />

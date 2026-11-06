@@ -3,7 +3,7 @@ import { getGame, updateModel, useGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { handCue, type HandCue, type HandTarget } from "../game/logic/tapHand";
 import { HALL_OF, SLOT_POS, STAND_H, TANKS } from "../game/data/tanks";
-import { DOOR_Z, doorX } from "../game/data/rooms";
+import { DOOR_Z, doorX, SHARKS_HALL } from "../game/data/rooms";
 import { SHARK_DOOR } from "../game/data/sharkTunnel";
 import { decorVersion } from "../game/data/decor";
 import { sandSurfaceY } from "../game/logic/tankLayout";
@@ -31,7 +31,7 @@ function screenPoint(target: TapHandTarget) {
       if (visitor && g.view === "room" && g.hall === 0) p = { x: visitor.x, y: 1.1 - visitor.seat * 0.25, z: visitor.z };
     } else if (kind === "door") {
       const hall = Number(id);
-      if (g.view === "room" && hall === g.hall + 1) p = hall === 4 ? { x: SHARK_DOOR.x, y: 1.3, z: SHARK_DOOR.z + 0.1 } : { x: doorX(hall) - 0.1, y: 1.3, z: DOOR_Z };
+      if (g.view === "room" && hall === g.hall + 1) p = hall === SHARKS_HALL ? { x: SHARK_DOOR.x, y: 1.3, z: SHARK_DOOR.z + 0.1 } : { x: doorX(hall) - 0.1, y: 1.3, z: DOOR_Z };
     } else if (kind === "pad") {
       const pad = SLOT_POS[id as keyof typeof SLOT_POS];
       if (pad && g.view === "room" && !g.model.tanks.some((t) => t.slot === id)) p = { ...pad, y: 0.15 };

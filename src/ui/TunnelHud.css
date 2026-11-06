@@ -1,0 +1,394 @@
+/* Shark Tunnel HUD: management of the wing, exploring, activities, cards. */
+
+.tunnel-goals .guide-next small {
+  display: block;
+  font-weight: 700;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+.tunnel-goals.compact {
+  opacity: 0.92;
+}
+.tunnel-milestones {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+  font-size: 14px;
+}
+.tunnel-milestones li {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  color: var(--ink-soft);
+}
+.tunnel-milestones li.current {
+  color: var(--ink);
+  font-weight: 800;
+}
+.tunnel-milestones li.done {
+  color: #2b8a3e;
+}
+.tunnel-milestones .tick {
+  flex: 0 0 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #e2f2f8;
+  font-size: 12px;
+  font-weight: 900;
+}
+.tunnel-milestones li.done .tick {
+  background: #d3f9d8;
+}
+.tunnel-milestones small {
+  display: block;
+  font-weight: 600;
+}
+
+/* Habitat status: upper right, under Help / Settings, never over the water's centre. */
+.wing-status {
+  position: absolute;
+  right: 14px;
+  top: 78px;
+  width: 222px;
+  padding: 10px 14px 12px;
+  display: grid;
+  gap: 7px;
+  z-index: 9;
+  pointer-events: none;
+}
+.wing-status header {
+  font-weight: 900;
+  font-size: 17px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.wing-status .fishcount {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.wing-views {
+  position: absolute;
+  right: 14px;
+  top: 262px;
+  display: grid;
+  gap: 8px;
+  z-index: 9;
+}
+.wing-views button {
+  min-width: 104px;
+  min-height: 52px;
+  border-radius: 16px;
+  border: 3px solid var(--aqua-soft);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  font-weight: 900;
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  line-height: 1.05;
+}
+.wing-views button.on {
+  border-color: var(--sea);
+  background: #e3f3ff;
+}
+
+.wing-bar .chips-right {
+  display: flex;
+  justify-content: flex-end;
+}
+.explore-btn {
+  pointer-events: auto;
+  min-height: 96px;
+  padding: 8px 20px;
+  border-radius: 26px;
+  border: 3px solid #ffd8b0;
+  background: linear-gradient(180deg, #ff9a5a, var(--coral));
+  color: white;
+  box-shadow: 0 5px 0 var(--coral-dark), var(--shadow);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 900;
+  font-size: 20px;
+  cursor: pointer;
+  text-align: left;
+}
+.explore-btn .ja,
+.explore-btn [lang="ja"] {
+  color: #fff3e6;
+}
+
+/* Exploring. */
+.back-aquarium {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 12;
+  min-height: 72px;
+  padding: 8px 20px;
+  border-radius: 22px;
+  border: 3px solid var(--aqua-soft);
+  background: var(--panel);
+  box-shadow: 0 5px 0 #9fd8ea, var(--shadow);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.joystick {
+  position: absolute;
+  left: 22px;
+  bottom: 22px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.18));
+  border: 3px solid rgba(255, 255, 255, 0.75);
+  box-shadow: var(--shadow);
+  z-index: 12;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+}
+.joystick-knob {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--panel);
+  border: 3px solid var(--aqua);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  transition: transform 0.08s;
+}
+.joystick-label {
+  position: absolute;
+  bottom: -26px;
+  font-weight: 900;
+  font-size: 14px;
+  color: white;
+  text-shadow: 0 1px 3px #0b3a5c;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.joystick-label [lang="ja"],
+.joystick-label .ja {
+  color: #e8fbff;
+}
+.tunnel-waiting {
+  position: absolute;
+  right: 18px;
+  bottom: 104px;
+  z-index: 12;
+  width: 96px;
+  height: 104px;
+  pointer-events: auto;
+}
+.tunnel-waiting .waiting-label {
+  font-weight: 900;
+  font-size: 14px;
+  line-height: 1;
+}
+.tour-btn {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 12;
+  min-height: 72px;
+  padding: 8px 22px;
+  border-radius: 22px;
+  border: 3px solid #fff0b8;
+  background: linear-gradient(180deg, #ffe066, var(--gold));
+  color: #5c3b00;
+  box-shadow: 0 5px 0 #d89b00, var(--shadow);
+  font-weight: 900;
+  font-size: 19px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+}
+.tunnel-activity {
+  position: absolute;
+  left: 50%;
+  top: 74px;
+  transform: translateX(-50%);
+  width: min(480px, calc(100vw - 520px));
+  min-width: 300px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  z-index: 11;
+  pointer-events: none;
+}
+.tunnel-activity .q {
+  display: block;
+  font-size: 22px;
+}
+.tunnel-activity .todo {
+  margin-top: 4px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.tunnel-activity .clue {
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #fff4cc;
+  font-weight: 800;
+}
+.spot-label {
+  position: absolute;
+  left: 50%;
+  bottom: 104px;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: rgba(11, 58, 92, 0.72);
+  color: white;
+  font-weight: 800;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  z-index: 10;
+  pointer-events: none;
+}
+.spot-label [lang="ja"],
+.spot-label .ja {
+  color: #d8f6ff;
+}
+
+/* Screen-space overlays (positioned each frame). */
+.tunnel-overlays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  overflow: hidden;
+}
+.tunnel-overlays > div {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+.count-tag {
+  min-width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background: var(--gold);
+  border: 3px solid white;
+  color: #5c3b00;
+  font-weight: 900;
+  font-size: 22px;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow);
+}
+.find-ring {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 6px solid #ffe066;
+  box-shadow: 0 0 18px #fff3a0;
+  animation: find-pulse 1s ease-in-out infinite;
+}
+.find-ring.big {
+  width: 170px;
+  height: 170px;
+}
+.find-arrow {
+  color: #ffe066;
+  font-size: 46px;
+  text-shadow: 0 2px 6px #0b3a5c;
+  animation: find-bob 0.8s ease-in-out infinite;
+}
+.find-hand {
+  font-size: 44px;
+  animation: find-bob 0.8s ease-in-out infinite;
+}
+@keyframes find-pulse {
+  50% { transform: translate(-50%, -50%) scale(1.12); }
+}
+@keyframes find-bob {
+  50% { margin-top: 10px; }
+}
+.tunnel-bubble {
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: white;
+  color: var(--ink);
+  font-weight: 900;
+  font-size: 16px;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  display: grid;
+  text-align: center;
+}
+.tunnel-bubble small {
+  font-weight: 700;
+  color: var(--ja);
+  font-size: 12px;
+}
+.tunnel-bubble.ask {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--coral);
+  color: white;
+  font-size: 26px;
+  animation: find-pulse 1s ease-in-out infinite;
+}
+
+.tunnel-celebration {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 45;
+  background: rgba(11, 58, 92, 0.35);
+}
+.tunnel-celebration .panel {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 22px 34px;
+  text-align: center;
+  color: var(--ink);
+}
+.tunnel-celebration h2 {
+  margin: 4px 0;
+}
+.tunnel-celebration .reward {
+  font-weight: 900;
+  font-size: 18px;
+}
+.tunnel-celebration button {
+  min-height: 56px;
+  min-width: 180px;
+  font-size: 18px;
+}
+@media (max-width: 1100px) {
+  .tunnel-activity {
+    width: min(440px, calc(100vw - 300px));
+  }
+  .wing-views {
+    top: 250px;
+  }
+}

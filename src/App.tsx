@@ -10,6 +10,7 @@ import { ResultsScreen, StageCardModal, TitleScreen } from "./ui/Screens";
 import { AudioCheckModal } from "./ui/AudioCheck";
 import { DebugPanel } from "./ui/DebugPanel";
 import { AtriumArrival } from "./ui/AtriumArrival";
+import { TunnelArrival, TunnelCelebration, TunnelOverlays } from "./ui/TunnelHud";
 import { installKeyboard } from "./input/keyboard";
 import { onKey } from "./game/flow/input";
 import { hasSaved, installAutosave, saveIsLost } from "./game/flow/story";
@@ -141,6 +142,9 @@ export function App() {
       <AudioCheckModal />
       <DebugPanel />
       <AtriumArrival />
+      <TunnelArrival />
+      <TunnelOverlays />
+      <TunnelCelebration />
       <Fade />
     </div>
   );

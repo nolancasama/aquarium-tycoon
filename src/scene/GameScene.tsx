@@ -11,6 +11,7 @@ import { Pico } from "./Pico";
 import { Effects } from "./Effects";
 import { Markers } from "./Markers";
 import { CountNumbers } from "./Animals";
+import { MainRooms, SharkTunnel } from "./tunnel/SharkTunnel";
 
 /** Renderer stats for the test hook (draw calls / triangles per frame). */
 export const perf = { calls: 0, triangles: 0, fps: 0 };
@@ -84,10 +85,13 @@ export function GameScene() {
       <Clock />
       <AdaptiveDpr />
       <Lights />
-      <Room />
-      <Tanks />
-      <Pico />
-      <Visitors />
+      <MainRooms>
+        <Room />
+        <Tanks />
+        <Pico />
+        <Visitors />
+      </MainRooms>
+      <SharkTunnel />
       <Effects />
       <Markers />
       <CountNumbers />

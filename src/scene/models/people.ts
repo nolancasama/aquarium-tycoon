@@ -16,6 +16,9 @@ export interface PersonModel {
   hip: number;
   /** Leg x offset from the centre. */
   legX: number;
+  /** With `split`: the right arm on its own, pivoting at the shoulder (`armPivot`), for pointing. */
+  arm?: THREE.BufferGeometry;
+  armPivot?: [number, number, number];
   /** Total height (for bubbles and picking). */
   height: number;
 }
@@ -62,11 +65,21 @@ export const paletteCount = (t: VisitorType) => PALETTES[t].length;
 
 const cache = new Map<string, PersonModel>();
 
-export function personModel(type: VisitorType, variant: number): PersonModel {
-  const key = `${type}:${variant}`;
+/** The player in the Shark Tunnel: the aquarium boss, a child in a teal staff cap and shirt. */
+const BOSS: Palette = { shirt: "#139aa0", pants: "#24476b", hair: "#2a1d14", skin: "#f3cfae", extra: "#0b6f8a" };
+export function bossModel(): PersonModel {
+  return personModel("child", 0, BOSS, true);
+}
+/** Shark Tunnel visitors: the usual people, with a right arm that can point or hold up a camera. */
+export function tunnelPersonModel(type: VisitorType, variant: number): PersonModel {
+  return personModel(type, variant, undefined, true);
+}
+
+export function personModel(type: VisitorType, variant: number, palette?: Palette, split = false): PersonModel {
+  const key = `${type}:${variant}${palette ? `:${palette.shirt}` : ""}${split ? ":arm" : ""}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const p = PALETTES[type][variant % PALETTES[type].length];
+  const p = palette ?? PALETTES[type][variant % PALETTES[type].length];
   const child = type === "child";
   // Small height differences keep children recognizable without changing
   // the existing articulated walking and sitting rig.
@@ -76,7 +89,7 @@ export function personModel(type: VisitorType, variant: number): PersonModel {
   // Torso, shoulders, arms, hands.
   b.add(new THREE.CylinderGeometry(0.2 * s, 0.23 * s, 0.6 * s, 10), p.shirt, [0, hip + 0.3 * s, 0]);
   b.sphere(0.21 * s, 0, hip + 0.58 * s, 0, p.shirt, [1.1, 0.5, 0.85], 10);
-  for (const x of [-1, 1]) {
+  for (const x of split ? [-1] : [-1, 1]) {
     b.add(new THREE.CylinderGeometry(0.055 * s, 0.06 * s, 0.5 * s, 7), p.shirt, [x * 0.27 * s, hip + 0.36 * s, 0], [0, 0, x * 0.12]);
     b.sphere(0.065 * s, x * 0.3 * s, hip + 0.08 * s, 0.01, p.skin, [1, 1, 1], 8);
   }
@@ -166,6 +179,14 @@ export function personModel(type: VisitorType, variant: number): PersonModel {
   sb.add(new THREE.CylinderGeometry(0.07 * s, 0.065 * s, hip - thigh - 0.06, 8), p.pants, [0, -(hip - thigh - 0.06) / 2, 0]);
   sb.sphere(0.085 * s, 0, -hip + thigh + 0.05, 0.04 * s, type === "judge" ? "#111111" : "#f1f3f5", [1, 0.6, 1.5], 8);
   const model: PersonModel = { body, leg: lb.build(), shin: sb.build(), thigh, hip, legX: 0.1 * s, height: hy + hr * (type === "fan" ? 1.6 : type === "explorer" ? 1.5 : 1.2) };
+  if (split) {
+    // The right arm, hanging from a shoulder pivot (rotate about x to raise it forward).
+    const ab = new PartBuilder(0);
+    ab.add(new THREE.CylinderGeometry(0.055 * s, 0.06 * s, 0.5 * s, 7), p.shirt, [0.015 * s, -0.25 * s, 0], [0, 0, 0.12]);
+    ab.sphere(0.065 * s, 0.03 * s, -0.53 * s, 0.01, p.skin, [1, 1, 1], 8);
+    model.arm = ab.build();
+    model.armPivot = [0.255 * s, hip + 0.61 * s, 0];
+  }
   cache.set(key, model);
   return model;
 }

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { SHARKS_HALL } from "../game/data/rooms";
 import { setGame, useGame } from "../game/store";
 import { ANIMAL_ORDER, FISH_ORDER, JELLY_BY_COLOR, SPECIES, spaceOf } from "../game/data/fish";
 import { DECOR, DECOR_ORDER, decorFits } from "../game/data/decor";
@@ -100,7 +101,7 @@ export function AnimalShop() {
   const panel = useGame((s) => s.panel);
   const stage = useGame((s) => s.model.progress.stage);
   const prompt = useGame((s) => s.prompt);
-  const tunnel = useGame((s) => s.hall === 4);
+  const tunnel = useGame((s) => s.hall === SHARKS_HALL);
   if (panel !== "animalShop") return null;
   if (tunnel) return <AnimalCards list={ANIMAL_ORDER.filter((s) => SPECIES[s].habitat.includes("sharks"))} testid="animal-shop" title="Sharks and rays サメと エイ" />;
   if (stage < EXPANSION_FROM) return <AnimalCards list={ANIMAL_ORDER.filter((s) => SPECIES[s].fromStage < EXPANSION_FROM)} testid="animal-shop" />;
@@ -141,7 +142,7 @@ export function DecorShop() {
   const { coins, progress: { stage } } = model;
   const shopItem = useMemo(() => nextStep(model)?.shopItem, [model]);
   const mode = useGame((s) => s.mode);
-  const tunnel = useGame((s) => s.hall === 4);
+  const tunnel = useGame((s) => s.hall === SHARKS_HALL);
   if (panel !== "decorShop" || mode === "ask") return null;
   // Phase 2 decorations appear (locked) from Level 6, so there is something to look forward to.
   const expansionDecor = new Set(["kelp", "arch", "cave", "driftwood"]);
@@ -463,7 +464,7 @@ export function DecorTray() {
   const view = useGame((s) => s.view);
   const mode = useGame((s) => s.mode);
   const allDecor = useGame((s) => s.model.inv.decor);
-  const tunnel = useGame((s) => s.hall === 4);
+  const tunnel = useGame((s) => s.hall === SHARKS_HALL);
   const inv = useMemo(() => allDecor.filter((d) => tunnel ? decorFits(d.kind, "sharks") : !decorFits(d.kind, "sharks")), [allDecor, tunnel]);
   const placing = useGame((s) => s.placing);
   const guide = useGame((s) => s.guide === "tray" || s.nudge?.target === "tray");

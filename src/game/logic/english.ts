@@ -75,6 +75,17 @@ export type PhraseId =
   | "sandPlease"
   | "itsShark"
   | "itsRay"
+  // Shark Tunnel activities.
+  | "aboveMe"
+  | "byMe"
+  | "yesItCan"
+  | "noItCant"
+  | "sk1"
+  | "sk2"
+  | "sk3"
+  | "sk4"
+  | "sk5"
+  | "sk6"
   | "itsEel"
   | "itsOctopus"
   | "itsCrab"
@@ -240,6 +251,16 @@ const num = (n: number): Phrase => ({
   key: NUMBER_EN[n]
 });
 
+const sharks = (n: number): Phrase => ({
+  id: SHARK_NUMBER_PHRASE[n],
+  en: `${NUMBER_EN[n]} ${n === 1 ? "shark" : "sharks"}!`,
+  keys: [NUMBER_WORDS[n]],
+  key: NUMBER_EN[n]
+});
+/** "How many sharks?" answers, one to six. */
+export const SHARK_NUMBER_PHRASE: Record<number, PhraseId> = { 1: "sk1", 2: "sk2", 3: "sk3", 4: "sk4", 5: "sk5", 6: "sk6" };
+export const SHARK_NUMBER_IDS: PhraseId[] = ["sk1", "sk2", "sk3", "sk4", "sk5", "sk6"];
+
 export const PHRASES: Record<PhraseId, Phrase> = {
   orangePlease: please("orangePlease", "orange"),
   bluePlease: please("bluePlease", "blue"),
@@ -297,6 +318,17 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   sandPlease: animal("sandPlease", "Sand, please!", ["sand", "sando"], "sand"),
   itsShark: animal("itsShark", "It's a shark.", ["shark", "sharks", "shaaku"], "shark"),
   itsRay: animal("itsRay", "It's a ray.", ["ray", "rays", "rei"], "ray"),
+  // Shark Tunnel: location (judged on the location word), abilities (yes / no), counting sharks.
+  aboveMe: { id: "aboveMe", en: "It's above me!", keys: [["above", "abub", "a bob", "abov", "of"]], forbid: ["by", "bye", "buy"], key: "above" },
+  byMe: { id: "byMe", en: "It's by me!", keys: [["by", "bye", "buy", "bai"]], forbid: ["above", "abub"], key: "by" },
+  yesItCan: { id: "yesItCan", en: "Yes, it can!", keys: [YES], forbid: NO, key: "Yes" },
+  noItCant: { id: "noItCant", en: "No, it can't!", keys: [NO], forbid: ["yes", "yeah", "yep"], key: "No" },
+  sk1: sharks(1),
+  sk2: sharks(2),
+  sk3: sharks(3),
+  sk4: sharks(4),
+  sk5: sharks(5),
+  sk6: sharks(6),
   itsEel: animal("itsEel", "It's an eel.", EEL, "eel"),
   itsOctopus: animal("itsOctopus", "It's an octopus.", OCTOPUS, "octopus"),
   itsCrab: animal("itsCrab", "It's a crab.", CRAB, "crab"),

@@ -1,5 +1,5 @@
 import { SPECIES } from "../data/fish";
-import { colorOfPhrase, NUMBER_IDS, speciesOfPhrase, type PhraseId } from "./english";
+import { colorOfPhrase, NUMBER_IDS, SHARK_NUMBER_IDS, speciesOfPhrase, type PhraseId } from "./english";
 import type { Model } from "./model";
 import type { Request } from "./requests";
 import type { ColorId } from "../types";
@@ -17,7 +17,10 @@ export const SENTENCE_PATTERNS = {
   animalPlease: { en: "A ___, please!", ja: "＿＿を おねがいします。" },
   feed: { en: "___ the fish!", ja: "さかなに ＿＿してね。" },
   clean: { en: "___, please!", ja: "＿＿を おねがいします。" },
-  yesNo: { en: "___, I do / don't.", ja: "＿＿、そうです／そうでは ありません。" }
+  yesNo: { en: "___, I do / don't.", ja: "＿＿、そうです／そうでは ありません。" },
+  where: { en: "Where is it? — It's ___ me!", ja: "どこに いる？ わたしの ＿＿に いるよ。" },
+  canIt: { en: "Can it ___? — ___, it can / can't.", ja: "＿＿できる？ できる／できない。" },
+  countSharks: { en: "How many sharks? — ___ sharks!", ja: "サメは なんびき？ ＿＿ひきです。" }
 } as const;
 export type SentencePatternId = keyof typeof SENTENCE_PATTERNS;
 export const isSentencePattern = (id: unknown): id is SentencePatternId => typeof id === "string" && Object.prototype.hasOwnProperty.call(SENTENCE_PATTERNS, id);
@@ -37,6 +40,11 @@ export function requestPattern(req: Request): SentencePatternId {
 /** Phrase ids and existing phrase metadata, never completed sentence strings. */
 export function phrasePattern(id: PhraseId): SentencePatternId {
   if (NUMBER_IDS.includes(id)) return "countFish";
+  if (SHARK_NUMBER_IDS.includes(id)) return "countSharks";
+  if (id === "aboveMe" || id === "byMe") return "where";
+  if (id === "yesItCan" || id === "noItCant") return "canIt";
+  if (id === "archPlease" || id === "rockPlease" || id === "reefPlease" || id === "ledgePlease") return "animalPlease";
+  if (id === "sandPlease") return "please";
   if (speciesOfPhrase(id)) return "animalPlease";
   if (id.startsWith("its")) return "identify";
   if (id.startsWith("like")) return "favoriteColor";

@@ -1,4 +1,4 @@
-import { getGame, setGame, updateModel } from "./store";
+import { getGame, model, setGame, updateModel } from "./store";
 import { rt, type FishRt, type Pellet } from "./runtime";
 import { SPECIES } from "./data/fish";
 import { SAND_H, STAND_H, TANKS } from "./data/tanks";
@@ -11,6 +11,8 @@ import { FOOD_FALL, PELLET_SINK, PLANKTON_LIFE, eatsFood, foodsFor, type FoodId 
 import { seabedY } from "./data/sharkTunnel";
 import { SLOT_POS } from "./data/tanks";
 import { checkTunnelMilestones } from "./logic/tunnel";
+import { stepTunnelVisitors } from "./tunnel/tunnelVisitors";
+import { celebrateMilestones, stepTunnelActivity, tunnelActivitiesTick } from "./tunnel/activities";
 import { makeRng } from "./logic/rng";
 import { columnsOf, feedSpot } from "./world";
 import { stepVisitors, visitorsTick } from "./flow/visitors";
@@ -300,9 +302,15 @@ export function tick(dt: number) {
     if (rt.decayAcc >= 1) {
       const s = rt.decayAcc;
       rt.decayAcc = 0;
+      const before = model().progress.tunnel?.milestone ?? 0;
       updateModel((m) => checkTunnelMilestones(latchHappy(decay(m, s))).m);
+      const after = model().progress.tunnel?.milestone ?? 0;
+      if (after > before && before > 0) celebrateMilestones(before, after);
     }
   }
   visitorsTick(dt);
+  stepTunnelVisitors(dt);
+  tunnelActivitiesTick();
+  stepTunnelActivity();
   storyTick(dt);
 }

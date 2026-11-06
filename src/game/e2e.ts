@@ -15,7 +15,11 @@ import { sandSurfaceY, slotMarkerY } from "./logic/tankLayout";
 import type { SlotId, VisitorType } from "./types";
 import { visibleCountNumbers } from "./logic/counting";
 import { ROOMS } from "./data/rooms";
-import { SHARK_DOOR, TUNNEL_ZONES } from "./data/sharkTunnel";
+import { SHARK_DOOR, TUNNEL_SECTIONS, TUNNEL_VIEWING_SPOTS, TUNNEL_ZONES, sectionAt, walkwayFrame, walkwayLength, type TunnelSection } from "./data/sharkTunnel";
+import { tunnelRuntime } from "./tunnel/contract";
+import { cameraTubeCheck, playerWorld, snapCamera } from "./tunnel/explore";
+import { locate, runActivity } from "./tunnel/activities";
+import { personWorld, tunnelPeople } from "./tunnel/tunnelVisitors";
 
 /**
  * Test hook (only with ?e2e=1): read game state, find where things are on
@@ -123,7 +127,8 @@ export function installE2eHook(seed: number) {
         const t = m.tanks.find((x) => x.id === id);
         if (!t) return null;
         const o = SLOT_POS[t.slot];
-        if (t.type === "sharks") return project(o.x, 0, -12);
+        // The habitat answers taps on its water surface (y 8), over the open middle of the U.
+        if (t.type === "sharks") return project(o.x, 8, -21);
         return kind === "badge"
           ? project(o.x, STAND_H + TANKS[t.type].h + 0.5, o.z)
           : project(o.x, STAND_H + TANKS[t.type].h * 0.5, o.z + TANKS[t.type].d / 2);
@@ -216,4 +221,49 @@ export function installE2eHook(seed: number) {
     visitorsOn: () => visitorsOn
   };
   (window as unknown as { __at: typeof api }).__at = api;
+  (window as unknown as { __tunnel: typeof tunnelApi }).__tunnel = tunnelApi;
 }
+
+/** Shark Tunnel test hook: exploration state, teleport along the walkway, activities. */
+const tunnelApi = {
+  state() {
+    const e = rt.explore;
+    const swim = tunnelRuntime.swim;
+    const p = playerWorld();
+    return {
+      active: e.active, s: e.s, lateral: e.lateral, section: sectionAt(e.s), spot: e.spot, speed: e.speed,
+      player: p, cam: { ...e.cam }, tube: e.active ? cameraTubeCheck() : null, length: walkwayLength,
+      animals: swim ? swim.poses().map((a) => ({ id: a.id, species: a.species, x: a.x, y: a.y - (a.restDrop ?? 0), z: a.z, resting: a.resting, where: e.active ? locate(a) : null })) : [],
+      visitors: tunnelPeople.map((v) => ({ id: v.id, type: v.type, s: v.s, lateral: v.lateral, state: v.state, activity: v.activity, request: v.request, ...personWorld(v) })),
+      activity: getGame().tunnelActivity, waiting: getGame().tunnelWaiting, tilt: e.tilt
+    };
+  },
+  /** Put the player at distance s along the loop (lateral offset optional). */
+  goTo(s: number, lateral = 0) {
+    rt.explore.s = ((s % walkwayLength) + walkwayLength) % walkwayLength;
+    rt.explore.lateral = lateral;
+    rt.explore.walkTo = null;
+    // Face along the walking direction, as if the player had walked here.
+    const f = walkwayFrame(rt.explore.s);
+    rt.explore.heading = Math.atan2(f.dx, f.dz);
+    snapCamera();
+  },
+  sectionStart(name: TunnelSection) {
+    return TUNNEL_SECTIONS[name].from;
+  },
+  spots: () => TUNNEL_VIEWING_SPOTS.map((v) => ({ id: v.id, s: v.s, side: v.side })),
+  /** Start an activity as a visitor's (visitor: true) or Pico's question. */
+  activity(kind: "find" | "show" | "where" | "can" | "count", target: "shark" | "ray" | "bigshark", visitor = true) {
+    const v = visitor ? tunnelPeople[0] : null;
+    void runActivity(kind, target, v?.id ?? null, false);
+  },
+  /** Screen position of an animal (for tapping it). */
+  animalOnScreen(id: string) {
+    const a = tunnelRuntime.swim?.poses().find((x) => x.id === id);
+    return a ? project(a.x, a.y - (a.restDrop ?? 0), a.z) : null;
+  },
+  /** Bring an animal over the player now (tests do not wait for ordinary swimming). */
+  attract(id: string, x: number, y: number, z: number, seconds = 20) {
+    tunnelRuntime.swim?.attract(id, { x, y, z }, seconds);
+  }
+};

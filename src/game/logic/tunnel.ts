@@ -40,7 +40,9 @@ function giveAnimal(m: Model, species: TunnelSpecies): Model {
 export function recordTunnelActivity(m: Model, kind: "find" | "where" | "can" | "count" | "show", byVisitor: boolean): Model {
   if (!m.progress.tunnelOpen) return m;
   const p = m.progress.tunnel ?? newTunnelProgress();
-  let progress: TunnelProgress = { ...p, observed: p.observed + 1, helped: p.helped + (byVisitor ? 1 : 0) };
+  // "Help visitors" (milestone 3) counts from the end of the First Tunnel Tour, so the
+  // two milestones are distinct steps rather than completing together.
+  let progress: TunnelProgress = { ...p, observed: p.observed + 1, helped: p.helped + (byVisitor && p.milestone >= 2 ? 1 : 0) };
   if (p.milestone === 4 && !byVisitor) {
     progress = {
       ...progress,

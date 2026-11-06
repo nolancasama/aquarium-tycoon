@@ -154,7 +154,8 @@ function shark(species: "blacktip" | "zebrashark", close: boolean): THREE.Buffer
   b.fin(point(zebra ? .47 : .64, .025, 0), point(zebra ? .55 : .71, zebra ? .11 : .11, 0), point(zebra ? .64 : .78, .02, 0), [0, 0, .005 * l], paint);
   if (zebra) {
     // Long, low caudal ribbon: roughly half of this species' total length.
-    b.fin(point(.49, .01, 0), point(.79, .12, 0), point(.94, .001, 0), [0, 0, .004 * l], paint, SHARK_PART.tail);
+    b.fin(point(.5, .012, 0), point(.8, .062, 0), point(.97, .001, 0), [0, 0, .004 * l], paint, SHARK_PART.tail);
+    b.fin(point(.62, -.006, 0), point(.82, -.034, 0), point(.95, -.001, 0), [0, 0, .003 * l], paint, SHARK_PART.tail);
     // Three subtle longitudinal ridges are buried into the top of the stocky body.
     for (const z of [-.036, 0, .036]) {
       const points: V[] = [.13, .23, .35, .46, .58].map(s => { const [ry, rz] = radius(ZEBRA, s); return point(s, ry * Math.sqrt(1 - Math.min(.8, (z / rz) ** 2)) - .004, z); });

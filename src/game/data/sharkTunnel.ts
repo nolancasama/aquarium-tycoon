@@ -13,7 +13,7 @@ import type { Obstacle, P3, SwimVolume, TunnelShape } from "../tunnel/contract";
 export const SHARK_DOOR = { x: 32.55, z: -5.5, w: 1.8, h: 2.65 };
 
 /** The dry entrance lobby between the Atrium and the habitat. */
-export const TUNNEL_LOBBY = { minX: 29.5, maxX: 41.5, minZ: -10.5, maxZ: -5.5, height: 3.4 };
+export const TUNNEL_LOBBY = { minX: 29.5, maxX: 41.5, minZ: -10.5, maxZ: -5.5, height: 4.2 };
 
 /** The water: inner faces of the habitat walls, the seabed's lowest level and the surface. */
 export const HABITAT = {
@@ -208,7 +208,7 @@ export const TUNNEL_VIEWING_SPOTS: ViewingSpot[] = [
 export type TunnelView = "whole" | "left" | "right" | "entrance";
 /** Management viewpoints (the elevated diorama camera). Base framing at 16:9; CameraRig widens for narrower screens. */
 export const TUNNEL_VIEWS: Record<TunnelView, { pos: P3; target: P3 }> = {
-  whole: { pos: { x: 36, y: 30, z: 6 }, target: { x: 36, y: 0.5, z: -24.5 } },
+  whole: { pos: { x: 36, y: 36, z: 10 }, target: { x: 36, y: 0, z: -22.5 } },
   left: { pos: { x: 15, y: 19, z: -6 }, target: { x: 29, y: 0.5, z: -25 } },
   right: { pos: { x: 57, y: 19, z: -6 }, target: { x: 43, y: 0.5, z: -25 } },
   entrance: { pos: { x: 35.5, y: 10, z: 1.5 }, target: { x: 35.5, y: 0.6, z: -14 } }

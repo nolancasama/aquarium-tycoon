@@ -168,6 +168,14 @@ export interface GameState {
   atriumArrival: boolean;
   tunnelArrival: boolean;
   tunnelView: "whole" | "left" | "right" | "entrance";
+  /** Walking the Shark Tunnel (runtime only; rt.explore holds the details). */
+  exploring: boolean;
+  /** A Shark Tunnel English activity in progress (the card while finding an animal). */
+  tunnelActivity: TunnelActivityUi | null;
+  /** A tunnel visitor waiting with a question (the HUD chip). */
+  tunnelWaiting: { id: string; type: VisitorType } | null;
+  /** Shark Tunnel milestone celebration card. */
+  tunnelCelebration: { milestone: number } | null;
 
   model: Model;
 
@@ -264,6 +272,10 @@ export const useGame = create<GameState>(() => ({
   atriumArrival: false,
   tunnelArrival: false,
   tunnelView: "whole",
+  exploring: false,
+  tunnelActivity: null,
+  tunnelWaiting: null,
+  tunnelCelebration: null,
   model: newModel(),
   prompt: null,
   line: null,
@@ -317,4 +329,20 @@ export function nudge(n: Omit<Nudge, "id">, ms = 6000) {
   window.setTimeout(() => {
     if (getGame().nudge?.id === id) setGame({ nudge: null });
   }, ms);
+}
+
+/** The Shark Tunnel activity card (see game/tunnel/activities.ts). */
+export interface TunnelActivityUi {
+  id: number;
+  kind: "find" | "show" | "where" | "can" | "count";
+  /** Who asks: a tunnel visitor's type, or Pico on a tour / at a viewing spot. */
+  by: VisitorType | "pico";
+  question: { en: string; ja: string };
+  /** What to do, shown under the question. */
+  todo: { en: string; ja: string };
+  /** Help tier (0 none .. 4 tap demonstration). */
+  tier: number;
+  /** A short written clue (tier 1+). */
+  clue: { en: string; ja: string } | null;
+  status: "seek" | "wait" | "ask" | "done";
 }

@@ -7,7 +7,8 @@ import { SHARK_DOOR } from "../../game/data/sharkTunnel";
 
 /** Ground footprints are also consumed by the walking graph. */
 export const ATRIUM_PALMS = [{ x: 31, z: -4.65 }, { x: 45, z: 4.65 }, { x: 45, z: -0.4 }];
-export const ATRIUM_BOARDS = [{ x: 32.7, z: -4.75 }, { x: 40.9, z: -4.75 }];
+// The left board stands beside (not in front of) the Shark Tunnel doorway at x 32.55.
+export const ATRIUM_BOARDS = [{ x: 34.5, z: -4.75 }, { x: 40.9, z: -4.75 }];
 
 const CREAM = "#ffe6bf";
 const CORAL = "#e99579";

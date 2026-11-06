@@ -14,6 +14,7 @@ import { galleryFloorTexture, galleryJellyTexture, galleryShaftTexture, galleryW
 import { ATRIUM_BENCHES, ATRIUM_BOARDS, ATRIUM_PALMS, atriumFurnitureGeometry, atriumShaftGeometry, atriumSkylightGeometry, atriumWallGeometry } from "./models/atrium";
 import { atriumFloorTexture, atriumGlassMaterial, atriumMaterial, atriumShaftMaterial } from "./atriumMaterials";
 import { tankShellGeometry, waterGeometry } from "./models/tankShell";
+import { SharkDoor } from "./tunnel/SharkTunnel";
 import { flatMat, floorTexture, muralTexture, oceanFloorMaterial, oceanMuralTexture, padIconTexture, posterTexture, shadowMaterial, signMaterial, smoothMat } from "./materials";
 
 /** Soft contact blobs under furniture: [x, z, width, depth], merged into one mesh. */
@@ -230,6 +231,7 @@ function Atrium() {
           <primitive object={signMaterial("Coral Reef\nサンゴしょう", "#e5f2df", "#21777a", 512, 256)} attach="material" />
         </mesh>
       ))}
+      <SharkDoor />
     </NearbyRoom>
   );
 }

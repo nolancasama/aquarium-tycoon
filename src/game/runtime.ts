@@ -130,6 +130,33 @@ export const rt = {
   /** One-time room reveal; the shot object is mutated in place by CameraRig. */
   atriumReveal: null as { t0: number; reducedMotion: boolean } | null,
   tunnelReveal: null as { t0: number; reducedMotion: boolean } | null,
+  /** Shark Tunnel exploration (runtime only, never saved). See game/tunnel/explore.ts. */
+  explore: {
+    active: false,
+    /** Distance along the walkway loop and lateral offset (+ left of walking direction). */
+    s: 0,
+    lateral: 0,
+    /** Avatar yaw (radians, three.js rotation.y) and walking speed (m/s). */
+    heading: 0,
+    speed: 0,
+    /** Walking animation phase. */
+    phase: 0,
+    /** Combined joystick + keyboard input: x right, y forward, -1..1, camera-relative. */
+    input: { x: 0, y: 0 },
+    /** Auto-walk target (distance along the loop), from tapping a viewing spot. */
+    walkTo: null as number | null,
+    /** Enter/leave transition: 0..1 progress handled by the camera. */
+    transition: null as null | { kind: "enter" | "leave"; t0: number },
+    /** The viewing spot the player is at (camera reframes there), if any. */
+    spot: null as string | null,
+    /** Camera: current position/target (smoothed), and the overhead tilt (0..1). */
+    cam: { x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0 },
+    tilt: 0,
+    /** Activity camera override: frame the Grand Viewing Chamber, a window or a visitor. */
+    frame: null as null | { kind: "chamber" | "point"; x: number; y: number; z: number }
+  },
+  /** Shark Tunnel feeding: rt.time when Feed was tapped (food falls from the surface). */
+  tunnelFeedT: -100,
   visitorTapAck: null as { id: string; t0: number } | null,
   /** Tokens, rather than a boolean, keep overlapping celebrations hidden. */
   celebrations: new Set<symbol>(),
@@ -228,6 +255,11 @@ export function resetRuntime() {
   rt.camera.shot = null;
   rt.atriumReveal = null;
   rt.tunnelReveal = null;
+  rt.explore.active = false;
+  rt.explore.transition = null;
+  rt.explore.frame = null;
+  rt.explore.walkTo = null;
+  rt.tunnelFeedT = -100;
   rt.camera.snap = true;
   rt.effects = [];
   clearGlow();

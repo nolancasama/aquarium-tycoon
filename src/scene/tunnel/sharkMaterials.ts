@@ -121,7 +121,7 @@ if (vSkinPart < 3.5) {
     float spots = skinSpots(vSkinPosition.xz * vec2(11.0, 12.0));
     float back = smoothstep(0.0, 0.018, vSkinPosition.y);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93,0.91,0.81), spots * back);
-  } else if (uSpecies > 0.5) {
+  } else if (uSpecies > 0.5 && vSkinPart < 0.5) {
     // Cylindrical coordinates carry the adult pattern around the broad back.
     vec2 cells = vec2(-vSkinPosition.x * 9.0, atan(vSkinPosition.z, vSkinPosition.y) * 3.3);
     float spots = skinSpots(cells);

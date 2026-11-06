@@ -1,3 +1,4 @@
+import { clearTunnelVisitors } from "../tunnel/tunnelVisitors";
 import { commit, getGame, model, nudge, setGame, toast, updateModel, useGame, type Panel, type Reward } from "../store";
 import { clearVisitorTapQueue, effect, resetCelebrations, resetRuntime, rt, startCount } from "../runtime";
 import type { StageId } from "../types";
@@ -164,6 +165,7 @@ function enter(m: Model) {
   expansionIntroduced = false;
   scripted.busy = false;
   resetRuntime();
+  clearTunnelVisitors();
   resetVisitors();
   resetHints();
   lastSaved = "";
@@ -184,6 +186,10 @@ function enter(m: Model) {
     saveLost: false,
     atriumArrival: false,
     tunnelArrival: false,
+    exploring: false,
+    tunnelActivity: null,
+    tunnelWaiting: null,
+    tunnelCelebration: null,
     tunnelView: "whole",
     hall: 0,
     guide: null,

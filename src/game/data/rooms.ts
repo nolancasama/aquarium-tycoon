@@ -75,3 +75,6 @@ export const doorX = (i: RoomIndex) => {
   if (ROOMS[i]?.wing) throw new Error("Branching wings have an authored doorway, not a hall-row doorX");
   return ROOMS[i].bounds.minX;
 };
+
+/** The Shark Tunnel wing's index in ROOMS (management view of the habitat). */
+export const SHARKS_HALL: RoomIndex = ROOMS.findIndex((r) => r.id === "sharks");

@@ -4,8 +4,11 @@ import type { DecorKind, DecorVariant, SlotId, SpeciesId, TankType } from "../ty
 import { ANIMAL_ORDER, FISH_ORDER, JELLY_BY_COLOR, SPECIES, SPECIES_BY_COLOR } from "../data/fish";
 import { DECOR } from "../data/decor";
 import { HALL_OF, PAD_TYPES, TANKS } from "../data/tanks";
-import { roomOpen } from "../data/rooms";
+import { roomOpen, SHARKS_HALL } from "../data/rooms";
 import { openSharkTunnel, tunnelUnlocked } from "../logic/tunnel";
+import { startExplore, stopExplore } from "../tunnel/explore";
+import { tunnelRuntime } from "../tunnel/contract";
+import { cancelTunnelActivity } from "../tunnel/activities";
 import {
   buyDecor,
   buyFish,
@@ -85,7 +88,7 @@ export function openTank(tankId: string) {
   if (!t) return;
   audio.play("tick");
   if (t.type === "sharks") {
-    setGame({ view: "room", tankId: null, hall: 4, panel: null, placing: null });
+    setGame({ view: "room", tankId: null, hall: SHARKS_HALL, panel: null, placing: null });
     return;
   }
   // Back from the close-up lands in this tank's hall.
@@ -128,29 +131,55 @@ export function tapAtriumDoor() {
 /** The Atrium back-wall entrance: unlock requirements use the same pure rule as the offer. */
 export function tapSharkTunnelDoor() {
   if (!allowed("tankShop")) return;
-  if (model().progress.tunnelOpen) { switchHall(4); return; }
+  if (model().progress.tunnelOpen) { switchHall(SHARKS_HALL); return; }
   if (!tunnelUnlocked(model())) {
-    toast({ en: "Four animals in the giant reef!", ja: "フリープレイで アトリウムの おおきな サンゴしょうに いきものを 4ひき いれよう", tone: "info" }, 4500);
+    toast({ en: "Put 4 animals in the giant reef!", ja: "アトリウムの おおきな サンゴの タンクに いきものを 4ひき いれると ひらけるよ", tone: "info" }, 4500);
     return;
   }
   openTankShop();
 }
 
 export function setTunnelView(tunnelView: GameState["tunnelView"]) {
-  if (!allowed("back") || getGame().hall !== 4) return;
+  if (!allowed("back") || getGame().hall !== SHARKS_HALL) return;
   audio.play("tick");
   setGame({ tunnelView });
 }
 
-/** TODO slice 3: start constrained walkway exploration; deliberately has no caller yet. */
-export function enterExplore(): void {}
+/** "Explore Tunnel": walk through the habitat as the aquarium boss. */
+export function enterExplore(): void {
+  const g = getGame();
+  if (!allowed("back") || g.hall !== SHARKS_HALL || g.view !== "room" || g.placing || rt.explore.active) return;
+  audio.play("door");
+  startExplore();
+}
 
+/** "Back to Aquarium": from the tunnel walk to the habitat's management view. */
+export function leaveExplore(): void {
+  if (!rt.explore.active) return;
+  audio.play("tick");
+  cancelTunnelActivity();
+  stopExplore();
+}
+
+let switching = false;
 /** The arrows at the screen edges: show the neighbouring room (open rooms only). */
 export function switchHall(hall: number) {
   const g = getGame();
-  if (g.screen !== "game" || g.view !== "room" || !roomOpen(hall, g.model.progress)) return;
+  if (switching || g.screen !== "game" || g.view !== "room" || !roomOpen(hall, g.model.progress) || rt.explore.active) return;
   audio.play("tick");
-  setGame({ hall, panel: null, tankId: null, placing: g.placing?.kind === "fish" ? g.placing : null });
+  const placing = g.placing?.kind === "fish" ? g.placing : null;
+  if (hall === SHARKS_HALL || g.hall === SHARKS_HALL) {
+    // Into or out of the wing: a short fade, then a cut (the areas are not side by side).
+    switching = true;
+    setGame({ fade: 1, panel: null, tankId: null, placing });
+    window.setTimeout(() => {
+      switching = false;
+      rt.camera.snap = true;
+      setGame({ hall, fade: 0, tunnelView: "whole" });
+    }, 380);
+    return;
+  }
+  setGame({ hall, panel: null, tankId: null, placing });
 }
 
 export function backToRoom() {
@@ -229,7 +258,7 @@ export function habitatHint(s: SpeciesId): string {
 export function openAnimalShop() {
   if (!allowed("fishShop")) return;
   const m = model();
-  const unlocked = ANIMAL_ORDER.filter((s) => SPECIES[s].habitat.includes("sharks") === (getGame().hall === 4) && isSpeciesUnlocked(m, s));
+  const unlocked = ANIMAL_ORDER.filter((s) => SPECIES[s].habitat.includes("sharks") === (getGame().hall === SHARKS_HALL) && isSpeciesUnlocked(m, s));
   if (!unlocked.length) {
     audio.play("error");
     toast({ en: "Level 6!", ja: "うみの ホールを ひらくと かえるよ", tone: "info" });
@@ -254,7 +283,7 @@ export async function orderAnimal(): Promise<SpeciesId | null> {
   setGame({ panel: "animalShop", placing: null, view: "room", tankId: null });
   for (;;) {
     const m = model();
-    const { species, jelly, options, jellyColors } = animalOrderChoices(m, getGame().hall === 4);
+    const { species, jelly, options, jellyColors } = animalOrderChoices(m, getGame().hall === SHARKS_HALL);
     if (!species.length) {
       await say("pico", "Sorry! You need more coins.", "コインが たりないよ。おきゃくさんを たすけて コインを ためよう");
       setGame({ panel: null });
@@ -516,11 +545,12 @@ export function buySharkTunnel() {
   const r = commit(openSharkTunnel(model()));
   if (!r.ok) {
     audio.play("error");
-    toast({ en: r.reason === "coins" ? "More coins, please!" : "Four animals in the giant reef!", ja: r.reason === "coins" ? "もっと コインが ひつよう" : "サンゴしょうに いきものを 4ひき いれよう", tone: "warn" });
+    toast({ en: r.reason === "coins" ? "More coins, please!" : "Put 4 animals in the giant reef!", ja: r.reason === "coins" ? "もっと コインが ひつよう" : "サンゴしょうに いきものを 4ひき いれよう", tone: "warn" });
     return;
   }
   audio.play("unlock");
-  setGame({ panel: null, placing: null, view: "room", tankId: null, hall: 4, tunnelView: "whole" });
+  setGame({ panel: null, placing: null, view: "room", tankId: null });
+  switchHall(SHARKS_HALL);
 }
 
 let lightTaught = false;
@@ -681,7 +711,7 @@ export async function buyDecorKind(kind: DecorKind) {
     return;
   }
   audio.play("purchase");
-  if (getGame().view === "tank" || getGame().hall === 4) {
+  if (getGame().view === "tank" || getGame().hall === SHARKS_HALL) {
     // Straight to placing it in this tank.
     setGame({ panel: "decorate", placing: { kind: "decor", decorId: r.id! } });
   } else {
@@ -765,7 +795,7 @@ export function doneDecorate() {
 export async function feedTank() {
   if (!allowed("feed")) return;
   const g = getGame();
-  const t = g.hall === 4 ? tankAt(model(), "L") : g.tankId ? tankById(model(), g.tankId) : null;
+  const t = g.hall === SHARKS_HALL ? tankAt(model(), "L") : g.tankId ? tankById(model(), g.tankId) : null;
   if (!t) return;
   if (!t.fish.length) {
     toast({ en: "No fish!", ja: "さかなが いないよ", tone: "info" });
@@ -788,7 +818,8 @@ export async function feedTank() {
   }
   const r = commit(feed(model(), t.id));
   if (!r.ok) return;
-  dropPellets(t.id, t.type);
+  if (t.type === "sharks") feedHabitat();
+  else dropPellets(t.id, t.type);
   audio.play("sprinkle");
   setGame({ foodStrip: { id: foodStripId++, tankId: t.id, foods: foodsFor(t.fish), until: rt.time + 4 } });
 }
@@ -810,7 +841,7 @@ export function tasteFood(food: FoodId) {
 export async function cleanTank() {
   if (!allowed("clean")) return;
   const g = getGame();
-  const t = g.hall === 4 ? tankAt(model(), "L") : g.tankId ? tankById(model(), g.tankId) : null;
+  const t = g.hall === SHARKS_HALL ? tankAt(model(), "L") : g.tankId ? tankById(model(), g.tankId) : null;
   if (!t) return;
   if (!model().progress.cleanedOnce && t.type !== "sharks") {
     const id = await ask({
@@ -922,4 +953,12 @@ export function buyTankUpgrade(kind: UpgradeKind) {
     const w = toWorld(t.slot, { x: 0, y: TANKS[t.type].h * 0.6, z: 0 });
     effect("sparkle", w.x, w.y, w.z, 10);
   }
+}
+
+/** Shark Tunnel feeding: food falls from the surface and the animals swim up to it. */
+function feedHabitat() {
+  rt.tunnelFeedT = rt.time;
+  const swim = tunnelRuntime.swim;
+  if (!swim) return;
+  swim.poses().forEach((a, i) => swim.attract(a.id, { x: 26 + ((i * 7.3) % 20), y: 5.5, z: -14 - ((i * 5.9) % 22) }, 7));
 }
