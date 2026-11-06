@@ -1,5 +1,11 @@
 # Current State
 
+## Shark Tunnel lower-wall seam polish (2026-11-06)
+
+- Corrected a 15 cm lateral offset between the walkway kerb's outer foot and the vertical plinth walls on both sides. The previously separate surfaces now meet at the same swept cross-section along the tunnel's curves.
+- Added a targeted geometry regression check for common-edge vertices. This addresses a plausible source of the disconnected lower-right wall during walking; a matching in-game screenshot would be needed to confirm the precise visual symptom.
+- Existing locomotion, tunnel collision, glass and camera behavior were not changed.
+
 ## Shark Tunnel expansion (2026-11-06)
 
 Design: DESIGN_DECISIONS.md "Shark Tunnel expansion (design freeze)" and its

@@ -210,6 +210,9 @@ function mergeAll(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 // ------------------------------------------------------------------ the walkway tube
 
 const DECK = new THREE.Color("#c8c2b4"), DECK_EDGE = new THREE.Color("#7fd6e6"), KERB = new THREE.Color("#4b6470"), RIB = new THREE.Color("#3a4f5c"), PLINTH = new THREE.Color("#8a9696");
+// The vertical lower wall must share the kerb's outer bottom edge. Previously
+// it was offset 15 cm outward, creating a visible floating right/left edge.
+const KERB_FOOT_INSET = 0.05;
 
 /** Points of the loop outside the lobby, plus their frames. */
 function tubeSamples() {
@@ -271,13 +274,15 @@ function tunnelStructureGeometry(): THREE.BufferGeometry {
   for (const side of [-1, 1]) {
     // Kerb: inner face, top, then the glass foot.
     parts.push(sweep((s) => {
-      const a = (s.halfWidth - 0.42) * side, b = (s.halfWidth - 0.05) * side;
+      const a = (s.halfWidth - 0.42) * side, b = (s.halfWidth - KERB_FOOT_INSET) * side;
       const pts: Array<[number, number]> = [[a, 0], [a, 0.5], [b, 0.5], [b, -0.05]];
       return side > 0 ? pts : pts.reverse();
     }, (_i, j) => (side > 0 ? j === 1 || j === 2 : j === 1 || j === 2) ? KERB.clone().multiplyScalar(1.25) : KERB, inWater));
     // Plinth wall down to the sand.
     parts.push(sweep((s) => {
-      const b = (s.halfWidth + 0.1) * side;
+      // Match the kerb's outer foot exactly, on both sides of the curved
+      // walkway, so the vertical plinth cannot appear detached during walking.
+      const b = (s.halfWidth - KERB_FOOT_INSET) * side;
       const pts: Array<[number, number]> = [[b, -0.05], [b, -0.95]];
       return side > 0 ? pts : pts.reverse();
     }, () => PLINTH, inWater));
