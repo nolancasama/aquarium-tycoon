@@ -79,11 +79,13 @@ describe("habitats and reasons", () => {
 
   it("does not offer a two-space animal when free places are split across tanks", () => {
     const m = level8();
+    // Both tanks can hold stingrays, but each has only one free space.
+    // The two spaces cannot be combined across separate aquariums.
     m.tanks = [
-      tank("big", ["clownfish", "clownfish", "clownfish", "clownfish"]),
+      { ...tank("ocean", ["clownfish", "clownfish", "clownfish", "clownfish", "clownfish", "clownfish", "clownfish"]), id: "tx" },
       { ...tank("panorama", ["clownfish", "clownfish", "clownfish", "clownfish", "clownfish", "clownfish"]), id: "ty" }
     ];
-    expect(usedSpace(m.tanks[0])).toBe(4);
+    expect(usedSpace(m.tanks[0])).toBe(7);
     expect(usedSpace(m.tanks[1])).toBe(6);
     expect(homesFor(m, "stingray")).toBe(0);
   });
