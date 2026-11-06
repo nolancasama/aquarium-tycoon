@@ -1238,3 +1238,151 @@ model, part 3 arm shader, `groundAnimal` placement and tap burst are restored, a
 freeze's Octopus section no longer describes the game. It eats by reaching food on the
 sand like other bottom animals, with no arm carrying food. The frozen-eel pose fix from
 that work stays, for the eel only. The rig remains in git at 841807a.
+
+## 2026-11-06 — Shark Tunnel expansion (design freeze)
+
+The fifth area: one enormous shark habitat with a walk-through glass tunnel, run in
+two modes on the same state. **Management** (elevated camera, buy, decorate, care)
+and **Exploration** (walk the tunnel as your own character, visitors, English
+activities). The owner's brief of 2026-11-06 is accepted with the changes below.
+
+### Changes to the brief
+
+- **A branching wing, not a sixth tile on the +x row.** The Shark Tunnel is entered
+  through a new doorway in the Atrium's **back wall** (left bay, about x 32.6; the
+  builder may slide it within that bay to clear windows and columns). The wing lies
+  behind the Atrium (−z): a short indoor lobby, then the habitat. It is a `RoomDef`
+  marked as a wing of the Atrium and excluded from every x-tiling helper (`roomAtX`,
+  `doorX`, ordinary visitor routes). Hall arrows treat it as the room after the
+  Atrium. No world map.
+- **Only the active area is drawn.** While the wing is shown the four rooms are
+  hidden, and the habitat is hidden everywhere else (the high management camera
+  would otherwise see over the Atrium's back wall).
+- **The habitat is a built-in tank.** Opening the wing creates a permanent tank of
+  type `sharks` on new pad `L`, exactly like the Atrium's reef on pad I. It reuses
+  feeding, cleaning, happiness, capacity, tips, saves and the animal counter. It has
+  its own renderer and its own animal simulation; the small-tank `behavior.ts`,
+  `swim.ts` and `Tank.tsx` never handle it.
+- **Roster.** Blacktip reef shark (`blacktip`, 1.6 m, active midwater cruiser),
+  zebra shark (`zebrashark`, 2.4 m including its long tail, slow, low, rests on the
+  sand), spotted eagle ray (`eagleray`, 1.8 m span, midwater gliding, broad banks).
+  Student words: "shark", "ray"; names "blacktip shark", "zebra shark", "eagle ray".
+  These three live only in `sharks`, and nothing else lives there (no small fish to be
+  eaten; no stingray, whose model is tank scale). No great whites, no feeding
+  frenzies, no attacks.
+- **Capacity 16 places.** Sharks take 3 places, the eagle ray 2. Shown with the
+  existing occupied/total convention ("6/16").
+- **Prepositions: "above" and "by" only.** "Near" and "by" are near-synonyms, an
+  unfair choice for Grade 3; "under" needs a glass-floor section, reserved for later.
+  "Above": the animal is over the tunnel crown, horizontally within the tube's
+  width. "By": beside the glass at roughly walking height, within 4 m. The question
+  is only asked when one animal is unambiguously in one of those zones. The answer
+  is graded against that snapshot, and the animal is held (slowed, kept in its zone)
+  for about 6 s so the picture does not contradict the question.
+- **Abilities: "Can it swim?" (Yes, it can!) and "Can it walk?" (No, it can't!)**
+  and nothing else: some sharks "walk" and eagle rays "fly", so no trick questions.
+- **Counting counts every shark in the habitat.** It is one open water volume, so
+  "visible" is not a rule a child can check. Numbered tags (the existing counting
+  sprites) appear on each shark, and the camera widens to the Grand Viewing Chamber
+  shot while the question is up. Answers 1–6.
+- **Find and show requests attract the animal.** When a visitor asks "Where is the
+  shark?" or "Find a ray!", that animal's wander targets are biased toward the
+  player's stretch of tunnel, so it arrives within about 10–15 s by ordinary
+  swimming. Tapping is generous: the animal itself, or within a large screen radius
+  of it, counts. Help climbs the existing ladder: written and spoken clue, then a
+  highlight on the right window, then an arrow or glow on the animal, then the tap
+  demonstration (existing tap hand). "Look at the big shark!" is only asked when both
+  shark species are present (the zebra shark is the big one).
+- **Player character.** The game has no avatar, so the player is "the aquarium
+  boss": a child visitor model with a distinct teal staff cap and vest. Pico does not
+  follow (cost and clutter); Pico's voice still gives help.
+- **Movement is constrained to the visitor path.** The walkway is a closed loop
+  (lobby, entrance mouth, First Viewing, Main Curve, Grand Viewing Chamber, return
+  leg, exit mouth, lobby). Position is (distance along the loop, lateral offset), with
+  the offset clamped inside the walkway, so the player can never leave the path or
+  touch the glass. Joystick (bottom left, touch or mouse drag), arrows and WASD, all
+  relative to the camera's view. Tapping a viewing-spot marker walks there.
+- **Camera: authored shots, never free.** Shots are keyed by position along the
+  loop and blended smoothly. The camera always stays inside the tube's cross-section
+  (no wall clipping by construction), keeps the horizon level, and tilts gently up
+  when a shark passes overhead near the player.
+- **Shark Tunnel goals instead of new Levels.** Levels 1–8 are untouched. Five
+  milestones show in the objectives panel while in the wing:
+  1 Grand Opening (open it; reward: a free blacktip);
+  2 First Tunnel Tour (enter the tunnel and complete 3 observation activities;
+  reward: the big rock arch);
+  3 Help Visitors (help 3 tunnel visitors; reward: a free eagle ray);
+  4 Improve the Habitat (habitat happy and 3 structures placed; reward: zebra shark
+  unlocked plus a free one);
+  5 Shark Tunnel Celebration (a guided final tour: one find, one where, one count in
+  a row; reward: Shark Tunnel trophy and a celebration).
+  Everything stays open and playable afterwards.
+- **Unlock.** Free play, the Atrium open and its giant reef holding at least 4
+  animals, then coins. Target price 400, tuned by the simulated student (as the
+  Atrium's was) to be reachable about 8–12 minutes after opening the Atrium; move it
+  within 300–450 if the simulation says so, and record the number.
+
+### Habitat and tunnel
+
+- World placement behind the Atrium: lobby about x 29–39, z −5.5 to −9.5; habitat
+  about x 20–52, z −10 to −40, seabed about y −0.5, water surface about y 8. The
+  habitat walls are dark rock and blue-grey concrete, far enough to fade into the
+  water fog from inside; distant rock silhouettes and tall arches give depth.
+- Walkway tube: about 4 m wide and 2.9 m high, a gentle U-shaped curve. The Grand
+  Viewing Chamber is a wider dome (about 9 m across, 4.5 m high) deep in the habitat,
+  with the broadest overhead swimming space above it. Glass ribs every few metres
+  (opaque frames make the glass legible and hide seams).
+- Glass: one shared fresnel-edged transparent material, single-sided, no refraction.
+  Underwater look: fog, a procedural caustic floor, a few additive low-opacity light
+  shafts, one pooled particle system (motes and bubbles), instanced rocks and coral.
+  No volumetrics, ray marching or fluid simulation.
+- Management view: an elevated, fixed-angle diorama from the lobby side, with four
+  automatic viewpoints (Whole, Left, Right, Entrance) as large buttons. No lid over
+  the water (a faint surface sheet at most), so animals stay readable from above.
+- Six large placement zones on the seabed around the tunnel, each a big touch ring,
+  clear of the tube, the windows and the main swim lanes. Five habitat structures:
+  big rock arch (sharks swim through it), tall rock pinnacle, reef rock shelf,
+  resting ledge (zebra sharks rest under it), sand bank. Each structure's collision
+  shape is defined once, beside its zone data, and used by both the renderer and the
+  swim simulation.
+
+### Animals
+
+- One 3D steering simulation for the habitat (not `swim.ts`): wander targets in the
+  volume, look-ahead avoidance of the tube, the habitat box, the seabed, rock and
+  decoration shapes and other large animals, with clearance for the whole body.
+  Turn rate and bank are limited per species so turns are wide; speed eases. Each
+  animal keeps a path history so the body follows the head (the eel's head-led idea,
+  but a stiff shark body: curvature grows toward the tail, the tail beats, the head
+  barely yaws).
+- Sharks: one merged low-poly mesh per species with a vertex-shader body bend and
+  tail beat; markings in vertex colours. Rays: a pectoral wave in the vertex shader.
+  Lower detail for distant animals.
+- Pose data is shared state: the exploration camera, visitor reactions and the
+  English activities read it.
+
+### Visitors in the tunnel
+
+- A separate lightweight visitor set for the wing (about 6 at once, adults and
+  children, existing models) walks the same loop in lanes, stops at viewing spots,
+  looks up, points, takes photos, gathers in twos and threes. They sidestep for the
+  player and never stand in the player's way for more than a few seconds. Reactions
+  ("Wow! A shark!", "Look! It's above us!", "It's so big!", with Japanese) are
+  triggered by a shark passing near and are rate-limited.
+- Leaving visitors pay the habitat's tip through the existing tip breakdown.
+
+### Saving
+
+- New optional fields only (save version unchanged): `progress.tunnelOpen`,
+  `progress.tunnelIntroSeen` and `progress.tunnel` (milestone index, activity
+  counters, visitors helped, trophy). The habitat tank is an ordinary tank record.
+  Old saves load with the wing closed. Exploration itself is not saved: a reload
+  returns to the management view.
+
+### How it is built
+
+Four slices: (1) data, rules, save, wing, habitat scene and management mode;
+(2) shark and ray models and the 3D swim simulation, built in parallel with (1)
+against a frozen geometry contract (`src/game/tunnel/contract.ts`); (3) integration,
+exploration mode and tunnel visitors; (4) English activities, milestones, reactions
+and the celebration.
