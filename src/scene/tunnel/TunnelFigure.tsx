@@ -30,6 +30,11 @@ const shadow = shadowMaterial(0.32);
 const phoneGeo = new THREE.BoxGeometry(0.08, 0.13, 0.015);
 const phoneMat = new THREE.MeshLambertMaterial({ color: "#2b2f3a" });
 
+/** Keep the phone's long axis vertical relative to the torso while the arm reaches forward. */
+export function phonePitchForArm(armPitch: number): number {
+  return -armPitch;
+}
+
 /** A walking person built from the shared visitor rig (body, two legs with knees, a free right arm). */
 export function TunnelFigure({ model, pose, name }: { model: PersonModel; pose: { current: FigurePose }; name?: string }) {
   const root = useRef<THREE.Group>(null);
@@ -67,8 +72,15 @@ export function TunnelFigure({ model, pose, name }: { model: PersonModel; pose: 
       kneeL.current.rotation.x = Math.max(0, -swing) * 0.6;
       kneeR.current.rotation.x = Math.max(0, swing) * 0.6;
     }
-    if (arm.current) arm.current.rotation.x = p.moving ? -swing * 0.5 - p.arm * 2.3 : -p.arm * 2.3;
-    if (phone.current) phone.current.visible = p.photo && p.arm > 0.6;
+    const armPitch = p.moving ? -swing * 0.5 - p.arm * 2.3 : -p.arm * 2.3;
+    if (arm.current) arm.current.rotation.x = armPitch;
+    if (phone.current) {
+      phone.current.visible = p.photo && p.arm > 0.6;
+      // The phone is carried by the forearm, but its screen stays upright
+      // instead of pointing in the same direction as the raised arm.
+      // Counter-rotate at the wrist; pointing still uses the unaltered arm pose.
+      phone.current.rotation.x = phonePitchForArm(armPitch);
+    }
   });
   const legX = model.legX, hip = model.hip;
   return (
