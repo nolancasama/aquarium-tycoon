@@ -55,7 +55,8 @@ Design: DESIGN_DECISIONS.md "Shark Tunnel expansion (design freeze)" and its
   is unchanged and old saves load with the wing closed.
 - Verified: typecheck, `npm test` 551/551 (incl. `sharkTunnel.test.ts`,
   `swim3d.test.ts` with the real habitat, `sharks.test.ts`, `tunnel.test.ts` and
-  the price regression), build. `tests/e2e/tunnel.spec.ts` (2 tests) passes on the
+  the price regression), build, and the full Playwright suite 67/67 on the production
+  preview (17.2 min). `tests/e2e/tunnel.spec.ts` (2 tests) passes on the
   dev server and fails on a known-bad save (tunnel not restored).
   `node scripts/tunnel-review.mjs <url> [manage|explore]` writes
   `.tmp/tunnel-review/`. Frames were checked by eye at 1366×768, 1280×720 and
