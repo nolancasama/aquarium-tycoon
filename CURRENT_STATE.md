@@ -4,7 +4,8 @@
 
 - Corrected a 15 cm lateral offset between the walkway kerb's outer foot and the vertical plinth walls on both sides. The previously separate surfaces now meet at the same swept cross-section along the tunnel's curves.
 - Added a targeted geometry regression check for common-edge vertices. This addresses a plausible source of the disconnected lower-right wall during walking; a matching in-game screenshot would be needed to confirm the precise visual symptom.
-- Existing locomotion, tunnel collision, glass and camera behavior were not changed.
+- 2026-11-07: route reworked (circular main-curve arc, straight mouths through the lobby wall). Walking is now tunnel-relative (see DESIGN_DECISIONS). Unit tests 564/564 and tunnel e2e 3/3 runs passed. Pushed to main in 1a830c3 (deploys via Pages).
+- The user confirmed on the live build (2026-11-07) that the lower-right wall gap is gone. The full Playwright suite passed 67/67.
 
 ## Shark Tunnel expansion (2026-11-06)
 
