@@ -13,7 +13,9 @@ describe("Shark Tunnel lower wall seams", () => {
       const count = samples.length;
       // Distinct sections of the path, including the main curve and return leg.
       const check = samples.map((s, i) => ({ s, i }))
-        .filter(({ s, i }) => !s.inside && i > 2 && i < count - 3)
+        // The two tunnel mouths intentionally have no joining side faces.
+        // Check only samples with a complete underwater section on both sides.
+        .filter(({ s, i }) => !s.inside && !samples[(i - 1 + count) % count].inside && !samples[(i + 1) % count].inside && i > 2 && i < count - 3)
         .filter((_, i) => i % 19 === 0);
       expect(check.length).toBeGreaterThan(3);
       for (const { s, i } of check) {
