@@ -1444,3 +1444,64 @@ and the celebration.
   camera-relative input made "back" swing the camera, which reversed "back" (jitter),
   and freezing the camera yaw instead pushed the player into the walkway edge on
   curves. Rejected: camera-relative input with a locked yaw.
+
+## 2026-11-07 — Rush Hour event (design freeze)
+
+A recurring free-play event: warning → timed preparation (feed + clean every
+occupied tank) → a 90-second visitor crowd → medal, small coin bonus, permanent
+cosmetic trophies. Brief accepted with the changes below. Numbers live in
+`src/game/rush/config.ts`; the shared state shape is `src/game/rush/types.ts`
+(`Model.rush`, optional; old saves get `newRushState()`).
+
+**Accepted as briefed:** unlock = free play + Ocean Hall open + ≥1 occupied tank,
+never during the tutorial; Pico intro once; first event 8–12 min, later 12–18 min
+of active play, the rolled delay persisted; preparation 120 / 150 / 210 s by
+1–4 / 5–9 / 10+ eligible tanks (fixed at start); rush 90 s; ready = food ≥75 and
+clean ≥75; medal thresholds on the exact fraction (≥0.5 bronze, ≥0.75 silver,
+1 gold); bonus `floor(min(40, 10 + 3n) × fraction)`; no penalties ever; skip
+without penalty schedules the next normal delay; eligible tank ids captured at
+start (sold or emptied tanks stay in the denominator as unready; a remodel keeps
+its id); results screen with one Continue; trophy cabinet and stats persisted.
+
+**Changed:**
+1. **Readiness latches.** Food decays 1 pt / 3 s and dirt 1 pt / 5 s, so a tank
+   fed to 100 falls below 75 within 75 s. Snapshotting live state at the deadline
+   would make early work vanish and turn the event into plate-spinning — the
+   opposite of "not stressful". A tracked tank counts as prepared once food and
+   clean are both ≥75 at the same moment during preparation, and stays prepared
+   for that event (checkmark and chime play once). Decay is unchanged. Rejected:
+   live-state snapshot (as briefed); freezing decay during prep (hides the normal
+   care loop).
+2. **One clock.** Rush Hour time advances only inside the existing care-decay gate
+   (`decayRunning()` in sim.ts: game screen, no Settings, no stage card, not
+   `busy` — which covers English prompts and scripted moments — tutorial done),
+   in the same 1-s accumulator, and is stored in `Model.rush` so reloads resume
+   it. Hidden tabs stop requestAnimationFrame; a resumed frame's dt is clamped so
+   nothing jumps. No wall-clock time, no offline time.
+3. **Cooldown = waiting** with a freshly rolled delay; one fewer phase to get wrong.
+   Phases: waiting → pending → prep → rush → results → waiting.
+4. **Pending banner.** When due at a calm moment (idle mode, no celebration, not
+   exploring the Shark Tunnel), a small banner offers Start Now / Skip and starts
+   by itself after 20 active seconds. If due while exploring the tunnel, it stays
+   pending and shows on return. Start Now exists only for a due event (no farming).
+5. **"Perfect preparations" = gold count**; not stored twice.
+6. **Rewards are fixed-position cosmetics in Hall 1's entrance area**, not
+   placeable inventory: no placement UI, no clutter, nothing collides with the
+   player's decorations, nothing touches income/food/clean/happiness. The cabinet
+   appears at unlock with empty slots; the first bronze-or-better fills the bronze
+   display (the brief's "first bronze → cabinet" and "cabinet at unlock" conflict;
+   resolved this way). The reward bench is decorative, not a seat.
+7. **Results-screen medals are 2D** (SVG/CSS, fish / ray / shark motifs); the 3D
+   medals live in the cabinet. A second WebGL canvas on a Chromebook for a
+   results card is not worth it.
+8. **Once-only commit.** Medal, stats, rewards and coins are applied in a single
+   model update at the rush → results transition, guarded by
+   `rush.lastCommitted === event.id` (the general `paid` list keeps only 60 keys,
+   too short to be the guard). Results only display.
+9. **Crowd.** Up to `CROWD_EXTRA` extra visitors, all cosmetic (never tip, never
+   requests), hall total capped at `CROWD_CAP`; ordinary visitors tip as normal.
+   At most `RUSH_QUESTIONS` short English visitor questions per rush through the
+   normal ask() flow (which pauses the clock); their usual rewards only.
+
+**Future variants** (Field Trip, VIP, Discovery Day) are not built; the event
+record and config are shaped so a `kind` can be added later.

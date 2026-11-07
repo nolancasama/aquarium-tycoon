@@ -4,6 +4,7 @@ import { DECOR, decorFits, decorVersion, isTunnelDecor } from "../data/decor";
 import { ATRIUM_PRICE, BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
 import type { PhraseId } from "./english";
+import type { RushState } from "../rush/types";
 
 /**
  * The whole aquarium as plain data, and every rule that changes it as a pure
@@ -142,6 +143,8 @@ export interface Model {
   nextId: number;
   /** Reward keys already paid (each visitor is rewarded once). */
   paid: string[];
+  /** Rush Hour event; absent in older saves (see game/rush/types.ts). */
+  rush?: RushState;
 }
 
 export type Reason = "coins" | "locked" | "full" | "missing" | "slotTaken" | "foodFull" | "empty" | "habitat" | "tooBig" | "owned";
