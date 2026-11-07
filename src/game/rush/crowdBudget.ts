@@ -4,13 +4,14 @@ export type CrowdBudgetTier = keyof typeof CROWD_TIERS;
 
 /** Four seconds smooths isolated slow frames; two poor windows precede a cut. */
 export const CROWD_WINDOW_SECONDS = 4;
-export const CROWD_POOR_FRAME_MS = 25;
-export const CROWD_GOOD_FRAME_MS = 19;
+export const CROWD_POOR_FRAME_MS = 34; // below ~29 fps: under the 30 fps target
+export const CROWD_GOOD_FRAME_MS = 24; // above ~42 fps: clear headroom
 export const CROWD_DOWN_SECONDS = 8;
 export const CROWD_UP_SECONDS = 12;
 export const CROWD_RECOVERY_COOLDOWN = 20;
-/** GameScene clamps resumed simulation frames at this value. */
-export const CROWD_MAX_SAMPLE_SECONDS = 0.1;
+/** Longer gaps are a resumed tab or a hitch, not a frame rate. Frames past the
+ * simulation clamp (0.1 s) still count: a 9 fps machine must be able to step down. */
+export const CROWD_MAX_SAMPLE_SECONDS = 0.5;
 
 export interface CrowdBudgetState {
   readonly tier: CrowdBudgetTier;

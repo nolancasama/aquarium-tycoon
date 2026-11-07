@@ -62,8 +62,7 @@
 .rush-objective.rush .rush-time-bar { background: #c9ece6; }
 .rush-objective.rush .rush-time-bar > span { background: linear-gradient(90deg, #2fb5a5, #6fd8c9); }
 .rush-crowd { display: flex; align-items: center; gap: 10px; font-size: 16px; }
-.rush-crowd-icons { display: inline-flex; align-items: flex-end; color: #23988a; }
-.rush-crowd-icons > svg:nth-child(2) { margin: 0 -4px; }
+.rush-crowd-icons { flex-shrink: 0; color: #23988a; }
 .rush-objective .rush-preview { display: flex; align-items: center; gap: 8px; font-size: 15px; padding-top: 10px; border-top: 2px dashed #b9e3dc; }
 .rush-objective.rush .rush-goals-button { border-color: #a9ddd5; }
 

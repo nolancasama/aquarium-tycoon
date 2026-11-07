@@ -14,9 +14,9 @@ describe("Rush Hour crowd budget", () => {
   });
 
   it("requires sustained poor windows and steps down one tier at a time", () => {
-    let state = evaluateCrowdBudget(createCrowdBudgetState(), 30);
+    let state = evaluateCrowdBudget(createCrowdBudgetState(), 40);
     expect(state.maxVisitors).toBe(18);
-    state = evaluateCrowdBudget(state, 30);
+    state = evaluateCrowdBudget(state, 40);
     expect(state.maxVisitors).toBe(14);
     state = evaluateCrowdBudget(state, 45);
     expect(state.maxVisitors).toBe(14);
@@ -29,18 +29,18 @@ describe("Rush Hour crowd budget", () => {
   it("resets evidence in the hysteresis band and never reacts to isolated bad windows", () => {
     let state = createCrowdBudgetState();
     for (let i = 0; i < 8; i++) {
-      state = evaluateCrowdBudget(state, 30);
-      state = evaluateCrowdBudget(state, 22);
+      state = evaluateCrowdBudget(state, 40);
+      state = evaluateCrowdBudget(state, 28);
     }
     expect(state.maxVisitors).toBe(18);
-    state = evaluateCrowdBudget(evaluateCrowdBudget(state, 30), 30);
-    for (let i = 0; i < 8; i++) state = evaluateCrowdBudget(state, 22);
+    state = evaluateCrowdBudget(evaluateCrowdBudget(state, 40), 40);
+    for (let i = 0; i < 8; i++) state = evaluateCrowdBudget(state, 28);
     expect(state.maxVisitors).toBe(14);
   });
 
   it("requires both good performance and cooldown before recovering one tier", () => {
     let state = createCrowdBudgetState();
-    for (let i = 0; i < 4; i++) state = evaluateCrowdBudget(state, 30);
+    for (let i = 0; i < 4; i++) state = evaluateCrowdBudget(state, 40);
     expect(state.tier).toBe("low");
     for (let i = 0; i < 4; i++) state = evaluateCrowdBudget(state, 16);
     expect(state.tier).toBe("low");
@@ -62,26 +62,34 @@ describe("Rush Hour crowd budget", () => {
   it("ignores hidden, paused, non-play, invalid and clamped resume samples", () => {
     expect(crowdFrameEligible(0.016, true, true)).toBe(false);
     expect(crowdFrameEligible(0.016, false)).toBe(false);
-    for (const dt of [0, -0.01, 0.1, 1, Infinity, NaN]) expect(crowdFrameEligible(dt, true)).toBe(false);
+    for (const dt of [0, -0.01, 0.5, 1, Infinity, NaN]) expect(crowdFrameEligible(dt, true)).toBe(false);
     expect(crowdFrameEligible(0.016, true)).toBe(true);
     const sampler = createCrowdBudgetSampler();
-    sampler.state = evaluateCrowdBudget(sampler.state, 30);
-    for (let i = 0; i < 100; i++) sampleCrowdBudget(sampler, 0.03, true);
-    sampleCrowdBudget(sampler, 0.03, false);
+    sampler.state = evaluateCrowdBudget(sampler.state, 40);
+    for (let i = 0; i < 100; i++) sampleCrowdBudget(sampler, 0.035, true);
+    sampleCrowdBudget(sampler, 0.035, false);
     expect(sampler.elapsed).toBe(0);
     expect(sampler.frames).toBe(0);
     expect(sampler.state.poorSeconds).toBe(0);
-    for (let i = 0; i < 134; i++) sampleCrowdBudget(sampler, 0.03, true);
+    for (let i = 0; i < 134; i++) sampleCrowdBudget(sampler, 0.035, true);
     expect(sampler.state.tier).toBe("good");
-    sampleCrowdBudget(sampler, 0.1, true);
+    sampleCrowdBudget(sampler, 0.5, true);
     expect(sampler.state.poorSeconds).toBe(0);
-    for (let i = 0; i < 1000; i++) sampleCrowdBudget(sampler, 0.03, false);
+    for (let i = 0; i < 1000; i++) sampleCrowdBudget(sampler, 0.035, false);
     expect(sampler.state.tier).toBe("good");
+  });
+
+  it("steps down on a very slow machine (frames longer than the simulation clamp)", () => {
+    const sampler = createCrowdBudgetSampler();
+    for (let i = 0; i < 90; i++) sampleCrowdBudget(sampler, 0.111, true); // ~9 fps for 10 s
+    expect(sampler.state.tier).toBe("moderate");
+    for (let i = 0; i < 90; i++) sampleCrowdBudget(sampler, 0.111, true);
+    expect(sampler.state.tier).toBe("low");
   });
 
   it("preserves a reduced tier and cooldown across pauses without accumulating evidence", () => {
     const sampler = createCrowdBudgetSampler();
-    sampler.state = evaluateCrowdBudget(evaluateCrowdBudget(sampler.state, 30), 30);
+    sampler.state = evaluateCrowdBudget(evaluateCrowdBudget(sampler.state, 40), 40);
     const cooldown = sampler.state.cooldownSeconds;
     for (let i = 0; i < 1000; i++) sampleCrowdBudget(sampler, 0.016, false);
     expect(sampler.state.maxVisitors).toBe(14);

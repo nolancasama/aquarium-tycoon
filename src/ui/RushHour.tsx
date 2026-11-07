@@ -240,11 +240,20 @@ export function RushObjective({ slot, onGoals }: { slot: "pending" | "prep" | "r
         {goalsButton}
       </div>}
     </> : <>
-      <div className="rush-crowd"><span className="rush-crowd-icons" aria-hidden="true"><Icon id="visitor" size={22} /><Icon id="visitor" size={26} /><Icon id="visitor" size={22} /></span><b>Lots of visitors!<Ja>おきゃくさんが いっぱい！</Ja></b></div>
+      <div className="rush-crowd"><CrowdGlyph /><b>Lots of visitors!<Ja>おきゃくさんが いっぱい！</Ja></b></div>
       <div className="rush-preview" data-testid="rush-medal-preview">{event.result?.medal ? <><RushMedal medal={event.result.medal} small /><b>{MEDAL_NAMES[event.result.medal].en}<Ja>{MEDAL_NAMES[event.result.medal].ja}</Ja></b></> : <b>Thanks for getting ready!<Ja>じゅんび ありがとう！</Ja></b>}</div>
       {!paused && goalsButton && <div className="rush-buttons rush-minor">{goalsButton}</div>}
     </>}
   </aside>;
+}
+
+/** A family group silhouette (no "!" badge: that means a visitor with a request). */
+function CrowdGlyph() {
+  return <svg className="rush-crowd-icons" viewBox="0 0 64 32" width="58" height="29" aria-hidden="true">
+    <circle cx="12" cy="11" r="5" fill="currentColor" opacity=".75" /><path d="M4 32c0-8 3.5-13 8-13s8 5 8 13z" fill="currentColor" opacity=".75" />
+    <circle cx="32" cy="7" r="6" fill="currentColor" /><path d="M22 32c0-11 4.5-17 10-17s10 6 10 17z" fill="currentColor" />
+    <circle cx="51" cy="14" r="4.5" fill="currentColor" opacity=".75" /><path d="M44 32c0-7 3-11 7-11s7 4 7 11z" fill="currentColor" opacity=".75" />
+  </svg>;
 }
 
 /** Shown on the goals card while Rush Hour is running and the player peeks at goals. */
