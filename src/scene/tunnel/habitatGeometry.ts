@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { wreckGeometry } from "./wreckGeometry";
 import type { Obstacle } from "../../game/tunnel/contract";
 import type { TunnelDecorKind } from "../../game/types";
 import {
@@ -192,7 +193,8 @@ export function habitatStaticGeometry(): { rock: THREE.BufferGeometry; sand: THR
     rock.push(solidRock({ kind: "capsule", a: { x, y: -0.5, z }, b: { x, y: h, z }, r: 1.1 }, rockPaint(ROCK_B)));
   }
   const sand = [seabedGeometry()];
-  const struct = [tunnelStructureGeometry(), habitatRimGeometry()];
+  // Merge the sunken wreck with existing opaque structures: no new draw call.
+  const struct = [tunnelStructureGeometry(), habitatRimGeometry(), wreckGeometry()];
   return { rock: mergeAll(rock), sand: mergeAll(sand), struct: mergeAll(struct) };
 }
 

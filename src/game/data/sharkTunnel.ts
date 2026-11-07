@@ -281,6 +281,19 @@ export const TUNNEL_STRUCTURES: Record<TunnelDecorKind, TunnelStructure> = {
   }
 };
 
+/** A modest shipwreck sits in the open water in the centre of the U-shaped bend.
+ * The camera naturally looks here from the curved tunnel. Keep the wreck low
+ * enough for sharks to swim over, and far inside the curve so glass stays clear. */
+export const WRECK_SITE = { x: ARC.x, y: seabedY(ARC.x, ARC.z), z: ARC.z };
+export const WRECK_OBSTACLES: Obstacle[] = [
+  box(WRECK_SITE.x, WRECK_SITE.y + 0.48, WRECK_SITE.z, 2.0, 0.73, 1.0),
+  capsule(
+    { x: WRECK_SITE.x - 0.35, y: WRECK_SITE.y + 0.65, z: WRECK_SITE.z + 0.1 },
+    { x: WRECK_SITE.x - 0.08, y: WRECK_SITE.y + 2.75, z: WRECK_SITE.z + 0.06 },
+    0.19
+  )
+];
+
 /** Built-in rock formations near the habitat walls (a back arch, side buttresses). Drawn from these solids. */
 export const TUNNEL_ROCKS: Obstacle[] = [
   sphere(21.6, 1.2, -20.5, 1.7), sphere(21.4, 3.3, -20.8, 1.2), sphere(21.2, 5.2, -21, 0.9),
@@ -324,6 +337,7 @@ export function sharkSwimVolume(placed: ReadonlyArray<{ zone: number; kind: Tunn
     min: { ...HABITAT.min }, max: { ...HABITAT.max }, floorY: seabedY, tunnel: TUNNEL_SHAPE,
     obstacles: [
       ...TUNNEL_ROCKS,
+      ...WRECK_OBSTACLES,
       // The lobby building's habitat face and the walkway plinth under the tube are covered by
       // the tube itself (inside points are skipped), so the lobby gets its own block.
       { kind: "box", c: { x: (TUNNEL_LOBBY.minX + TUNNEL_LOBBY.maxX) / 2, y: 2, z: -8 }, half: { x: (TUNNEL_LOBBY.maxX - TUNNEL_LOBBY.minX) / 2, y: 2.5, z: 2.6 } },

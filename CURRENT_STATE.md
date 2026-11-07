@@ -1,5 +1,11 @@
 # Current State
 
+## Tappable hint audio and U-bend centerpiece (2026-11-07)
+
+- General Pico hint bubbles now play their visible English instruction aloud when tapped, with a separate small dismissal control. The Shark Tunnel's animal-finding clue is also tap-to-hear. Both use shared TTS and avoid overlapping ongoing speech; no answer choices are revealed.
+- A small coral-covered, broken-mast shipwreck is installed on the seabed in the open centre of the Shark Tunnel U-bend. The opaque geometry is batched into the existing structure draw; simplified hull/mast collisions tell the swim controller to steer around it. Sharks retain open swimming room above it.
+- No camera choreography, player progression, coin economy or saves were altered. Check visually on classroom Chromebooks.
+
 ## Rush Hour event (2026-11-07)
 
 Design: DESIGN_DECISIONS.md "Rush Hour event (design freeze)" + "decided while building".
