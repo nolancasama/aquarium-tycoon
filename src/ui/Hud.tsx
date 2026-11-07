@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getGame, setGame, toast, useGame } from "../game/store";
 import { nextStep, objectivesUnlocked } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
@@ -32,7 +32,7 @@ import { PicoFace, PersonFace } from "./Portraits";
 import { Ja } from "./Talk";
 import { ActionTag } from "./ActionTag";
 import { TapHand } from "./TapHand";
-import { RushAwardsButton, RushHour } from "./RushHour";
+import { RushAwardsButton, RushHour, RushObjective, RushReturn, useRushSlot } from "./RushHour";
 import { STAGE_NAMES, STAGE_PREVIEWS, UI, goalText } from "./i18n";
 
 export function Big({
@@ -117,13 +117,23 @@ function GoalRow({ g }: { g: Goal }) {
   );
 }
 
+/** The upper-left objective slot: Rush Hour takes it over while an event runs,
+ * the goals return afterwards (and can be peeked at during the event). */
 function GoalCard() {
+  const slot = useRushSlot();
+  const [peek, setPeek] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => setPeek(false), [slot]);
+  if (slot && !peek) return <RushObjective slot={slot} onGoals={slot === "pending" ? undefined : () => setPeek(true)} />;
+  return <GoalsPanel expanded={expanded} setExpanded={setExpanded} rushBack={slot ? <RushReturn onBack={() => setPeek(false)} /> : null} />;
+}
+
+function GoalsPanel({ expanded, setExpanded, rushBack }: { expanded: boolean; setExpanded: (fn: (open: boolean) => boolean) => void; rushBack: ReactNode }) {
   const model = useGame((s) => s.model);
   const inWing = useGame((s) => s.screen === "game" && (s.hall === SHARKS_HALL || s.exploring));
   const request = useGame((s) => s.request);
   const interrupted = useGame((s) => Boolean(s.prompt || s.line || s.stageCard));
   const waiting = useGame((s) => Boolean(s.waiting));
-  const [expanded, setExpanded] = useState(false);
   const unlocked = objectivesUnlocked(model.progress.tutorial);
   const wasUnlocked = useRef(unlocked);
   const [revealing, setRevealing] = useState(false);
@@ -137,8 +147,8 @@ function GoalCard() {
   }, [unlocked]);
   const step = useMemo(() => nextStep(model), [model]);
   // Start each level compact and clear an expanded list for scripted interactions.
-  useEffect(() => setExpanded(false), [model.progress.stage, interrupted, Boolean(request)]);
-  if (inWing && !request) return <TunnelGoals />;
+  useEffect(() => setExpanded(() => false), [model.progress.stage, interrupted, Boolean(request)]);
+  if (inWing && !request) return <TunnelGoals before={rushBack} />;
   // The tutorial's "Tap the visitor!" card takes this place; in free play the objectives stay.
   if (!unlocked || request || (waiting && !interrupted && model.progress.tutorial !== "done")) return null;
   const p = model.progress;
@@ -146,6 +156,7 @@ function GoalCard() {
   const name = STAGE_NAMES[p.stage];
   return (
     <div className={`panel goals ui ${expanded ? "expanded" : ""} ${revealing ? "goals-reveal" : ""}`} data-testid="goals">
+      {rushBack}
       <header>
         {p.star && list.length === 0 ? (
           <>

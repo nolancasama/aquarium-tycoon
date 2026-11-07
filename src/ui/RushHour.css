@@ -1,25 +1,5 @@
-.rush-widget, .rush-pending {
-  position: absolute; left: 14px; bottom: 126px; width: 244px;
-  padding: 10px 12px; z-index: 14; border-color: #e6b856;
-  background: #fff7df; color: #54401e;
-}
-.rush-widget .ja, .rush-pending .ja, .rush-dialog .ja { display: block; line-height: 1.35; font-size: 12px; font-weight: 600; }
-.rush-widget-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 17px; }
-.rush-widget time { font-variant-numeric: tabular-nums; font-weight: 900; }
-.rush-widget progress { width: 100%; height: 9px; margin: 7px 0 3px; accent-color: #d39b20; }
-.rush-ready-count { display: flex; align-items: center; gap: 5px; font-size: 13px; }
-.rush-care-icons { display: inline-flex; gap: 3px; margin-left: auto; }
+.rush-dialog .ja { display: block; line-height: 1.35; font-size: 12px; font-weight: 600; }
 .rush-ready-mark { display: inline-grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; color: #278460; font-weight: 900; }
-.rush-sparkles { position: absolute; top: -31px; left: 12px; color: #8d6700; background: #fff5b7; border-radius: 14px; padding: 4px 12px; font-size: 14px; font-weight: 900; pointer-events: none; animation: rush-ready-pop 1.1s ease-out; }
-.rush-widget-buttons, .rush-pending > div { display: flex; gap: 8px; margin-top: 8px; }
-.rush-widget button, .rush-pending button { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1px; min-height: 44px; font-size: 14px; padding: 4px 10px; }
-.rush-widget-buttons > :first-child { flex: 1; }
-.rush-text-button { border: 0; background: transparent; color: inherit; text-decoration: underline; }
-.rush-widget.rush { background: #e4fbf9; border-color: #40afa4; }
-.rush-preview { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-.rush-pending > b { font-size: 18px; }
-.rush-pending button { flex: 1; }
-.app:has(.goals.expanded):has(.hall-arrow.left) .rush-widget, .app:has(.goals.expanded):has(.hall-arrow.left) .rush-pending { left: auto; right: 14px; }
 .rush-announcement.ui { position: absolute; top: 78px; left: 50%; transform: translateX(-50%); width: min(450px, calc(100% - 36px)); padding: 12px 18px; border: 3px solid #e4b950; border-radius: 22px; background: #fff5d9; color: #664719; text-align: center; pointer-events: none; z-index: 17; animation: rush-announcement-in .45s ease-out; }
 .rush-announcement > b { font-size: 24px; }.rush-announcement .ja { display: block; font-size: 13px; }.rush-announcement p { font-size: 14px; margin: 6px 0 0; }
 .rush-announcement.rush { background: #def9f2; border-color: #54ba9e; color: #206b5c; }
@@ -65,11 +45,8 @@
 @keyframes rush-ready-pop { 0% { transform: scale(.45); filter: drop-shadow(0 0 0 #ffe480); } 45% { transform: scale(1.45); filter: drop-shadow(0 0 8px #e6bc3b); } 100% { transform: scale(1); filter: drop-shadow(0 0 0 #ffe480); } }
 @keyframes rush-award-in { from { transform: translateY(10px) scale(.8); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 @keyframes rush-announcement-in { from { opacity: 0; transform: translate(-50%, -18px) scale(.94); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
-@media (max-width: 1100px) { .rush-widget, .rush-pending { width: 228px; left: 10px; } .rush-widget-title { font-size: 15px; } }
-@media (max-height: 650px) { .rush-dialog-shade { padding-top: 72px; padding-bottom: 110px; } .rush-widget, .rush-pending { bottom: 112px; } .rush-dialog { padding: 12px; } .rush-result-award .rush-medal { width: 76px; height: 86px; } }
+@media (max-height: 650px) { .rush-dialog-shade { padding-top: 72px; padding-bottom: 110px; } .rush-dialog { padding: 12px; } .rush-result-award .rush-medal { width: 76px; height: 86px; } }
 @media (prefers-reduced-motion: reduce) { .rush-sparkles { animation-duration: .01ms; } .rush-result-award, .rush-announcement { animation: none !important; } }
-/* Prep widget: a clear amber band so it reads as an event, not a notice. */
-.rush-widget:not(.rush) { background: linear-gradient(#ffd56a 0, #ffe7a3 34px, #fff7df 35px); border-color: #d9a12c; }
 /* Results must fit without scrolling (children will not find a scrolled reward list). */
 .rush-dialog .rush-result-award .rush-medal { width: 84px; height: 95px; }
 .rush-result-award + p, .rush-bonus { margin: 4px 0; }

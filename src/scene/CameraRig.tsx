@@ -118,6 +118,9 @@ function besideTank(tankId: string, pos: THREE.Vector3, look: THREE.Vector3, wid
   // Stay clear of a request card above and the prompt stack below.
   const req = document.querySelector<HTMLElement>("[data-testid=request]")?.getBoundingClientRect();
   if (req && req.right > x && req.left < x + w) y = Math.max(y, req.bottom + 10);
+  // The objective slot (goals or the Rush Hour card) holds the top-left corner.
+  const goal = document.querySelector<HTMLElement>("[data-testid=rush-widget], [data-testid=rush-pending]")?.getBoundingClientRect();
+  if (goal && goal.right > x && goal.left < x + w) y = Math.max(y, goal.bottom + 10);
   const floor = height - bottomPanel.height - h - 8;
   if (bottomPanel.height > 0 && floor >= topMin) y = Math.min(y, floor);
   const transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;

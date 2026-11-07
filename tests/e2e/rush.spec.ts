@@ -73,7 +73,7 @@ test("preparation, medal and bonus survive results reload without a second payme
   const errors = await setup(page);
   await start(page);
   await prepareTanks(page);
-  await expect(page.getByTestId("rush-ready-count")).toContainText("2/2");
+  await expect(page.getByTestId("rush-ready-count")).toContainText("2 / 2");
   await shot(page, "rush-prepared");
   const coinsBefore = (await state(page)).coins;
   await finishPhase(page);
@@ -116,15 +116,76 @@ test("preparation, medal and bonus survive results reload without a second payme
   expect(errors).toEqual([]);
 });
 
-test("pending and preparation can both be skipped without a result or penalty", async ({ page }) => {
+test("Rush Hour takes over the objective slot, reacts to time, pauses, and gives the goals back", async ({ page }) => {
+  const errors = await setup(page);
+  await expect(page.getByTestId("goals")).toBeVisible();
+  await due(page);
+  // One card at a time in the upper-left: the banner replaces the goals.
+  await expect(page.getByTestId("goals")).toHaveCount(0);
+  await expect(page.getByTestId("rush-cancel")).toHaveText("キャンセル");
+  await expect(page.getByTestId("rush-pending")).not.toContainText(/skip|スキップ/i);
+  await page.getByTestId("rush-start").click();
+  const card = page.getByTestId("rush-widget");
+  await expect(card).toBeVisible();
+  await expect(page.getByTestId("goals")).toHaveCount(0);
+  const box = (await card.boundingBox())!;
+  expect(box.x).toBeLessThan(40);
+  expect(box.y).toBeLessThan(40);
+  const clockEl = page.getByTestId("rush-clock");
+  await expect(clockEl).toHaveText(/^\d\d:\d\d$/);
+  const size = await clockEl.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  expect(size).toBeGreaterThanOrEqual(38);
+  await expect(card).toHaveAttribute("data-urgency", "calm");
+  // Peek at the goals and come back.
+  await page.getByTestId("rush-show-goals").click();
+  await expect(page.getByTestId("goals")).toBeVisible();
+  await expect(card).toHaveCount(0);
+  await page.getByTestId("rush-return").click();
+  await expect(card).toBeVisible();
+  // A genuine pause (Pico talking): the card says so and the clock does not move.
+  await hook(page, "set", { mode: "talk" });
+  await expect(page.getByTestId("rush-paused")).toBeVisible();
+  for (const [seconds, urgency, text] of [[61, "calm", "01:01"], [60, "warm", "01:00"], [30, "hot", "00:30"], [10, "final", "00:10"]] as const) {
+    await hook(page, "rushRemaining", seconds);
+    await expect(card).toHaveAttribute("data-urgency", urgency);
+    await expect(clockEl).toHaveText(text);
+  }
+  await hook(page, "rushRemaining", 20);
+  await expect(clockEl).toHaveText("00:20");
+  await hook(page, "rushAdvance", 3);
+  await page.waitForTimeout(1500); // real game time passes too
+  await expect(clockEl).toHaveText("00:20");
+  await hook(page, "set", { mode: "play" });
+  await expect(page.getByTestId("rush-paused")).toHaveCount(0);
+  await hook(page, "rushAdvance", 3);
+  await expect.poll(async () => (await rush(page)).event!.remaining).toBeLessThanOrEqual(17);
+  // The visitor rush: aqua card, no checklist or cancel.
+  await finishPhase(page);
+  await expect(card).toHaveClass(/\brush\b/);
+  await expect(page.getByTestId("rush-checklist-open")).toHaveCount(0);
+  await expect(page.getByTestId("rush-cancel")).toHaveCount(0);
+  await expect(clockEl).toHaveText(/^01:[0-3]\d$/);
+  await finishPhase(page);
+  await expect(page.getByTestId("rush-results")).toBeVisible();
+  await page.getByTestId("rush-continue").click();
+  await expect(page.getByTestId("goals")).toBeVisible();
+  await expect(card).toHaveCount(0);
+  // Cancelling restores the goals at once.
+  await start(page);
+  await page.getByTestId("rush-cancel").click();
+  await expect(page.getByTestId("goals")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("pending and preparation can both be cancelled without a result or penalty", async ({ page }) => {
   const errors = await setup(page);
   const coins = (await state(page)).coins;
   await due(page);
-  await page.getByTestId("rush-skip").click();
+  await page.getByTestId("rush-cancel").click();
   expect((await rush(page)).phase).toBe("waiting");
   await expect(page.getByTestId("rush-start")).toHaveCount(0);
   await start(page);
-  await page.getByTestId("rush-skip").click();
+  await page.getByTestId("rush-cancel").click();
   const after = await rush(page);
   expect(after.phase).toBe("waiting");
   expect(after.event).toBeNull();
@@ -148,7 +209,8 @@ async function layout(page: Page, id: string, controls: string[]) {
   for (const other of controls) {
     const element = page.getByTestId(other);
     if (!(await element.isVisible())) continue;
-    const b = (await element.boundingBox())!;
+    const b = await element.boundingBox();
+    if (!b) continue; // hidden between the two checks
     const overlaps = box.x < b.x + b.width - 1 && b.x < box.x + box.width - 1 && box.y < b.y + b.height - 1 && b.y < box.y + box.height - 1;
     expect(overlaps, `${id} overlaps ${other}`).toBe(false);
   }
