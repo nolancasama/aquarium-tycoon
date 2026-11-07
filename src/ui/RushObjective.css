@@ -1,0 +1,100 @@
+/* Rush Hour in the upper-left objective slot: replaces the goals card while an event runs. */
+.rush-objective {
+  --rush-ink: #5a3d0c; --rush-accent: #e0a72a; --rush-clock: #8a5600; --rush-band: #ffd96e; --rush-bg: #fff8e2;
+  position: absolute; left: 0; top: 0; box-sizing: border-box;
+  width: clamp(262px, 23vw, 304px); padding: 14px 16px 16px;
+  display: grid; gap: 10px;
+  border-color: var(--rush-accent); color: var(--rush-ink);
+  background: linear-gradient(var(--rush-band) 0, var(--rush-bg) 62px);
+  transition: border-color .4s ease;
+}
+.rush-objective .ja { display: block; line-height: 1.35; font-size: 12.5px; font-weight: 600; }
+.rush-objective p { margin: 0; }
+.rush-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rush-title { font-size: 19px; line-height: 1.02; font-weight: 900; letter-spacing: .02em; color: var(--rush-clock); }
+.rush-clock {
+  display: block; font-size: clamp(38px, 3.3vw, 46px); line-height: 1; font-weight: 900;
+  font-variant-numeric: tabular-nums; letter-spacing: .01em; color: var(--rush-clock);
+  text-shadow: 0 2px 0 #fff; transition: color .4s ease;
+}
+.rush-time-bar { height: 10px; border-radius: 5px; background: #f1e2bd; overflow: hidden; margin-top: -2px; }
+.rush-time-bar > span { display: block; height: 100%; border-radius: inherit; transform-origin: left center; background: linear-gradient(90deg, #f0b62b, #f7cf5a); transition: transform 1s linear; }
+.rush-guide { font-size: 16px; font-weight: 900; text-align: center; color: var(--rush-ink); }
+.rush-guide small { display: block; font-size: 12.5px; font-weight: 600; }
+.rush-ready { display: flex; align-items: center; gap: 6px; font-size: 17px; padding-top: 10px; border-top: 2px dashed #ecd9a8; }
+.rush-ready b { font-variant-numeric: tabular-nums; }
+.rush-care-icons { display: inline-flex; gap: 4px; margin-left: auto; }
+.rush-ready .rush-ready-mark { display: inline-grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: #2f9e66; color: #fff; font-size: 14px; font-weight: 900; animation: rush-ready-pop .7s ease-out; }
+.rush-pips { display: flex; gap: 4px; margin-top: -4px; }
+.rush-pips > span { flex: 1; height: 12px; border-radius: 6px; background: #eadfc4; box-shadow: inset 0 1px 2px #0000001f; transition: background .3s ease; }
+.rush-pips > span.on { background: #38b170; box-shadow: inset 0 -2px 0 #23824f; }
+.rush-buttons { display: flex; gap: 8px; align-items: stretch; }
+.rush-objective button { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1px; min-height: 46px; font-size: 15px; padding: 4px 12px; }
+.rush-buttons > :first-child { flex: 1; }
+.rush-minor > :first-child { flex: 1 1 0; }
+.rush-objective .rush-text-button { border: 0; background: transparent; color: inherit; text-decoration: underline; }
+.rush-cancel { font-weight: 800; }
+.rush-objective button { white-space: nowrap; }
+/* Second row: quieter controls sharing the width (cancel, goals). */
+.rush-minor { margin-top: -4px; }
+.rush-minor > button { flex: 1 1 0; }
+.rush-objective .rush-goals-button { flex-direction: row; gap: 6px; padding: 4px 10px; border: 2px solid #e3cf9b; border-radius: 14px; background: #fffdf5; color: inherit; }
+.rush-goals-button > span { font-size: 18px; line-height: 1; font-weight: 900; }
+.rush-objective .rush-goals-button .ja { font-size: 12.5px; font-weight: 800; }
+.rush-autostart { font-size: 14px; font-weight: 800; }
+.rush-objective.pending .rush-head svg { color: #b77a12; }
+.rush-objective.pending .rush-title { font-size: 24px; }
+.rush-objective.pending .rush-buttons button { flex: 1; }
+.rush-sparkles { position: absolute; top: calc(100% + 6px); left: 14px; color: #8d6700; background: #fff5b7; border-radius: 14px; padding: 4px 12px; font-size: 14px; font-weight: 900; pointer-events: none; animation: rush-ready-pop 1.1s ease-out; }
+.rush-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Urgency follows the preparation clock. Motion is keyed to real clock ticks, so a paused clock is still. */
+.rush-objective[data-urgency="warm"] { --rush-accent: #ea8d1d; --rush-clock: #b45800; --rush-band: #ffc867; }
+.rush-objective[data-urgency="warm"] .rush-clock { animation: rush-nudge .8s ease-out; }
+.rush-objective[data-urgency="hot"], .rush-objective[data-urgency="final"] { --rush-accent: #e2611f; --rush-clock: #c13a16; --rush-band: #ffb36a; --rush-bg: #fff3e6; }
+.rush-objective[data-urgency="hot"] .rush-time-bar > span, .rush-objective[data-urgency="final"] .rush-time-bar > span { background: linear-gradient(90deg, #e2581f, #f39a3b); }
+.rush-objective[data-urgency="hot"] .rush-clock { animation: rush-tick .6s ease-out; }
+.rush-objective[data-urgency="final"] .rush-clock { font-size: clamp(42px, 3.6vw, 50px); animation: rush-tick-big .7s cubic-bezier(.3, 1.6, .5, 1); }
+.rush-objective[data-urgency="final"] { box-shadow: var(--shadow), 0 0 0 4px #ffb36a66; }
+
+/* The visitor rush: aqua, celebratory, calmer. */
+.rush-objective.rush { --rush-ink: #1b5e57; --rush-accent: #2fa89a; --rush-clock: #11766b; --rush-band: #9fe6dc; --rush-bg: #e9fbf8; animation: rush-arrive .6s cubic-bezier(.3, 1.5, .5, 1); }
+.rush-objective.rush .rush-time-bar { background: #c9ece6; }
+.rush-objective.rush .rush-time-bar > span { background: linear-gradient(90deg, #2fb5a5, #6fd8c9); }
+.rush-crowd { display: flex; align-items: center; gap: 10px; font-size: 16px; }
+.rush-crowd-icons { display: inline-flex; align-items: flex-end; color: #23988a; }
+.rush-crowd-icons > svg:nth-child(2) { margin: 0 -4px; }
+.rush-objective .rush-preview { display: flex; align-items: center; gap: 8px; font-size: 15px; padding-top: 10px; border-top: 2px dashed #b9e3dc; }
+.rush-objective.rush .rush-goals-button { border-color: #a9ddd5; }
+
+/* Paused (an English question, Pico talking): grey clock, no bar, no motion. */
+.rush-objective.paused { --rush-clock: #6f7c86; --rush-band: #dfe5e9; --rush-bg: #f6f8f9; --rush-accent: #b8c3ca; box-shadow: var(--shadow); animation: none; }
+.rush-objective.paused .rush-clock { animation: none; }
+.rush-paused { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 900; color: #55636e; }
+.rush-objective .rush-paused .ja { font-size: 12px; }
+/* Compact: tank close-up, Shark Tunnel walk, paused. */
+.rush-objective.compact { gap: 8px; padding: 10px 14px 12px; }
+.rush-objective.compact .rush-clock { font-size: 34px; }
+.rush-objective.compact .rush-ready { padding-top: 6px; font-size: 15px; }
+.rush-objective.compact .rush-crowd-icons, .rush-objective.compact .rush-preview .rush-medal { display: none; }
+
+/* While peeking at goals during an event, the goals card leads with a way back. */
+.rush-return { display: grid; grid-template-columns: 1fr auto; align-items: center; width: 100%; min-height: 44px; margin: -2px 0 6px; padding: 4px 10px; border: 2px solid #e0a72a; border-radius: 14px; background: #fff3cf; color: #6b4708; font-size: 14px; text-align: left; }
+.rush-return time { font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.rush-return .ja { grid-column: 1 / -1; font-size: 11px; }
+
+@keyframes rush-nudge { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes rush-tick { 0% { transform: scale(1.1); } 100% { transform: scale(1); } }
+@keyframes rush-tick-big { 0% { transform: scale(1.25); } 100% { transform: scale(1); } }
+@keyframes rush-arrive { 0% { transform: scale(.9); } 100% { transform: scale(1); } }
+@media (max-height: 560px) {
+  .rush-objective { padding: 8px 12px 10px; gap: 6px; }
+  .rush-objective .rush-clock { font-size: 30px; }
+  .rush-objective .rush-guide, .rush-objective .rush-pips, .rush-objective .rush-care-icons, .rush-crowd-icons { display: none; }
+  .talking .rush-objective { display: none; }
+}
+@media (max-width: 700px) { .rush-objective { width: min(262px, calc(100vw - 150px)); } }
+@media (prefers-reduced-motion: reduce) {
+  .rush-objective, .rush-objective .rush-clock, .rush-ready-mark { animation: none !important; }
+  .rush-time-bar > span, .rush-pips > span { transition: none; }
+}

@@ -3,13 +3,14 @@ import { useGame } from "../game/store";
 import { ROOMS } from "../game/data/rooms";
 import { HALL_OF, TANKS } from "../game/data/tanks";
 import { onOpenRushAwards, openRushAwards } from "../game/rush/bridge";
-import { BENCH_AT_GOLDS, FOUNTAIN_AT_SUCCESSES, READY_CLEAN, READY_FOOD, STATUE_AT_SUCCESSES } from "../game/rush/config";
+import { BENCH_AT_GOLDS, FOUNTAIN_AT_SUCCESSES, PENDING_AUTOSTART, READY_CLEAN, READY_FOOD, RUSH_SECONDS, STATUE_AT_SUCCESSES } from "../game/rush/config";
 import { continueRush, rushCalm, skipRush, startRush } from "../game/rush/flow";
 import type { Medal, RushEvent, RushRewardId, RushState } from "../game/rush/types";
 import { Icon } from "./icons";
 import { Ja } from "./Ja";
 import { visitRushTank } from "./rushNavigation";
 import "./RushHour.css";
+import "./RushObjective.css";
 
 const REWARDS: Record<RushRewardId, { en: string; ja: string; condition: string; conditionJa: string }> = {
   cabinet: { en: "Trophy cabinet", ja: "トロフィーの たな", condition: "Unlock Rush Hour", conditionJa: "ラッシュアワーを はじめよう" },
@@ -135,19 +136,48 @@ export function RushAwardsButton() {
   return unlocked ? <button className="round rush-awards-button ui" data-testid="btn-rush-awards" onClick={openRushAwards} disabled={!available} aria-label="Rush Hour awards" title="Rush Hour awards"><Icon id="star" size={25} /></button> : null;
 }
 
-const clock = (seconds: number) => {
+/** Always MM:SS ("02:30", "00:09") so the digits never change width. */
+export const clock = (seconds: number) => {
   const whole = Math.ceil(Math.max(0, seconds));
-  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+  return `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
 };
 
-export function RushHour() {
+/** Preparation urgency by seconds left: > 60 calm, 60–30 warm, 30–10 hot, last 10 final. */
+export function rushUrgency(remaining: number): "calm" | "warm" | "hot" | "final" {
+  const s = Math.ceil(remaining);
+  return s > 60 ? "calm" : s > 30 ? "warm" : s > 10 ? "hot" : "final";
+}
+
+/** What the upper-left objective slot shows: the Rush Hour card, or the normal goals. */
+export function useRushSlot(): "pending" | "prep" | "rush" | null {
+  const phase = useGame((s) => s.model.rush?.unlocked && s.screen === "game" ? s.model.rush.phase : null);
+  const hidden = useGame((s) => s.settingsOpen || Boolean(s.stageCard || s.request || s.tunnelCelebration));
+  // rushCalm reads the store; subscribe to the whole game so it re-evaluates.
+  useGame();
+  if (hidden || !phase) return null;
+  if (phase === "pending") return rushCalm() ? "pending" : null;
+  return phase === "prep" || phase === "rush" ? phase : null;
+}
+
+/** The objective card opens the checklist dialog, which RushHour() renders full-screen. */
+let openChecklist: (() => void) | null = null;
+
+const CLOCK_CUES: Record<number, { en: string; ja: string }> = {
+  60: { en: "One minute left", ja: "あと 1ぷん" },
+  30: { en: "30 seconds left", ja: "あと 30びょう" },
+  10: { en: "10 seconds left", ja: "あと 10びょう" }
+};
+
+/** The Rush Hour card in the objective slot (pending banner, preparation, visitor rush). */
+export function RushObjective({ slot, onGoals }: { slot: "pending" | "prep" | "rush"; onGoals?: () => void }) {
   const rush = useGame((s) => s.model.rush);
-  // Subscribe to all gate inputs used by rushCalm, including story/celebration changes.
-  const game = useGame();
-  const [panel, setPanel] = useState<"checklist" | "awards" | null>(null);
+  const view = useGame((s) => (s.exploring ? "explore" : s.tankId ? "tank" : "room"));
+  // Mirrors decayRunning(): the event clock only moves in calm play.
+  const paused = useGame((s) => s.mode !== "play" || Boolean(s.prompt || s.line));
   const event = rush?.event;
   const previousReady = useRef({ id: event?.id, ready: event?.ready ?? [] });
   const [sparkles, setSparkles] = useState<string[]>([]);
+  const [cue, setCue] = useState("");
   useEffect(() => {
     if (rush?.phase === "prep" && event) {
       const prior = previousReady.current.id === event.id ? previousReady.current.ready : [];
@@ -156,31 +186,97 @@ export function RushHour() {
     }
     previousReady.current = { id: event?.id, ready: event?.ready ?? [] };
   }, [rush?.phase, event?.id, event?.ready]);
+  const whole = event ? Math.ceil(event.remaining) : 0;
+  // Screen readers hear the time at a few thresholds, never every second.
+  useEffect(() => {
+    const at = CLOCK_CUES[whole];
+    if (at && (slot === "prep" || slot === "rush")) setCue(`${at.en}. ${at.ja}`);
+  }, [whole, slot]);
+  if (!rush) return null;
+  const goalsButton = onGoals && <button className="rush-goals-button" data-testid="rush-show-goals" onClick={onGoals} aria-label="Show goals" title="Goals"><span aria-hidden="true">≡</span><Ja>もくひょう</Ja></button>;
+  if (slot === "pending") {
+    const left = Math.max(0, Math.ceil(PENDING_AUTOSTART - rush.pendingFor));
+    return <aside className="panel rush-objective pending ui" data-testid="rush-pending" aria-label="Rush Hour soon">
+      <div className="rush-head"><b className="rush-title">RUSH HOUR{" "}<br />SOON!</b><Icon id="visitor" size={40} /></div>
+      <Ja>おきゃくさんが いっぱい くるよ！</Ja>
+      <p className="rush-autostart">Starts in {left} s<Ja>{left}びょうで はじまるよ</Ja></p>
+      <div className="rush-buttons"><button className="primary" data-testid="rush-start" onClick={startRush}>Start Now<Ja>はじめる</Ja></button><button className="secondary rush-cancel" data-testid="rush-cancel" onClick={skipRush} lang="ja">キャンセル</button></div>
+    </aside>;
+  }
+  if (!event) return null;
+  const total = slot === "prep" ? event.prepTotal : RUSH_SECONDS;
+  const timeLeft = Math.max(0, Math.min(1, event.remaining / Math.max(1, total)));
+  const urgency = slot === "prep" ? rushUrgency(event.remaining) : "rush";
+  const compact = paused || view !== "room";
+  const ready = event.ready.length;
+  const of = event.tankIds.length;
+  const timer = <time className="rush-clock" data-testid="rush-clock" role="timer" aria-label={`${clock(event.remaining)} left`}
+    key={urgency === "hot" || urgency === "final" ? `${event.id}-${whole}` : urgency}>{clock(event.remaining)}</time>;
+  return <aside className={`panel rush-objective ${slot} ${compact ? "compact" : ""} ${paused ? "paused" : ""} ui`} data-urgency={urgency} data-testid="rush-widget" aria-label="Rush Hour countdown">
+    {sparkles.length > 0 && slot === "prep" && <span className="rush-sparkles" key={sparkles.join("-")} onAnimationEnd={() => setSparkles([])} aria-hidden="true">✦ ✓ Ready! ✦</span>}
+    <span className="rush-sr" aria-live="polite">{cue}</span>
+    <div className="rush-head">
+      <b className="rush-title">RUSH{" "}<br />HOUR!</b>
+      {timer}
+    </div>
+    {paused ? <p className="rush-paused" data-testid="rush-paused"><span aria-hidden="true">⏸</span> Paused<Ja>とけいは ストップ ちゅう</Ja></p>
+      : !compact && <div className="rush-time-bar" aria-hidden="true"><span style={{ transform: `scaleX(${timeLeft})` }} /></div>}
+    {slot === "prep" ? <>
+      {!compact && <p className="rush-guide" lang="ja">「じゅんび しよう！」</p>}
+      <div className="rush-ready" data-testid="rush-ready-count">
+        <span className="rush-ready-mark" key={`${event.id}-${ready}`} aria-hidden="true">✓</span>
+        <b>{ready} / {of} tanks ready</b>
+        {!compact && <span className="rush-care-icons" aria-label="Food and cleaning"><Icon id="food" size={18} /><Icon id="sponge" size={18} /></span>}
+      </div>
+      {!compact && <div className="rush-pips" role="progressbar" aria-label="Tanks prepared" aria-valuemin={0} aria-valuemax={of} aria-valuenow={ready}>
+        {event.tankIds.map((id) => <span key={id} className={event.ready.includes(id) ? "on" : ""} />)}
+      </div>}
+      {!paused && <div className="rush-buttons">
+        <button className="secondary" data-testid="rush-checklist-open" onClick={() => openChecklist?.()}>Checklist<Ja>じゅんびリスト</Ja></button>
+        {compact && goalsButton}
+      </div>}
+      {!paused && !compact && <div className="rush-buttons rush-minor">
+        <button className="rush-cancel rush-text-button" data-testid="rush-cancel" onClick={skipRush} lang="ja">キャンセル</button>
+        {goalsButton}
+      </div>}
+    </> : <>
+      <div className="rush-crowd"><span className="rush-crowd-icons" aria-hidden="true"><Icon id="visitor" size={22} /><Icon id="visitor" size={26} /><Icon id="visitor" size={22} /></span><b>Lots of visitors!<Ja>おきゃくさんが いっぱい！</Ja></b></div>
+      <div className="rush-preview" data-testid="rush-medal-preview">{event.result?.medal ? <><RushMedal medal={event.result.medal} small /><b>{MEDAL_NAMES[event.result.medal].en}<Ja>{MEDAL_NAMES[event.result.medal].ja}</Ja></b></> : <b>Thanks for getting ready!<Ja>じゅんび ありがとう！</Ja></b>}</div>
+      {!paused && goalsButton && <div className="rush-buttons rush-minor">{goalsButton}</div>}
+    </>}
+  </aside>;
+}
+
+/** Shown on the goals card while Rush Hour is running and the player peeks at goals. */
+export function RushReturn({ onBack }: { onBack: () => void }) {
+  const event = useGame((s) => s.model.rush?.event);
+  return <button className="rush-return" data-testid="rush-return" onClick={onBack}>
+    <b>RUSH HOUR</b>{event && <time>{clock(event.remaining)}</time>}<Ja>ラッシュアワーに もどる</Ja>
+  </button>;
+}
+
+export function RushHour() {
+  const rush = useGame((s) => s.model.rush);
+  // Subscribe to all gate inputs used by rushCalm, including story/celebration changes.
+  const game = useGame();
+  const [panel, setPanel] = useState<"checklist" | "awards" | null>(null);
+  const event = rush?.event;
   useEffect(() => {
     onOpenRushAwards(() => setPanel("awards"));
-    return () => onOpenRushAwards(null);
+    openChecklist = () => setPanel("checklist");
+    return () => { onOpenRushAwards(null); openChecklist = null; };
   }, []);
   useEffect(() => {
     if (rush?.phase === "results" || (panel === "checklist" && rush?.phase !== "prep")) setPanel(null);
   }, [rush?.phase, panel]);
   if (!rush?.unlocked || game.screen !== "game") return null;
   const interrupted = game.settingsOpen || game.mode !== "play" || Boolean(game.prompt || game.line || game.request || game.stageCard || game.tunnelCelebration);
-  const active = event && (rush.phase === "prep" || rush.phase === "rush");
   return <>
     {game.rushAnnouncement && !interrupted && <div className={`rush-announcement ${game.rushAnnouncement.kind} ui`} role="status" data-testid="rush-announcement" key={`${event?.id}-${game.rushAnnouncement.kind}`}>
       <b>{game.rushAnnouncement.kind === "prep" ? "RUSH HOUR IS COMING!" : "RUSH HOUR!"}</b>
       <Ja>{game.rushAnnouncement.kind === "prep" ? "おきゃくさんが もうすぐ くるよ！" : "おきゃくさんが いっぱい！"}</Ja>
       {game.rushAnnouncement.kind === "prep" && <p>Pico: Feed the animals and clean the tanks!<Ja>えさを あげて、タンクを きれいに しよう！</Ja></p>}
     </div>}
-    {rush.phase === "pending" && rushCalm() && <aside className="panel rush-pending ui" data-testid="rush-pending" aria-label="Rush Hour soon">
-      <b>Rush Hour soon!<Ja>もうすぐ ラッシュアワー！</Ja></b><div><button className="primary" data-testid="rush-start" onClick={startRush}>Start Now<Ja>はじめる</Ja></button><button className="secondary" data-testid="rush-skip" onClick={skipRush}>Skip<Ja>スキップ</Ja></button></div>
-    </aside>}
-    {active && !interrupted && <aside className={`panel rush-widget ui ${rush.phase}`} data-testid="rush-widget" aria-label="Rush Hour countdown">
-      {sparkles.length > 0 && rush.phase === "prep" && <span className="rush-sparkles" key={sparkles.join("-")} onAnimationEnd={() => setSparkles([])} aria-hidden="true">✦ ✓ Ready! ✦</span>}
-      <div className="rush-widget-title"><b>{rush.phase === "prep" ? "RUSH HOUR" : "RUSH HOUR!"}</b><time data-testid="rush-clock">{clock(event.remaining)}</time></div>
-      {rush.phase === "prep" ? <><Ja>えさやりと おそうじを しよう！</Ja><progress value={event.ready.length} max={event.tankIds.length} aria-label="Tanks prepared" /><div className="rush-ready-count" data-testid="rush-ready-count"><span className="rush-ready-mark" key={`${event.id}-${event.ready.length}`} aria-hidden="true">✓</span><b>{event.ready.length}/{event.tankIds.length} tanks ready</b><span className="rush-care-icons" aria-label="Food and cleaning"><Icon id="food" size={18} /><Icon id="sponge" size={18} /></span></div><div className="rush-widget-buttons"><button className="secondary" data-testid="rush-checklist-open" onClick={() => setPanel("checklist")}>Checklist<Ja>じゅんびリスト</Ja></button><button className="rush-text-button" data-testid="rush-skip" onClick={skipRush}>Skip<Ja>スキップ</Ja></button></div></>
-        : <><Ja>おきゃくさんが いっぱい！</Ja><div className="rush-preview" data-testid="rush-medal-preview">{event.result?.medal ? <><RushMedal medal={event.result.medal} small /><b>{MEDAL_NAMES[event.result.medal].en}</b></> : <b>Thanks for getting ready!<Ja>じゅんび ありがとう！</Ja></b>}</div></>}
-    </aside>}
     {rush.phase === "results" && !game.settingsOpen && <Results rush={rush} />}
     {panel === "checklist" && rush.phase === "prep" && event && !interrupted && <Checklist event={event} close={() => setPanel(null)} />}
     {panel === "awards" && rush.phase !== "results" && !interrupted && <Awards rush={rush} close={() => setPanel(null)} />}

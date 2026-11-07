@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { getGame, setGame, updateModel, useGame } from "../game/store";
 import { rt } from "../game/runtime";
@@ -45,7 +45,7 @@ function WalkIcon({ size = 40 }: { size?: number }) {
 
 // ------------------------------------------------------------------ milestones card (upper left)
 
-export function TunnelGoals() {
+export function TunnelGoals({ before }: { before?: ReactNode } = {}) {
   const t = useGame((s) => s.model.progress.tunnel);
   const exploring = useGame((s) => s.exploring);
   const [open, setOpen] = useState(false);
@@ -54,6 +54,7 @@ export function TunnelGoals() {
   const count = done === 1 ? `${Math.min(3, t?.observed ?? 0)}/3` : done === 2 ? `${Math.min(3, t?.helped ?? 0)}/3` : null;
   return (
     <div className={`panel goals tunnel-goals ui ${open ? "expanded" : ""} ${exploring ? "compact" : ""}`} data-testid="tunnel-goals" data-milestone={done}>
+      {before}
       <header>
         <SharkIcon size={22} /> Shark Tunnel <Ja>サメの トンネル</Ja>
       </header>
