@@ -56,9 +56,11 @@ building", "bigger crowd" and "HUD in the objective slot".
   (medals visible, the golden sign on its crown cropped); the ⭐ HUD button also opens
   the awards. Follow-up: reframe or move the cabinet. A free-play save shows Pico's
   one-time Rush intro shortly after loading, so e2e seeds set `rush.introSeen`.
-- **Verified 2026-11-07:** typecheck, 631 unit tests, build; full e2e 70/73 on one
-  loaded 18-min run — rush and tunnel failures passed on rerun, the layout failure was
-  the intro (fixed in the seed; layout 7/7 twice; baseline 7742574 passed it too).
+- **Verified 2026-11-07 (HUD + crowd, 8bb83e0):** typecheck, build, 646 unit tests
+  (geometry/swim tests time out only when e2e runs alongside); full e2e 73/75 on one
+  loaded 22-min run, the two failures (requests "show me", rush reload) passed 2/2 on
+  rerun; rush.spec 6/6 several times. CI deploy to Pages succeeded. The layout e2e
+  waits out Pico's one-time "New tanks and animals!" line (`afterOpeningLine`).
 
 ## Shark Tunnel lower-wall seam polish (2026-11-06)
 
