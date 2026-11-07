@@ -5,7 +5,7 @@ import { scripted } from "../flow/visitors";
 import type { Model } from "../logic/model";
 import { effect, rt } from "../runtime";
 import { getGame, setGame, updateModel } from "../store";
-import { advance, continueEvent, latchReadiness, skip, startEvent } from "./logic";
+import { advance, continueEvent, debugStartEvent, latchReadiness, skip, startEvent } from "./logic";
 
 /** A due event can wait here without interrupting a lesson or a tunnel walk. */
 export function rushCalm(): boolean {
@@ -69,6 +69,18 @@ export function startRush() {
   const before = getGame().model;
   updateModel((m) => startEvent(m, Math.random));
   rushTransitionEffects(before, getGame().model);
+}
+
+/** Debug menu: start the actual preparation phase immediately.
+ * No synthetic rewards, no duplicate events and no bypass of Free Play unlocks. */
+export function debugStartRush(): boolean {
+  if (!rushCalm()) return false;
+  const before = getGame().model;
+  const after = debugStartEvent(before, Math.random);
+  if (after === before || after.rush?.phase !== "prep") return false;
+  updateModel(() => after);
+  rushTransitionEffects(before, after);
+  return true;
 }
 
 export function skipRush() {

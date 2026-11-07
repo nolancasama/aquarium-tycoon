@@ -48,6 +48,24 @@ export function startEvent(model: Model, rand: () => number = Math.random): Mode
   } });
 }
 
+/** Debug-only bypass of the random wait, never the tutorial or eligibility rules.
+ * Uses the normal unlocking, preparation and award pipeline. */
+export function debugStartEvent(input: Model, rand: () => number = Math.random): Model {
+  const model = ensureRush(input);
+  if (model.progress.tutorial !== "done" || !model.tanks.some(t => t.fish.length > 0) ||
+      (model.rush!.phase !== "waiting" && model.rush!.phase !== "pending")) return input;
+
+  // An eligible aquarium might not have had its first simulation tick since unlocking
+  // Free Play; initialise the normal cabinet reward and Rush Hour state if needed.
+  const unlocked = model.rush!.unlocked ? model : advance(model, 0, { rand, calm: true }).model;
+  if (!unlocked.rush!.unlocked) return input;
+
+  const pending: Model = { ...unlocked, rush: {
+    ...unlocked.rush!, phase: "pending", untilNext: 0, pendingFor: 0
+  } };
+  return startEvent(pending, rand);
+}
+
 /** A single simultaneous care check earns a permanent checkmark for this event. */
 export function latchReadiness(model: Model): Model {
   const rush = model.rush;
