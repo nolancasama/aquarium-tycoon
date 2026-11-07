@@ -31,6 +31,7 @@ import { Icon, type IconId } from "./icons";
 import { PicoFace, PersonFace } from "./Portraits";
 import { Ja } from "./Talk";
 import { ActionTag } from "./ActionTag";
+import { playHintAudio } from "./hintAudio";
 import { TapHand } from "./TapHand";
 import { RushAwardsButton, RushHour } from "./RushHour";
 import { STAGE_NAMES, STAGE_PREVIEWS, UI, goalText } from "./i18n";
@@ -513,11 +514,15 @@ function NudgeBubble() {
   // The placing banner and the decoration tray already say this; one instruction at a time.
   if ((placingFish && n.target?.startsWith("tank-")) || (decorating && (n.target === "tray" || n.target === "decor-rings"))) return null;
   return (
-    <div className={`nudge ui ${n.repeated ? "repeated" : ""}`} key={n.id} data-testid="nudge" data-tier={n.tier} role="status" onClick={() => setGame({ nudge: null })}>
-      <PicoFace size={58} />
-      <div className="nudge-text">
-        <ActionTag kind={n.kind ?? (n.target ? "tap" : "look")} en={n.en} ja={n.ja} />
-      </div>
+    <div className={`nudge ui ${n.repeated ? "repeated" : ""}`} key={n.id} data-testid="nudge" data-tier={n.tier} role="status">
+      <button className="nudge-listen" type="button" aria-label={`Hear hint: ${n.en}`} onClick={() => playHintAudio(n.en)}>
+        <PicoFace size={58} />
+        <span className="nudge-text">
+          <ActionTag kind={n.kind ?? (n.target ? "tap" : "look")} en={n.en} ja={n.ja} />
+        </span>
+        <Icon id="speaker" size={24} />
+      </button>
+      <button className="nudge-dismiss" type="button" aria-label="Dismiss hint" data-testid="nudge-dismiss" onClick={() => setGame({ nudge: null })}>×</button>
     </div>
   );
 }

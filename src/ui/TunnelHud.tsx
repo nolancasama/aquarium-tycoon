@@ -15,6 +15,7 @@ import { Big } from "./Hud";
 import { Icon } from "./icons";
 import { PersonFace, PicoFace } from "./Portraits";
 import { Ja } from "./Talk";
+import { playHintAudio } from "./hintAudio";
 import "./TunnelHud.css";
 
 /** The milestone names and rewards (English + Japanese). */
@@ -207,7 +208,7 @@ function ActivityCard() {
         <b className="q">{a.question.en}</b>
         <Ja>{a.question.ja}</Ja>
         <div className="todo"><Icon id={a.status === "wait" ? "eye" : "hand"} size={22} /> {a.todo.en} <Ja>{a.todo.ja}</Ja></div>
-        {a.clue && <div className="clue" data-testid="tunnel-clue">{a.clue.en} <Ja>{a.clue.ja}</Ja></div>}
+        {a.clue && <button type="button" className="clue" data-testid="tunnel-clue" aria-label={`Hear clue: ${a.clue.en}`} onClick={() => playHintAudio(a.clue!.en)}><Icon id="speaker" size={19} /> {a.clue.en} <Ja>{a.clue.ja}</Ja></button>}
       </div>
     </div>
   );
