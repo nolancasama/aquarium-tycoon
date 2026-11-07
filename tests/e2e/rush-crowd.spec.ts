@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { CROWD_TIERS } from "../../src/game/rush/config";
 import { newRushState, type RushState } from "../../src/game/rush/types";
-import { boot, hook, playing, shot, state } from "./helpers";
+import { afterOpeningLine, boot, hook, playing, shot, state } from "./helpers";
 
 /** A live (real-time) visitor rush: crowd size, cap, groups, frame rate and cleanup. */
 const tank = (id: string, type: string, slot: string, species: string) =>
@@ -34,6 +34,7 @@ test("a live rush fills the halls in groups, stays under the active cap and leav
   const errors = await boot(page);
   await page.getByTestId("btn-continue").click();
   await playing(page);
+  await afterOpeningLine(page);
   await hook(page, "visitors", false); // only the crowd: no English requests to answer
   await hook(page, "rushUntilNext", 0);
   await hook(page, "rushAdvance", 1);

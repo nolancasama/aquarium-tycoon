@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { BONUS_BASE, BONUS_CAP, BONUS_PER_TANK, NEXT_DELAY } from "../../src/game/rush/config";
 import { newRushState, type RushState } from "../../src/game/rush/types";
-import { boot, hook, playing, shot, state } from "./helpers";
+import { afterOpeningLine, boot, hook, playing, shot, state } from "./helpers";
 
 const SAVE = {
   v: 3,
@@ -31,6 +31,7 @@ async function setup(page: Page) {
   const errors = await boot(page);
   await page.getByTestId("btn-continue").click();
   await playing(page);
+  await afterOpeningLine(page);
   await hook(page, "visitors", false);
   return errors;
 }

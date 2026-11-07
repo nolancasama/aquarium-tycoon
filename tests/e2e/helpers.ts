@@ -162,6 +162,14 @@ export async function playing(page: Page, timeout = 30_000) {
   return waitFor(page, (s) => s.mode === "play" && !s.line && !s.prompt && !s.stageCard, timeout, "ordinary play");
 }
 
+/** A stage-8 save hears Pico's one-time "New tanks and animals!" ~1 s after loading
+ * (a per-session flag, so it cannot be seeded). The Rush card rightly steps aside for
+ * it; wait it out so layout checks do not race it. */
+export async function afterOpeningLine(page: Page) {
+  await waitFor(page, (s) => Boolean(s.line), 4000, "opening line").catch(() => undefined);
+  await playing(page);
+}
+
 let shotN = 0;
 /** Screenshots for review when SHOTS=1 (saved to .tmp/shots/<test>). */
 export async function shot(page: Page, name: string) {

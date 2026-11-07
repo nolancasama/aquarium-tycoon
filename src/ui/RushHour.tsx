@@ -4,7 +4,7 @@ import { ROOMS } from "../game/data/rooms";
 import { HALL_OF, TANKS } from "../game/data/tanks";
 import { onOpenRushAwards, openRushAwards } from "../game/rush/bridge";
 import { BENCH_AT_GOLDS, FOUNTAIN_AT_SUCCESSES, PENDING_AUTOSTART, READY_CLEAN, READY_FOOD, RUSH_SECONDS, STATUE_AT_SUCCESSES } from "../game/rush/config";
-import { continueRush, rushCalm, skipRush, startRush } from "../game/rush/flow";
+import { continueRush, skipRush, startRush } from "../game/rush/flow";
 import type { Medal, RushEvent, RushRewardId, RushState } from "../game/rush/types";
 import { Icon } from "./icons";
 import { Ja } from "./Ja";
@@ -152,10 +152,12 @@ export function rushUrgency(remaining: number): "calm" | "warm" | "hot" | "final
 export function useRushSlot(): "pending" | "prep" | "rush" | null {
   const phase = useGame((s) => s.model.rush?.unlocked && s.screen === "game" ? s.model.rush.phase : null);
   const hidden = useGame((s) => s.settingsOpen || Boolean(s.stageCard || s.request || s.tunnelCelebration));
-  // rushCalm reads the store; subscribe to the whole game so it re-evaluates.
-  useGame();
+  // The banner waits for a calm moment, judged on stable store state only: rushCalm()
+  // also reads per-frame runtime flags that flicker, which would swap the card with the
+  // goals for a frame. startRush() still checks rushCalm() itself.
+  const calm = useGame((s) => s.mode === "play" && !s.prompt && !s.line && !s.panel && !s.placing && !s.tunnelActivity && !s.exploring);
   if (hidden || !phase) return null;
-  if (phase === "pending") return rushCalm() ? "pending" : null;
+  if (phase === "pending") return calm ? "pending" : null;
   return phase === "prep" || phase === "rush" ? phase : null;
 }
 
