@@ -19,6 +19,7 @@ import { stepVisitors, visitorsTick } from "./flow/visitors";
 import { storyTick } from "./flow/story";
 import { audio } from "../audio/audio";
 import type { SpeciesId, TankType } from "./types";
+import { advanceRush, rushTransitionEffects } from "./rush/flow";
 
 /**
  * The per-frame step: fish swim (pure steering from logic/swim), pellets fall
@@ -281,9 +282,21 @@ function stepPellets(dt: number) {
 }
 
 /** Care time runs during ordinary play only (not on the title, in Settings or in scripted moments). */
-function decayRunning(): boolean {
+export function decayRunning(): boolean {
   const g = getGame();
-  return g.screen === "game" && !g.settingsOpen && !g.stageCard && g.mode !== "busy" && g.model.progress.tutorial === "done";
+  return g.screen === "game" && !g.settingsOpen && !g.stageCard && g.mode === "play" && !g.prompt && !g.line &&
+    g.model.progress.tutorial === "done" && g.model.rush?.phase !== "results";
+}
+
+/** The shared care/Rush Hour clock step. The debug hook uses this same path. */
+export function advanceCare(seconds: number) {
+  if (!decayRunning() || !Number.isFinite(seconds) || seconds < 0) return;
+  const beforeModel = model();
+  const before = beforeModel.progress.tunnel?.milestone ?? 0;
+  updateModel((m) => checkTunnelMilestones(latchHappy(decay(advanceRush(m, seconds, rand), seconds))).m);
+  rushTransitionEffects(beforeModel, model());
+  const after = model().progress.tunnel?.milestone ?? 0;
+  if (after > before && before > 0) celebrateMilestones(before, after);
 }
 
 export function tick(dt: number) {
@@ -295,6 +308,7 @@ export function tick(dt: number) {
   stepVisitors(dt);
   rt.effects = rt.effects.filter((e) => rt.time - e.t0 < 4);
   if (g.screen !== "game") return;
+  if (g.rushAnnouncement && rt.time >= g.rushAnnouncement.until) setGame({ rushAnnouncement: null });
   // Game time, so a slow machine still shows the food words for as long.
   if (g.foodStrip && rt.time > g.foodStrip.until) setGame({ foodStrip: null });
   if (decayRunning()) {
@@ -302,15 +316,14 @@ export function tick(dt: number) {
     if (rt.decayAcc >= 1) {
       const s = rt.decayAcc;
       rt.decayAcc = 0;
-      const before = model().progress.tunnel?.milestone ?? 0;
-      updateModel((m) => checkTunnelMilestones(latchHappy(decay(m, s))).m);
-      const after = model().progress.tunnel?.milestone ?? 0;
-      if (after > before && before > 0) celebrateMilestones(before, after);
+      advanceCare(s);
     }
   }
   visitorsTick(dt);
   stepTunnelVisitors(dt);
-  tunnelActivitiesTick();
-  stepTunnelActivity();
-  storyTick(dt);
+  if (model().rush?.phase !== "results") {
+    tunnelActivitiesTick();
+    stepTunnelActivity();
+    storyTick(dt);
+  }
 }

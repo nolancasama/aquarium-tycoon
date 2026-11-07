@@ -4,9 +4,10 @@ import * as THREE from "three";
 import { getGame } from "../game/store";
 import { rt, type VisitorRt } from "../game/runtime";
 import { SLOT_POS, TANKS } from "../game/data/tanks";
-import { benchPose, requestEligible, seatById } from "../game/world";
+import { benchPose, seatById } from "../game/world";
 import { tapVisitor } from "../game/flow/actions";
-import { paletteCount, personModel } from "./models/people";
+import { visitorRequestAvailable } from "../game/flow/visitors";
+import { paletteCount, personModel, tunnelPersonModel } from "./models/people";
 import { additiveSprite, bubbleTexture, shadowMaterial, smoothMat } from "./materials";
 
 /** The visitors in rt.visitors (the list is re-read when someone arrives or leaves). */
@@ -25,6 +26,8 @@ export function Visitors() {
 }
 
 const REDUCED_MOTION = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const phoneGeo = new THREE.BoxGeometry(0.08, 0.13, 0.015);
+const phoneMat = new THREE.MeshLambertMaterial({ color: "#2b2f3a" });
 
 /** Hide a visitor standing between the close-up camera and the tank. */
 function blocksCloseUp(v: VisitorRt): boolean {
@@ -43,7 +46,7 @@ function Visitor({ id }: { id: string }) {
     const n = Number(id.replace(/\D/g, "")) || 0;
     return v0 ? n % paletteCount(v0.type) : 0;
   }, [id, v0]);
-  const model = useMemo(() => (v0 ? personModel(v0.type, variant) : null), [v0, variant]);
+  const model = useMemo(() => (v0 ? (v0.cosmetic ? tunnelPersonModel(v0.type, variant) : personModel(v0.type, variant)) : null), [v0, variant]);
   const root = useRef<THREE.Group>(null);
   const body = useRef<THREE.Group>(null);
   const torso = useRef<THREE.Group>(null);
@@ -51,6 +54,8 @@ function Visitor({ id }: { id: string }) {
   const legR = useRef<THREE.Group>(null);
   const kneeL = useRef<THREE.Group>(null);
   const kneeR = useRef<THREE.Group>(null);
+  const arm = useRef<THREE.Group>(null);
+  const phone = useRef<THREE.Mesh>(null);
   const bubble = useRef<THREE.Sprite>(null);
   const bubbleMat = useMemo(() => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }), []);
   const shadow = useMemo(() => shadowMaterial(0.28), []);
@@ -79,6 +84,8 @@ function Visitor({ id }: { id: string }) {
     let lean = 0;
     let tilt = 0;
     let swing = 0;
+    let armTarget = 0;
+    let takingPhoto = false;
     if (v.moving) {
       swing = Math.sin(v.step) * 0.55;
       y = Math.abs(Math.cos(v.step)) * 0.03;
@@ -90,7 +97,8 @@ function Visitor({ id }: { id: string }) {
       if (a.kind === "jump" && k < 1.2) y += Math.abs(Math.sin((k / 1.2) * Math.PI * 2)) * 0.22;
       else if (a.kind === "clap" && k < 1) y += Math.abs(Math.sin(k * Math.PI * 4)) * 0.06;
       else if (a.kind === "hmm" && k < 1.4) tilt = Math.sin((k / 1.4) * Math.PI) * 0.18;
-      else if (a.kind === "photo" && k < 1.4) lean = -0.1;
+      else if (a.kind === "photo" && k < 1.4) { lean = -0.1; armTarget = 0.75; takingPhoto = true; }
+      else if (a.kind === "point" && k < 1.4) armTarget = 0.95;
       else if (a.kind === "wave" && k < 1.2) y += Math.abs(Math.sin(k * Math.PI * 3)) * 0.04;
       else if (k > 1.5) v.anim = null;
     }
@@ -124,9 +132,14 @@ function Visitor({ id }: { id: string }) {
       kneeL.current.rotation.x = pose.knee;
       kneeR.current.rotation.x = pose.knee;
     }
+    if (arm.current) {
+      const target = -armTarget * 2.3 - (v.moving ? swing * 0.5 : 0);
+      arm.current.rotation.x += (target - arm.current.rotation.x) * Math.min(1, dt * 7);
+    }
+    if (phone.current) phone.current.visible = takingPhoto;
     const b = bubble.current;
     if (b) {
-      b.visible = Boolean(v.bubble) && r.visible && (v.bubble !== "!" || v.scripted || requestEligible(v));
+      b.visible = Boolean(v.bubble) && r.visible && (v.bubble !== "!" || v.scripted || visitorRequestAvailable(v));
       if (v.bubble) {
         const tex = bubbleTexture(v.bubble);
         if (bubbleMat.map !== tex) {
@@ -143,7 +156,7 @@ function Visitor({ id }: { id: string }) {
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     // Eligible requests take the tap while walking as well as on the bench.
     const v = rt.visitors.find((x) => x.id === id);
-    const waiting = Boolean(v && requestEligible(v));
+    const waiting = Boolean(v && visitorRequestAvailable(v));
     if (e.delta > 8 || !waiting || !root.current?.visible || getGame().view !== "room") return;
     e.stopPropagation();
     tapVisitor(id);
@@ -157,6 +170,12 @@ function Visitor({ id }: { id: string }) {
         {/* The torso bends at the hips when sitting and standing; the legs do not. */}
         <group ref={torso} position={[0, model.hip, 0]}>
           <mesh geometry={model.body} material={smoothMat} position={[0, -model.hip, 0]} />
+          {model.arm && model.armPivot && (
+            <group ref={arm} position={[model.armPivot[0], model.armPivot[1] - model.hip, model.armPivot[2]]}>
+              <mesh geometry={model.arm} material={smoothMat} />
+              <mesh ref={phone} geometry={phoneGeo} material={phoneMat} position={[0.03, -0.6 * (model.hip / 0.74), 0.06]} visible={false} />
+            </group>
+          )}
         </group>
         <group ref={legL} position={[-model.legX, model.hip, 0]}>
           <mesh geometry={model.leg} material={smoothMat} />

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { decodeSave, encodeSave, VERSION } from "./save";
 import { buyDecor, buyFish, buyTank, buyTickets, buyUpgrade, newModel, openAtrium, openGallery, openHall, placeDecor, placeFish, placeTank, remodelTank, setLight, type Model, type Result } from "./model";
+import { advance, commitResult, lockResult, startEvent } from "../rush/logic";
+import { newRushState } from "../rush/types";
+import { RUSH_SECONDS } from "../rush/config";
 
 type M = Model & { lastId?: string };
 
@@ -23,6 +26,131 @@ function played(): Model {
   void _drop;
   return { ...model, tanks: model.tanks.map((t) => ({ ...t, food: 42.5, clean: 61 })) };
 }
+
+describe("Rush Hour saves", () => {
+  function unlocked(): Model {
+    const model = played();
+    return advance({ ...model, progress: { ...model.progress, stage: 8, tutorial: "done", star: true, freePlay: true, hallOpen: true } }, 0, { calm: true, rand: () => 0.5 }).model;
+  }
+  function preparation(): Model {
+    const model = unlocked();
+    return startEvent({ ...model, rush: { ...model.rush!, phase: "pending" } });
+  }
+
+  it.each([1, 2, 3])("loads v%i without rush with the same aquarium and a fresh default", (version) => {
+    const raw = JSON.parse(encodeSave(played()));
+    raw.v = version;
+    delete raw.model.rush;
+    const absent = decodeSave(JSON.stringify(raw))!.model;
+    expect(absent.rush).toEqual(newRushState());
+    raw.model.rush = newRushState();
+    expect(decodeSave(JSON.stringify(raw))!.model).toEqual(absent);
+    expect(absent.coins).toBe(raw.model.coins);
+    expect(absent.tanks).toEqual(raw.model.tanks);
+    expect(absent.inv).toEqual(raw.model.inv);
+    expect(absent.stats).toEqual(raw.model.stats);
+  });
+
+  it("preserves the single rolled delay on repeated decode and encode", () => {
+    const model = unlocked();
+    const delay = model.rush!.untilNext;
+    let saved = model;
+    for (let n = 0; n < 3; n++) {
+      saved = decodeSave(encodeSave(saved))!.model;
+      expect(saved.rush!.untilNext).toBe(delay);
+    }
+    expect(delay).toBe(600);
+  });
+
+  it("resumes preparation and the crowd with their saved active time and locked result", () => {
+    let model = preparation();
+    model = advance(model, 17, { calm: true, rand: () => 0 }).model;
+    let saved = decodeSave(encodeSave(model))!.model;
+    expect(saved.rush).toEqual(model.rush);
+    expect(saved.rush!.event!.remaining).toBe(103);
+    model = lockResult(saved);
+    model = advance(model, 23, { calm: false, rand: () => 0 }).model;
+    saved = decodeSave(encodeSave(model))!.model;
+    expect(saved.rush).toEqual(model.rush);
+    expect(saved.rush!.event!.remaining).toBe(RUSH_SECONDS - 23);
+    expect(saved.rush!.event!.result).not.toBeNull();
+  });
+
+  it("resumes paid results without paying again even after ordinary award keys expire", () => {
+    let model = preparation();
+    model = { ...model, tanks: model.tanks.map((tank) => ({ ...tank, food: 100, clean: 100 })) };
+    model = commitResult(lockResult(model));
+    const coins = model.coins;
+    const saved = decodeSave(encodeSave({ ...model, paid: [] }))!.model;
+    expect(saved.rush).toEqual(model.rush);
+    expect(saved.rush!.phase).toBe("results");
+    expect(commitResult(saved).coins).toBe(coins);
+    expect(commitResult(saved).rush!.stats.events).toBe(1);
+  });
+
+  it("drops unknown readiness ids and duplicates without dropping sold tracked ids", () => {
+    const raw = JSON.parse(encodeSave(preparation()));
+    raw.model.rush.event.tankIds.push("sold-tank");
+    raw.model.rush.event.ready = ["t1", "unknown", "t1", "sold-tank"];
+    const state = decodeSave(JSON.stringify(raw))!.model.rush!;
+    expect(state.phase).toBe("prep");
+    expect(state.event!.ready).toEqual(["t1", "sold-tank"]);
+    expect(state.event!.tankIds).toContain("sold-tank");
+  });
+
+  it.each(["prep", "rush"] as const)("clamps %s remaining to the phase length", (phase) => {
+    const model = phase === "prep" ? preparation() : lockResult(preparation());
+    const raw = JSON.parse(encodeSave(model));
+    raw.model.rush.event.remaining = 99999;
+    expect(decodeSave(JSON.stringify(raw))!.model.rush!.event!.remaining).toBe(phase === "prep" ? model.rush!.event!.prepTotal : RUSH_SECONDS);
+    raw.model.rush.event.remaining = -10;
+    expect(decodeSave(JSON.stringify(raw))!.model.rush!.event!.remaining).toBe(0);
+  });
+
+  it.each([
+    ["unlocked", "yes"], ["introSeen", 1], ["phase", "cooldown"], ["untilNext", "600"],
+    ["pendingFor", null], ["lastCommitted", "someone"], ["event", { id: "broken" }]
+  ])("resets invalid %s while retaining independently valid stats and rewards", (key, value) => {
+    const raw = JSON.parse(encodeSave(preparation()));
+    raw.model.rush.stats = { events: 3, bronze: 1, silver: 1, gold: 1, successes: 3, best: "gold", bestReady: 4 };
+    raw.model.rush.rewards = ["cabinet", "bronzeDisplay", "floorPattern", "goldSign"];
+    const stats = raw.model.rush.stats;
+    const rewards = raw.model.rush.rewards;
+    raw.model.rush[key as string] = value;
+    expect(decodeSave(JSON.stringify(raw))!.model.rush).toEqual({ ...newRushState(), stats, rewards });
+  });
+
+  it("validates every lifetime counter, reward id, and locked-result field", () => {
+    for (const key of ["events", "bronze", "silver", "gold", "successes", "bestReady"]) {
+      const raw = JSON.parse(encodeSave(unlocked()));
+      raw.model.rush.stats[key] = -1;
+      const state = decodeSave(JSON.stringify(raw))!.model.rush!;
+      expect(state.stats).toEqual(newRushState().stats);
+      expect(state.unlocked).toBe(false);
+    }
+    for (const [key, value] of [["ready", 999], ["eligible", 0], ["medal", "diamond"], ["bonus", 99999], ["newRewards", ["incomeBoost"]]]) {
+      const raw = JSON.parse(encodeSave(lockResult(preparation())));
+      raw.model.rush.event.result[key as string] = value;
+      expect(decodeSave(JSON.stringify(raw))!.model.rush!.event).toBeNull();
+    }
+    const raw = JSON.parse(encodeSave(unlocked()));
+    raw.model.rush.rewards = ["cabinet", "moneyMachine"];
+    expect(decodeSave(JSON.stringify(raw))!.model.rush!.rewards).toEqual([]);
+  });
+
+  it("rejects inconsistent lifetime success totals and best-medal records", () => {
+    for (const stats of [
+      { events: 1, bronze: 1, silver: 0, gold: 0, successes: 0, best: "bronze", bestReady: 2 },
+      { events: 0, bronze: 1, silver: 0, gold: 0, successes: 1, best: "bronze", bestReady: 2 },
+      { events: 1, bronze: 0, silver: 1, gold: 0, successes: 1, best: "gold", bestReady: 2 },
+      { events: 1, bronze: 0, silver: 0, gold: 0, successes: 0, best: "bronze", bestReady: 2 }
+    ]) {
+      const raw = JSON.parse(encodeSave(unlocked()));
+      raw.model.rush.stats = stats;
+      expect(decodeSave(JSON.stringify(raw))!.model.rush!.stats).toEqual(newRushState().stats);
+    }
+  });
+});
 
 describe("save", () => {
   it("loads a pre-Atrium save with all existing rooms, animals and purchases intact", () => {

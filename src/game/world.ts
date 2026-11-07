@@ -6,6 +6,7 @@ import type { TankRec } from "./logic/model";
 import type { Column } from "./logic/swim";
 import { sandSurfaceY } from "./logic/tankLayout";
 import { HABITAT } from "./data/sharkTunnel";
+import { RUSH_OBSTACLES } from "./data/rushDecor";
 
 /**
  * Room layout and tank geometry in world space (metres). The room's front
@@ -187,6 +188,10 @@ export const doorWest = (i: number): Vec2 => ({ x: doorX(i) - 0.7, z: DOOR_Z });
 export const doorEast = (i: number): Vec2 => ({ x: doorX(i) + 0.7, z: DOOR_Z });
 
 export interface WalkObstacle { minX: number; maxX: number; minZ: number; maxZ: number }
+/** Permanently reserved entrance cosmetics. These sit outside all Hall 1
+ * visitor routes, including interrupted request/ordinary bench approaches.
+ * Keeping reservations stable avoids changing routes as rewards are earned. */
+export const HALL1_OBSTACLES: WalkObstacle[] = RUSH_OBSTACLES;
 /** Conservative solid footprints, including 30 cm for a visitor's body. Pads
  * reserve the largest accepted tank even before it is installed. */
 export const ATRIUM_OBSTACLES: WalkObstacle[] = [

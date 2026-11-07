@@ -54,6 +54,8 @@ export interface Pellet {
 export type VisitorState = "walk" | "look" | "sit" | "help" | "leave" | "gone";
 
 export interface VisitorRt {
+  /** Rush crowds are visual only: no tips, requests or economy changes. */
+  cosmetic?: boolean;
   id: string;
   type: VisitorType;
   x: number;
@@ -89,7 +91,7 @@ export interface VisitorRt {
   scripted: boolean;
   bubble: "!" | "heart" | "hmm" | "wow" | null;
   bubbleT0: number;
-  anim: { kind: "jump" | "clap" | "photo" | "hmm" | "wave"; t0: number } | null;
+  anim: { kind: "jump" | "clap" | "photo" | "hmm" | "wave" | "point"; t0: number } | null;
   /** Face this point while standing. */
   face: Vec2 | null;
   /** Fade in at the door. */

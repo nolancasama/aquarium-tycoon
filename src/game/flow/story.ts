@@ -37,6 +37,7 @@ import { audio } from "../../audio/audio";
 import { tts } from "../../audio/tts";
 import { recognition, requestMicPermission } from "../../audio/recognition";
 import { ACTION } from "../../ui/i18n";
+import { rushCalm } from "../rush/flow";
 
 /**
  * Starting, continuing and saving; the tutorial with Pico; stage rewards;
@@ -190,6 +191,7 @@ function enter(m: Model) {
     tunnelActivity: null,
     tunnelWaiting: null,
     tunnelCelebration: null,
+    rushAnnouncement: null,
     tunnelView: "whole",
     hall: 0,
     guide: null,
@@ -246,7 +248,8 @@ export function toTitle() {
     panel: null,
     placing: null,
     view: "room",
-    tankId: null
+    tankId: null,
+    rushAnnouncement: null
   });
   rt.visitors = [];
 }
@@ -790,6 +793,7 @@ export function storyTick(dt: number) {
     syncTutorialGuide(dt);
   }
   if (busyFlow || g.screen !== "game") return;
+  if (g.model.rush?.phase === "results") return;
   const m = g.model;
   // Idle time toward Pico's nudge.
   const step = currentStep();
@@ -806,6 +810,15 @@ export function storyTick(dt: number) {
   // Rewards may interrupt the decorating tray (the goal was just met there), never a carried item.
   const calm = g.mode === "play" && !g.prompt && !g.request && !g.stageCard && !g.settingsOpen && !g.placing && (!g.panel || g.panel === "decorate");
   if (!calm || m.progress.tutorial !== "done") return;
+  if (m.rush?.unlocked && !m.rush.introSeen && rushCalm()) {
+    updateModel((current) => current.rush ? { ...current, rush: { ...current.rush, introSeen: true } } : current);
+    void flow(async (generation) => {
+      setGame({ mode: "busy" });
+      await say("pico", "Rush Hour is coming! Let's get our aquarium ready!", "もうすぐ おきゃくさんが いっぱい くるよ！じゅんび しよう！");
+      alive(generation);
+    });
+    return;
+  }
   if (needsGift(m)) {
     void flow(giftFlow);
     return;

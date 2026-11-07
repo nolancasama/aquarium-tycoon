@@ -1,7 +1,9 @@
 import { getGame, setGame, updateModel } from "./store";
 import { beginCelebration, endCelebration, rt } from "./runtime";
 import { seedChoices } from "./flow/ask";
-import { seedSim } from "./sim";
+import { advanceCare, seedSim } from "./sim";
+import { ensureRush } from "./rush/logic";
+import { RUSH_SECONDS } from "./rush/config";
 import { leave, seedVisitors, spawnVisitor } from "./flow/visitors";
 import { decay, goals, happiness, latchHappy, setCare } from "./logic/model";
 import type { Request } from "./logic/requests";
@@ -56,6 +58,7 @@ export function installE2eHook(seed: number) {
         placing: g.placing,
         micState: g.micState,
         coins: m.coins,
+        rush: m.rush,
         stage: m.progress.stage,
         tutorial: m.progress.tutorial,
         guide: g.guide,
@@ -190,6 +193,28 @@ export function installE2eHook(seed: number) {
     },
     setCare(tankId: string, food: number, clean: number) {
       updateModel((m) => setCare(m, tankId, food, clean));
+    },
+    rushState() {
+      return getGame().model.rush ?? null;
+    },
+    rushUntilNext(seconds: number) {
+      if (!Number.isFinite(seconds)) return;
+      updateModel((m) => {
+        const next = ensureRush(m);
+        return { ...next, rush: { ...next.rush!, untilNext: Math.max(0, seconds) } };
+      });
+    },
+    rushRemaining(seconds: number) {
+      if (!Number.isFinite(seconds)) return;
+      updateModel((m) => {
+        const r = m.rush;
+        if (!r?.event || (r.phase !== "prep" && r.phase !== "rush")) return m;
+        const limit = r.phase === "prep" ? r.event.prepTotal : RUSH_SECONDS;
+        return { ...m, rush: { ...r, event: { ...r.event, remaining: Math.max(0, Math.min(limit, seconds)) } } };
+      });
+    },
+    rushAdvance(seconds: number) {
+      advanceCare(seconds);
     },
     /** Ordinary visitors on/off (tests spawn their own request visitors). */
     visitors(on: boolean) {

@@ -2,11 +2,12 @@ import { getGame, model, nudge, setGame, updateModel } from "../store";
 import { beginCelebration, clearGlow, clearVisitorTapQueue, effect, endCelebration, resetCelebrations, rt, startCount, type VisitorRt } from "../runtime";
 import type { SlotId, Vec2, VisitorType } from "../types";
 import { award, EXPANSION_FROM, fishCount, happiness, helpVisitor, mood, tankById, tipBreakdown, type TankRec } from "../logic/model";
-import { makeRequest, matchesShow, requestLine, requestReward, stillValid, tankSatisfies, targetsIn, type Request, type ShowTarget } from "../logic/requests";
+import { countableTanks, makeRequest, matchesShow, requestLine, requestReward, stillValid, tankSatisfies, targetsIn, type Request, type ShowTarget } from "../logic/requests";
 import { IT_COLOR_IDS, IT_COLOR_PHRASE, ITS_IDS, ITS_IDS_BASE, ITS_PHRASE, LIKE_COLOR_PHRASE, NUMBER_IDS, NUMBER_PHRASE, colorOfPhrase, type PhraseId } from "../logic/english";
 import { makeRng, shuffle } from "../logic/rng";
 import { SPECIES } from "../data/fish";
 import { SLOT_POS, STAND_H, TANKS } from "../data/tanks";
+import { ROOM_OF, roomOpen } from "../data/rooms";
 import { BENCH_FACING, BENCH_SEAT, ENTRY, OUTSIDE, REQUEST_SEAT, benchApproach, benchPose, hallOfX, lookSpot, reefLoop, requestEligible, route, seatApproach, seatById, seatExit, tankOrigin } from "../world";
 import { planRest, restDuration } from "../logic/seating";
 import { ask, fastMode, say, speak, wait } from "./ask";
@@ -17,6 +18,7 @@ import type { ColorId } from "../types";
 import { requestPattern } from "../logic/sentenceTeaching";
 import { meetPattern } from "./meaning";
 import { queuedVisitorTapState } from "../logic/visitorTap";
+import { CROWD_CAP, CROWD_EXTRA, RUSH_QUESTIONS, RUSH_SECONDS } from "../rush/config";
 
 /**
  * Visitors: they come in, look at each tank, react to how happy its fish are,
@@ -38,17 +40,27 @@ const exclaimed = new Set<string>();
 let lastExclaim = -100;
 const arrivals = new Map<string, () => void>();
 let activeRequest: string | null = null;
+/** Cosmetic poses and visitor locations are deliberately runtime-only. */
+const crowdReactionAt = new Map<string, number>();
+const rushQuestionVisitors = new Map<string, string>();
+let crowdEvent: string | null = null;
+let crowdSpawned = 0;
+let nextCrowdAt = 0;
+let offerPaid: readonly string[] | null = null;
+let offerEvent: string | null = null;
+let offerCount = 0;
 
 /** A visitor stops working the request (or the judge's step) and is free again. */
 function syncWaiting() {
   let w: VisitorRt | undefined;
-  if (!activeRequest) for (const v of rt.visitors) if (requestEligible(v)) { w = v; break; }
+  if (!activeRequest) for (const v of rt.visitors) if (visitorRequestAvailable(v)) { w = v; break; }
   const cur = getGame().waiting;
   if ((w?.id ?? null) !== (cur?.id ?? null)) setGame({ waiting: w ? { id: w.id, type: w.type } : null });
 }
 
-export function spawnVisitor(type: VisitorType, request: Request | null, opts: { atBench?: boolean; scripted?: boolean } = {}): VisitorRt {
+export function spawnVisitor(type: VisitorType, request: Request | null, opts: { atBench?: boolean; scripted?: boolean; cosmetic?: boolean } = {}): VisitorRt {
   const m = model();
+  if (opts.cosmetic) request = null;
   const id = `v${visitorNo++}`;
   const plan = m.tanks.filter((t) => t.type !== "sharks" && t.fish.length > 0).map((t) => t.id);
   const v: VisitorRt = {
@@ -70,13 +82,14 @@ export function spawnVisitor(type: VisitorType, request: Request | null, opts: {
     request,
     helped: false,
     scripted: Boolean(opts.scripted),
+    cosmetic: Boolean(opts.cosmetic),
     bubble: request ? "!" : null,
     bubbleT0: rt.time,
     anim: null,
     face: null,
     bornT: rt.time
   };
-  if (!request && !opts.scripted) v.restAfter = 1 + Math.floor(rand() * Math.max(1, plan.length));
+  if (!request && !opts.scripted && !opts.cosmetic) v.restAfter = 1 + Math.floor(rand() * Math.max(1, plan.length));
   if (opts.atBench) {
     v.seatId = REQUEST_SEAT.id;
     v.x = BENCH_SEAT.x;
@@ -142,6 +155,11 @@ function startLook(v: VisitorRt, tankId: string) {
   if (!v.seen.includes(tankId)) v.seen.push(tankId);
   const t = tankById(model(), tankId);
   const md = t ? mood(happiness(t)) : "okay";
+  if (v.cosmetic) {
+    v.until = rt.time + 8 + rand() * 8;
+    crowdReactionAt.set(v.id, rt.time + 0.6 + rand() * 1.8);
+    return;
+  }
   window.setTimeout(() => {
     if (v.state !== "look" || v.at !== tankId) return;
     // A sea animal is worth saying out loud (ambient English): "Look! A turtle!"
@@ -173,7 +191,7 @@ function startLook(v: VisitorRt, tankId: string) {
 }
 
 function nextLookOrLeave(v: VisitorRt) {
-  if (v.state === "look" && v.at && v.seen.length >= (v.restAfter ?? 1)) {
+  if (!v.cosmetic && v.state === "look" && v.at && v.seen.length >= (v.restAfter ?? 1)) {
     const rest = planRest(v, hallOfX(v.x), v.plan.length === 0, rt.visitors, rand);
     if (rest.decided) v.restDecided = true;
     if (rest.seat) {
@@ -195,12 +213,16 @@ function nextLookOrLeave(v: VisitorRt) {
     v.seatId = undefined;
     v.seatTarget = 0;
   }
+  // Crowd members keep touring until the event ends, without occupying the
+  // ordinary visitors' seats. Shuffle once per tour, never every frame.
+  if (v.cosmetic && !v.plan.length && model().rush?.phase === "rush") v.plan = crowdTankIds();
   const next = v.plan.shift();
   if (next && tankById(model(), next)) {
     const slot = tankSlot(next)!;
     v.state = "walk";
     v.at = next;
-    const spot = lookSpot(slot, visitorNo + v.seen.length);
+    const spot = lookSpot(slot, v.cosmetic ? Math.floor(rand() * CROWD_CAP) : visitorNo + v.seen.length);
+    if (v.cosmetic) { spot.x += (rand() - 0.5) * 0.55; spot.z += rand() * 0.4; }
     const from = seat ? seat.approach : v;
     const onward = slot === "I" ? reefLoop(from, spot) : route(from, spot);
     v.path = seat ? [...(seated ? [seat.front] : []), seat.approach, ...onward] : onward;
@@ -216,7 +238,8 @@ export function leave(v: VisitorRt) {
   if (v.state === "leave" || v.state === "gone") return;
   const seated = v.seat > 0 || v.seatTarget === 1;
   const seat = v.seatId || v.poseSeatId ? seatById(v.seatId ?? v.poseSeatId) : null;
-  if (!v.helped && !v.scripted) payTips(v);
+  if (!v.helped && !v.scripted && !v.cosmetic) payTips(v);
+  crowdReactionAt.delete(v.id);
   v.state = "leave";
   v.request = null;
   v.at = null;
@@ -231,6 +254,7 @@ export function leave(v: VisitorRt) {
 
 /** A seated-out visitor's tips: one tag per tank (its own amount and mood), one total at the visitor. */
 function payTips(v: VisitorRt) {
+  if (v.cosmetic) return;
   const m = model();
   const parts = tipBreakdown(m, v.seen);
   const tips = parts.reduce((n, p) => n + p.tip, 0);
@@ -301,6 +325,7 @@ export function stepVisitors(dt: number) {
   const speedUp = fastMode() ? 4 : 1;
   for (const v of rt.visitors) {
     if (v.state === "gone") continue;
+    if (v.cosmetic && v.state === "look" && rt.time >= (crowdReactionAt.get(v.id) ?? Infinity)) crowdReact(v);
     if (v.seat !== v.seatTarget) {
       // Turn at the spot in front of the seat, then sit back onto it over planted feet.
       const seat = seatById(v.seatId ?? v.poseSeatId);
@@ -392,24 +417,152 @@ const TYPES: VisitorType[] = ["child", "adult", "fan"];
 /** Phase 2 adds grandma and the explorer. */
 const MORE_TYPES: VisitorType[] = ["child", "adult", "fan", "grandma", "explorer"];
 
+/** A varied tour across all open halls; the Shark Tunnel has its own people. */
+function crowdTankIds(): string[] {
+  const m = model();
+  return shuffle(m.tanks.filter((t) => {
+    if (t.type === "sharks" || !t.fish.length) return false;
+    return roomOpen(ROOM_OF[t.slot], m.progress);
+  }).map((t) => t.id), rand);
+}
+
+function crowdReact(v: VisitorRt) {
+  const tank = v.at ? tankById(model(), v.at) : null;
+  const popular = tank?.fish.some((f) => SPECIES[f.species].kind === "animal");
+  const reaction = rand();
+  const kind = reaction < 0.38 ? "point" : reaction < 0.76 ? "photo" : popular ? "jump" : "clap";
+  v.anim = { kind, t0: rt.time };
+  v.bubble = kind === "jump" ? "heart" : "wow";
+  v.bubbleT0 = rt.time;
+  crowdReactionAt.set(v.id, rt.time + 3 + rand() * 5);
+  // Ambient cheers are staggered and quiet periods remain available for speech.
+  const g = getGame();
+  if (kind === "jump" && rt.time - lastExclaim > 12 && !g.prompt && !g.line && !rt.pico.talking && g.mode === "play") {
+    lastExclaim = rt.time;
+    audio.play("wow");
+  }
+}
+
+function rushQuestionCount(eventId: string): number {
+  const paid = model().paid;
+  if (offerPaid === paid && offerEvent === eventId) return offerCount;
+  let count = 0;
+  for (let i = 1; i <= RUSH_QUESTIONS; i++) if (paid.includes(`${eventId}:question:${i}`)) count++;
+  offerPaid = paid;
+  offerEvent = eventId;
+  offerCount = count;
+  return count;
+}
+
+/** Requests that use this rush's budget stay tappable; other requests wait. */
+export function visitorRequestAvailable(v: VisitorRt): boolean {
+  if (v.cosmetic || !requestEligible(v)) return false;
+  const rush = model().rush;
+  if (rush?.phase === "results") return false;
+  return rush?.phase !== "rush" || !rush.event || rushQuestionVisitors.get(v.id) === rush.event.id || rushQuestionCount(rush.event.id) < RUSH_QUESTIONS;
+}
+
+/** Reserve an offer before showing it, so reloads cannot offer it twice. */
+function reserveRushQuestion(eventId: string): boolean {
+  const m = model();
+  for (let i = 1; i <= RUSH_QUESTIONS; i++) {
+    const marker = `${eventId}:question:${i}`;
+    if (m.paid.includes(marker)) continue;
+    updateModel((mm) => mm.paid.includes(marker) ? mm : { ...mm, paid: [...mm.paid, marker].slice(-60) });
+    return true;
+  }
+  return false;
+}
+
+function shortRushQuestion(): Request | null {
+  const m = model();
+  const counts = countableTanks(m).filter((t) => t.type !== "sharks");
+  const animals = m.tanks.filter((t) => t.type !== "sharks" && t.fish.some((f) => SPECIES[f.species].kind === "animal"));
+  if (animals.length && (!counts.length || rand() < 0.5)) {
+    const tank = animals[Math.floor(rand() * animals.length)];
+    const animal = tank.fish.find((f) => SPECIES[f.species].kind === "animal")!;
+    return { kind: "whatsThis", tankId: tank.id, fishId: animal.id };
+  }
+  if (counts.length) return { kind: "count", tankId: counts[Math.floor(rand() * counts.length)].id };
+  return m.tanks.some((t) => t.type !== "sharks" && t.fish.length) ? { kind: "chatLike" } : null;
+}
+
+/** Uses remaining active event time, rather than a second independent clock. */
+function rushVisitorsTick() {
+  const g = getGame();
+  const rush = g.model.rush;
+  if (rush?.phase !== "rush" || !rush.event) {
+    if (crowdEvent !== null) {
+      for (const v of rt.visitors) if (v.cosmetic) leave(v);
+      crowdEvent = null;
+      crowdSpawned = 0;
+    }
+    return;
+  }
+  const eventId = rush.event.id;
+  if (crowdEvent !== eventId) {
+    crowdEvent = eventId;
+    crowdSpawned = 0;
+    nextCrowdAt = RUSH_SECONDS - rush.event.remaining;
+    rushQuestionVisitors.clear();
+  }
+  if (g.mode !== "play" || g.settingsOpen || g.stageCard || g.prompt || g.line || scripted.busy || rt.celebrations.size || rt.pico.talking) return;
+  let total = 0;
+  let ordinary = 0;
+  let waiting = false;
+  for (const v of rt.visitors) {
+    if (v.state === "gone") continue;
+    total++;
+    if (!v.cosmetic) ordinary++;
+    if (v.request && !v.helped) waiting = true;
+  }
+  const elapsed = RUSH_SECONDS - rush.event.remaining;
+  if (elapsed >= nextCrowdAt && crowdSpawned < CROWD_EXTRA && total < CROWD_CAP) {
+    const left = CROWD_EXTRA - crowdSpawned;
+    const group = Math.min(left === 4 ? 2 : 2 + Math.floor(rand() * 2), left, CROWD_CAP - total);
+    for (let i = 0; i < group; i++) {
+      const v = spawnVisitor(i === 0 ? "adult" : "child", null, { cosmetic: true });
+      v.plan = crowdTankIds();
+      v.x += (i - 1) * 0.32;
+      v.z -= rand() * 0.8;
+      v.step = rand() * Math.PI * 2;
+      crowdSpawned++;
+      total++;
+    }
+    nextCrowdAt = elapsed + RUSH_SECONDS / CROWD_EXTRA;
+  }
+  const offered = rushQuestionCount(eventId);
+  if (!waiting && ordinary < (g.model.progress.tickets ? 4 : 3) && total < CROWD_CAP && offered < RUSH_QUESTIONS &&
+      elapsed >= (offered + 1) * RUSH_SECONDS / (RUSH_QUESTIONS + 1)) {
+    const request = shortRushQuestion();
+    if (request && reserveRushQuestion(eventId)) {
+      const v = spawnVisitor(rand() < 0.5 ? "adult" : "child", request);
+      rushQuestionVisitors.set(v.id, eventId);
+      rt.sinceRequest = 0;
+    }
+  }
+}
+
 /** Visitors come only during ordinary play, while at least one fish is in a tank. */
 export function visitorsTick(dt: number) {
+  rushVisitorsTick();
   const g = getGame();
   const m = g.model;
   if (m.progress.tutorial !== "done" || scripted.busy || fishCount(m) === 0) return;
-  if (g.mode === "busy" || g.stageCard) return;
+  if (g.mode === "busy" || g.stageCard || m.rush?.phase === "results") return;
   rt.spawnClock += dt;
   rt.sinceRequest += dt;
   if (rt.spawnClock < rt.nextSpawn) return;
-  const active = rt.visitors.filter((v) => v.state !== "gone");
+  const active = rt.visitors.filter((v) => v.state !== "gone" && !v.cosmetic);
   // The ticket gate: up to 4 visitors, arriving more often.
   const tickets = m.progress.tickets;
   if (active.length >= (tickets ? 4 : 3)) return;
+  if (m.rush?.phase === "rush" && rt.visitors.length >= CROWD_CAP) return;
   rt.spawnClock = 0;
   rt.nextSpawn = fastMode() ? 3 : tickets ? 14 + rand() * 8 : 18 + rand() * 10;
   const waiting = active.some((v) => v.request && !v.helped);
   let req: Request | null = null;
-  if (!waiting) {
+  if (!waiting && m.rush?.phase !== "rush") {
     const p = m.progress;
     const goalStage = (!p.star && (p.stage === 3 || p.stage === 5)) || (p.stage >= 6 && !p.superStar);
     const chance = goalStage ? 0.5 : p.stage >= 2 ? 1 / 3 : 0;
@@ -481,6 +634,7 @@ export function whatColorChoices(color: ColorId, random: () => number = rand): P
 
 /** Run one request with its visitor. Resolves when helped (ok) or put off (not ok). */
 export async function runRequest(v: VisitorRt, req: Request, opts: { cancellable: boolean }): Promise<RequestOutcome> {
+  if (v.cosmetic) return { ok: false, tankId: null };
   const line = requestLine(req);
   v.bubble = null;
   if (req.kind === "whatsThis" || req.kind === "whatColor") {
@@ -755,7 +909,7 @@ export async function celebrate(v: VisitorRt, tankId: string | null) {
 
 /** Reward a helped request visitor (once), celebrate, and let them go. */
 export async function helped(v: VisitorRt, req: Request, tankId: string | null) {
-  if (v.helped) return;
+  if (v.helped || v.cosmetic) return;
   v.helped = true;
   const t = tankId ? tankById(model(), tankId) : null;
   const amount = requestReward(req, t);
@@ -775,15 +929,20 @@ export async function helped(v: VisitorRt, req: Request, tankId: string | null) 
 export async function openRequest(id: string) {
   const g = getGame();
   const tutorial = g.model.progress.tutorial === "visitor";
-  if (g.screen !== "game" || activeRequest || (scripted.busy && !tutorial) || g.request || g.prompt || g.placing || g.stageCard || g.settingsOpen || g.fade > 0 || g.mode === "ask") return;
+  if (g.screen !== "game" || activeRequest || (scripted.busy && !tutorial) || g.request || g.prompt || g.placing || g.stageCard || g.settingsOpen || g.fade > 0 || g.mode === "ask" || g.model.rush?.phase === "results") return;
   const v = rt.visitors.find((x) => x.id === id);
-  if (!v || !v.request || !requestEligible(v)) return;
+  if (!v || !v.request || !visitorRequestAvailable(v)) return;
   acknowledgeVisitorTap(v);
   if (g.mode !== "play" || g.line || rt.pico.talking || rt.camera.shot) {
     rt.pendingVisitorTap = { visitorId: v.id, queuedAt: rt.time, screen: g.screen, hall: g.hall };
     return;
   }
   rt.pendingVisitorTap = null;
+  const rush = model().rush;
+  if (rush?.phase === "rush" && rush.event && rushQuestionVisitors.get(v.id) !== rush.event.id) {
+    if (!reserveRushQuestion(rush.event.id)) return;
+    rushQuestionVisitors.set(v.id, rush.event.id);
+  }
   activeRequest = v.id;
   // Get up forward if seated; a walking visitor stops exactly where tapped.
   const seated = v.seat > 0 || v.seatTarget === 1;
@@ -859,5 +1018,13 @@ export function resetVisitors() {
   exclaimed.clear();
   showWait = null;
   lastKind = null;
+  crowdReactionAt.clear();
+  rushQuestionVisitors.clear();
+  crowdEvent = null;
+  crowdSpawned = 0;
+  nextCrowdAt = 0;
+  offerPaid = null;
+  offerEvent = null;
+  offerCount = 0;
   setGame({ waiting: null });
 }

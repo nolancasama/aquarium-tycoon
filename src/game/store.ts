@@ -176,6 +176,8 @@ export interface GameState {
   tunnelWaiting: { id: string; type: VisitorType } | null;
   /** Shark Tunnel milestone celebration card. */
   tunnelCelebration: { milestone: number } | null;
+  /** Short Rush Hour cue, timed by the existing simulation clock. */
+  rushAnnouncement: { kind: "prep" | "rush"; until: number } | null;
 
   model: Model;
 
@@ -288,7 +290,8 @@ export const useGame = create<GameState>(() => ({
   fishTalk: null,
   foodStrip: null,
   guide: null,
-  decorAsk: null
+  decorAsk: null,
+  rushAnnouncement: null
 }));
 
 export const setGame = useGame.setState;

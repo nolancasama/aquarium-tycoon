@@ -32,6 +32,7 @@ import { PicoFace, PersonFace } from "./Portraits";
 import { Ja } from "./Talk";
 import { ActionTag } from "./ActionTag";
 import { TapHand } from "./TapHand";
+import { RushAwardsButton, RushHour } from "./RushHour";
 import { STAGE_NAMES, STAGE_PREVIEWS, UI, goalText } from "./i18n";
 
 export function Big({
@@ -203,6 +204,7 @@ function TopBar() {
         </div>
       </div>
       <div className="top-right">
+        <RushAwardsButton />
         <HelpButton />
         <button className="round settings-btn ui" onClick={() => setGame({ settingsOpen: true })} aria-label="Settings" data-testid="btn-settings">
           <Icon id="gear" size={30} />
@@ -550,6 +552,7 @@ export function Hud() {
       <Toasts />
       {!prompt && !line && <NudgeBubble />}
       <TapHand />
+      <RushHour />
     </>
   );
 }

@@ -4,7 +4,9 @@ import { requestReward, type Request } from "../logic/requests";
 import { resetRuntime, rt } from "../runtime";
 import { getGame, model, setGame } from "../store";
 import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, SEATS, seatApproach, seatExit } from "../world";
-import { answerShow, cancelShow, helped, openRequest, leave, resetVisitors, scripted, seedVisitors, spawnVisitor, stepVisitors, walkTo } from "./visitors";
+import { answerShow, cancelShow, helped, openRequest, leave, resetVisitors, scripted, seedVisitors, spawnVisitor, stepVisitors, visitorsTick, walkTo } from "./visitors";
+import { CROWD_CAP, CROWD_EXTRA, RUSH_QUESTIONS, RUSH_SECONDS } from "../rush/config";
+import { newRushState } from "../rush/types";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn() } }));
 vi.mock("./actions", () => ({ openTank: vi.fn() }));
@@ -18,6 +20,25 @@ vi.mock("./ask", () => ({
 
 const request: Request = { kind: "show", color: "orange", fishOnly: true };
 const answer = { type: "fish", species: "clownfish" } as const;
+
+function rushAt(remaining = RUSH_SECONDS) {
+  const m = model();
+  const rush = m.rush ?? newRushState();
+  setGame({
+    model: {
+      ...m,
+      progress: { ...m.progress, tutorial: "done", freePlay: true, hallOpen: true },
+      rush: {
+        ...rush, unlocked: true, introSeen: true, phase: "rush",
+        event: {
+          id: "rush-1", tankIds: ["t1"], ready: ["t1"], prepTotal: 120, remaining,
+          result: { ready: 1, eligible: 1, medal: "gold", bonus: 13, newRewards: [] }
+        }
+      }
+    },
+    mode: "play", line: null, settingsOpen: false, fade: 0
+  });
+}
 
 beforeEach(() => {
   vi.stubGlobal("window", { setTimeout: vi.fn() });
@@ -35,6 +56,98 @@ afterEach(() => {
   resetRuntime();
   resetVisitors();
   vi.unstubAllGlobals();
+});
+
+describe("Rush Hour visitors", () => {
+  it("brings adult and child groups up to the cosmetic limit and leaves naturally without tipping", () => {
+    seedVisitors(777);
+    rushAt();
+    visitorsTick(0);
+    const firstGroup = rt.visitors.filter((v) => v.cosmetic);
+    expect(firstGroup.length).toBeGreaterThanOrEqual(2);
+    expect(firstGroup.length).toBeLessThanOrEqual(3);
+    expect(firstGroup.map((v) => v.type)).toContain("adult");
+    expect(firstGroup.map((v) => v.type)).toContain("child");
+    for (const remaining of [75, 60, 45, 30, 15, 1]) { rushAt(remaining); visitorsTick(0); }
+    const crowd = rt.visitors.filter((v) => v.cosmetic);
+    expect(crowd).toHaveLength(CROWD_EXTRA);
+    expect(rt.visitors.length).toBeLessThanOrEqual(CROWD_CAP);
+    expect(crowd.every((v) => !v.request)).toBe(true);
+    const coins = model().coins;
+    for (const v of crowd) v.seen.push("t1");
+    setGame({ model: { ...model(), rush: { ...model().rush!, phase: "results" } } });
+    visitorsTick(0);
+    expect(crowd.every((v) => v.state === "leave" && v.path.length > 0)).toBe(true);
+    expect(model().coins).toBe(coins);
+    expect(model().paid.some((key) => key.startsWith("tip:"))).toBe(false);
+  });
+
+  it("honours the hard hall cap when other visitors already fill the room", () => {
+    rushAt();
+    for (let i = 0; i < CROWD_CAP; i++) spawnVisitor("adult", null);
+    visitorsTick(0);
+    expect(rt.visitors).toHaveLength(CROWD_CAP);
+    expect(rt.visitors.some((v) => v.cosmetic)).toBe(false);
+  });
+
+  it("tours the open Gallery and Atrium as well as the halls, excluding closed rooms and the tunnel", () => {
+    const m = model();
+    const gallery = newTank("gallery-rush", "cylinder", "F");
+    const atrium = newTank("atrium-rush", "reef", "I");
+    const tunnel = newTank("tunnel-rush", "sharks", "L");
+    gallery.fish = [{ id: "jelly-rush", species: "moonjelly" }];
+    atrium.fish = [{ id: "reef-rush", species: "clownfish" }];
+    tunnel.fish = [{ id: "shark-rush", species: "blacktip" }];
+    setGame({ model: { ...m, tanks: [...m.tanks, gallery, atrium, tunnel], progress: { ...m.progress, galleryOpen: true, atriumOpen: true, tunnelOpen: true } } });
+    rushAt();
+    visitorsTick(0);
+    const v = rt.visitors.find((visitor) => visitor.cosmetic)!;
+    expect(v.plan).toEqual(expect.arrayContaining(["t1", gallery.id, atrium.id]));
+    expect(v.plan).not.toContain(tunnel.id);
+    resetRuntime();
+    resetVisitors();
+    setGame({ model: { ...model(), progress: { ...model().progress, galleryOpen: false, atriumOpen: false } } });
+    visitorsTick(0);
+    expect(rt.visitors.find((visitor) => visitor.cosmetic)!.plan).toEqual(["t1"]);
+  });
+
+  it("defensively prevents cosmetic requests and help rewards while ordinary tips still pay", async () => {
+    const cosmetic = spawnVisitor("adult", request, { cosmetic: true });
+    expect(cosmetic.request).toBeNull();
+    cosmetic.seen.push("t1");
+    const coins = model().coins;
+    await helped(cosmetic, request, "t1");
+    leave(cosmetic);
+    expect(model().coins).toBe(coins);
+    expect(model().stats.helped).toBe(0);
+    const ordinary = spawnVisitor("adult", null);
+    ordinary.seen.push("t1");
+    leave(ordinary);
+    expect(model().coins).toBeGreaterThan(coins);
+  });
+
+  it("persists the short-question offer budget across runtime reloads without awarding coins", () => {
+    const coins = model().coins;
+    rushAt(60);
+    visitorsTick(0);
+    let offered = rt.visitors.find((v) => v.request);
+    expect(offered).toBeDefined();
+    expect(offered!.cosmetic).toBe(false);
+    expect(offered!.request!.kind).toBe("chatLike");
+    leave(offered!);
+    rushAt(30);
+    visitorsTick(0);
+    offered = rt.visitors.find((v) => v.request);
+    expect(offered).toBeDefined();
+    expect(model().paid.filter((key) => key.startsWith("rush-1:question:"))).toHaveLength(RUSH_QUESTIONS);
+    expect(model().coins).toBe(coins);
+    resetRuntime();
+    resetVisitors();
+    rushAt(1);
+    visitorsTick(0);
+    expect(rt.visitors.some((v) => v.request)).toBe(false);
+    expect(model().coins).toBe(coins);
+  });
 });
 
 function walkingVisitor(req: Request | null = request, scriptedVisitor = false) {

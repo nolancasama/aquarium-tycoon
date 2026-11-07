@@ -15,6 +15,7 @@ import { ATRIUM_BENCHES, ATRIUM_BOARDS, ATRIUM_PALMS, atriumFurnitureGeometry, a
 import { atriumFloorTexture, atriumGlassMaterial, atriumMaterial, atriumShaftMaterial } from "./atriumMaterials";
 import { tankShellGeometry, waterGeometry } from "./models/tankShell";
 import { SharkDoor } from "./tunnel/SharkTunnel";
+import { RushDecor } from "./rush/RushDecor";
 import { flatMat, floorTexture, muralTexture, oceanFloorMaterial, oceanMuralTexture, padIconTexture, posterTexture, shadowMaterial, signMaterial, smoothMat } from "./materials";
 
 /** Soft contact blobs under furniture: [x, z, width, depth], merged into one mesh. */
@@ -99,6 +100,7 @@ export function Room() {
       </mesh>
       <Photo />
       <Trophy />
+      <RushDecor />
       </NearbyRoom>
       <HallDoor />
       <OceanHall />

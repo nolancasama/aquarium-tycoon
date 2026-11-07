@@ -5,6 +5,7 @@ import { BUILT_IN_PADS, HALL_OF, PAD_TYPES, SLOT_ORDER, TANKS } from "../data/ta
 import { roomOpen } from "../data/rooms";
 import { PHRASES, type PhraseId } from "./english";
 import { isSentencePattern } from "./sentenceTeaching";
+import { decodeRush } from "../rush/decode";
 import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep, type TunnelProgress } from "./model";
 
 /**
@@ -241,6 +242,7 @@ export function decodeSave(text: string | null): SaveData | null {
   m.paid = arr(src.paid)
     .filter((k): k is string => typeof k === "string" && k.length < 60)
     .slice(-60);
+  m.rush = decodeRush(src.rush);
   return { v: VERSION, model: m };
 }
 

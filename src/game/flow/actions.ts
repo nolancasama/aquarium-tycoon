@@ -54,6 +54,7 @@ import { dropPellets, dropPinch } from "../sim";
 import { FOOD, foodsFor, type FoodId } from "../data/food";
 import { toWorld } from "../world";
 import { audio } from "../../audio/audio";
+import { latchRushCare } from "../rush/flow";
 
 /**
  * Everything a button or a tap in the 3D view does. Each action checks that
@@ -75,7 +76,7 @@ const TUTORIAL_ALLOWS: Record<TutorialStep, Act[]> = {
 
 function allowed(act: Act): boolean {
   const g = getGame();
-  if (g.screen !== "game" || g.settingsOpen || g.stageCard) return false;
+  if (g.screen !== "game" || g.settingsOpen || g.stageCard || g.model.rush?.phase === "results") return false;
   if (g.mode !== "play") return false;
   const step = g.model.progress.tutorial;
   return step === "done" || TUTORIAL_ALLOWS[step].includes(act);
@@ -818,6 +819,7 @@ export async function feedTank() {
   }
   const r = commit(feed(model(), t.id));
   if (!r.ok) return;
+  latchRushCare();
   if (t.type === "sharks") feedHabitat();
   else dropPellets(t.id, t.type);
   audio.play("sprinkle");
@@ -855,6 +857,7 @@ export async function cleanTank() {
   }
   const r = commit(clean(model(), t.id));
   if (!r.ok) return;
+  latchRushCare();
   rt.cleaning.set(t.id, rt.time);
   audio.play("scrub");
 }

@@ -4,7 +4,7 @@ import { DECOR, decorFits, decorVersion, isTunnelDecor } from "../data/decor";
 import { ATRIUM_PRICE, BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
 import type { PhraseId } from "./english";
-import type { RushState } from "../rush/types";
+import { newRushState, type RushState } from "../rush/types";
 
 /**
  * The whole aquarium as plain data, and every rule that changes it as a pure
@@ -209,6 +209,7 @@ export function newModel(): Model {
     inv: { fish: [], decor: [], tanks: [] },
     progress: newProgress(),
     stats: { coinsEarned: 0, helped: 0, fishBought: 0, seconds: 0 },
+    rush: newRushState(),
     nextId: 2,
     paid: []
   };
