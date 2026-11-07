@@ -1,5 +1,38 @@
 # Current State
 
+## Rush Hour event (2026-11-07)
+
+Design: DESIGN_DECISIONS.md "Rush Hour event (design freeze)" + "decided while building".
+
+- **What:** a recurring free-play event (unlock: free play, Ocean Hall, an occupied
+  tank). Every 8–12 min (first) / 12–18 min of active play, a "Rush Hour soon!"
+  banner (Start Now / Skip, auto-start after 20 s) → preparation (120/150/210 s by
+  tank count) with an amber widget and a checklist that navigates to each tank →
+  90 s visitor crowd → results (medal, `floor(min(40, 10+3n) × fraction)` coins) →
+  awards panel. Tanks latch "prepared" once food and clean are both ≥75.
+- **Code:** rules `src/game/rush/` (config.ts numbers, types.ts state, logic.ts pure
+  state machine, decode.ts save reading, flow.ts sim/UI glue, bridge.ts), UI
+  `src/ui/RushHour.tsx` + `.css` + `rushNavigation.ts`, crowd in `flow/visitors.ts`
+  (cosmetic visitors never tip), cabinet and rewards `src/scene/rush/` with fixed
+  positions/footprints in `src/game/data/rushDecor.ts`. State is `Model.rush`
+  (optional; old saves get defaults, save version unchanged at 3).
+- **Clock:** the care-decay gate in `sim.ts` (`decayRunning`/`advanceCare`); now also
+  paused for prompts, dialogue and the results screen (normal decay too).
+- **Tests:** `rush/logic.test.ts`, `rush/clock.test.ts`, save and visitor additions,
+  `rushDecor.test.ts`; e2e `tests/e2e/rush.spec.ts` (flow, reload no double pay, skip,
+  layout at 1366×768 / 1280×720 / 1024×768; shown to fail on an injected double
+  payment) and `rush-visual.spec.ts` (screenshots only, `SHOTS=1`).
+- **Unverified:** real Chromebook fps with the crowd (CROWD_CAP 14); whether 120 s
+  is enough for children with 4 tanks across rooms; English rush questions observed
+  only through unit tests; first-unlock Pico intro seen only in tests.
+- **Known:** at the default room camera the cabinet sits at the left screen edge
+  (medals visible, the golden sign on its crown cropped); the ⭐ HUD button also opens
+  the awards. Follow-up: reframe or move the cabinet. A free-play save shows Pico's
+  one-time Rush intro shortly after loading, so e2e seeds set `rush.introSeen`.
+- **Verified 2026-11-07:** typecheck, 631 unit tests, build; full e2e 70/73 on one
+  loaded 18-min run — rush and tunnel failures passed on rerun, the layout failure was
+  the intro (fixed in the seed; layout 7/7 twice; baseline 7742574 passed it too).
+
 ## Shark Tunnel lower-wall seam polish (2026-11-06)
 
 - Corrected a 15 cm lateral offset between the walkway kerb's outer foot and the vertical plinth walls on both sides. The previously separate surfaces now meet at the same swept cross-section along the tunnel's curves.
@@ -463,6 +496,8 @@ approach frames, the trophy from front/side/rear.
    full habitat; whether children find the joystick, the "!" visitors and the
    Final Tour. Is 300 coins / about 13 minutes right?
 7. Shark Tunnel follow-ups: spots on the zebra shark's fins, rockier ledge and
+8. Rush Hour with children: is 2 min enough for 1–4 tanks across rooms, do they
+   find the checklist, do medals motivate; fps of the crowd on a Chromebook.
    shelf shapes, a glass-floor section for "under", spoken visitor reactions.
 
 ## Codex / Delegated Work

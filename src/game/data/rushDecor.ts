@@ -23,10 +23,12 @@ export const RUSH_DECOR = {
   bubbleFountain: { x: -3.5, y: 0, z: 3.3, facing: 0,
     footprint: { minX: -3.9, maxX: -3.1, minZ: 2.9, maxZ: 3.7 } },
   // Decorative only; this does not add a seat to the visitor seating system.
-  bench: { x: -2.25, y: 0, z: 3.35, facing: Math.PI,
-    footprint: { minX: -2.95, maxX: -1.55, minZ: 3.08, maxZ: 3.62 } },
-  sharkStatue: { x: -0.55, y: 0, z: 3.62, facing: 0,
-    footprint: { minX: -0.9, maxX: -0.2, minZ: 3.27, maxZ: 3.97 } }
+  // Low, so it can sit behind the bottom toolbar at the default camera.
+  bench: { x: -0.55, y: 0, z: 3.58, facing: Math.PI,
+    footprint: { minX: -1.25, maxX: 0.15, minZ: 3.31, maxZ: 3.85 } },
+  // The top reward stays left of the bottom toolbar so it is visible at the default room camera.
+  sharkStatue: { x: -2.3, y: 0, z: 3.55, facing: 0.35,
+    footprint: { minX: -2.65, maxX: -1.95, minZ: 3.2, maxZ: 3.9 } }
 } satisfies Record<string, RushDecorPlacement>;
 
 /** Permanently reserve the four standing objects plus a 30 cm visitor margin.

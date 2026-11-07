@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { boot, click3d, hook, playing, shot, state, waitFor } from "./helpers";
+import { newRushState } from "../../src/game/rush/types";
 
 const SAVE = {
   v: 1,
@@ -27,6 +28,8 @@ const OCEAN_SAVE = {
       { id: "t15", type: "tall", slot: "E", fish: [{ id: "f16", species: "jellyfish" }], decor: [], food: 100, clean: 100 }
     ],
     progress: { ...SAVE.model.progress, stage: 6, hallOpen: true, star: true, freePlay: true },
+    // A free-play save unlocks Rush Hour; Pico's one-time intro would steal this layout test's clicks.
+    rush: { ...newRushState(), unlocked: true, introSeen: true, untilNext: 600, rewards: ["cabinet"] },
     nextId: 17
   }
 };

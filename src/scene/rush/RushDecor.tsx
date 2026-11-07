@@ -34,7 +34,7 @@ function Reveal({ id, shown, children }: { id: DecorId; shown: boolean; children
   const previous = useRef(shown);
   const born = useRef(-100);
   useEffect(() => {
-    if (shown && !previous.current) {
+    if (shown && !previous.current && revealLive(id)) {
       born.current = rt.time;
       effect("sparkle", p.x, p.y + (id === "floorPattern" ? .15 : 1), p.z, 12);
     }
@@ -46,6 +46,16 @@ function Reveal({ id, shown, children }: { id: DecorId; shown: boolean; children
     ref.current.scale.setScalar(t < 1 ? .15 + .85 * (1 - Math.pow(1 - t, 3)) + Math.sin(t * Math.PI) * .12 : 1);
   });
   return <group ref={ref} visible={shown} position={[p.x, p.y, p.z]} rotation={[0, p.facing, 0]}>{children}</group>;
+}
+
+/**
+ * A reward is only earned live at the results screen (commitResult), and the cabinet at
+ * unlock, before Pico's intro. Anything else that flips "shown" is a save loading behind
+ * the title screen, which must not replay the reveal.
+ */
+function revealLive(id: DecorId): boolean {
+  const rush = getGame().model.rush;
+  return rush?.phase === "results" || (id === "cabinet" && !rush?.introSeen);
 }
 
 function cabinetTap(e: ThreeEvent<MouseEvent>) {
@@ -83,7 +93,8 @@ function Cabinet() {
   const labels = useMemo(labelsMaterial, []);
   const previous = useRef(medals);
   useEffect(() => {
-    if ([...medals].some((m, i) => m === "1" && previous.current[i] === "0")) {
+    if (getGame().model.rush?.phase === "results" &&
+        [...medals].some((m, i) => m === "1" && previous.current[i] === "0")) {
       const p = RUSH_DECOR.cabinet;
       effect("sparkle", p.x, 1.3, p.z, 8);
     }

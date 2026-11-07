@@ -1505,3 +1505,27 @@ its id); results screen with one Continue; trophy cabinet and stats persisted.
 
 **Future variants** (Field Trip, VIP, Discovery Day) are not built; the event
 record and config are shaped so a `kind` can be added later.
+
+### Rush Hour — decided while building (2026-11-07)
+
+- **The shared clock gate widened.** Prompts are mode `ask` and dialogue lines mode
+  `talk`, not `busy` as the freeze assumed. `decayRunning()` now requires
+  `mode === "play"`, no prompt and no line, and not the Rush results screen. So
+  ordinary care decay also pauses while a child answers an English question or
+  reads Pico. Accepted: it is fairer, and one clock is the point. Rejected: a second
+  Rush-only gate (two clocks drifting apart).
+- **Announcements are non-blocking** (a timed card, `rushAnnouncement`), so they
+  never take preparation time. Rush questions are budgeted per event and the
+  budget is persisted, so a reload cannot reopen the question budget.
+- **Cabinet turned 35° toward the room camera.** Flat against the left wall, only
+  its side showed and the medals could not be seen. The golden sign stands on the
+  cabinet's crown, facing with it, instead of on the wall (it read as a dark plaque).
+- **The top reward stays visible.** The golden shark statue stands left of the
+  bottom toolbar. The low decorative bench sits behind the toolbar, where the
+  statue first was. The front-right floor is a visitor destination, so it is not free.
+- **Reveals only play live.** A reward's sparkle and scale-in play only at the
+  results screen (where rewards are granted), and the cabinet's before Pico's
+  intro. The Room mounts behind the title screen, so loading a save would
+  otherwise replay every reveal.
+- **Results must fit without scrolling** at 1366×768: smaller medal on the card,
+  new rewards inline. Children do not find a scrolled reward list.

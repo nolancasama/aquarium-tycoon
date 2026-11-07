@@ -94,5 +94,5 @@ describe("fixed Rush Hour entrance cosmetics", () => {
         clearPath(from, seatExit(from, to, seat, false));
       }
     }
-  });
+  }, 20_000); // exhaustive route pairs; slow on a loaded machine
 });
