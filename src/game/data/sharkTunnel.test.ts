@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CHAMBER_S, EXPLORE_START_S, glassHeightAt, HABITAT, seabedY, sectionAt, sharkSwimVolume, structureObstacles,
   TUNNEL_ROCKS, TUNNEL_SHAPE, TUNNEL_STRUCTURES, TUNNEL_VIEWING_SPOTS, TUNNEL_ZONES, walkHalfWidth, walkwayFrame,
-  walkwayLength, walkwayPoint, WALKWAY_SAMPLES, WRECK_SITE, WRECK_OBSTACLES
+  walkwayLength, walkwayPoint, WALKWAY_SAMPLES
 } from "./sharkTunnel";
 import { tunnelClearance } from "../tunnel/swim3d";
 import type { TunnelDecorKind } from "../types";
@@ -36,20 +36,6 @@ function obstacleExtent(o: Obstacle) {
 }
 
 describe("Shark Tunnel geometry", () => {
-  it("keeps the central shipwreck inside the U, clear of the tube and available placement zones", () => {
-    expect(WRECK_OBSTACLES.length).toBeGreaterThanOrEqual(2);
-    expect(WRECK_SITE.y).toBeCloseTo(seabedY(WRECK_SITE.x, WRECK_SITE.z));
-    for (const o of WRECK_OBSTACLES) {
-      const [x0, x1, z0, z1] = obstacleExtent(o);
-      for (const [x, z] of [[x0,z0],[x0,z1],[x1,z0],[x1,z1]]) {
-        expect(nearestTube(x,z)).toBeGreaterThan(0.6);
-      }
-      for (const p of TUNNEL_ZONES) expect(Math.hypot(p.x - WRECK_SITE.x, p.z - WRECK_SITE.z)).toBeGreaterThan(5);
-    }
-    const volume = sharkSwimVolume([]);
-    expect(volume.obstacles).toEqual(expect.arrayContaining(WRECK_OBSTACLES));
-  });
-
   it("is a smooth closed loop through the habitat, with the lobby outside the water", () => {
     expect(walkwayLength).toBeGreaterThan(55);
     expect(walkwayLength).toBeLessThan(90);
