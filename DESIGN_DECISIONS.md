@@ -1542,10 +1542,14 @@ record and config are shaped so a `kind` can be added later.
   Groups choose the least-crowded occupied exhibit across open rooms, then tour
   using the existing viewing spots and routes. Shark Tunnel limits stay separate.
 - **Runtime governor: good 18 / moderate 14 / low 12.** Four-second frame-time
-  windows; two consecutive windows averaging over 25 ms lower one tier. Recovery
-  needs at least 12 s below 19 ms and a 20 s active-play cooldown after the last
-  tier change, one tier at a time. Hidden tabs, paused/non-play frames and raw
-  dt ≥ 100 ms (clamped/resume frames) discard partial evidence. No saved state or
+  windows; two consecutive windows averaging over 34 ms (under ~29 fps, the 30 fps
+  target) lower one tier. Recovery needs at least 12 s below 24 ms (~42 fps) and a
+  20 s active-play cooldown after the last tier change, one tier at a time. Hidden
+  tabs, paused/non-play frames and gaps ≥ 0.5 s (a resumed tab, a hitch) discard
+  partial evidence. *Revised while reviewing:* the first cut was 25/19 ms and
+  discarded every frame ≥ 100 ms as a resume spike, so a live software-rendered rush
+  at 9 fps never stepped down, and a steady 35 fps Chromebook (meeting the target)
+  would have lost its crowd. No saved state or
   per-frame React updates. Excess cosmetics finish their current look and walk
   out; request visitors, scripts and English activities keep their normal flow.
 - **Renderer resources are shared**, including limb geometry, shadows and picking
@@ -1555,3 +1559,35 @@ record and config are shaped so a `kind` can be added later.
   are unchanged. Rejected: raising only the cap (the lifetime spawn budget stayed
   sparse), a single arrival burst, deleting visible people on slow frames, a
   per-frame FPS switch without hysteresis, and an instancing rewrite of the rig.
+
+### Rush Hour HUD in the objective slot (2026-11-07)
+
+- **The upper-left corner is the player's current objective.** While Rush Hour is
+  pending, preparing or rushing, its card *replaces* the Free Play / Goals card in
+  the same slot (`GoalCard` renders either `RushObjective` or the goals; never
+  both, no z-index layering). Results stay the centred dialog; afterwards, or on
+  キャンセル, the goals return at once. The goals' expanded state is held by the
+  slot, so it survives the swap. Rejected: keeping the bottom-left widget (it
+  competed with the toolbar and moved to the bottom-right whenever goals opened).
+- **Goals stay reachable.** A "≡ もくひょう" control swaps the slot to the goals
+  (or the Shark Tunnel milestones), led by a "RUSH HOUR 01:23" return button.
+- **Card layout.** Title and a 38–46 px tabular `MM:SS` countdown share the top
+  row (a stacked title would push the card into the hall arrow at 1280×720); a
+  continuous time bar under it; 「じゅんび しよう！」; "n / m tanks ready" with one
+  pip per tank (segmented green, deliberately unlike the amber time bar); a
+  full-width Checklist; キャンセル and もくひょう share a quieter second row (three
+  buttons in one row wrapped キャンセル one character per line at 1024 px).
+- **Urgency is tied to real clock ticks.** > 60 s amber and calm; 60–30 s orange
+  with one nudge on entry; 30–10 s orange-red with a small pulse per tick; last 10 s
+  a larger bounce per tick and a glow. Animations are keyed to the displayed second,
+  so a paused clock is visibly still. No tick sound: a classroom game must not
+  compete with English speech. Screen readers hear 60/30/10 s only.
+- **Paused** (an English question, Pico talking): the card stays but goes grey,
+  says "Paused / とけいは ストップ ちゅう", and hides the bar and buttons.
+- **Compact variant** in tank close-up, the tunnel walk, and while paused: timer,
+  ready count and Checklist only. The close-up status card steps below it.
+- **Visitor rush:** aqua card, same timer, a plain family silhouette (the visitor
+  icon's "!" means a request), the secured medal; no Checklist or キャンセル.
+- **Pending visibility uses stable store state**, not `rushCalm()`, whose per-frame
+  runtime flags flicker and would swap card and goals for a frame. `startRush()`
+  still checks `rushCalm()`.

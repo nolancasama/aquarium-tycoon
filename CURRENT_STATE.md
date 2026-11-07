@@ -13,14 +13,25 @@
 
 ## Rush Hour event (2026-11-07)
 
-Design: DESIGN_DECISIONS.md "Rush Hour event (design freeze)" + "decided while building".
+Design: DESIGN_DECISIONS.md "Rush Hour event (design freeze)", "decided while
+building", "bigger crowd" and "HUD in the objective slot".
 
 - **What:** a recurring free-play event (unlock: free play, Ocean Hall, an occupied
   tank). Every 8–12 min (first) / 12–18 min of active play, a "Rush Hour soon!"
-  banner (Start Now / Skip, auto-start after 20 s) → preparation (120/150/210 s by
-  tank count) with an amber widget and a checklist that navigates to each tank →
-  90 s visitor crowd → results (medal, `floor(min(40, 10+3n) × fraction)` coins) →
-  awards panel. Tanks latch "prepared" once food and clean are both ≥75.
+  card (Start Now / キャンセル, auto-start after 20 s) → preparation (120/150/210 s by
+  tank count) with a checklist that navigates to each tank → 90 s visitor crowd →
+  results (medal, `floor(min(40, 10+3n) × fraction)` coins) → awards panel. Tanks
+  latch "prepared" once food and clean are both ≥75.
+- **HUD:** the Rush card replaces the Free Play / Goals card in the upper-left slot
+  for pending/prep/rush (`GoalCard` in `Hud.tsx` → `RushObjective` in
+  `RushHour.tsx`, styles `RushObjective.css`). Large `MM:SS` timer, time bar,
+  per-tank pips, urgency stages at 60/30/10 s keyed to clock ticks, grey paused
+  state, compact variant in close-up / tunnel walk, "≡ もくひょう" peeks at goals.
+- **Crowd:** target 18 in the regular halls (15 cosmetic + 3–4 reserved ordinary
+  places), groups of 3–4 every 6–8 s to the least-crowded exhibit. Governor
+  `src/game/rush/crowdBudget.ts` (18/14/12, 4 s windows, poor > 34 ms, good < 24 ms,
+  cooldown) fed from `GameScene`'s frame clock; excess cosmetics leave after their
+  current look. Shark Tunnel visitors unchanged. Visitor renderer shares geometry.
 - **Code:** rules `src/game/rush/` (config.ts numbers, types.ts state, logic.ts pure
   state machine, decode.ts save reading, flow.ts sim/UI glue, bridge.ts), UI
   `src/ui/RushHour.tsx` + `.css` + `rushNavigation.ts`, crowd in `flow/visitors.ts`
@@ -33,7 +44,12 @@ Design: DESIGN_DECISIONS.md "Rush Hour event (design freeze)" + "decided while b
   `rushDecor.test.ts`; e2e `tests/e2e/rush.spec.ts` (flow, reload no double pay, skip,
   layout at 1366×768 / 1280×720 / 1024×768; shown to fail on an injected double
   payment) and `rush-visual.spec.ts` (screenshots only, `SHOTS=1`).
-- **Unverified:** real Chromebook fps with the crowd (CROWD_CAP 14); whether 120 s
+- **Crowd evidence (software renderer, headless, not a Chromebook):** a live rush
+  filled in groups of 3–4 every ~5–10 s and never passed the cap; at ~9 fps the
+  governor went good → moderate (~10 s) → low (~20 s) and settled at 9 cosmetics;
+  everyone left after the event; no cosmetic tips. `tests/e2e/rush-crowd.spec.ts`.
+- **Unverified:** real Chromebook fps with the 18-person crowd, and how often the
+  governor steps down there; whether 120 s
   is enough for children with 4 tanks across rooms; English rush questions observed
   only through unit tests; first-unlock Pico intro seen only in tests.
 - **Known:** at the default room camera the cabinet sits at the left screen edge

@@ -158,7 +158,7 @@ describe("Rush Hour visitors", () => {
       const v = spawnVisitor("child", null, { cosmetic: true });
       Object.assign(v, { state: "look", at: "t1", path: [], until: 100 });
     }
-    for (let frame = 0; frame < 268; frame++) sampleVisitorCrowdFrame(0.03, true);
+    for (let frame = 0; frame < 201; frame++) sampleVisitorCrowdFrame(0.04, true); // 8 s at 25 fps
     expect(visitorCrowdStats().tier).toBe("moderate");
     visitorsTick(0);
     expect(rt.visitors.filter((v) => v.cosmetic).every((v) => v.state === "look" && v.until === 100)).toBe(true);
