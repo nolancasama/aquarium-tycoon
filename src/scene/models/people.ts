@@ -63,7 +63,10 @@ const PALETTES: Record<VisitorType, Palette[]> = {
 
 export const paletteCount = (t: VisitorType) => PALETTES[t].length;
 
+// Scene-lifetime resources: consumers must opt out of automatic geometry disposal.
 const cache = new Map<string, PersonModel>();
+// Ordinary and articulated crowd variants use the same walking/sitting legs.
+const legCache = new Map<string, { leg: THREE.BufferGeometry; shin: THREE.BufferGeometry }>();
 
 /** The player in the Shark Tunnel: the aquarium boss, a child in a teal staff cap and shirt. */
 const BOSS: Palette = { shirt: "#139aa0", pants: "#24476b", hair: "#2a1d14", skin: "#f3cfae", extra: "#0b6f8a" };
@@ -170,15 +173,22 @@ export function personModel(type: VisitorType, variant: number, palette?: Palett
     b.sphere(hr * 0.3, 0, hy - hr * 0.12, hr * 0.92, p.hair, [1.6, 0.45, 0.5], 8);
   }
   const body = b.build();
-  const lb = new PartBuilder(0.2);
-  const sb = new PartBuilder(0.2);
   const thigh = hip / 2;
-  // The knee articulates: thighs rest above the seat, shins hang in front.
-  lb.add(new THREE.CylinderGeometry(0.075 * s, 0.07 * s, thigh, 8), p.pants, [0, -thigh / 2, 0]);
-  lb.sphere(0.07 * s, 0, -thigh, 0, p.pants, [1, 1, 1], 8);
-  sb.add(new THREE.CylinderGeometry(0.07 * s, 0.065 * s, hip - thigh - 0.06, 8), p.pants, [0, -(hip - thigh - 0.06) / 2, 0]);
-  sb.sphere(0.085 * s, 0, -hip + thigh + 0.05, 0.04 * s, type === "judge" ? "#111111" : "#f1f3f5", [1, 0.6, 1.5], 8);
-  const model: PersonModel = { body, leg: lb.build(), shin: sb.build(), thigh, hip, legX: 0.1 * s, height: hy + hr * (type === "fan" ? 1.6 : type === "explorer" ? 1.5 : 1.2) };
+  const shoe = type === "judge" ? "#111111" : "#f1f3f5";
+  const legKey = `${s}:${p.pants}:${shoe}`;
+  let legs = legCache.get(legKey);
+  if (!legs) {
+    const lb = new PartBuilder(0.2);
+    const sb = new PartBuilder(0.2);
+    // The knee articulates: thighs rest above the seat, shins hang in front.
+    lb.add(new THREE.CylinderGeometry(0.075 * s, 0.07 * s, thigh, 8), p.pants, [0, -thigh / 2, 0]);
+    lb.sphere(0.07 * s, 0, -thigh, 0, p.pants, [1, 1, 1], 8);
+    sb.add(new THREE.CylinderGeometry(0.07 * s, 0.065 * s, hip - thigh - 0.06, 8), p.pants, [0, -(hip - thigh - 0.06) / 2, 0]);
+    sb.sphere(0.085 * s, 0, -hip + thigh + 0.05, 0.04 * s, shoe, [1, 0.6, 1.5], 8);
+    legs = { leg: lb.build(), shin: sb.build() };
+    legCache.set(legKey, legs);
+  }
+  const model: PersonModel = { body, ...legs, thigh, hip, legX: 0.1 * s, height: hy + hr * (type === "fan" ? 1.6 : type === "explorer" ? 1.5 : 1.2) };
   if (split) {
     // The right arm, hanging from a shoulder pivot (rotate about x to raise it forward).
     const ab = new PartBuilder(0);

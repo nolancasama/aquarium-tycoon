@@ -1529,3 +1529,29 @@ record and config are shaped so a `kind` can be added later.
   otherwise replay every reveal.
 - **Results must fit without scrolling** at 1366×768: smaller medal on the card,
   new rewards inline. Children do not find a scrolled reward list.
+
+### Rush Hour bigger crowd (2026-11-07)
+
+- **Regular halls target 18 people total**, ordinary plus cosmetic; `CROWD_EXTRA`
+  is now an active cosmetic ceiling of 15, with replacements throughout the 90 s
+  rush. Groups of 3–4 arrive every 6–8 active seconds (the last group can be
+  smaller to fit), filling the halls in roughly 30–40 s. Mostly one adult and
+  children, sometimes two adults; starts, speeds and animation phases vary.
+  The existing 3 ordinary visitor places (4 with tickets) stay reserved, including
+  at reduced budgets, so cosmetics cannot block normal arrivals or questions.
+  Groups choose the least-crowded occupied exhibit across open rooms, then tour
+  using the existing viewing spots and routes. Shark Tunnel limits stay separate.
+- **Runtime governor: good 18 / moderate 14 / low 12.** Four-second frame-time
+  windows; two consecutive windows averaging over 25 ms lower one tier. Recovery
+  needs at least 12 s below 19 ms and a 20 s active-play cooldown after the last
+  tier change, one tier at a time. Hidden tabs, paused/non-play frames and raw
+  dt ≥ 100 ms (clamped/resume frames) discard partial evidence. No saved state or
+  per-frame React updates. Excess cosmetics finish their current look and walk
+  out; request visitors, scripts and English activities keep their normal flow.
+- **Renderer resources are shared**, including limb geometry, shadows and picking
+  meshes, with automatic disposal disabled for shared people resources. Distant
+  background limbs update at 12 Hz; nearby and interactive animation stays smooth.
+  Cosmetics still never request or tip; ordinary tips and the two-question budget
+  are unchanged. Rejected: raising only the cap (the lifetime spawn budget stayed
+  sparse), a single arrival burst, deleting visible people on slow frames, a
+  per-frame FPS switch without hysteresis, and an instancing rewrite of the rig.

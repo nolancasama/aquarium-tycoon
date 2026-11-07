@@ -4,7 +4,7 @@ import { seedChoices } from "./flow/ask";
 import { advanceCare, seedSim } from "./sim";
 import { ensureRush } from "./rush/logic";
 import { RUSH_SECONDS } from "./rush/config";
-import { leave, seedVisitors, spawnVisitor } from "./flow/visitors";
+import { leave, seedVisitors, spawnVisitor, visitorCrowdStats } from "./flow/visitors";
 import { decay, goals, happiness, latchHappy, setCare } from "./logic/model";
 import type { Request } from "./logic/requests";
 import { requestStep } from "./logic/requestGuide";
@@ -59,6 +59,7 @@ export function installE2eHook(seed: number) {
         micState: g.micState,
         coins: m.coins,
         rush: m.rush,
+        crowd: visitorCrowdStats(),
         stage: m.progress.stage,
         tutorial: m.progress.tutorial,
         guide: g.guide,
@@ -102,7 +103,7 @@ export function installE2eHook(seed: number) {
           : null,
         stageCard: g.stageCard,
         waiting: g.waiting,
-        visitors: rt.visitors.map((v) => ({ id: v.id, type: v.type, state: v.state, request: v.request?.kind ?? null, helped: v.helped, x: v.x, z: v.z, yaw: v.yaw, seat: v.seat, seatId: v.seatId })),
+        visitors: rt.visitors.map((v) => ({ id: v.id, type: v.type, cosmetic: Boolean(v.cosmetic), state: v.state, request: v.request?.kind ?? null, helped: v.helped, x: v.x, z: v.z, yaw: v.yaw, seat: v.seat, seatId: v.seatId })),
         pellets: rt.pellets.length,
         pelletFoods: rt.pellets.map((p) => p.food),
         countGlow: Boolean(rt.countGlow),

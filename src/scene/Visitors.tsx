@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { getGame } from "../game/store";
@@ -14,7 +14,9 @@ import { additiveSprite, bubbleTexture, shadowMaterial, smoothMat } from "./mate
 export function Visitors() {
   const [ids, setIds] = useState<string[]>([]);
   useFrame(() => {
-    if (rt.visitors.length !== ids.length || rt.visitors.some((v, i) => v.id !== ids[i])) setIds(rt.visitors.map((v) => v.id));
+    let changed = rt.visitors.length !== ids.length;
+    for (let i = 0; !changed && i < ids.length; i++) changed = rt.visitors[i].id !== ids[i];
+    if (changed) setIds(rt.visitors.map((v) => v.id));
   });
   return (
     <>
@@ -28,6 +30,12 @@ export function Visitors() {
 const REDUCED_MOTION = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 const phoneGeo = new THREE.BoxGeometry(0.08, 0.13, 0.015);
 const phoneMat = new THREE.MeshLambertMaterial({ color: "#2b2f3a" });
+const shadowGeo = new THREE.PlaneGeometry(0.8, 0.8);
+const pickGeo = new THREE.BoxGeometry(1, 1, 1);
+const pickMat = new THREE.MeshBasicMaterial({ visible: false });
+let sharedShadow: THREE.MeshBasicMaterial | undefined;
+// Canvas-backed shadow resources are created on first mount, then shared for the scene lifetime.
+const visitorShadow = () => (sharedShadow ??= shadowMaterial(0.28));
 
 /** Hide a visitor standing between the close-up camera and the tank. */
 function blocksCloseUp(v: VisitorRt): boolean {
@@ -40,7 +48,7 @@ function blocksCloseUp(v: VisitorRt): boolean {
   return Math.abs(v.x - p.x) < def.w / 2 + 0.45 && v.z > p.z + def.d / 2 && v.z < rt.camera.pos.z;
 }
 
-function Visitor({ id }: { id: string }) {
+const Visitor = memo(function Visitor({ id }: { id: string }) {
   const v0 = rt.visitors.find((v) => v.id === id);
   const variant = useMemo(() => {
     const n = Number(id.replace(/\D/g, "")) || 0;
@@ -58,13 +66,16 @@ function Visitor({ id }: { id: string }) {
   const phone = useRef<THREE.Mesh>(null);
   const bubble = useRef<THREE.Sprite>(null);
   const bubbleMat = useMemo(() => new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }), []);
-  const shadow = useMemo(() => shadowMaterial(0.28), []);
+  const shadow = visitorShadow();
+  const limbElapsed = useRef(0);
+  const poseCache = useRef<{ progress: number; seatId: string | undefined; pose: ReturnType<typeof benchPose> } | null>(null);
   // The first-visitor hint: a soft halo behind the body (only drawn while on).
   const glow = useRef<THREE.Sprite>(null);
   const glowMat = useMemo(() => additiveSprite("#fff19a", 0), []);
-  useEffect(() => () => glowMat.dispose(), [glowMat]);
-  useFrame((_, dt) => {
-    const v = rt.visitors.find((x) => x.id === id);
+  useEffect(() => () => { glowMat.dispose(); bubbleMat.dispose(); }, [glowMat, bubbleMat]);
+  useFrame(({ camera }, frameDt) => {
+    // Runtime visitors mutate in place. Keep their reference instead of searching the crowd every frame.
+    const v = v0;
     const r = root.current;
     if (!v || !r || !model) return;
     const t = rt.time;
@@ -79,7 +90,16 @@ function Visitor({ id }: { id: string }) {
     const ack = rt.visitorTapAck?.id === id ? t - rt.visitorTapAck.t0 : Infinity;
     const pop = ack < 0.35 ? 1 + Math.sin((ack / 0.35) * Math.PI) * (REDUCED_MOTION ? 0.04 : 0.12) : 1;
     r.scale.set(pop, pop, pop);
-    r.visible = !blocksCloseUp(v) && t - v.bornT > 0.05;
+    r.visible = v.state !== "gone" && !blocksCloseUp(v) && t - v.bornT > 0.05;
+    limbElapsed.current += frameDt;
+    const dx = camera.position.x - v.x;
+    const dz = camera.position.z - v.z;
+    const distant = dx * dx + camera.position.y * camera.position.y + dz * dz > 20 * 20;
+    // Positions remain smooth; distant background limbs update at 12 Hz. Requests,
+    // reactions, tap feedback and sitting transitions retain their full animation cadence.
+    if (distant && !v.request && !v.scripted && !v.anim && ack >= 0.35 && (v.seat === 0 || v.seat === 1) && limbElapsed.current < 1 / 12) return;
+    const dt = limbElapsed.current;
+    limbElapsed.current = 0;
     let y = 0;
     let lean = 0;
     let tilt = 0;
@@ -102,7 +122,11 @@ function Visitor({ id }: { id: string }) {
       else if (a.kind === "wave" && k < 1.2) y += Math.abs(Math.sin(k * Math.PI * 3)) * 0.04;
       else if (k > 1.5) v.anim = null;
     }
-    const pose = benchPose(v.seat, model.hip, seatById(v.seatId ?? v.poseSeatId));
+    const seatId = v.seatId ?? v.poseSeatId;
+    if (!poseCache.current || poseCache.current.progress !== v.seat || poseCache.current.seatId !== seatId) {
+      poseCache.current = { progress: v.seat, seatId, pose: benchPose(v.seat, model.hip, seatById(seatId)) };
+    }
+    const pose = poseCache.current.pose;
     if (v.seat > 0) {
       y = pose.bodyY;
       lean = 0;
@@ -162,10 +186,10 @@ function Visitor({ id }: { id: string }) {
     tapVisitor(id);
   };
   return (
-    <group ref={root}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} material={shadow}>
-        <planeGeometry args={[0.8, 0.8]} />
-      </mesh>
+    // Geometry, picking material and blob shadows are shared. Only the mutable
+    // per-person sprite materials are disposed by the effect above.
+    <group ref={root} dispose={null}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]} geometry={shadowGeo} material={shadow} />
       <group ref={body}>
         {/* The torso bends at the hips when sitting and standing; the legs do not. */}
         <group ref={torso} position={[0, model.hip, 0]}>
@@ -192,10 +216,7 @@ function Visitor({ id }: { id: string }) {
       </group>
       <sprite ref={glow} material={glowMat} position={[0, model.height * 0.55, -0.05]} scale={[1.3, model.height * 1.35, 1]} visible={false} raycast={() => {}} />
       <sprite ref={bubble} material={bubbleMat} visible={false} renderOrder={12} onClick={onClick} />
-      <mesh position={[0, model.height / 2 + 0.1, 0]} onClick={onClick}>
-        <boxGeometry args={[0.9, model.height + 0.5, 0.9]} />
-        <meshBasicMaterial visible={false} />
-      </mesh>
+      <mesh geometry={pickGeo} material={pickMat} scale={[0.9, model.height + 0.5, 0.9]} position={[0, model.height / 2 + 0.1, 0]} onClick={onClick} />
     </group>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { PersonModel } from "../models/people";
@@ -30,6 +30,7 @@ export const newPose = (): FigurePose => ({ x: 0, z: 0, yaw: 0, step: 0, moving:
 const shadow = shadowMaterial(0.32);
 const phoneGeo = new THREE.BoxGeometry(0.08, 0.13, 0.015);
 const phoneMat = new THREE.MeshLambertMaterial({ color: "#2b2f3a" });
+const shadowGeo = new THREE.PlaneGeometry(0.75, 0.6).rotateX(-Math.PI / 2);
 
 
 /** A walking person built from the shared visitor rig (body, two legs with knees, a free right arm). */
@@ -43,7 +44,6 @@ export function TunnelFigure({ model, pose, name }: { model: PersonModel; pose: 
   const kneeR = useRef<THREE.Group>(null);
   const arm = useRef<THREE.Group>(null);
   const phone = useRef<THREE.Mesh>(null);
-  const shadowGeo = useMemo(() => new THREE.PlaneGeometry(0.75, 0.6).rotateX(-Math.PI / 2), []);
   useFrame(() => {
     const p = pose.current, r = root.current;
     if (!r) return;
@@ -81,7 +81,7 @@ export function TunnelFigure({ model, pose, name }: { model: PersonModel; pose: 
   });
   const legX = model.legX, hip = model.hip;
   return (
-    <group ref={root} name={name}>
+    <group ref={root} name={name} dispose={null}>
       <mesh geometry={shadowGeo} material={shadow} position={[0, 0.012, 0]} raycast={() => undefined} />
       <group ref={body}>
         {/* The torso pivots at the hips (leaning back to look up); the legs stay planted. */}

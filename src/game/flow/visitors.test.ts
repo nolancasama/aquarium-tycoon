@@ -4,7 +4,7 @@ import { requestReward, type Request } from "../logic/requests";
 import { resetRuntime, rt } from "../runtime";
 import { getGame, model, setGame } from "../store";
 import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, SEATS, seatApproach, seatExit } from "../world";
-import { answerShow, cancelShow, helped, openRequest, leave, resetVisitors, scripted, seedVisitors, spawnVisitor, stepVisitors, visitorsTick, walkTo } from "./visitors";
+import { answerShow, cancelShow, helped, openRequest, leave, resetVisitors, sampleVisitorCrowdFrame, scripted, seedVisitors, spawnVisitor, stepVisitors, visitorCrowdStats, visitorsTick, walkTo } from "./visitors";
 import { CROWD_CAP, CROWD_EXTRA, RUSH_QUESTIONS, RUSH_SECONDS } from "../rush/config";
 import { newRushState } from "../rush/types";
 
@@ -21,7 +21,7 @@ vi.mock("./ask", () => ({
 const request: Request = { kind: "show", color: "orange", fishOnly: true };
 const answer = { type: "fish", species: "clownfish" } as const;
 
-function rushAt(remaining = RUSH_SECONDS) {
+function rushAt(remaining = RUSH_SECONDS, id = "rush-1") {
   const m = model();
   const rush = m.rush ?? newRushState();
   setGame({
@@ -31,7 +31,7 @@ function rushAt(remaining = RUSH_SECONDS) {
       rush: {
         ...rush, unlocked: true, introSeen: true, phase: "rush",
         event: {
-          id: "rush-1", tankIds: ["t1"], ready: ["t1"], prepTotal: 120, remaining,
+          id, tankIds: ["t1"], ready: ["t1"], prepTotal: 120, remaining,
           result: { ready: 1, eligible: 1, medal: "gold", bonus: 13, newRewards: [] }
         }
       }
@@ -62,16 +62,17 @@ describe("Rush Hour visitors", () => {
   it("brings adult and child groups up to the cosmetic limit and leaves naturally without tipping", () => {
     seedVisitors(777);
     rushAt();
+    for (let i = 0; i < 3; i++) spawnVisitor("adult", null);
     visitorsTick(0);
     const firstGroup = rt.visitors.filter((v) => v.cosmetic);
-    expect(firstGroup.length).toBeGreaterThanOrEqual(2);
-    expect(firstGroup.length).toBeLessThanOrEqual(3);
+    expect(firstGroup.length).toBeGreaterThanOrEqual(3);
+    expect(firstGroup.length).toBeLessThanOrEqual(4);
     expect(firstGroup.map((v) => v.type)).toContain("adult");
     expect(firstGroup.map((v) => v.type)).toContain("child");
     for (const remaining of [75, 60, 45, 30, 15, 1]) { rushAt(remaining); visitorsTick(0); }
     const crowd = rt.visitors.filter((v) => v.cosmetic);
-    expect(crowd).toHaveLength(CROWD_EXTRA);
-    expect(rt.visitors.length).toBeLessThanOrEqual(CROWD_CAP);
+    expect(crowd.length).toBeLessThanOrEqual(CROWD_EXTRA);
+    expect(rt.visitors).toHaveLength(CROWD_CAP);
     expect(crowd.every((v) => !v.request)).toBe(true);
     const coins = model().coins;
     for (const v of crowd) v.seen.push("t1");
@@ -88,6 +89,125 @@ describe("Rush Hour visitors", () => {
     visitorsTick(0);
     expect(rt.visitors).toHaveLength(CROWD_CAP);
     expect(rt.visitors.some((v) => v.cosmetic)).toBe(false);
+  });
+
+  it("builds to 18 by 40 seconds, stays full and replaces departed cosmetics", () => {
+    seedVisitors(777);
+    rushAt();
+    for (let i = 0; i < 3; i++) spawnVisitor("adult", null);
+    // Sample real walking, looking and ordinary spawning, with a capable frame rate.
+    for (let frame = 0; frame <= 70 * 30; frame++) {
+      const elapsed = frame / 30;
+      rt.time += 1 / 30;
+      if (frame % 30 === 0) rushAt(RUSH_SECONDS - elapsed);
+      sampleVisitorCrowdFrame(1 / 60, true);
+      stepVisitors(1 / 30);
+      visitorsTick(1 / 30);
+      if (elapsed >= 40) {
+        expect(visitorCrowdStats().active).toBeGreaterThanOrEqual(CROWD_CAP - 2);
+        expect(visitorCrowdStats().active).toBeLessThanOrEqual(CROWD_CAP);
+        expect(visitorCrowdStats().cosmetic).toBe(CROWD_EXTRA);
+      }
+    }
+    const leavers = rt.visitors.filter((v) => v.cosmetic).slice(0, 3);
+    for (const v of leavers) leave(v);
+    for (let frame = 0; frame < 18 * 30; frame++) {
+      rt.time += 1 / 30;
+      if (frame % 30 === 0) rushAt(20 - frame / 30);
+      stepVisitors(1 / 30);
+      visitorsTick(1 / 30);
+      expect(visitorCrowdStats().active).toBeLessThanOrEqual(CROWD_CAP);
+    }
+    expect(leavers.every((v) => !rt.visitors.includes(v))).toBe(true);
+    expect(visitorCrowdStats().cosmetic).toBe(CROWD_EXTRA);
+    expect(visitorCrowdStats().active).toBeGreaterThanOrEqual(CROWD_CAP - 2);
+  });
+
+  it("spreads groups over different exhibits and staggers their walking", () => {
+    const second = newTank("other-rush", "small", "C");
+    second.fish = [{ id: "other-fish", species: "clownfish" }];
+    setGame({ model: { ...model(), tanks: [...model().tanks, second] } });
+    rushAt();
+    visitorsTick(0);
+    const first = rt.visitors.filter((v) => v.cosmetic);
+    const target = first[0].plan[0];
+    expect(first.every((v) => v.plan[0] === target)).toBe(true);
+    rushAt(82);
+    visitorsTick(0);
+    const secondGroup = rt.visitors.filter((v) => v.cosmetic && !first.includes(v));
+    expect(secondGroup.length).toBeGreaterThanOrEqual(3);
+    expect(secondGroup.every((v) => v.plan[0] !== target)).toBe(true);
+    expect(new Set(first.map((v) => v.step)).size).toBe(first.length);
+    const positions = first.map((v) => ({ x: v.x, z: v.z }));
+    rt.time += 0.2;
+    stepVisitors(0.1);
+    expect(first[0].moving).toBe(true);
+    expect(first[first.length - 1].moving).toBe(false);
+    rt.time += 1;
+    stepVisitors(0.1);
+    const distances = first.map((v, i) => Math.hypot(v.x - positions[i].x, v.z - positions[i].z));
+    expect(new Set(distances).size).toBeGreaterThan(1);
+  });
+
+  it("reduces cosmetics only after their look, preserving requests and scripts", () => {
+    rushAt();
+    const ordinary = spawnVisitor("adult", request, { atBench: true });
+    const character = spawnVisitor("judge", null, { scripted: true });
+    spawnVisitor("adult", null, { scripted: true });
+    for (let i = 0; i < CROWD_EXTRA; i++) {
+      const v = spawnVisitor("child", null, { cosmetic: true });
+      Object.assign(v, { state: "look", at: "t1", path: [], until: 100 });
+    }
+    for (let frame = 0; frame < 268; frame++) sampleVisitorCrowdFrame(0.03, true);
+    expect(visitorCrowdStats().tier).toBe("moderate");
+    visitorsTick(0);
+    expect(rt.visitors.filter((v) => v.cosmetic).every((v) => v.state === "look" && v.until === 100)).toBe(true);
+    expect(ordinary.request).toBe(request);
+    expect(character.scripted).toBe(true);
+    rt.time = 101;
+    stepVisitors(0);
+    expect(rt.visitors.filter((v) => v.cosmetic && v.state === "leave")).toHaveLength(4);
+    expect(ordinary.state).toBe("sit");
+    expect(ordinary.request).toBe(request);
+    expect(character.state).toBe("walk");
+    visitorsTick(0);
+    expect(rt.visitors).toHaveLength(18); // Visible leavers are still counted, never deleted.
+  });
+
+  it("cleans up visitors and runtime tracking across several consecutive rushes", () => {
+    for (let event = 0; event < 3; event++) {
+      const ordinary = rt.visitors.filter((v) => !v.cosmetic).length;
+      for (let i = ordinary; i < 3; i++) spawnVisitor("adult", null);
+      for (const elapsed of [0, 8, 16, 24, 32, 40]) {
+        rushAt(RUSH_SECONDS - elapsed, `repeat-${event}`);
+        visitorsTick(0);
+      }
+      expect(visitorCrowdStats().active).toBe(CROWD_CAP);
+      for (let frame = 0; frame < 20 * 30; frame++) {
+        rt.time += 1 / 30;
+        stepVisitors(1 / 30);
+      }
+      expect(visitorCrowdStats().reactionTimers).toBeGreaterThan(0);
+      setGame({ model: { ...model(), rush: { ...model().rush!, phase: "waiting", event: null } } });
+      visitorsTick(0);
+      for (let frame = 0; frame < 45 * 30; frame++) {
+        rt.time += 1 / 30;
+        stepVisitors(1 / 30);
+      }
+      expect(visitorCrowdStats()).toMatchObject({ cosmetic: 0, reactionTimers: 0, trackedCosmetics: 0 });
+    }
+  });
+
+  it("reserves normal arrival and English-question capacity even with a full cosmetic crowd", () => {
+    rushAt();
+    for (let i = 0; i < CROWD_EXTRA; i++) spawnVisitor("child", null, { cosmetic: true });
+    rt.spawnClock = rt.nextSpawn;
+    visitorsTick(0);
+    expect(rt.visitors.filter((v) => !v.cosmetic)).toHaveLength(1);
+    rushAt(60);
+    visitorsTick(0);
+    expect(rt.visitors.some((v) => !v.cosmetic && v.request)).toBe(true);
+    expect(rt.visitors.length).toBeLessThanOrEqual(CROWD_CAP);
   });
 
   it("tours the open Gallery and Atrium as well as the halls, excluding closed rooms and the tunnel", () => {

@@ -19,6 +19,7 @@ import { requestPattern } from "../logic/sentenceTeaching";
 import { meetPattern } from "./meaning";
 import { queuedVisitorTapState } from "../logic/visitorTap";
 import { CROWD_CAP, CROWD_EXTRA, RUSH_QUESTIONS, RUSH_SECONDS } from "../rush/config";
+import { createCrowdBudgetSampler, sampleCrowdBudget } from "../rush/crowdBudget";
 
 /**
  * Visitors: they come in, look at each tank, react to how happy its fish are,
@@ -42,13 +43,30 @@ const arrivals = new Map<string, () => void>();
 let activeRequest: string | null = null;
 /** Cosmetic poses and visitor locations are deliberately runtime-only. */
 const crowdReactionAt = new Map<string, number>();
+const crowdMotion = new Map<string, { speed: number; startAt: number; retiring: boolean }>();
 const rushQuestionVisitors = new Map<string, string>();
 let crowdEvent: string | null = null;
-let crowdSpawned = 0;
+let crowdArea = 0;
 let nextCrowdAt = 0;
+let crowdBudget = createCrowdBudgetSampler();
 let offerPaid: readonly string[] | null = null;
 let offerEvent: string | null = null;
 let offerCount = 0;
+
+/** Called once per rendered frame, with raw (unclamped) dt and the play gate. */
+export function sampleVisitorCrowdFrame(dt: number, eligible: boolean) {
+  sampleCrowdBudget(crowdBudget, dt, eligible);
+}
+
+/** Read on demand by the existing test hook; no React updates while sampling. */
+export function visitorCrowdStats() {
+  let active = 0, cosmetic = 0;
+  for (const v of rt.visitors) if (v.state !== "gone") { active++; if (v.cosmetic) cosmetic++; }
+  return {
+    active, cosmetic, tier: crowdBudget.state.tier, maxVisitors: crowdBudget.state.maxVisitors,
+    reactionTimers: crowdReactionAt.size, trackedCosmetics: crowdMotion.size
+  };
+}
 
 /** A visitor stops working the request (or the judge's step) and is free again. */
 function syncWaiting() {
@@ -109,6 +127,7 @@ export function spawnVisitor(type: VisitorType, request: Request | null, opts: {
   }
   if (request) lastKind = request.kind;
   rt.visitors.push(v);
+  if (v.cosmetic) crowdMotion.set(id, { speed: 0.9 + rand() * 0.2, startAt: rt.time, retiring: false });
   audio.play("door");
   syncWaiting();
   return v;
@@ -191,6 +210,10 @@ function startLook(v: VisitorRt, tankId: string) {
 }
 
 function nextLookOrLeave(v: VisitorRt) {
+  if (v.cosmetic && (crowdMotion.get(v.id)?.retiring || model().rush?.phase !== "rush")) {
+    leave(v);
+    return;
+  }
   if (!v.cosmetic && v.state === "look" && v.at && v.seen.length >= (v.restAfter ?? 1)) {
     const rest = planRest(v, hallOfX(v.x), v.plan.length === 0, rt.visitors, rand);
     if (rest.decided) v.restDecided = true;
@@ -215,7 +238,7 @@ function nextLookOrLeave(v: VisitorRt) {
   }
   // Crowd members keep touring until the event ends, without occupying the
   // ordinary visitors' seats. Shuffle once per tour, never every frame.
-  if (v.cosmetic && !v.plan.length && model().rush?.phase === "rush") v.plan = crowdTankIds();
+  if (v.cosmetic && !v.plan.length) v.plan = crowdTour(v.at);
   const next = v.plan.shift();
   if (next && tankById(model(), next)) {
     const slot = tankSlot(next)!;
@@ -325,6 +348,8 @@ export function stepVisitors(dt: number) {
   const speedUp = fastMode() ? 4 : 1;
   for (const v of rt.visitors) {
     if (v.state === "gone") continue;
+    const motion = v.cosmetic ? crowdMotion.get(v.id) : undefined;
+    if (motion && rt.time < motion.startAt) continue;
     if (v.cosmetic && v.state === "look" && rt.time >= (crowdReactionAt.get(v.id) ?? Infinity)) crowdReact(v);
     if (v.seat !== v.seatTarget) {
       // Turn at the spot in front of the seat, then sit back onto it over planted feet.
@@ -365,7 +390,7 @@ export function stepVisitors(dt: number) {
       const dx = p.x - v.x;
       const dz = p.z - v.z;
       const d = Math.hypot(dx, dz);
-      const step = WALK_SPEED[v.type] * speedUp * dt;
+      const step = WALK_SPEED[v.type] * (motion?.speed ?? 1) * speedUp * dt;
       v.moving = true;
       if (d <= step) {
         v.x = p.x;
@@ -381,7 +406,7 @@ export function stepVisitors(dt: number) {
         while (a < -Math.PI) a += Math.PI * 2;
         v.yaw += a * Math.min(1, dt * 8);
       }
-      v.step += dt * 9 * speedUp;
+      v.step += dt * 9 * speedUp * (motion?.speed ?? 1);
     } else {
       v.moving = false;
       if (v.face && v.seat === 0) {
@@ -406,7 +431,16 @@ export function stepVisitors(dt: number) {
     }
     if (v.bubble && v.bubble !== "!" && rt.time - v.bubbleT0 > 2.5) v.bubble = null;
   }
-  if (rt.visitors.some((v) => v.state === "gone")) rt.visitors = rt.visitors.filter((v) => v.state !== "gone");
+  if (rt.visitors.some((v) => v.state === "gone")) {
+    rt.visitors = rt.visitors.filter((v) => {
+      if (v.state !== "gone") return true;
+      crowdMotion.delete(v.id);
+      crowdReactionAt.delete(v.id);
+      rushQuestionVisitors.delete(v.id);
+      exclaimed.delete(v.id);
+      return false;
+    });
+  }
   syncWaiting();
   flushVisitorTap();
 }
@@ -424,6 +458,24 @@ function crowdTankIds(): string[] {
     if (t.type === "sharks" || !t.fish.length) return false;
     return roomOpen(ROOM_OF[t.slot], m.progress);
   }).map((t) => t.id), rand);
+}
+
+/** Balance first destinations, including people still walking to an exhibit. */
+function crowdTour(previous: string | null = null): string[] {
+  const ids = crowdTankIds();
+  if (!ids.length) return ids;
+  let best = 0, fewest = Infinity;
+  for (let offset = 0; offset < ids.length; offset++) {
+    const i = (crowdArea + offset) % ids.length;
+    if (ids.length > 1 && ids[i] === previous) continue;
+    let count = 0;
+    for (const v of rt.visitors) {
+      if (v.state !== "gone" && v.state !== "leave" && (v.at ?? v.plan[0]) === ids[i]) count++;
+    }
+    if (count < fewest) { fewest = count; best = i; }
+  }
+  crowdArea++;
+  return [ids[best], ...ids.filter((_, i) => i !== best)];
 }
 
 function crowdReact(v: VisitorRt) {
@@ -495,41 +547,68 @@ function rushVisitorsTick() {
     if (crowdEvent !== null) {
       for (const v of rt.visitors) if (v.cosmetic) leave(v);
       crowdEvent = null;
-      crowdSpawned = 0;
+      crowdArea = 0;
+      nextCrowdAt = 0;
+      crowdReactionAt.clear();
+      rushQuestionVisitors.clear();
+      offerPaid = null;
+      offerEvent = null;
+      offerCount = 0;
     }
     return;
   }
   const eventId = rush.event.id;
   if (crowdEvent !== eventId) {
     crowdEvent = eventId;
-    crowdSpawned = 0;
+    crowdArea = 0;
     nextCrowdAt = RUSH_SECONDS - rush.event.remaining;
     rushQuestionVisitors.clear();
   }
   if (g.mode !== "play" || g.settingsOpen || g.stageCard || g.prompt || g.line || scripted.busy || rt.celebrations.size || rt.pico.talking) return;
   let total = 0;
   let ordinary = 0;
+  let cosmetic = 0;
+  let leaving = 0;
+  let cosmeticLeaving = 0;
   let waiting = false;
   for (const v of rt.visitors) {
     if (v.state === "gone") continue;
     total++;
     if (!v.cosmetic) ordinary++;
+    else cosmetic++;
+    if (v.state === "leave") { leaving++; if (v.cosmetic) cosmeticLeaving++; }
     if (v.request && !v.helped) waiting = true;
   }
   const elapsed = RUSH_SECONDS - rush.event.remaining;
-  if (elapsed >= nextCrowdAt && crowdSpawned < CROWD_EXTRA && total < CROWD_CAP) {
-    const left = CROWD_EXTRA - crowdSpawned;
-    const group = Math.min(left === 4 ? 2 : 2 + Math.floor(rand() * 2), left, CROWD_CAP - total);
+  const budget = crowdBudget.state.maxVisitors;
+  // Keep the ordinary arrival/question capacity: a full cosmetic tour must not
+  // take every slot for the rest of the rush. Scripted people also count here.
+  const ordinaryLimit = g.model.progress.tickets ? 4 : 3;
+  const cosmeticLimit = Math.min(CROWD_EXTRA, Math.max(0, budget - ordinaryLimit));
+  // Count leavers against the spawn cap until they are outside. Retire only
+  // enough cosmetics to reach the budget after those departures complete.
+  let excess = Math.max(0, total - leaving - budget, cosmetic - cosmeticLeaving - cosmeticLimit);
+  for (let i = rt.visitors.length - 1; i >= 0; i--) {
+    const v = rt.visitors[i];
+    const motion = v.cosmetic ? crowdMotion.get(v.id) : undefined;
+    if (!motion || v.state === "leave" || v.state === "gone") continue;
+    motion.retiring = excess > 0;
+    if (motion.retiring) excess--;
+  }
+  if (elapsed >= nextCrowdAt && cosmetic < cosmeticLimit && total < budget) {
+    const group = Math.min(3 + Math.floor(rand() * 2), cosmeticLimit - cosmetic, budget - total);
+    const tour = crowdTour();
+    const twoAdults = rand() < 0.25;
     for (let i = 0; i < group; i++) {
-      const v = spawnVisitor(i === 0 ? "adult" : "child", null, { cosmetic: true });
-      v.plan = crowdTankIds();
+      const v = spawnVisitor(i === 0 || (twoAdults && i === group - 1) ? "adult" : "child", null, { cosmetic: true });
+      v.plan = [...tour];
       v.x += (i - 1) * 0.32;
       v.z -= rand() * 0.8;
       v.step = rand() * Math.PI * 2;
-      crowdSpawned++;
+      crowdMotion.get(v.id)!.startAt = rt.time + i * 0.2 + rand() * 0.15;
       total++;
     }
-    nextCrowdAt = elapsed + RUSH_SECONDS / CROWD_EXTRA;
+    nextCrowdAt = elapsed + 6 + rand() * 2;
   }
   const offered = rushQuestionCount(eventId);
   if (!waiting && ordinary < (g.model.progress.tickets ? 4 : 3) && total < CROWD_CAP && offered < RUSH_QUESTIONS &&
@@ -1019,10 +1098,12 @@ export function resetVisitors() {
   showWait = null;
   lastKind = null;
   crowdReactionAt.clear();
+  crowdMotion.clear();
   rushQuestionVisitors.clear();
   crowdEvent = null;
-  crowdSpawned = 0;
+  crowdArea = 0;
   nextCrowdAt = 0;
+  crowdBudget = createCrowdBudgetSampler();
   offerPaid = null;
   offerEvent = null;
   offerCount = 0;

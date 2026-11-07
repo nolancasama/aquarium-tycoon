@@ -33,9 +33,10 @@ export const BONUS_BASE = 10;
 export const BONUS_PER_TANK = 3;
 export const BONUS_CAP = 40;
 
-/** Extra cosmetic (never tipping) visitors during the rush, and the hard cap on all visitors in the halls. */
-export const CROWD_EXTRA = 8;
-export const CROWD_CAP = 14;
+/** Active cosmetic ceiling (replacements allowed), and total hall caps by performance. Never applies to the tunnel. */
+export const CROWD_EXTRA = 15;
+export const CROWD_TIERS = { good: 18, moderate: 14, low: 12 } as const;
+export const CROWD_CAP = CROWD_TIERS.good;
 /** At most this many English visitor questions per rush, through the normal ask() flow. */
 export const RUSH_QUESTIONS = 2;
 

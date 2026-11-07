@@ -1,7 +1,8 @@
 import { useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { rt } from "../game/runtime";
-import { tick } from "../game/sim";
+import { decayRunning, tick } from "../game/sim";
+import { sampleVisitorCrowdFrame } from "../game/flow/visitors";
 import { shaderTime } from "./materials";
 import { CameraRig, FOV } from "./CameraRig";
 import { Room } from "./Room";
@@ -20,6 +21,7 @@ function Clock() {
   const frames = useRef({ n: 0, t: 0 });
   // Runs before everything else each frame.
   useFrame((state, dt) => {
+    sampleVisitorCrowdFrame(dt, !document.hidden && decayRunning());
     const d = Math.min(dt, 0.1);
     rt.time += d;
     shaderTime.value = rt.time;
