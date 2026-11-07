@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast, updateModel, useGame } from "../game/store";
 import { openAtrium, openGallery, openHall, type Model } from "../game/logic/model";
 import type { StageId } from "../game/types";
+import { debugStartRush } from "../game/rush/flow";
 import "./DebugPanel.css";
 
 const STAGES: StageId[] = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -101,6 +102,14 @@ export function DebugPanel() {
           {a.label}
         </button>
       ))}
+      <button className="debug-action" data-testid="debug-rush-start" onClick={() => {
+        if (debugStartRush()) {
+          setOpen(false);
+          toast({ en: "Debug: Rush Hour preparation started", tone: "info" });
+        } else {
+          toast({ en: "Rush Hour needs Free Play, Ocean Hall, an occupied tank, and no other active event or dialogue.", tone: "warn" });
+        }
+      }}>Start Rush Hour now</button>
       <small>Ctrl+Alt+D to close · Ctrl+Alt+U unlock all · Ctrl+Alt+M +1000 coins</small>
     </div>
   );

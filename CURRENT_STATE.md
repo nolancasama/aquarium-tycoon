@@ -1,5 +1,16 @@
 # Current State
 
+## Debug Rush Hour trigger (2026-11-07)
+
+- Added a "Start Rush Hour now" action in Ctrl+Alt+D Debug. It bypasses the semi-random wait but uses the real preparation countdown, visitor rush, medals, payouts, and existing save state. The debug action closes the panel when successful.
+- Only starts in a calm playable state with an occupied tank and the normal Rush Hour eligibility (completed tutorial, Free Play, Ocean Hall); it cannot overwrite an ongoing event. Regular event timing and balancing remain unchanged.
+
+## Tappable hint audio; Shark Tunnel shipwreck removed (2026-11-07)
+
+- General Pico hint bubbles play their visible English instruction aloud when tapped, with a separate dismissal control. The Shark Tunnel's animal-finding clue is also tap-to-hear. Both use shared TTS and avoid overlapping ongoing speech; no answer choices are revealed.
+- Removed the U-bend shipwreck model, its swim-collision solids, geometry test and associated files at the user's request. The central area is open again, retaining its original low reef rocks. Replacement centerpiece is undecided.
+- No camera choreography, player progression, coin economy or saves were altered.
+
 ## Rush Hour event (2026-11-07)
 
 Design: DESIGN_DECISIONS.md "Rush Hour event (design freeze)" + "decided while building".

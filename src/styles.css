@@ -692,6 +692,32 @@ button:focus-visible { outline: 4px solid var(--sea); outline-offset: 3px; }
   z-index: 26;
   animation: toastIn 0.3s ease-out;
 }
+.nudge-listen {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  min-height: 48px;
+}
+.nudge-listen:focus-visible, .nudge-dismiss:focus-visible {
+  outline: 3px solid #1971c2;
+  outline-offset: 3px;
+}
+.nudge-dismiss {
+  border: 0;
+  background: transparent;
+  color: #536b70;
+  font-size: 22px;
+  min-width: 28px;
+  min-height: 32px;
+  cursor: pointer;
+}
 
 .top-panels {
   position: absolute;

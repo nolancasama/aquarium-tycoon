@@ -127,8 +127,10 @@ test("Repeated wrong shops advance hints once per tier; the level overview dismi
   await expect(nudge).toContainText(`${HALL_PRICE}`);
   await closeDecor();
 
-  // Dismissing the final hint does not make another pair restart its animation.
-  await nudge.click();
+  // A hint tap replays its English text; the separate close control dismisses it.
+  await nudge.getByRole("button", { name: /Hear hint/ }).click();
+  await expect(nudge).toBeVisible();
+  await page.getByTestId("nudge-dismiss").click();
   for (let i = 0; i < 2; i++) {
     await openDecor();
     await closeDecor();

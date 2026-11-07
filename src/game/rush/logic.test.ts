@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { decay, newModel, newTank, type Model } from "../logic/model";
 import { decodeSave, encodeSave } from "../logic/save";
 import { FIRST_DELAY, NEXT_DELAY, PENDING_AUTOSTART, prepSeconds, RUSH_SECONDS } from "./config";
-import { advance, canUnlock, commitResult, continueEvent, ensureRush, latchReadiness, lockResult, resultFor, skip, startEvent } from "./logic";
+import { advance, canUnlock, commitResult, continueEvent, debugStartEvent, ensureRush, latchReadiness, lockResult, resultFor, skip, startEvent } from "./logic";
 import { newRushState } from "./types";
 
 function aquarium(n = 1): Model {
@@ -24,6 +24,34 @@ function prepared(n = 1): Model {
 }
 
 describe("Rush Hour pure state machine", () => {
+  it("debug start skips the random wait but follows normal preparation and reward rules", () => {
+    const original = aquarium(3); // unlocked by the same first eligible tick as regular Rush Hour
+    const started = debugStartEvent(original, () => 0.2);
+    expect(started.rush).toMatchObject({ unlocked: true, phase: "prep", rewards: ["cabinet"] });
+    expect(started.rush!.event!.tankIds).toHaveLength(3);
+    expect(started.rush!.event!.remaining).toBe(prepSeconds(3));
+    expect(started.coins).toBe(original.coins);
+    expect(started.rush!.stats).toEqual(original.rush!.stats);
+    expect(debugStartEvent(started)).toBe(started); // never restarts a running event
+    const cancelled = skip(started, () => 0.5);
+    expect(cancelled.rush!.phase).toBe("waiting");
+    expect(debugStartEvent(cancelled, () => 0.5).rush!.phase).toBe("prep");
+  });
+
+  it("debug start refuses ineligible aquariums, empty tanks and active results", () => {
+    for (const edit of [
+      (m: Model) => { m.progress.freePlay = false; },
+      (m: Model) => { m.progress.hallOpen = false; },
+      (m: Model) => { m.progress.tutorial = "feed"; },
+      (m: Model) => { m.tanks[0].fish = []; }
+    ]) {
+      const m = aquarium(); edit(m);
+      expect(debugStartEvent(m)).toBe(m);
+    }
+    const results = { ...aquarium(), rush: { ...newRushState(), unlocked: true, phase: "results" as const } };
+    expect(debugStartEvent(results)).toBe(results);
+  });
+
   it("fills absent state without changing existing data or rerolling existing state", () => {
     const model = aquarium();
     delete model.rush;
