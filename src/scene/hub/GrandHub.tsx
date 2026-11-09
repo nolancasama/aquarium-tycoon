@@ -5,7 +5,7 @@ import { getGame, useGame } from "../../game/store";
 import { rt } from "../../game/runtime";
 import { HUB_HALL } from "../../game/data/rooms";
 import {
-  bayOf, DOOR_OPENING, FUTURE_DOORS, HUB_BAYS, HUB_CENTRE, HUB_FRONT, HUB_R, HUB_TANK, HUB_WALL_H, onRing,
+  bayOf, DOOR_OPENING, FUTURE_DOORS, HUB_BAYS, HUB_CAMERA, HUB_CENTRE, HUB_FRONT, HUB_R, HUB_TANK, HUB_WALL_H, onRing,
   type HubDestination
 } from "../../game/data/hub";
 import { hubGroups, memberWorld, stepHubVisitors } from "../../game/hub/hubVisitors";
