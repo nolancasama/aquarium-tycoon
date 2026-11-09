@@ -13,6 +13,7 @@ import { Effects } from "./Effects";
 import { Markers } from "./Markers";
 import { CountNumbers } from "./Animals";
 import { MainRooms, SharkTunnel } from "./tunnel/SharkTunnel";
+import { GrandHub } from "./hub/GrandHub";
 
 /** Renderer stats for the test hook (draw calls / triangles per frame). */
 export const perf = { calls: 0, triangles: 0, fps: 0 };
@@ -94,6 +95,7 @@ export function GameScene() {
         <Visitors />
       </MainRooms>
       <SharkTunnel />
+      <GrandHub />
       <Effects />
       <Markers />
       <CountNumbers />

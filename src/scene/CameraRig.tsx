@@ -7,7 +7,8 @@ import { TANKS } from "../game/data/tanks";
 import { HALL_X, PEDESTAL, tankOrigin, waterCentre } from "../game/world";
 import { tankById } from "../game/logic/model";
 import { footprintPoints } from "../game/logic/tankLayout";
-import { ROOMS, SHARKS_HALL } from "../game/data/rooms";
+import { HUB_HALL, ROOMS, SHARKS_HALL } from "../game/data/rooms";
+import { HUB_CAMERA } from "../game/data/hub";
 import { TUNNEL_VIEWS, type TunnelView } from "../game/data/sharkTunnel";
 import { stepTransition } from "../game/tunnel/explore";
 
@@ -44,6 +45,16 @@ export function tunnelView(view: TunnelView, aspect: number) {
   return {
     pos: { x: v.target.x + (v.pos.x - v.target.x) * k, y: v.target.y + (v.pos.y - v.target.y) * k, z: v.target.z + (v.pos.z - v.target.z) * k },
     target: v.target
+  };
+}
+
+/** The hub's fixed camera; narrower screens step back along the view so both side doorways stay in frame. */
+export function hubView(aspect: number) {
+  const { pos, target } = HUB_CAMERA;
+  const k = Math.max(1, 1.78 / aspect);
+  return {
+    pos: { x: target.x + (pos.x - target.x) * k, y: target.y + (pos.y - target.y) * k, z: target.z + (pos.z - target.z) * k },
+    target
   };
 }
 
@@ -195,6 +206,10 @@ export function CameraRig() {
       wantLook.current.set(c.shot.target.x, c.shot.target.y, c.shot.target.z);
     } else if (g.screen === "game" && g.hall === SHARKS_HALL && g.view === "room") {
       const v = tunnelView(g.tunnelView, aspect);
+      want.current.set(v.pos.x, v.pos.y, v.pos.z);
+      wantLook.current.set(v.target.x, v.target.y, v.target.z);
+    } else if (g.screen === "game" && g.hall === HUB_HALL) {
+      const v = hubView(aspect);
       want.current.set(v.pos.x, v.pos.y, v.pos.z);
       wantLook.current.set(v.target.x, v.target.y, v.target.z);
     } else if (g.screen === "title") {

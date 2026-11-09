@@ -1,4 +1,4 @@
-import type { ColorId, DecorKind, DecorVariant, StageId, TankType, TunnelDecorKind } from "../types";
+import type { CoastDecorKind, ColorId, DecorKind, DecorVariant, StageId, TankType, TunnelDecorKind } from "../types";
 import { SIZE_RANK, TANKS, type DecorSize } from "./tanks";
 
 export interface DecorVersion {
@@ -54,6 +54,25 @@ export const DECOR: Record<DecorKind, DecorDef> = {
     size: "habitat", question: null,
     versions: [{ variant: null, price: 20, joy: 8, color: null, height: 0.12 }]
   },
+  // Coastal habitat items (sold per habitat; the first of each list is the species' need).
+  penguinRock: { kind: "penguinRock", name: "Resting rocks", ja: "やすむ いわ", fromStage: 8, size: "habitat", question: null,
+    versions: [{ variant: null, price: 25, joy: 10, color: null, height: 0.3 }] },
+  penguinNest: { kind: "penguinNest", name: "Nest burrow", ja: "すあな", fromStage: 8, size: "habitat", question: null,
+    versions: [{ variant: null, price: 30, joy: 12, color: null, height: 0.4 }] },
+  penguinFeeder: { kind: "penguinFeeder", name: "Fish station", ja: "えさば", fromStage: 8, size: "habitat", question: null,
+    versions: [{ variant: null, price: 20, joy: 8, color: null, height: 0.3 }] },
+  sealRock: { kind: "sealRock", name: "Haul-out rock", ja: "ひなたぼっこの いわ", fromStage: 8, size: "habitat", question: null,
+    versions: [{ variant: null, price: 30, joy: 12, color: null, height: 0.3 }] },
+  sealBall: { kind: "sealBall", name: "Play ball", ja: "あそぶ ボール", fromStage: 8, size: "habitat", question: null,
+    versions: [{ variant: null, price: 20, joy: 10, color: null, height: 0.2 }] },
+  sealBuoy: { kind: "sealBuoy", name: "Dive ring", ja: "もぐる リング", fromStage: 8, size: "habitat", question: null,
+    versions: [{ variant: null, price: 20, joy: 8, color: null, height: 0.3 }] },
+  otterKelp: { kind: "otterKelp", name: "Kelp bed", ja: "コンブの ベッド", fromStage: 8, size: "habitat", question: null,
+    versions: [{ variant: null, price: 25, joy: 10, color: null, height: 0.1 }] },
+  otterToy: { kind: "otterToy", name: "Floating toy", ja: "うく おもちゃ", fromStage: 8, size: "habitat", question: null,
+    versions: [{ variant: null, price: 20, joy: 10, color: null, height: 0.1 }] },
+  otterDen: { kind: "otterDen", name: "Cozy den", ja: "かくれが", fromStage: 8, size: "habitat", question: null,
+    versions: [{ variant: null, price: 30, joy: 12, color: null, height: 0.5 }] },
   plant: {
     kind: "plant",
     fromStage: 2,
@@ -226,11 +245,21 @@ export const DECOR: Record<DecorKind, DecorDef> = {
 
 export const TUNNEL_DECOR_ORDER: TunnelDecorKind[] = ["tunnelArch", "tunnelPinnacle", "tunnelShelf", "tunnelLedge", "tunnelSand"];
 export const isTunnelDecor = (kind: DecorKind): kind is TunnelDecorKind => (TUNNEL_DECOR_ORDER as DecorKind[]).includes(kind);
+/** Each coastal habitat's items: the first is what the animals need to be happy. */
+export const COAST_DECOR: Record<"penguins" | "seals" | "otters", CoastDecorKind[]> = {
+  penguins: ["penguinRock", "penguinNest", "penguinFeeder"],
+  seals: ["sealRock", "sealBall", "sealBuoy"],
+  otters: ["otterKelp", "otterToy", "otterDen"]
+};
+const COAST_KINDS = Object.values(COAST_DECOR).flat() as DecorKind[];
+export const isCoastDecor = (kind: DecorKind): kind is CoastDecorKind => COAST_KINDS.includes(kind);
+export const isCoastTank = (t: TankType): t is "penguins" | "seals" | "otters" => t === "penguins" || t === "seals" || t === "otters";
 export const DECOR_ORDER: DecorKind[] = ["plant", "coral", "rock", "shell", "chest", "bubbler", "starfish", "castle", "anemone", "shipwreck", "kelp", "arch", "cave", "driftwood", "staghorn", "brain", "fan", "table", ...TUNNEL_DECOR_ORDER];
 
 /** Can this decoration go in this kind of tank? */
 export function decorFits(kind: DecorKind, tank: TankType): boolean {
   if (tank === "sharks" || isTunnelDecor(kind)) return tank === "sharks" && isTunnelDecor(kind);
+  if (isCoastTank(tank) || isCoastDecor(kind)) return isCoastTank(tank) && (COAST_DECOR[tank] as DecorKind[]).includes(kind);
   return SIZE_RANK[DECOR[kind].size] <= SIZE_RANK[TANKS[tank].decorSize];
 }
 

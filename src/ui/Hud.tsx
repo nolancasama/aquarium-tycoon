@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { getGame, setGame, toast, useGame } from "../game/store";
+import { getGame, nudge, setGame, toast, useGame } from "../game/store";
 import { nextStep, objectivesUnlocked } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
 import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, usedSpace, type Goal } from "../game/logic/model";
 import { HALL_OF, TANKS } from "../game/data/tanks";
-import { ROOMS, roomOpen, SHARKS_HALL } from "../game/data/rooms";
+import { HUB_HALL, inHallRow, ROOMS, roomOpen, SHARKS_HALL } from "../game/data/rooms";
+import { AquariumMap, MapButton, TrophyCard } from "./AquariumMap";
+import { watchHubIntro } from "../game/flow/hub";
 import { ExploreHud, TunnelGoals, WingHud } from "./TunnelHud";
 import { tunnelHelp } from "../game/tunnel/activities";
 import type { VisitorType } from "../game/types";
@@ -194,7 +196,7 @@ function HelpButton() {
   const request = useGame((s) => Boolean(s.request));
   if (request) return null;
   return (
-    <button className="chip help-btn ui" onClick={() => (getGame().exploring || getGame().hall === SHARKS_HALL ? tunnelHelp() : showGuideHint())} disabled={!canHelp} data-testid="btn-help">
+    <button className="chip help-btn ui" onClick={() => (getGame().hall === HUB_HALL ? hubHelp() : getGame().exploring || getGame().hall === SHARKS_HALL ? tunnelHelp() : showGuideHint())} disabled={!canHelp} data-testid="btn-help">
       <b aria-hidden="true">?</b> <span className="help-label">Help <small lang="ja">ヒント</small></span>
     </button>
   );
@@ -216,6 +218,7 @@ function TopBar() {
         </div>
       </div>
       <div className="top-right">
+        <MapButton />
         <RushAwardsButton />
         <HelpButton />
         <button className="round settings-btn ui" onClick={() => setGame({ settingsOpen: true })} aria-label="Settings" data-testid="btn-settings">
@@ -284,8 +287,9 @@ function HallSwitch() {
   const model = useGame((s) => s.model);
   const placing = useGame((s) => s.placing);
   const hintTarget = useGame((s) => s.nudge?.target);
-  const prev = hall > 0 && roomOpen(hall - 1, progress) ? hall - 1 : null;
-  const next = roomOpen(hall + 1, progress) ? hall + 1 : null;
+  if (!inHallRow(hall)) return null;
+  const prev = hall > 0 && inHallRow(hall - 1) && roomOpen(hall - 1, progress) ? hall - 1 : null;
+  const next = inHallRow(hall + 1) && roomOpen(hall + 1, progress) ? hall + 1 : null;
   if (prev === null && next === null) return null;
   // Guide: the carried animal (or tank) only fits in rooms on one side.
   let targets: number[] = [];
@@ -553,14 +557,16 @@ export function Hud() {
   if (screen !== "game") return null;
   const free = mode === "play" && !prompt && !line && !shot;
   const wing = hall === SHARKS_HALL;
+  const hub = hall === HUB_HALL;
   const showRoomBar = free && view === "room" && !panel && !placing && (step === "done" || step === "buy" || step === "visitor");
   const showTankBar = free && view === "tank" && panel !== "decorate";
   return (
     <>
       <TopBar />
       {view === "tank" && <TankStatus />}
-      {showRoomBar && !wing && !exploring && <RoomBar />}
+      {showRoomBar && !wing && !hub && !exploring && <RoomBar />}
       {free && view === "room" && !exploring && <HallSwitch />}
+      {free && hub && <HubBar />}
       {view === "room" && wing && !exploring && <WingHud />}
       {exploring && <ExploreHud />}
       {showTankBar && <TankBar />}
@@ -569,6 +575,31 @@ export function Hud() {
       {!prompt && !line && <NudgeBubble />}
       <TapHand />
       <RushHour />
+      <AquariumMap />
+      <TrophyCard />
+      <HubIntro />
     </>
   );
+}
+
+function HubIntro() {
+  useEffect(() => watchHubIntro(), []);
+  return null;
+}
+
+/** In the hub: one short instruction, tappable to hear it. */
+function HubBar() {
+  const hasNudge = useGame((s) => Boolean(s.nudge));
+  if (hasNudge) return null;
+  return (
+    <div className="bottombar hub-bar">
+      <button className="panel hub-hint ui" data-testid="hub-hint" onClick={() => playHintAudio("Tap a door!")}>
+        <Icon id="hand" size={30} /> Tap a door! <Ja>いきたい ドアを タップしよう</Ja> <Icon id="speaker" size={20} />
+      </button>
+    </div>
+  );
+}
+
+function hubHelp() {
+  nudge({ en: "Tap a door to go there!", ja: "いきたい ばしょの ドアを タップしよう。マップ からも いけるよ", kind: "tap", target: "btn-map" });
 }

@@ -15,12 +15,13 @@ import { TunnelAnimals } from "./TunnelAnimals";
 import { habitatStaticGeometry, lobbyGeometry, shaftGeometry, structureGeometry, tunnelGlassGeometry, zoneRingGeometry } from "./habitatGeometry";
 import { habitatRock, habitatSand, lobbyMat, moteMat, shaftMat, tunnelGlass, tunnelStruct, waterSection, waterSurface, zoneRingBusyMat, zoneRingMat } from "./tunnelMaterials";
 import { useAreaGate, wingShown } from "./wing";
+import { isWingHall } from "../../game/data/rooms";
 import { ExplorePlayer } from "./ExplorePlayer";
 import { TunnelVisitors } from "./TunnelVisitors";
 
 /** The four original rooms: hidden (and untappable) while the wing is shown. */
 export function MainRooms({ children }: { children: ReactNode }) {
-  const ref = useAreaGate(() => !wingShown());
+  const ref = useAreaGate(() => !wingShown() && !(getGame().screen === "game" && isWingHall(getGame().hall)));
   return <group ref={ref}>{children}</group>;
 }
 

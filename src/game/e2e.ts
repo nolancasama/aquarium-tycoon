@@ -12,6 +12,7 @@ import { SLOT_POS, STAND_H, TANKS } from "./data/tanks";
 import { decorVersion } from "./data/decor";
 import { PICO } from "./world";
 import { project } from "../scene/CameraRig";
+import { HUB_BAYS, HUB_R, onRing } from "./data/hub";
 import { dprState, perf } from "../scene/GameScene";
 import { sandSurfaceY, slotMarkerY } from "./logic/tankLayout";
 import type { SlotId, VisitorType } from "./types";
@@ -51,6 +52,9 @@ export function installE2eHook(seed: number) {
         tunnelObserved: m.progress.tunnel?.observed ?? 0,
         tunnelHelped: m.progress.tunnel?.helped ?? 0,
         tunnelArrival: g.tunnelArrival,
+        hubIntroSeen: Boolean(m.progress.hubIntroSeen),
+        mapOpen: g.mapOpen,
+        fade: g.fade,
         tunnelView: g.tunnelView,
         habitatTankId: m.tanks.find((t) => t.type === "sharks" && t.slot === "L")?.id ?? null,
         camera: { pos: { ...rt.camera.pos }, target: { ...rt.camera.target } },
@@ -117,9 +121,15 @@ export function installE2eHook(seed: number) {
       };
     },
     /** Screen position of a thing: fish id, tank id, `tankId:slot` (decoration or slot), pad slot, visitor id, pico. */
-    where(kind: "fish" | "tank" | "badge" | "decor" | "slot" | "pad" | "visitor" | "pico" | "tunnel-door", id = "") {
+    where(kind: "fish" | "tank" | "badge" | "decor" | "slot" | "pad" | "visitor" | "pico" | "tunnel-door" | "hub-door", id = "") {
       const m = getGame().model;
       if (kind === "tunnel-door") return project(SHARK_DOOR.x, 1.3, SHARK_DOOR.z + 0.2);
+      if (kind === "hub-door") {
+        const bay = HUB_BAYS.find((b) => b.kind === id);
+        if (!bay) return null;
+        const p = onRing(bay.angle, HUB_R - 0.8);
+        return project(p.x, 1.7, p.z);
+      }
       if (kind === "fish") {
         const f = rt.fish.get(id);
         const t = f && m.tanks.find((x) => x.id === f.tankId);

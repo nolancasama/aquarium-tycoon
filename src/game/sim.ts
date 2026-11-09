@@ -1,7 +1,7 @@
 import { getGame, model, setGame, updateModel } from "./store";
 import { rt, type FishRt, type Pellet } from "./runtime";
 import { SPECIES } from "./data/fish";
-import { SAND_H, STAND_H, TANKS } from "./data/tanks";
+import { isWingHabitat, SAND_H, STAND_H, TANKS } from "./data/tanks";
 import { decay, happiness, latchHappy, mood, type TankRec } from "./logic/model";
 import { newSwimState, tankFishBounds, frontAt, floorAt, type Bounds, type SwimEnv, type Column } from "./logic/swim";
 import { reactToAnimalTap, stepBehavior, type BehaviorEnv } from "./logic/behavior";
@@ -57,7 +57,7 @@ const live = new Set<string>();
 function syncFish(tanks: TankRec[]) {
   live.clear();
   for (const t of tanks) {
-    if (t.type === "sharks") continue; // The separate tunnelRuntime owns large animals.
+    if (isWingHabitat(t.type)) continue; // The tunnel and coast runtimes own their animals.
     const columns = columnsFor(t);
     for (const f of t.fish) {
       live.add(f.id);
@@ -140,7 +140,7 @@ const behaviorEnv: BehaviorEnv = {
 
 function stepFish(dt: number, tanks: TankRec[]) {
   for (const t of tanks) {
-    if (t.type === "sharks") continue;
+    if (isWingHabitat(t.type)) continue;
     fishes.length = 0;
     for (const f of rt.fish.values()) if (f.tankId === t.id) fishes.push(f);
     if (!fishes.length) continue;

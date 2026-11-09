@@ -1,5 +1,6 @@
 import type { ColorId, DecorKind, DecorVariant, SpeciesId } from "../types";
 import { SPECIES } from "../data/fish";
+import { isWingHabitat } from "../data/tanks";
 import { decorVersion } from "../data/decor";
 import { happiness, HAPPY, type Model, type TankRec } from "./model";
 
@@ -44,7 +45,7 @@ export function matchesShow(req: Extract<Request, { kind: "show" | "showAnimal" 
 
 /** Things in this tank that a "show me" request could point at. */
 export function targetsIn(t: TankRec): ShowTarget[] {
-  if (t.type === "sharks") return []; // Tunnel visitors and activities belong to later slices.
+  if (isWingHabitat(t.type)) return []; // Tunnel visitors and activities belong to later slices.
   return [
     ...t.fish.map((f): ShowTarget => ({ type: "fish", species: f.species })),
     ...t.decor.map((d): ShowTarget => ({ type: "decor", kind: d.kind, variant: d.variant }))
@@ -71,7 +72,7 @@ export function presentColors(m: Model, fishOnly: boolean): ColorId[] {
 /** Sea animals (not fish) in the aquarium, one per word (all jellyfish are "jellyfish"). */
 export function presentAnimals(m: Model): SpeciesId[] {
   const byWord = new Map<string, SpeciesId>();
-  for (const t of m.tanks.filter((t) => t.type !== "sharks")) for (const f of t.fish) if (!isFish(f.species) && !byWord.has(SPECIES[f.species].word)) byWord.set(SPECIES[f.species].word, f.species);
+  for (const t of m.tanks.filter((t) => !isWingHabitat(t.type))) for (const f of t.fish) if (!isFish(f.species) && !byWord.has(SPECIES[f.species].word)) byWord.set(SPECIES[f.species].word, f.species);
   return [...byWord.values()];
 }
 
@@ -90,7 +91,7 @@ export interface RequestOptions {
 
 /** Choose a request the aquarium can satisfy, or null if none fits. */
 export function makeRequest(m: Model, rand: () => number, opts: RequestOptions): Request | null {
-  m = { ...m, tanks: m.tanks.filter((t) => t.type !== "sharks") };
+  m = { ...m, tanks: m.tanks.filter((t) => !isWingHabitat(t.type)) };
   const stage = m.progress.stage;
   // From Stage 4, "I like red!" may point at decorations as well as fish.
   const anyColor = (stage >= 4 || m.progress.star) && rand() < 0.5;

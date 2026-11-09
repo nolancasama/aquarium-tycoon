@@ -15,7 +15,7 @@ export type BodyStyle = "fish" | "puffer" | "upright" | "jelly" | "turtle" | "sc
 export type Movement = "swim" | "perch" | "school" | "glide" | "walk" | "crawl" | "den" | "drift";
 
 /** Why a tank type is wrong for an animal (shown to the student as "Needs a ___!"). */
-export type HomeNeed = "bigger" | "rocky" | "jelly" | "ocean" | "tall" | "sharks";
+export type HomeNeed = "bigger" | "rocky" | "jelly" | "ocean" | "tall" | "sharks" | "coast";
 
 export interface SpeciesDef {
   id: SpeciesId;
@@ -648,6 +648,33 @@ export const SPECIES: Record<SpeciesId, SpeciesDef> = {
     likesLine: "I like the light!",
     voice: { pitch: 1.15, rate: 0.8 },
     body: "jelly"
+  },
+  // Coastal & Polar Zone. Their motion is the separate semi-aquatic system (game/coast/motion.ts);
+  // these fields only give names, colours, care and what they like. Not sold at the counters:
+  // they arrive with the zone's milestones.
+  penguin: {
+    id: "penguin", name: "penguin", ja: "ペンギン",
+    kind: "animal", counter: "animal", color: "white", word: "penguin", plural: "penguins",
+    price: 60, fromStage: 8, habitat: ["penguins"], needs: "coast", space: 1,
+    movement: "swim", length: 0.6, radius: 0.3, speed: 1.5, turn: 1,
+    wander: [4, 8], depth: [0.2, 0.9], tailHz: 2, tailAmp: 0, burst: 0,
+    likes: "penguinRock", likesLine: "I like the rocks!", voice: { pitch: 1.3, rate: 1 }, body: "fish"
+  },
+  seal: {
+    id: "seal", name: "harbor seal", ja: "ゴマフアザラシ",
+    kind: "animal", counter: "animal", color: "white", word: "seal", plural: "seals",
+    price: 90, fromStage: 8, habitat: ["seals"], needs: "coast", space: 1,
+    movement: "swim", length: 1.5, radius: 0.6, speed: 1.2, turn: 0.6,
+    wander: [6, 12], depth: [0.1, 0.9], tailHz: 0.8, tailAmp: 0.2, burst: 0,
+    likes: "sealRock", likesLine: "I like my rock!", voice: { pitch: 0.9, rate: 0.9 }, body: "fish"
+  },
+  otter: {
+    id: "otter", name: "sea otter", ja: "ラッコ",
+    kind: "animal", counter: "animal", color: "orange", word: "sea otter", plural: "sea otters",
+    price: 90, fromStage: 8, habitat: ["otters"], needs: "coast", space: 1,
+    movement: "swim", length: 1.1, radius: 0.45, speed: 0.8, turn: 0.8,
+    wander: [6, 12], depth: [0.6, 1], tailHz: 1, tailAmp: 0.1, burst: 0,
+    likes: "otterKelp", likesLine: "I like the kelp!", voice: { pitch: 1.2, rate: 1 }, body: "fish"
   }
 };
 

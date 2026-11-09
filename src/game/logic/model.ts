@@ -1,7 +1,8 @@
 import type { ColorId, DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
 import { SPECIES, SPECIES_ORDER, spaceOf, type HomeNeed } from "../data/fish";
-import { DECOR, decorFits, decorVersion, isTunnelDecor } from "../data/decor";
-import { ATRIUM_PRICE, BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
+import { COAST_DECOR, DECOR, decorFits, decorVersion, isCoastTank, isTunnelDecor } from "../data/decor";
+import type { CoastProgress } from "./coast";
+import { ATRIUM_PRICE, BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, isWingHabitat, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
 import type { PhraseId } from "./english";
 import { newRushState, type RushState } from "../rush/types";
@@ -107,6 +108,12 @@ export interface Progress {
   tunnelOpen?: boolean;
   tunnelIntroSeen?: boolean;
   tunnel?: TunnelProgress;
+  /** Grand Aquarium Hub: open is derived (free play + Shark Tunnel); only Pico's one-time introduction is saved. */
+  hubIntroSeen?: boolean;
+  /** Coastal & Polar Zone; absent in older saves. */
+  coastOpen?: boolean;
+  coastIntroSeen?: boolean;
+  coast?: CoastProgress;
   /** Distinct sentences said or chosen (results card). */
   said: PhraseId[];
 }
@@ -194,6 +201,9 @@ export function newProgress(): Progress {
     tunnelOpen: false,
     tunnelIntroSeen: false,
     tunnel: newTunnelProgress(),
+    hubIntroSeen: false,
+    coastOpen: false,
+    coastIntroSeen: false,
     said: []
   };
 }
@@ -244,7 +254,8 @@ export function homeReason(species: SpeciesId, t: TankRec): HomeReason | null {
   const jelly = def.group === "jelly";
   if (!def.habitat.includes(t.type)) {
     if (def.needs === "sharks") return "sharks";
-    if (t.type === "sharks") return "notSafe";
+    if (def.needs === "coast") return "coast";
+    if (isWingHabitat(t.type)) return "notSafe";
     if (t.type === "cylinder" && !jelly) return "jellyOnly";
     if (t.type === "cave") return "notSafe";
     return def.needs;
@@ -305,7 +316,7 @@ export const decorUnlocked = (m: Model) => m.progress.stage >= 2;
 export const tanksUnlocked = (m: Model) => m.progress.stage >= 4;
 export const upgradesUnlocked = (m: Model) => m.progress.stage >= UPGRADES_FROM;
 export const isDecorUnlocked = (m: Model, kind: DecorKind) => m.progress.stage >= DECOR[kind].fromStage && (!isTunnelDecor(kind) || Boolean(m.progress.tunnelOpen));
-export const isTankUnlocked = (m: Model, type: TankType) => type !== "ocean" && type !== "small" && type !== "reef" && type !== "sharks" && m.progress.stage >= TANKS[type].fromStage;
+export const isTankUnlocked = (m: Model, type: TankType) => type !== "ocean" && type !== "small" && type !== "reef" && !isWingHabitat(type) && m.progress.stage >= TANKS[type].fromStage;
 /** Expansion 1 content (special tanks, new animals and decorations, the Gallery) opens at Level 8. */
 export const EXPANSION_FROM: StageId = 8;
 export const galleryUnlocked = (m: Model) => m.progress.stage >= EXPANSION_FROM && m.progress.hallOpen;
@@ -336,8 +347,13 @@ export function likedShare(t: TankRec): number {
 export function happiness(t: TankRec): number | null {
   if (!t.fish.length) return null;
   const h = 0.35 * t.food + 0.25 * t.clean + Math.min(30, decorJoy(t)) + 10 * likedShare(t) + (t.upgrades.lamp ? LAMP_BONUS : 0);
-  return Math.max(0, Math.min(100, Math.round(h)));
+  const r = Math.max(0, Math.min(100, Math.round(h)));
+  // A coastal habitat without its needed item (rocks, haul-out rock, kelp bed) stops below happy.
+  return isCoastTank(t.type) && !t.decor.some((d) => d.kind === COAST_DECOR[t.type as "penguins"][0]) ? Math.min(r, NEED_CAP) : r;
 }
+
+/** The coastal need cap (see happiness). */
+export const NEED_CAP = 60;
 
 export type Mood = "happy" | "okay" | "sad";
 
@@ -595,7 +611,7 @@ export function remodelPlan(m: Model, tankId: string, type: TankType): RemodelPl
   const tradeIn = t ? Math.floor(TANKS[t.type].price / 2) : 0;
   const cost = Math.max(0, TANKS[type].price - tradeIn);
   const plan: RemodelPlan = { reason: null, blockers: [], keep: [], toTray: [], tradeIn, cost };
-  if (!t || t.type === "ocean" || t.type === "reef" || t.type === "sharks" || !isTankUnlocked(m, type) || m.progress.stage < EXPANSION_FROM) return { ...plan, reason: "locked" };
+  if (!t || t.type === "ocean" || t.type === "reef" || isWingHabitat(t.type) || !isTankUnlocked(m, type) || m.progress.stage < EXPANSION_FROM) return { ...plan, reason: "locked" };
   if (t.type === type) return { ...plan, reason: "same" };
   if (!PAD_TYPES[t.slot].includes(type)) return { ...plan, reason: "pad" };
   plan.blockers = t.fish.filter((f) => !SPECIES[f.species].habitat.includes(type));

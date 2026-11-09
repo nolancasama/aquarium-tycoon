@@ -4,7 +4,7 @@ import type { DecorKind, DecorVariant, SlotId, SpeciesId, TankType } from "../ty
 import { ANIMAL_ORDER, FISH_ORDER, JELLY_BY_COLOR, SPECIES, SPECIES_BY_COLOR } from "../data/fish";
 import { DECOR } from "../data/decor";
 import { HALL_OF, PAD_TYPES, TANKS } from "../data/tanks";
-import { roomOpen, SHARKS_HALL } from "../data/rooms";
+import { isWingHall, roomOpen, SHARKS_HALL } from "../data/rooms";
 import { openSharkTunnel, tunnelUnlocked } from "../logic/tunnel";
 import { startExplore, stopExplore } from "../tunnel/explore";
 import { tunnelRuntime } from "../tunnel/contract";
@@ -169,7 +169,7 @@ export function switchHall(hall: number) {
   if (switching || g.screen !== "game" || g.view !== "room" || !roomOpen(hall, g.model.progress) || rt.explore.active) return;
   audio.play("tick");
   const placing = g.placing?.kind === "fish" ? g.placing : null;
-  if (hall === SHARKS_HALL || g.hall === SHARKS_HALL) {
+  if (isWingHall(hall) || isWingHall(g.hall)) {
     // Into or out of the wing: a short fade, then a cut (the areas are not side by side).
     switching = true;
     setGame({ fade: 1, panel: null, tankId: null, placing });
@@ -205,6 +205,7 @@ const fishWithHome = () => FISH_ORDER.filter((s) => isSpeciesUnlocked(model(), s
 /** The same explanation is used by placement, shop cards and the counter. */
 export const HOME_REASON_TEXT: Record<HomeReason, { en: string; ja: string }> = {
   sharks: { en: "Needs the Shark Tunnel!", ja: "サメの トンネルに すむよ！" },
+  coast: { en: "Lives at the coast!", ja: "かいがんの すみかに すむよ！" },
   bigger: { en: "Needs a bigger tank!", ja: "もっと おおきな タンクが ひつようだよ" },
   rocky: { en: "Needs a rocky home!", ja: "いわの ほらあな タンクが ひつようだよ" },
   jelly: { en: "Needs a jellyfish tank!", ja: "クラゲの まるい タンクが ひつようだよ" },

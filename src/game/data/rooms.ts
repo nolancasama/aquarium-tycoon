@@ -17,7 +17,7 @@ export interface RoomBounds {
 }
 
 /** What a room needs from the saved progress to be open (the first hall always is). */
-export type RoomUnlock = null | "hallOpen" | "galleryOpen" | "atriumOpen" | "tunnelOpen";
+export type RoomUnlock = null | "hallOpen" | "galleryOpen" | "atriumOpen" | "tunnelOpen" | "hubOpen" | "coastOpen";
 
 export interface RoomDef {
   id: RoomId;
@@ -44,7 +44,14 @@ export const ROOMS: RoomDef[] = [
   { id: "atrium", name: "Coral Reef Atrium", ja: "サンゴの アトリウム", bounds: { minX: 30, maxX: 46, minZ: -5.5, maxZ: 5.5, wallH: 5.5 }, pads: ["I", "J", "K"],
     padLayout: { I: { x: 38, z: -1 }, J: { x: 33, z: 3 }, K: { x: 43.6, z: -3.7 } }, unlock: "atriumOpen" },
   { id: "sharks", name: "Shark Tunnel", ja: "サメの トンネル", bounds: { minX: 20, maxX: 52, minZ: -40, maxZ: -5.5, wallH: 8 },
-    pads: ["L"], padLayout: { L: { x: 36, z: -25 } }, unlock: "tunnelOpen", wing: "atrium" }
+    pads: ["L"], padLayout: { L: { x: 36, z: -25 } }, unlock: "tunnelOpen", wing: "atrium" },
+  // The Grand Aquarium Hub: a rotunda well away from the hall row (only the active area is drawn).
+  // It is reached through the Aquarium Map, never through the hall arrows. See data/hub.ts.
+  { id: "hub", name: "Grand Hub", ja: "グランド ホール", bounds: { minX: -84, maxX: -56, minZ: -12, maxZ: 9, wallH: 7 },
+    pads: [], unlock: "hubOpen", wing: "hub" },
+  // The Coastal & Polar Zone: three exhibits side by side, entered from the hub. See data/coast.ts.
+  { id: "coast", name: "Coastal & Polar Zone", ja: "かいがんと さむい ちいき", bounds: { minX: -152, maxX: -108, minZ: -66, maxZ: -50, wallH: 4 },
+    pads: ["M", "N", "O"], unlock: "coastOpen", wing: "hub" }
 ];
 
 export type RoomIndex = number;
@@ -57,12 +64,21 @@ export const ROOM_CENTER_X: number[] = ROOMS.filter((r) => !r.wing).map((r) => (
 /** Which room a pad is in. */
 export const ROOM_OF: Record<SlotId, RoomIndex> = Object.fromEntries(ROOMS.flatMap((r, i) => r.pads.map((p) => [p, i]))) as Record<SlotId, RoomIndex>;
 
-/** Is this room open with this progress? */
-export function roomOpen(i: RoomIndex, progress: { hallOpen: boolean; galleryOpen: boolean; atriumOpen?: boolean; tunnelOpen?: boolean }): boolean {
+type OpenFlags = { hallOpen: boolean; galleryOpen: boolean; atriumOpen?: boolean; tunnelOpen?: boolean; freePlay?: boolean; coastOpen?: boolean };
+
+/** Is this room open with this progress? The hub is a free upgrade, derived (never bought). */
+export function roomOpen(i: RoomIndex, progress: OpenFlags): boolean {
   const r = ROOMS[i];
   if (!r) return false;
+  if (r.unlock === "hubOpen") return Boolean(progress.freePlay && progress.tunnelOpen);
   return r.unlock === null || progress[r.unlock] === true;
 }
+
+/** Rooms on the hall row plus the Shark Tunnel (which branches from the Atrium): the hall arrows link only these. */
+export const inHallRow = (i: RoomIndex): boolean => Boolean(ROOMS[i]) && (!ROOMS[i].wing || ROOMS[i].wing === "atrium");
+
+/** Areas that are entered with a fade and drawn on their own (the Shark Tunnel, the hub, the coast). */
+export const isWingHall = (i: RoomIndex): boolean => Boolean(ROOMS[i]?.wing);
 
 /** The room containing world x (rooms tile the x axis). */
 export function roomAtX(x: number): RoomIndex {
@@ -78,3 +94,7 @@ export const doorX = (i: RoomIndex) => {
 
 /** The Shark Tunnel wing's index in ROOMS (management view of the habitat). */
 export const SHARKS_HALL: RoomIndex = ROOMS.findIndex((r) => r.id === "sharks");
+/** The Coastal & Polar Zone's index in ROOMS. */
+export const COAST_HALL: RoomIndex = ROOMS.findIndex((r) => r.id === "coast");
+/** The Grand Aquarium Hub's index in ROOMS. */
+export const HUB_HALL: RoomIndex = ROOMS.findIndex((r) => r.id === "hub");

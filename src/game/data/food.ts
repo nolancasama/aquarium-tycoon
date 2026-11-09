@@ -21,6 +21,9 @@ export const DIET: Record<SpeciesId, readonly FoodId[]> = {
   blacktip: ["seafood"],
   zebrashark: ["seafood"],
   eagleray: ["seafood"],
+  penguin: ["seafood"], // small whole fish
+  seal: ["seafood"],
+  otter: ["shrimp", "seafood"], // clams, crabs and urchins: shellfish
   clownfish: ["flakes", "shrimp"],
   bluetang: ["seaweed", "flakes"], // grazes algae
   yellowfish: ["flakes", "shrimp"], // the butterflyfish picks at small animals

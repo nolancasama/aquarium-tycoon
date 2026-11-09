@@ -3,6 +3,7 @@ import { toast, updateModel, useGame } from "../game/store";
 import { openAtrium, openGallery, openHall, type Model } from "../game/logic/model";
 import type { StageId } from "../game/types";
 import { debugStartRush } from "../game/rush/flow";
+import { openSharkTunnel } from "../game/logic/tunnel";
 import "./DebugPanel.css";
 
 const STAGES: StageId[] = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -44,8 +45,20 @@ const ACTIONS: { label: string; run: (m: Model) => Model }[] = [
   { label: "+1000 coins", run: (m) => ({ ...m, coins: m.coins + 1000 }) },
   { label: "Finish tutorial", run: (m) => ({ ...m, progress: { ...m.progress, tutorial: "done" } }) },
   { label: "All tanks fed and clean", run: (m) => ({ ...m, tanks: m.tanks.map((t) => ({ ...t, food: 100, clean: 100 })) }) },
-  { label: "Give the crown (finish Level 8)", run: (m) => ({ ...m, progress: { ...m.progress, superStar: true } }) }
+  { label: "Give the crown (finish Level 8)", run: (m) => ({ ...m, progress: { ...m.progress, superStar: true } }) },
+  { label: "Open Grand Aquarium Hub (opens the Shark Tunnel)", run: openHub }
 ];
+
+/** Everything the hub needs, through the real rules: all halls, free play, the Shark Tunnel (free). */
+function openHub(m: Model): Model {
+  let o = unlockAll(m);
+  o = { ...o, progress: { ...o.progress, freePlay: true, tutorial: "done" } };
+  if (!o.progress.tunnelOpen) {
+    const r = openSharkTunnel({ ...o, coins: 1e9, tanks: o.tanks.map((t) => t.slot === "I" && t.fish.length < 4 ? { ...t, fish: [...t.fish, ...[1, 2, 3, 4].map((k) => ({ id: `dbg-reef-${k}`, species: "clownfish" as const }))].slice(0, Math.max(4, t.fish.length)) } : t) });
+    if (r.ok) o = { ...r.m, coins: o.coins };
+  }
+  return o;
+}
 
 /** Debug overlay, always available: Ctrl+Alt+D toggles it, Ctrl+Alt+U unlocks everything and Ctrl+Alt+M adds 1000 coins directly, Escape closes it. */
 export function DebugPanel() {

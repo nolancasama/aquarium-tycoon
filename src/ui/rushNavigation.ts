@@ -1,6 +1,6 @@
 import { backToRoom, leaveExplore, openTank, switchHall } from "../game/flow/actions";
 import { HALL_OF } from "../game/data/tanks";
-import { SHARKS_HALL } from "../game/data/rooms";
+import { isWingHall } from "../game/data/rooms";
 import { getGame, useGame, type GameState } from "../game/store";
 
 /** Wait for the existing navigation transitions, with no separate clock. */
@@ -23,7 +23,7 @@ export function visitRushTank(id: string) {
     if (!tank) return;
     const hall = HALL_OF[tank.slot];
     backToRoom();
-    if (hall !== game.hall && (hall === SHARKS_HALL || game.hall === SHARKS_HALL)) {
+    if (hall !== game.hall && (isWingHall(hall) || isWingHall(game.hall))) {
       switchHall(hall);
       whenReady((next) => next.hall === hall && next.fade === 0 && next.mode === "play", () => openTank(id));
     } else openTank(id);

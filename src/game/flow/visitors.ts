@@ -6,7 +6,7 @@ import { countableTanks, makeRequest, matchesShow, requestLine, requestReward, s
 import { IT_COLOR_IDS, IT_COLOR_PHRASE, ITS_IDS, ITS_IDS_BASE, ITS_PHRASE, LIKE_COLOR_PHRASE, NUMBER_IDS, NUMBER_PHRASE, colorOfPhrase, type PhraseId } from "../logic/english";
 import { makeRng, shuffle } from "../logic/rng";
 import { SPECIES } from "../data/fish";
-import { SLOT_POS, STAND_H, TANKS } from "../data/tanks";
+import { isWingHabitat, SLOT_POS, STAND_H, TANKS } from "../data/tanks";
 import { ROOM_OF, roomOpen } from "../data/rooms";
 import { BENCH_FACING, BENCH_SEAT, ENTRY, OUTSIDE, REQUEST_SEAT, benchApproach, benchPose, hallOfX, lookSpot, reefLoop, requestEligible, route, seatApproach, seatById, seatExit, tankOrigin } from "../world";
 import { planRest, restDuration } from "../logic/seating";
@@ -80,7 +80,7 @@ export function spawnVisitor(type: VisitorType, request: Request | null, opts: {
   const m = model();
   if (opts.cosmetic) request = null;
   const id = `v${visitorNo++}`;
-  const plan = m.tanks.filter((t) => t.type !== "sharks" && t.fish.length > 0).map((t) => t.id);
+  const plan = m.tanks.filter((t) => !isWingHabitat(t.type) && t.fish.length > 0).map((t) => t.id);
   const v: VisitorRt = {
     id,
     type,
@@ -455,7 +455,7 @@ const MORE_TYPES: VisitorType[] = ["child", "adult", "fan", "grandma", "explorer
 function crowdTankIds(): string[] {
   const m = model();
   return shuffle(m.tanks.filter((t) => {
-    if (t.type === "sharks" || !t.fish.length) return false;
+    if (isWingHabitat(t.type) || !t.fish.length) return false;
     return roomOpen(ROOM_OF[t.slot], m.progress);
   }).map((t) => t.id), rand);
 }
@@ -528,15 +528,15 @@ function reserveRushQuestion(eventId: string): boolean {
 
 function shortRushQuestion(): Request | null {
   const m = model();
-  const counts = countableTanks(m).filter((t) => t.type !== "sharks");
-  const animals = m.tanks.filter((t) => t.type !== "sharks" && t.fish.some((f) => SPECIES[f.species].kind === "animal"));
+  const counts = countableTanks(m).filter((t) => !isWingHabitat(t.type));
+  const animals = m.tanks.filter((t) => !isWingHabitat(t.type) && t.fish.some((f) => SPECIES[f.species].kind === "animal"));
   if (animals.length && (!counts.length || rand() < 0.5)) {
     const tank = animals[Math.floor(rand() * animals.length)];
     const animal = tank.fish.find((f) => SPECIES[f.species].kind === "animal")!;
     return { kind: "whatsThis", tankId: tank.id, fishId: animal.id };
   }
   if (counts.length) return { kind: "count", tankId: counts[Math.floor(rand() * counts.length)].id };
-  return m.tanks.some((t) => t.type !== "sharks" && t.fish.length) ? { kind: "chatLike" } : null;
+  return m.tanks.some((t) => !isWingHabitat(t.type) && t.fish.length) ? { kind: "chatLike" } : null;
 }
 
 /** Uses remaining active event time, rather than a second independent clock. */

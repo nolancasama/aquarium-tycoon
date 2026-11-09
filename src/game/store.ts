@@ -178,6 +178,9 @@ export interface GameState {
   tunnelCelebration: { milestone: number } | null;
   /** Short Rush Hour cue, timed by the existing simulation clock. */
   rushAnnouncement: { kind: "prep" | "rush"; until: number } | null;
+  /** The Aquarium Map overlay, and the hub's trophy card. */
+  mapOpen: boolean;
+  trophiesOpen: boolean;
 
   model: Model;
 
@@ -291,7 +294,9 @@ export const useGame = create<GameState>(() => ({
   foodStrip: null,
   guide: null,
   decorAsk: null,
-  rushAnnouncement: null
+  rushAnnouncement: null,
+  mapOpen: false,
+  trophiesOpen: false
 }));
 
 export const setGame = useGame.setState;

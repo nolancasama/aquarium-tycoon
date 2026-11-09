@@ -1591,3 +1591,71 @@ record and config are shaped so a `kind` can be added later.
 - **Pending visibility uses stable store state**, not `rushCalm()`, whose per-frame
   runtime flags flicker and would swap card and goals for a frame. `startRush()`
   still checks `rushCalm()`.
+
+## 2026-11-10 — Grand Aquarium Hub + Coastal & Polar Zone (plan review)
+
+The owner handed over a full expansion brief (hub, coastal wing with penguins,
+seals and sea otters, habitat items, ESL observation activities, five
+milestones). They asked Claude to accept, reject or modify it at its own
+discretion and build it alone, without the worker router. This entry is the
+review. Decisions made while building are appended below it.
+
+**Accepted as briefed:** a hub as an extra navigation layer. The four halls,
+their arrows and the Atrium → Shark Tunnel door stay exactly as they are. The
+hub opens free in Free Play once the Shark Tunnel is open. It has two future
+entrances (Dolphin Lagoon, Grand Ocean Sanctuary), shown as attractive but
+closed. Its centrepiece is a display tank with no care. Its visitors are
+decorative and never tip. Habitats are separate, not one shared pool. The coast
+gets its own five milestones (Levels 1–8 untouched), species-specific habitat
+items with visible effects, child-friendly needs (no death, a bilingual "needs a
+rock!" message), mic-free English, debug actions, and optional save fields only.
+
+**Changed:**
+1. **Habitats are tanks.** Each coastal exhibit is an ordinary `TankRec` on a
+   built-in pad (M penguins, N seals, O otters), like the Shark Tunnel's habitat
+   on pad L. Food, cleaning, decay, happiness, tips, save validation and Rush
+   Hour readiness then work with no parallel system. Rejected: a separate
+   habitat-state model, which would double the care rules and break Rush
+   integration.
+2. **Needs cap happiness.** The brief's "suitable resting area / enrichment"
+   needs become one required item per species (penguins: a resting rock, seals:
+   a haul-out rock, otters: a floating toy). Without it, happiness is capped at
+   60, below "happy", and the status card names the missing item. The existing
+   formula (food, clean, decorations) is otherwise unchanged. Rejected: a
+   multi-factor welfare score that children cannot read.
+3. **One Map control.** The brief asks for a Hub control *and* a Back to Hub
+   control. A single "Map / マップ" chip (top right) opens the Aquarium Map, and
+   its first and largest card is the Grand Hub. At 1366×768 the top bar has no
+   room for two new chips beside Rush awards, Help and Settings. The hub's
+   doorways also travel. The chip is hidden while a prompt, line, purchase,
+   placement or celebration is open. The Shark Tunnel walk keeps its own Back to
+   Aquarium button (the map is hidden while exploring).
+4. **Opening the other two habitats is free.** Seal Cove opens (with its first
+   seal) as the Penguin Paradise reward, and Otter Bay opens (with its first
+   otter) as the Seal Cove reward. Only the zone itself costs coins. Rejected:
+   three separate purchases, which add coin-farming between milestones.
+5. **The penguins arrive as a group of three.** The brief's Milestone 1 reward
+   is "first penguin". Penguins are colony birds: one alone looks wrong, and
+   "How many penguins?" needs more than one. Milestone 2 adds a fourth.
+6. **Movement is authored, not physics.** Each habitat is data: land
+   platforms with heights, a water volume (surface, floor), and shore ramps that
+   join land to water. Animals follow a state machine (rest → walk → enter ramp →
+   swim/dive → surface → exit ramp). Land travel stays on the platform graph and
+   water travel inside the volume, so clipping is impossible by construction.
+   Unit tests check it: never under ground, never walking below the surface, no
+   step longer than the speed allows. Rejected: free steering with collision
+   (expensive, and the shark swim showed how much tuning it needs).
+7. **Scope and order.** Built in order: A the Hub, B the coastal environment,
+   C a complete penguin slice, then D seals and otters, E milestones, F polish.
+   Each phase is committed and deployed only when verified. Whatever is not
+   finished this session is listed in CURRENT_STATE.md and is not hidden as
+   placeholders.
+
+**Rejected:**
+- "Test on real Chromebooks / stable 30 fps": not possible from here. Frame
+  budgets are measured with SwiftShader (draw calls, triangles) and the
+  existing adaptive DPR stays. This is reported as unverified.
+- "Information counter" as a working feature: it is scenery only. It has
+  nothing to sell.
+- A second achievement store: the hub's trophy wall reads the existing flags
+  (`star`, `superStar`, `tunnel.trophy`, `rush.trophies`, and the coastal trophy).

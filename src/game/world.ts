@@ -287,7 +287,7 @@ export const WALK_Z = 0.9;
 /** Water-local origin of a tank: centre of the glass bottom. */
 export function tankOrigin(slot: SlotId): Vec3 {
   const p = SLOT_POS[slot];
-  return { x: p.x, y: slot === "L" ? 0 : STAND_H, z: p.z };
+  return { x: p.x, y: slot === "L" || slot === "M" || slot === "N" || slot === "O" ? 0 : STAND_H, z: p.z };
 }
 
 export function toWorld(slot: SlotId, local: Vec3): Vec3 {

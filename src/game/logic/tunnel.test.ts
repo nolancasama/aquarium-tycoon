@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { canLive, homeReason, isSpeciesUnlocked, newModel, newTank, placeDecor, buyDecor, buyFish, placeFish, remodelPlan, usedSpace, hasSpace, type Model, type Result } from "./model";
 import { checkTunnelMilestones, openSharkTunnel, recordTunnelActivity, SHARK_TUNNEL_PRICE, tunnelUnlocked } from "./tunnel";
 import { decodeSave, encodeSave } from "./save";
+import { HUB_HALL, roomOpen } from "../data/rooms";
 import { decorFits } from "../data/decor";
 import { SPECIES } from "../data/fish";
 import { TANKS } from "../data/tanks";
@@ -161,5 +162,21 @@ describe("Shark Tunnel rules", () => {
     // A save claiming the wing open without the Atrium is not trusted.
     const forged = JSON.stringify({ v: 3, model: { ...old, progress: { ...old.progress, atriumOpen: false, tunnelOpen: true } } });
     expect(decodeSave(forged)!.model.progress.tunnelOpen).toBe(false);
+  });
+
+  it("opens the Grand Hub for a saved Shark Tunnel without any new save field; the intro flag round-trips", () => {
+    const m = ok(openSharkTunnel(atrium(4)));
+    // A save from before the hub existed: no hubIntroSeen at all.
+    const before = JSON.stringify({ v: 3, model: { ...m, progress: { ...m.progress, hubIntroSeen: undefined } } });
+    const loaded = decodeSave(before)!.model;
+    expect(roomOpen(HUB_HALL, loaded.progress)).toBe(true);
+    expect(loaded.progress.hubIntroSeen).toBe(false);
+    expect(loaded.coins).toBe(m.coins);
+    expect(loaded.tanks.map((t) => t.id)).toEqual(m.tanks.map((t) => t.id));
+    const seen = decodeSave(encodeSave({ ...m, progress: { ...m.progress, hubIntroSeen: true } }))!.model;
+    expect(seen.progress.hubIntroSeen).toBe(true);
+    // Not before the Shark Tunnel.
+    expect(roomOpen(HUB_HALL, atrium(4).progress)).toBe(false);
+    expect(decodeSave(encodeSave({ ...atrium(4), progress: { ...atrium(4).progress, hubIntroSeen: true } }))!.model.progress.hubIntroSeen).toBe(false);
   });
 });

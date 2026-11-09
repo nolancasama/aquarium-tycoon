@@ -6,7 +6,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { getGame, useGame } from "../game/store";
 import { rt } from "../game/runtime";
 import { decorVersion } from "../game/data/decor";
-import { SAND_H, SLOT_POS, SLOT_FACING, STAND_H, TANKS, type TankDef } from "../game/data/tanks";
+import { isWingHabitat, SAND_H, SLOT_POS, SLOT_FACING, STAND_H, TANKS, type TankDef } from "../game/data/tanks";
 import { happiness, isDirty, isHungry, mood, type PlacedDecor, type TankRec } from "../game/logic/model";
 import { tapDecor, tapFish, tapSlot, tapTank } from "../game/flow/actions";
 import { glassGeometry, surfaceGeometry, tankShellGeometry, waterGeometry } from "./models/tankShell";
@@ -24,7 +24,7 @@ export function Tanks() {
   const tanks = useGame((s) => s.model.tanks);
   return (
     <>
-      {tanks.filter((t) => t.type !== "sharks").map((t) => (
+      {tanks.filter((t) => !isWingHabitat(t.type)).map((t) => (
         <Tank key={t.id} tank={t} />
       ))}
     </>

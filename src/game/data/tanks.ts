@@ -1,6 +1,7 @@
 import type { SlotId, StageId, TankShape, TankType, Vec3 } from "../types";
 import { ROOMS, ROOM_OF } from "./rooms";
 import { HABITAT, TUNNEL_ZONES } from "./sharkTunnel";
+import { EX_D, EX_W, EXHIBITS, type CoastHabitat } from "./coast";
 
 /** Decoration size classes: a tank takes decorations up to its own class. */
 export type DecorSize = "small" | "medium" | "large" | "habitat";
@@ -40,7 +41,20 @@ export interface TankDef {
   current?: number;
 }
 
+/** A coastal exhibit as a tank: its care, capacity and item slots (positions are exhibit-local). */
+function coastTank(type: CoastHabitat, capacity: number): TankDef {
+  const ex = EXHIBITS[type];
+  return {
+    type, name: ex.name, ja: ex.ja, shape: "coast", group: "special", price: 0, fromStage: 8, capacity, decorSize: "habitat",
+    w: EX_W, d: EX_D, h: ex.pool.surface - ex.pool.floor,
+    slots: ex.slots.map((p) => ({ x: p.x, z: p.z }))
+  };
+}
+
 export const TANKS: Record<TankType, TankDef> = {
+  penguins: coastTank("penguins", 6),
+  seals: coastTank("seals", 3),
+  otters: coastTank("otters", 3),
   sharks: {
     type: "sharks", name: "Shark Tunnel", ja: "サメの トンネル", shape: "tunnel",
     group: "special", price: 0, fromStage: 8, capacity: 16, decorSize: "habitat",
@@ -291,10 +305,13 @@ export const SLOT_POS: Record<SlotId, Vec3> = {
   I: { ...atriumPads.I!, y: 0 },
   J: { ...atriumPads.J!, y: 0 },
   K: { ...atriumPads.K!, y: 0 },
-  L: { ...HABITAT.centre }
+  L: { ...HABITAT.centre },
+  M: { x: EXHIBITS.penguins.x, y: 0, z: EXHIBITS.penguins.z },
+  N: { x: EXHIBITS.seals.x, y: 0, z: EXHIBITS.seals.z },
+  O: { x: EXHIBITS.otters.x, y: 0, z: EXHIBITS.otters.z }
 };
 
-export const SLOT_ORDER: SlotId[] = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
+export const SLOT_ORDER: SlotId[] = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O"];
 export const SLOT_FACING = Object.fromEntries(SLOT_ORDER.map((slot) => [slot,
   ROOMS.find((room) => room.pads.includes(slot))?.padLayout?.[slot]?.facing ?? 0
 ])) as Record<SlotId, number>;
@@ -322,8 +339,15 @@ export const PAD_TYPES: Record<SlotId, TankType[]> = {
   I: ["reef"],
   J: ["hex", "panorama", "cave"],
   K: ["hex", "panorama", "cave"],
-  L: ["sharks"]
+  L: ["sharks"],
+  M: ["penguins"],
+  N: ["seals"],
+  O: ["otters"]
 };
 
+/** The coastal habitats, and every habitat run by its own wing (never shown or simulated as an ordinary tank). */
+export const COAST_TYPES: TankType[] = ["penguins", "seals", "otters"];
+export const isWingHabitat = (t: TankType): boolean => t === "sharks" || COAST_TYPES.includes(t);
+
 /** Pads that are never empty once their room is open (they come with a tank). */
-export const BUILT_IN_PADS: SlotId[] = ["C", "G", "I", "L"];
+export const BUILT_IN_PADS: SlotId[] = ["C", "G", "I", "L", "M", "N", "O"];

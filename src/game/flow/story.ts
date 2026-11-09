@@ -192,6 +192,8 @@ function enter(m: Model) {
     tunnelWaiting: null,
     tunnelCelebration: null,
     rushAnnouncement: null,
+    mapOpen: false,
+    trophiesOpen: false,
     tunnelView: "whole",
     hall: 0,
     guide: null,

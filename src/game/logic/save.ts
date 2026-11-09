@@ -1,11 +1,12 @@
 import type { ColorId, DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
 import { SPECIES } from "../data/fish";
 import { DECOR, decorFits } from "../data/decor";
-import { BUILT_IN_PADS, HALL_OF, PAD_TYPES, SLOT_ORDER, TANKS } from "../data/tanks";
+import { BUILT_IN_PADS, HALL_OF, isWingHabitat, PAD_TYPES, SLOT_ORDER, TANKS } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
 import { PHRASES, type PhraseId } from "./english";
 import { isSentencePattern } from "./sentenceTeaching";
 import { decodeRush } from "../rush/decode";
+import type { CoastProgress } from "./coast";
 import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep, type TunnelProgress } from "./model";
 
 /**
@@ -159,6 +160,21 @@ function readProgress(raw: unknown, version: number): Progress {
       trophy: milestone === 5
     };
   }
+  p.hubIntroSeen = src.hubIntroSeen === true && p.tunnelOpen;
+  // The coast needs the Shark Tunnel's trophy; its milestone is at least 1 once open.
+  p.coastOpen = src.coastOpen === true && Boolean(p.tunnel?.trophy) && p.freePlay;
+  p.coastIntroSeen = src.coastIntroSeen === true && p.coastOpen;
+  if (p.coastOpen) {
+    const c = isObj(src.coast) ? src.coast : {};
+    const milestone = Math.max(1, Math.min(5, Math.floor(num(c.milestone, 1)))) as CoastProgress["milestone"];
+    const acts = (v: unknown) => Math.max(0, Math.min(99, Math.floor(num(v, 0))));
+    p.coast = {
+      milestone,
+      sawPenguinSwim: c.sawPenguinSwim === true, sawSealDive: c.sawSealDive === true, sawOtterFloat: c.sawOtterFloat === true,
+      penguinActs: acts(c.penguinActs), sealActs: acts(c.sealActs), otterActs: acts(c.otterActs),
+      trophy: milestone === 5
+    };
+  }
   p.said = [...new Set(arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES))];
   return p;
 }
@@ -210,6 +226,15 @@ export function decodeSave(text: string | null): SaveData | null {
     tanks.push(newTank(`t${1000 + n}`, "sharks", "L"));
     ids.add(`t${1000 + n}`);
   }
+  // Each opened coastal habitat keeps its exhibit (penguins from milestone 1, seals from 2, otters from 3).
+  const coastAt = m.progress.coast?.milestone ?? 0;
+  for (const [type, slot, from] of [["penguins", "M", 1], ["seals", "N", 2], ["otters", "O", 3]] as const) {
+    if (!m.progress.coastOpen || coastAt < from || tanks.some((t) => t.slot === slot)) continue;
+    let n = 1;
+    while (ids.has(`t${1100 + n}`)) n++;
+    tanks.push(newTank(`t${1100 + n}`, type, slot));
+    ids.add(`t${1100 + n}`);
+  }
   m.tanks = tanks;
   const inv = isObj(src.inv) ? src.inv : {};
   const freePads = SLOT_ORDER.filter((s) => !tanks.some((t) => t.slot === s) && roomOpen(HALL_OF[s], m.progress) && !BUILT_IN_PADS.includes(s)).length;
@@ -221,7 +246,7 @@ export function decodeSave(text: string | null): SaveData | null {
       .map((d) => readDecor(d, ids))
       .filter((d): d is DecorRec => Boolean(d)),
     tanks: arr(inv.tanks)
-      .filter((t): t is TankType => isTankType(t) && t !== "small" && t !== "ocean" && t !== "reef" && t !== "sharks" && m.progress.stage >= TANKS[t].fromStage)
+      .filter((t): t is TankType => isTankType(t) && t !== "small" && t !== "ocean" && t !== "reef" && !isWingHabitat(t) && m.progress.stage >= TANKS[t].fromStage)
       .slice(0, freePads)
   };
   m.coins = Math.max(0, Math.min(99999, Math.floor(num(src.coins, 0))));

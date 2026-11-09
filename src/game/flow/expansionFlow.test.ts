@@ -98,7 +98,8 @@ describe("habitat explanations", () => {
     ["jellyOnly", "clownfish", "cylinder", "Jellyfish only!", "ここは クラゲ だけの タンクだよ"],
     ["notSafe", "clownfish", "cave", "Not safe here!", "ウツボや タコの いえだよ。ここは あぶないよ"],
     ["noMix", "jellyfish", "tall", "Jellyfish live alone!", "クラゲは ほかの いきものを さすよ。クラゲ だけで くらすよ"],
-    ["full", "clownfish", "small", "Not enough tank space!", "タンクの あきが たりないよ"]
+    ["full", "clownfish", "small", "Not enough tank space!", "タンクの あきが たりないよ"],
+    ["coast", "penguin", "small", "Lives at the coast!", "かいがんの すみかに すむよ！"]
   ];
   it("covers every HomeReason with shared bilingual copy", () => {
     expect(Object.keys(HOME_REASON_TEXT).sort()).toEqual(cases.map(([r]) => r).sort());

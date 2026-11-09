@@ -99,7 +99,19 @@ export type PhraseId =
   | "itOrange"
   | "itPink"
   | "itPurple"
-  | "itWhite";
+  | "itWhite"
+  // Coastal & Polar Zone: names, counting penguins, where an animal is.
+  | "itsPenguin"
+  | "itsSeal"
+  | "itsOtter"
+  | "pg1"
+  | "pg2"
+  | "pg3"
+  | "pg4"
+  | "pg5"
+  | "pg6"
+  | "onRock"
+  | "inWater";
 
 const YES = ["yes", "yeah", "yep", "yup", "yea", "yas", "yess", "yesh", "jess", "ies", "guess", "okay", "ok", "sure"];
 const NO = ["no", "nope", "nah", "know", "noh", "nou", "nor", "not", "don't", "dont"];
@@ -213,6 +225,9 @@ export const ITS_PHRASE: Record<SpeciesId, PhraseId> = {
   blacktip: "itsShark",
   zebrashark: "itsShark",
   eagleray: "itsRay",
+  penguin: "itsPenguin",
+  seal: "itsSeal",
+  otter: "itsOtter",
   moonjelly: "itsJellyfish",
   spottedjelly: "itsJellyfish",
   seanettle: "itsJellyfish"
@@ -262,6 +277,16 @@ const sharks = (n: number): Phrase => ({
 });
 /** "How many sharks?" answers, one to six. */
 export const SHARK_NUMBER_PHRASE: Record<number, PhraseId> = { 1: "sk1", 2: "sk2", 3: "sk3", 4: "sk4", 5: "sk5", 6: "sk6" };
+export const PENGUIN_NUMBER_PHRASE: Record<number, PhraseId> = { 1: "pg1", 2: "pg2", 3: "pg3", 4: "pg4", 5: "pg5", 6: "pg6" };
+const penguins = (n: number): Phrase => ({
+  id: PENGUIN_NUMBER_PHRASE[n],
+  en: `${NUMBER_EN[n]} ${n === 1 ? "penguin" : "penguins"}!`,
+  keys: [NUMBER_WORDS[n]],
+  key: NUMBER_EN[n]
+});
+const PENGUIN = ["penguin", "penguins", "pengin", "pengwin", "pengin", "pen gin"];
+const SEAL = ["seal", "seals", "shiru", "sea l", "seel", "ceil"];
+const OTTER = ["otter", "otters", "sea otter", "auto", "otta", "oter", "rakko"];
 export const SHARK_NUMBER_IDS: PhraseId[] = ["sk1", "sk2", "sk3", "sk4", "sk5", "sk6"];
 
 export const PHRASES: Record<PhraseId, Phrase> = {
@@ -332,6 +357,17 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   sk4: sharks(4),
   sk5: sharks(5),
   sk6: sharks(6),
+  itsPenguin: animal("itsPenguin", "It's a penguin.", PENGUIN, "penguin"),
+  itsSeal: animal("itsSeal", "It's a seal.", SEAL, "seal"),
+  itsOtter: animal("itsOtter", "It's a sea otter.", OTTER, "sea otter"),
+  pg1: penguins(1),
+  pg2: penguins(2),
+  pg3: penguins(3),
+  pg4: penguins(4),
+  pg5: penguins(5),
+  pg6: penguins(6),
+  onRock: { id: "onRock", en: "On the rock!", keys: [["rock", "rocks", "rokku", "lock", "rok", "luck"]], forbid: ["water", "wota", "warter"], key: "rock" },
+  inWater: { id: "inWater", en: "In the water!", keys: [["water", "wota", "warter", "wata", "woter", "waiter"]], forbid: ["rock", "rokku"], key: "water" },
   itsEel: animal("itsEel", "It's an eel.", EEL, "eel"),
   itsOctopus: animal("itsOctopus", "It's an octopus.", OCTOPUS, "octopus"),
   itsCrab: animal("itsCrab", "It's a crab.", CRAB, "crab"),
