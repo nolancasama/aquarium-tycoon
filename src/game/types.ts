@@ -60,7 +60,7 @@ export type TankShape = "box" | "hex" | "round" | "bow" | "reef" | "tunnel" | "c
 /** A, B: the first hall. C (the Ocean tank), D, E: the Ocean Hall. F, G (its Jelly Column), H: the Jellyfish Gallery. */
 export type SlotId = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O";
 /** Rooms in walking order; each connects to the previous one through a doorway. */
-export type RoomId = "hall" | "ocean" | "gallery" | "atrium" | "sharks" | "hub" | "coast";
+export type RoomId = "hall" | "ocean" | "gallery" | "atrium" | "sharks" | "hub" | "coast" | "lagoon" | "sanctuary";
 export type StageId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type VisitorType = "child" | "adult" | "fan" | "grandma" | "explorer" | "judge";
 

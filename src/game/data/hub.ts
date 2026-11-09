@@ -1,4 +1,5 @@
 import type { Vec2, Vec3 } from "../types";
+import type { ReleaseArea } from "./release";
 
 /**
  * The Grand Aquarium Hub: a half rotunda (eight wall bays from the far left,
@@ -42,13 +43,15 @@ export const HUB_BAYS: HubBay[] = [
   { id: "lagoon", kind: "lagoon", angle: bayAngle(2), en: "Dolphin Lagoon", ja: "イルカの ラグーン" },
   { id: "window-l", kind: "window", angle: bayAngle(3), en: "", ja: "" },
   { id: "window-r", kind: "window", angle: bayAngle(4), en: "", ja: "" },
-  { id: "sanctuary", kind: "sanctuary", angle: bayAngle(5), en: "Ocean Sanctuary", ja: "うみの サンクチュアリ" },
+  { id: "sanctuary", kind: "sanctuary", angle: bayAngle(5), en: "Grand Ocean Sanctuary", ja: "うみの サンクチュアリ" },
   { id: "sharks", kind: "sharks", angle: bayAngle(6), en: "Shark Tunnel", ja: "サメの トンネル" },
   { id: "coast", kind: "coast", angle: bayAngle(7), en: "Coastal & Polar Zone", ja: "かいがんと さむい ちいき" }
 ];
 
 export const HUB_DOORS: HubDestination[] = ["indoor", "sharks", "coast", "lagoon", "sanctuary"];
-/** Shown as future attractions: closed, with a "coming soon" panel. */
+/** Doorways to release-locked areas (data/release.ts): closed with a lock, a rope and "Coming soon" until released. */
+export const RELEASE_DOORS: Partial<Record<HubDestination, ReleaseArea>> = { coast: "coast", lagoon: "lagoon", sanctuary: "sanctuary" };
+/** The two outdoor expansions (always future attractions in the hub's art). */
 export const FUTURE_DOORS: HubDestination[] = ["lagoon", "sanctuary"];
 
 export const bayOf = (kind: HubBayKind) => HUB_BAYS.find((b) => b.kind === kind)!;

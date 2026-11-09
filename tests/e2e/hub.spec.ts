@@ -85,6 +85,14 @@ test("hub: introduction, map travel, doorways both ways, arrows unchanged, reloa
   await expect(page.getByTestId("aquarium-map")).toBeVisible();
   await expect(page.getByTestId("map-room-hall").getByTestId("map-here")).toBeVisible();
   await expect(page.getByTestId("map-lagoon")).toHaveAttribute("aria-disabled", "true");
+  // All three release-locked destinations: a lock and "Coming soon"; a tap only says so.
+  for (const id of ["map-coast", "map-lagoon", "map-sanctuary"]) await expect(page.getByTestId(id)).toHaveAttribute("data-soon", "true");
+  await expect(page.getByTestId("map-sanctuary")).toContainText("Grand Ocean Sanctuary");
+  await page.getByTestId("map-sanctuary").click();
+  await expect(page.getByTestId("map-sanctuary-soon")).toContainText("Coming soon!");
+  await expect(page.getByTestId("map-sanctuary-soon")).toContainText("おたのしみに");
+  await expect(page.getByTestId("aquarium-map")).toBeVisible();
+  expect((await hstate(page)).roomId).toBe("hall");
   await page.getByTestId("map-hub").click();
   await inRoom(page, "hub");
   await expect(page.getByTestId("hub-hint")).toBeVisible();
@@ -94,10 +102,17 @@ test("hub: introduction, map travel, doorways both ways, arrows unchanged, reloa
   await expect(page.getByTestId("btn-fish-shop")).toHaveCount(0);
   await page.waitForTimeout(900);
 
-  // A future attraction stays closed; the room does not change.
-  await click3d(page, "hub-door", "lagoon");
-  await expect(page.getByTestId("toast").filter({ hasText: "Coming soon" })).toBeVisible();
-  expect((await hstate(page)).roomId).toBe("hub");
+  // The release-locked doorways stay closed; the room and the coins do not change.
+  const coins = (await hstate(page)).coins;
+  for (const door of ["lagoon", "sanctuary", "coast"]) {
+    await click3d(page, "hub-door", door);
+    await expect(page.getByTestId("toast").filter({ hasText: "Coming soon" }).first()).toBeVisible();
+    await expect(page.getByTestId("toast").filter({ hasText: "おたのしみに" }).first()).toBeVisible();
+    await page.waitForTimeout(500);
+    expect((await hstate(page)).roomId).toBe("hub");
+  }
+  expect((await hstate(page)).coins).toBe(coins);
+  await expect(page.getByTestId("coast-offer")).toHaveCount(0);
 
   // Through the Shark Tunnel doorway, then back with the map.
   await click3d(page, "hub-door", "sharks");

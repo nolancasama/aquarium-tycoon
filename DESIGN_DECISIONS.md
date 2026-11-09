@@ -1701,3 +1701,80 @@ rock!" message), mic-free English, debug actions, and optional save fields only.
   usual.
 - **Price 320 coins**, close to the Shark Tunnel's 300. Players reach it after
   the tunnel's five milestones, when they already have more tanks paying tips.
+
+## 2026-11-10 — Dolphin Lagoon + Grand Ocean Sanctuary, release locks (plan review)
+
+The owner handed over a brief for two outdoor expansions, built now but kept
+locked, plus a temporary lock on the Coastal & Polar Zone. They asked Claude to
+accept, reject or modify it and build it alone, without the worker router.
+
+**Accepted as briefed:** the hub and the map keep all three destinations
+visible with a lock, a Coming Soon mark and bilingual labels ("GRAND OCEAN
+SANCTUARY / うみの サンクチュアリ"). A locked doorway or map card says "Coming
+soon! / もうすぐ オープン！ おたのしみに！" and never travels, charges or
+offers. The coast's normal unlock is switched off without touching coastal
+saves. Debug previews (Ctrl+Alt+D) for all three areas, milestone jumps, and a
+return to the hub. Outdoor lagoon with a main lagoon, underwater gallery,
+observation deck, care area and walkways, seen through curated viewpoints.
+Bottlenose dolphins and orcas with the listed anatomy, vertical fluke motion,
+social swimming, enrichment instead of shows. Five milestones for each area.
+Belugas in their own cold-water cove. Mic-free English about what is visible.
+Built / released / unlocked are separate; nothing auto-unlocks; no prices.
+
+**Changed:**
+1. **The release lock is not ownership.** `data/release.ts` holds one table
+   (built, released) per area. Travel (`roomOpen`) needs released + owned, or a
+   preview; save validation uses ownership only (`roomOwned`). Why: `save.ts`
+   checked tanks with `roomOpen`, so a lock there would have deleted every saved
+   coastal habitat on the next load. Rejected: putting the lock inside
+   `roomOpen` alone.
+2. **Owned habitats in a locked area are stored, not played.** At load they move
+   to `model.stored` (tanks, bagged animals, unplaced items) and are written
+   back unchanged on every save. Why: Rush Hour takes every occupied tank (gold
+   would become impossible), the Level 8 judge needs every occupied tank happy
+   (it could block the Super Star), and care decay would make unreachable
+   animals sad. Rejected: filtering each of those rules (too many to miss).
+3. **A preview is a sandbox.** Any preview first flushes the save, then stops
+   autosave for the session; "End preview" puts the saved model back, and a
+   reload simply never sees the preview. The old coast debug actions (unlock,
+   all habitats, Coast 1–5) now run inside it. Why: milestone jumps change
+   coins, items and habitats; a sandbox guarantees none of it persists.
+   Rejected: stripping individual fields on save.
+4. **The lagoon and the sanctuary are not tanks.** Their state is their own
+   (`progress.lagoon`, `progress.sanctuary`), so care decay, Rush Hour, tips,
+   visitor requests and the judge never see them, locked or not. Unreleased
+   areas' saved fields are dropped on load. Rejected: coast-style `TankRec`
+   habitats, which would have pulled them into every global rule.
+5. **Dolphin welfare is three visible needs, not a formula:** Food (ごはん),
+   Play (あそび) and Together (なかま), each a bar; happiness is their average.
+   They only change while the lagoon is shown (the care team looks after the
+   dolphins otherwise). Feeding is one tap from the care platform; enrichment
+   is a toy chosen from a few (ball, bubble curtain, kelp). No tricks or jumps
+   on command; a leap happens only by itself.
+6. **Observations are "Look!" moments.** When something worth seeing happens on
+   screen (two swimming together, a breath, a deep dive, a leap), a tappable
+   Look! bubble appears at the animal for a few seconds; tapping it records it.
+   Why: the child has to actually watch. A missed moment comes round again.
+7. **Questions only about what is visible.** "Where is the dolphin?" is "It's
+   on the water!" / "It's under the water!" from the ringed dolphin's real depth
+   (it holds that depth while asked). "Can it jump?" only right after a leap.
+   "Where is the orca?" is "It's by the island!" / "It's by the boat!" after the
+   orca is brought next to one of them.
+8. **The sanctuary's management is research and conservation:** a Research
+   Notebook of stickers (breathing, swimming together, a deep dive, size, a
+   calf with its mother, a spy-hop, the belugas, a clean ocean), an Ocean
+   Cleanup (tap the floating litter), and a Habitat Improvement choice with a
+   Japanese reason. No feeding, cleaning or decorating there.
+9. **Belugas open as the sanctuary's milestone 3 reward** in a separate cove
+   behind a rock breakwater, so the orca waters stay the main sight first.
+10. **Coast owners keep seeing their progress.** The map card shows the saved
+    milestone count under the lock; the trophy card keeps an earned coastal
+    trophy; "how to earn" lines for locked areas say "Coming soon".
+
+**Rejected:**
+- "Measure Chromebook performance / stable 30 fps": not possible from here.
+  Draw calls and triangles are measured with SwiftShader; reported as
+  unverified.
+- Unlimited flying cameras: curated viewpoints only (as briefed).
+- Coins from decorative visitors: they never tip. Answered questions pay 3
+  coins like the coast's.

@@ -14,6 +14,8 @@ import { PICO } from "./world";
 import { project } from "../scene/CameraRig";
 import { HUB_BAYS, HUB_R, onRing } from "./data/hub";
 import { coastTo } from "../ui/DebugPanel";
+import { endPreview, previewActive, startPreview } from "./flow/preview";
+import { areaReleased, previewAreas, RELEASE_AREAS, type ReleaseArea } from "./data/release";
 import { coastRt } from "./coast/coastRuntime";
 import { EXHIBITS } from "./data/coast";
 import { dprState, perf } from "../scene/GameScene";
@@ -265,9 +267,20 @@ export function installE2eHook(seed: number) {
       setGame(patch as never);
     },
     visitorsOn: () => visitorsOn,
-    /** Coastal zone: jump through its real rules to milestone n (1 opens it). */
+    /** Coastal zone: jump through its real rules to milestone n (1 opens it), inside a session-only preview (the zone is release-locked). */
     coastTo(n: number) {
+      startPreview("coast");
       updateModel((m) => coastTo(m, n));
+    },
+    /** Development preview of a release-locked area (session only, never saved), as Ctrl+Alt+D does. */
+    preview(area: ReleaseArea) {
+      return startPreview(area);
+    },
+    endPreview() {
+      return endPreview();
+    },
+    release() {
+      return { preview: previewAreas(), active: previewActive(), released: Object.fromEntries(RELEASE_AREAS.map((a) => [a, areaReleased(a)])), stored: getGame().model.stored ?? null };
     },
     /** The coastal animals now (exhibit-local positions). */
     coast() {

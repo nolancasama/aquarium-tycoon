@@ -3,11 +3,12 @@ import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { getGame, useGame } from "../../game/store";
 import { rt } from "../../game/runtime";
-import { HUB_HALL } from "../../game/data/rooms";
+import { COAST_HALL, HUB_HALL, LAGOON_HALL, roomOpen, SANCTUARY_HALL } from "../../game/data/rooms";
 import {
-  bayOf, DOOR_OPENING, FUTURE_DOORS, HUB_BAYS, HUB_CAMERA, HUB_CENTRE, HUB_FRONT, HUB_R, HUB_TANK, HUB_WALL_H, onRing,
+  bayOf, DOOR_OPENING, HUB_BAYS, HUB_CAMERA, HUB_CENTRE, HUB_DOORS, HUB_FRONT, HUB_R, HUB_TANK, HUB_WALL_H, onRing, RELEASE_DOORS,
   type HubDestination
 } from "../../game/data/hub";
+import { areaAvailable } from "../../game/data/release";
 import { hubGroups, memberWorld, stepHubVisitors } from "../../game/hub/hubVisitors";
 import { openMap, openTrophies, tapHubDoor } from "../../game/flow/hub";
 import { PartBuilder } from "../partBuilder";
@@ -119,16 +120,29 @@ function tap(fn: () => void) {
 
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 
+const DOOR_HALL: Partial<Record<HubDestination, number>> = { coast: COAST_HALL, lagoon: LAGOON_HALL, sanctuary: SANCTUARY_HALL };
+
+/** Can this doorway be walked through now (release locks and session previews included)? */
+function doorOpen(kind: HubDestination, progress: Parameters<typeof roomOpen>[1] & { tunnelOpen?: boolean }) {
+  if (kind === "indoor") return true;
+  if (kind === "sharks") return Boolean(progress.tunnelOpen);
+  return roomOpen(DOOR_HALL[kind]!, progress);
+}
+
+/** Held back by a release lock (not a price or a milestone): shown as Coming soon. */
+const doorSoon = (kind: HubDestination) => Boolean(RELEASE_DOORS[kind]) && !areaAvailable(RELEASE_DOORS[kind]!);
+
 function Door({ kind }: { kind: HubDestination }) {
   const bay = bayOf(kind);
-  const open = useGame((s) => kind === "indoor" || (kind === "sharks" && Boolean(s.model.progress.tunnelOpen)) || (kind === "coast" && Boolean(s.model.progress.coastOpen)));
-  const future = FUTURE_DOORS.includes(kind);
+  // previewAreas is read so a session preview re-renders the doorway.
+  const open = useGame((s) => (void s.previewAreas, doorOpen(kind, s.model.progress)));
+  const soon = useGame((s) => (void s.previewAreas, doorSoon(kind)));
   const lock = useRef<THREE.Sprite>(null);
   const a = bay.angle, p = onRing(a, HUB_R - 0.08), lk = onRing(a, HUB_R - 0.8);
-  const art = useMemo(() => new THREE.MeshBasicMaterial({ map: doorArtTexture(kind, open || future), toneMapped: false }), [kind, open, future]);
+  const art = useMemo(() => new THREE.MeshBasicMaterial({ map: doorArtTexture(kind, open, soon), toneMapped: false }), [kind, open, soon]);
   const label = `${bay.en.toUpperCase()}\n${bay.ja}`;
-  const sign = signMaterial(label, future ? "#7a6a52" : "#14506a", future ? "#fff4d6" : "#e8fbff", 900, 280);
-  const locked = !open && !future;
+  const sign = signMaterial(label, soon ? "#7a6a52" : "#14506a", soon ? "#fff4d6" : "#e8fbff", 900, 280);
+  const locked = !open;
   useFrame(() => {
     if (lock.current) lock.current.position.y = 1.7 + Math.sin(rt.time * 2) * 0.06;
   });
@@ -152,11 +166,12 @@ function Door({ kind }: { kind: HubDestination }) {
   );
 }
 
-/** Rope barriers in front of the closed future attractions. */
+/** Rope barriers in front of the release-locked doorways. */
 function Barriers() {
+  const key = useGame((s) => (void s.previewAreas, HUB_DOORS.filter(doorSoon).join(",")));
   const geo = useMemo(() => {
     const b = new PartBuilder(0.3);
-    for (const kind of FUTURE_DOORS) {
+    for (const kind of key.split(",").filter(Boolean) as HubDestination[]) {
       const a = bayOf(kind).angle, t = tangent(a), p = onRing(a, HUB_R - 1.15);
       for (const s of [-1, 1]) {
         b.cyl(0.05, 0.05, 0.95, p.x + t.x * s * 1.05, 0, p.z + t.z * s * 1.05, "#c9a24a", 8);
@@ -165,7 +180,7 @@ function Barriers() {
       b.add(new THREE.CylinderGeometry(0.035, 0.035, 2.1, 6), "#c0392b", [p.x, 0.82, p.z], [0, -a, Math.PI / 2]);
     }
     return b.build();
-  }, []);
+  }, [key]);
   return <mesh geometry={geo} material={smoothMat} raycast={() => undefined} />;
 }
 
@@ -223,8 +238,12 @@ function Trophies() {
     b.boxAt(0.08, 0.3, 0.04, [mx, 2.66 + 0.18, mz], [0, -a, 0], "#c0392b");
     const coastGot = Boolean(p.coast?.trophy);
     cup(0.6, 2.66, coastGot ? "#63e6be" : grey, (x, y, z) => b.sphere(0.12, x, y, z, coastGot ? "#f4f6f8" : grey, [1, 0.7, 1], 8));
+    // The outdoor expansions' trophies to come: a leaping dolphin, an orca's tall fin.
+    const lagoonGot = Boolean(p.lagoon?.trophy), sanctGot = Boolean(p.sanctuary?.trophy);
+    cup(-1.3, 2.66, lagoonGot ? "#4dd4e8" : grey, (x, y, z) => b.add(new THREE.TorusGeometry(0.1, 0.035, 5, 10, Math.PI), lagoonGot ? "#7f98a8" : grey, [x, y - 0.05, z], [0, -a, 0]));
+    cup(1.3, 2.66, sanctGot ? "#1f2a36" : grey, (x, y, z) => b.add(new THREE.ConeGeometry(0.06, 0.3, 3), sanctGot ? "#f4f6f8" : grey, [x, y + 0.02, z], [0, -a, 0], [1, 1, 0.4]));
     return b.build();
-  }, [p.star, p.superStar, p.tunnel?.trophy, p.coast?.trophy, best, a, t.x, t.z]);
+  }, [p.star, p.superStar, p.tunnel?.trophy, p.coast?.trophy, p.lagoon?.trophy, p.sanctuary?.trophy, best, a, t.x, t.z]);
   const sign = signMaterial("TROPHIES\nトロフィー", "#d9a441", "#3b2a00", 640, 220);
   const hit = onRing(a, HUB_R - 0.9);
   return (

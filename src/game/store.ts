@@ -5,6 +5,11 @@ import type { PhraseId } from "./logic/english";
 import type { Request } from "./logic/requests";
 import type { SentencePatternId } from "./logic/sentenceTeaching";
 import { newModel, type Model, type Result } from "./logic/model";
+import type { ReleaseArea } from "./data/release";
+import type { LagoonView } from "./logic/lagoon";
+import type { SanctuaryView } from "./logic/sanctuary";
+
+export type OutdoorArea = "lagoon" | "sanctuary";
 
 export type Screen = "title" | "game" | "results";
 
@@ -188,6 +193,18 @@ export interface GameState {
   /** A visitor at a coastal window has a question (the chip). */
   coastWaiting: { habitat: "penguins" | "seals" | "otters"; type: VisitorType } | null;
   coastCelebration: { milestone: number } | null;
+  /** Development previews of release-locked areas (session only; mirrors data/release.ts so the UI re-renders). */
+  previewAreas: ReleaseArea[];
+  /** Dolphin Lagoon and Grand Ocean Sanctuary: the viewpoint shown. */
+  lagoonView: LagoonView;
+  sanctuaryView: SanctuaryView;
+  /** An outdoor area's panel: toys (lagoon), the research notebook or the habitat improvement choice (sanctuary). */
+  areaPanel: null | "toys" | "notebook" | "improve";
+  /** An English activity in progress in an outdoor area, a visitor waiting with a question, a milestone card, the arrival card. */
+  areaActivity: { area: OutdoorArea; by: VisitorType | "pico" } | null;
+  areaWaiting: { area: OutdoorArea; type: VisitorType } | null;
+  areaCelebration: { area: OutdoorArea; milestone: number } | null;
+  areaArrival: OutdoorArea | null;
 
   model: Model;
 
@@ -308,7 +325,15 @@ export const useGame = create<GameState>(() => ({
   coastOffer: false,
   coastActivity: null,
   coastWaiting: null,
-  coastCelebration: null
+  coastCelebration: null,
+  previewAreas: [],
+  lagoonView: "lagoon",
+  sanctuaryView: "overview",
+  areaPanel: null,
+  areaActivity: null,
+  areaWaiting: null,
+  areaCelebration: null,
+  areaArrival: null
 }));
 
 export const setGame = useGame.setState;

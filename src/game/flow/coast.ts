@@ -9,7 +9,8 @@ import { coastRt, feedCoast, holdAnimal } from "../coast/coastRuntime";
 import { isOnRock } from "../coast/motion";
 import type { CoastDecorKind, VisitorType } from "../types";
 import { ask, say, speak } from "./ask";
-import { canTravel, travelTo } from "./hub";
+import { canTravel, comingSoon, travelTo } from "./hub";
+import { areaAvailable } from "../data/release";
 import { audio } from "../../audio/audio";
 import { rt } from "../runtime";
 
@@ -49,6 +50,8 @@ export function setCoastView(view: GameState["coastView"]) {
 /** The hub's coast doorway (and the map card): travel, the purchase offer, or what is still needed. */
 export function tapCoastDoor() {
   if (!canTravel()) return;
+  // Held back for now (data/release.ts): saved coastal progress is kept, but nothing opens the zone.
+  if (!areaAvailable("coast")) { comingSoon(); return; }
   const m = model();
   if (m.progress.coastOpen) { travelTo(COAST_HALL); return; }
   if (!coastUnlocked(m)) {

@@ -109,9 +109,75 @@ function penguin(g: CanvasRenderingContext2D, x: number, y: number, s: number) {
   g.fillRect(x + s * 0.06, y + s * 0.92, s * 0.25, s * 0.1);
 }
 
-/** What each doorway shows beyond it (512 × 680, portrait like the opening). */
-export function doorArtTexture(kind: HubDestination, open: boolean) {
-  return tex(`hub-door-${kind}-${open}`, 512, 680, (g) => {
+/** A bottlenose dolphin side view, nose to +x, centred at (0,0), length s. */
+function dolphinShape(g: CanvasRenderingContext2D, x: number, y: number, s: number, angle: number) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(angle);
+  g.scale(s / 200, s / 200);
+  const body = new Path2D("M100 0 C92 -8 80 -12 66 -16 C40 -26 0 -28 -40 -20 C-70 -14 -86 -6 -100 0 C-86 6 -66 14 -40 18 C0 24 40 22 66 14 C80 10 90 6 100 2 Z");
+  g.fillStyle = "#7f98a8";
+  g.fill(body);
+  g.save();
+  g.clip(body);
+  g.fillStyle = "#e7eef2";
+  g.beginPath(); g.ellipse(10, 18, 90, 16, 0, 0, Math.PI * 2); g.fill();
+  g.restore();
+  g.fillStyle = "#6b8495";
+  g.beginPath(); g.moveTo(-6, -24); g.quadraticCurveTo(-2, -58, -30, -66); g.quadraticCurveTo(-18, -40, -34, -22); g.fill();
+  g.beginPath(); g.moveTo(-96, 0); g.lineTo(-128, -18); g.quadraticCurveTo(-118, 0, -128, 18); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(30, 12); g.quadraticCurveTo(20, 34, 4, 36); g.quadraticCurveTo(14, 22, 14, 12); g.fill();
+  g.fillStyle = "#1d2a33"; g.beginPath(); g.arc(70, -4, 3.6, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+
+/** An orca side view with its markings, nose to +x. `fin` scales the dorsal fin (tall for a male). */
+function orcaShape(g: CanvasRenderingContext2D, x: number, y: number, s: number, angle: number, fin = 1) {
+  g.save();
+  g.translate(x, y);
+  g.rotate(angle);
+  g.scale(s / 200, s / 200);
+  const body = new Path2D("M100 2 C98 -14 84 -26 60 -30 C20 -36 -30 -34 -64 -22 C-82 -14 -94 -6 -100 0 C-90 8 -70 16 -40 22 C0 30 50 30 80 20 C94 14 100 10 100 2 Z");
+  g.fillStyle = "#151c24";
+  g.fill(body);
+  g.save();
+  g.clip(body);
+  g.fillStyle = "#f4f6f8";
+  g.beginPath(); g.ellipse(40, 26, 64, 12, 0.05, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(-30, 18, 30, 12, -0.3, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.ellipse(58, -12, 13, 6, -0.25, 0, Math.PI * 2); g.fill();
+  g.fillStyle = "#9aa3ab";
+  g.beginPath(); g.ellipse(-24, -30, 22, 6, 0.1, 0, Math.PI * 2); g.fill();
+  g.restore();
+  g.fillStyle = "#151c24";
+  g.beginPath(); g.moveTo(-6, -32); g.quadraticCurveTo(0, -32 - 70 * fin, -14 - 6 * (2 - fin), -34 - 78 * fin); g.quadraticCurveTo(-18, -60, -30, -28); g.fill();
+  g.beginPath(); g.moveTo(-96, 0); g.lineTo(-130, -20); g.quadraticCurveTo(-118, 0, -130, 20); g.closePath(); g.fill();
+  g.beginPath(); g.ellipse(36, 24, 16, 8, 0.6, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+
+function palm(g: CanvasRenderingContext2D, x: number, y: number, h: number) {
+  g.strokeStyle = "#8a6440"; g.lineWidth = h * 0.06;
+  g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + h * 0.25, y - h * 0.5, x + h * 0.1, y - h); g.stroke();
+  g.fillStyle = "#3e9e5a";
+  for (let k = 0; k < 6; k++) {
+    const a = -Math.PI / 2 + (k - 2.5) * 0.55;
+    g.beginPath();
+    g.ellipse(x + h * 0.1 + Math.cos(a) * h * 0.28, y - h + Math.sin(a) * h * 0.12 + h * 0.06, h * 0.3, h * 0.06, a, 0, Math.PI * 2);
+    g.fill();
+  }
+}
+
+function cloud(g: CanvasRenderingContext2D, x: number, y: number, s: number) {
+  g.fillStyle = "rgba(255,255,255,0.9)";
+  for (const [dx, dy, r] of [[0, 0, 1], [0.9, 0.15, 0.75], [-0.85, 0.2, 0.7], [0.3, -0.45, 0.65]]) {
+    g.beginPath(); g.arc(x + dx * s, y + dy * s, r * s, 0, Math.PI * 2); g.fill();
+  }
+}
+
+/** What each doorway shows beyond it (512 × 680, portrait like the opening). `soon`: held back by a release lock. */
+export function doorArtTexture(kind: HubDestination, open: boolean, soon = false) {
+  return tex(`hub-door-${kind}-${open}-${soon}`, 512, 680, (g) => {
     const W = 512, H = 680;
     if (kind === "indoor") {
       sky(g, W, H, "#fdf3df", "#e8d4b4");
@@ -154,22 +220,58 @@ export function doorArtTexture(kind: HubDestination, open: boolean) {
       g.beginPath(); g.ellipse(410, H * 0.72, 60, 18, 0, 0, Math.PI * 2); g.fill();
       g.beginPath(); g.arc(462, H * 0.69, 16, 0, Math.PI * 2); g.fill();
     } else if (kind === "lagoon") {
-      sky(g, W, H, "#7fd0ff", "#dff5ff");
-      g.fillStyle = "#ffe58a"; g.beginPath(); g.arc(400, 120, 55, 0, Math.PI * 2); g.fill();
-      g.fillStyle = "#2bb6c9"; g.fillRect(0, H * 0.56, W, H * 0.44);
-      g.fillStyle = "#6c8fa8";
-      g.beginPath(); g.moveTo(120, 420); g.quadraticCurveTo(240, 300, 360, 380); g.quadraticCurveTo(250, 360, 160, 430); g.fill();
-      g.beginPath(); g.moveTo(230, 345); g.lineTo(250, 300); g.lineTo(275, 350); g.fill();
+      // A sunny lagoon: open sky, the sea beyond a rocky breakwater, a deck, a palm and dolphins.
+      sky(g, W, H, "#45b4f0", "#d9f3ff");
+      const sun = g.createRadialGradient(400, 110, 10, 400, 110, 120);
+      sun.addColorStop(0, "rgba(255,248,200,1)"); sun.addColorStop(0.35, "rgba(255,236,150,0.85)"); sun.addColorStop(1, "rgba(255,236,150,0)");
+      g.fillStyle = sun; g.fillRect(260, 0, 252, 260);
+      cloud(g, 110, 120, 26); cloud(g, 300, 200, 18);
+      g.fillStyle = "#8fb4c8";
+      g.beginPath(); g.moveTo(0, H * 0.47); g.quadraticCurveTo(90, H * 0.41, 190, H * 0.47); g.closePath(); g.fill();
+      g.fillStyle = "#1d7fb5"; g.fillRect(0, H * 0.47, W, H * 0.07);
+      g.fillStyle = "#6d7a80";
+      for (let i = 0; i < 9; i++) { g.beginPath(); g.ellipse(30 + i * 58, H * 0.545, 34, 12, 0, 0, Math.PI * 2); g.fill(); }
+      const lag = g.createLinearGradient(0, H * 0.55, 0, H);
+      lag.addColorStop(0, "#2ec4d6"); lag.addColorStop(1, "#0f8fae");
+      g.fillStyle = lag; g.fillRect(0, H * 0.55, W, H * 0.45);
+      g.strokeStyle = "rgba(255,255,255,0.45)"; g.lineWidth = 3;
+      for (let i = 0; i < 10; i++) {
+        const y = H * 0.6 + i * 26, x = (i * 97) % 420;
+        g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 22, y - 6, x + 44, y); g.stroke();
+      }
+      dolphinShape(g, 250, 330, 230, -0.55);
+      g.fillStyle = "rgba(255,255,255,0.85)";
+      for (const [x, y, r] of [[160, 420, 10], [176, 412, 7], [146, 410, 6], [330, 440, 8], [345, 432, 5]]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+      g.save(); g.beginPath(); g.rect(0, 0, W, H * 0.66); g.clip(); dolphinShape(g, 380, H * 0.67, 150, 0.12); g.restore();
+      g.fillStyle = "#9c6b3f"; g.fillRect(0, H * 0.8, 200, 24);
+      g.fillStyle = "#b8834f"; for (let i = 0; i < 8; i++) g.fillRect(i * 25, H * 0.8, 20, 24);
+      g.fillStyle = "#6e4a2a"; for (let i = 0; i < 5; i++) g.fillRect(8 + i * 45, H * 0.72, 7, H * 0.08);
+      g.fillRect(0, H * 0.72, 210, 6);
+      palm(g, 455, H * 0.82, 260);
     } else {
-      sky(g, W, H, "#ffb27a", "#ffe2b8");
-      g.fillStyle = "#3a6f8f"; g.fillRect(0, H * 0.58, W, H * 0.42);
-      g.fillStyle = "#4e6a55";
-      g.beginPath(); g.moveTo(0, H * 0.6); g.quadraticCurveTo(90, H * 0.44, 200, H * 0.6); g.fill();
-      g.fillStyle = "#26323b";
-      g.beginPath(); g.moveTo(300, 470); g.quadraticCurveTo(320, 400, 280, 360); g.quadraticCurveTo(330, 380, 340, 330);
-      g.quadraticCurveTo(350, 380, 400, 360); g.quadraticCurveTo(360, 400, 380, 470); g.fill();
+      // The sanctuary: a vast bay at golden hour, headlands and islands, orcas surfacing.
+      sky(g, W, H, "#5da9df", "#ffe0a8");
+      const sun = g.createRadialGradient(130, H * 0.42, 10, 130, H * 0.42, 150);
+      sun.addColorStop(0, "rgba(255,240,190,1)"); sun.addColorStop(1, "rgba(255,220,150,0)");
+      g.fillStyle = sun; g.fillRect(0, H * 0.2, 300, 300);
+      g.fillStyle = "#9db3c4";
+      g.beginPath(); g.moveTo(0, H * 0.5); g.lineTo(60, H * 0.38); g.lineTo(150, H * 0.44); g.lineTo(240, H * 0.33); g.lineTo(340, H * 0.43); g.lineTo(430, H * 0.36); g.lineTo(512, H * 0.42); g.lineTo(512, H * 0.5); g.closePath(); g.fill();
+      g.fillStyle = "#5e7a6c";
+      g.beginPath(); g.moveTo(330, H * 0.5); g.quadraticCurveTo(420, H * 0.36, 512, H * 0.4); g.lineTo(512, H * 0.56); g.closePath(); g.fill();
+      for (let i = 0; i < 7; i++) { g.fillStyle = "#3f5e4e"; g.beginPath(); g.moveTo(380 + i * 18, H * 0.43 + (i % 2) * 6); g.lineTo(388 + i * 18, H * 0.38 + (i % 2) * 6); g.lineTo(396 + i * 18, H * 0.43 + (i % 2) * 6); g.fill(); }
+      const sea = g.createLinearGradient(0, H * 0.5, 0, H);
+      sea.addColorStop(0, "#3f7fa6"); sea.addColorStop(1, "#173f5c");
+      g.fillStyle = sea; g.fillRect(0, H * 0.5, W, H * 0.5);
+      g.fillStyle = "rgba(255,226,160,0.5)";
+      for (let i = 0; i < 9; i++) g.fillRect(110 - i * 4, H * 0.52 + i * 18, 40 + i * 8, 4);
+      g.fillStyle = "#e7e1d3"; g.fillRect(452, H * 0.3, 14, 70); g.fillStyle = "#c0392b"; g.fillRect(452, H * 0.3 - 14, 14, 14);
+      g.save(); g.beginPath(); g.rect(0, 0, W, H * 0.66); g.clip(); orcaShape(g, 270, H * 0.68, 300, -0.12, 1.25); g.restore();
+      g.save(); g.beginPath(); g.rect(0, 0, W, H * 0.77); g.clip(); orcaShape(g, 120, H * 0.785, 170, -0.08, 0.75); g.restore();
+      g.strokeStyle = "rgba(255,255,255,0.6)"; g.lineWidth = 4;
+      for (const [x, y, w] of [[180, H * 0.665, 180], [60, H * 0.775, 120]]) { g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w / 2, y - 8, x + w, y); g.stroke(); }
+      g.fillStyle = "rgba(255,255,255,0.75)"; g.beginPath(); g.ellipse(340, H * 0.58, 10, 26, 0.2, 0, Math.PI * 2); g.fill();
     }
-    if (!open) {
+    if (!open && !soon) {
       g.fillStyle = "rgba(20,40,60,0.38)";
       g.fillRect(0, 0, W, H);
     }
@@ -179,17 +281,25 @@ export function doorArtTexture(kind: HubDestination, open: boolean) {
     v.addColorStop(1, "rgba(0,0,0,0.35)");
     g.fillStyle = v;
     g.fillRect(0, 0, W, H);
-    if (kind === "lagoon" || kind === "sanctuary") {
+    if (soon) {
+      // A ribbon across the lower doorway, bilingual, under the floating lock.
       g.save();
       g.translate(W / 2, H * 0.84);
       g.rotate(-0.08);
+      g.fillStyle = "rgba(0,0,0,0.25)";
+      g.fillRect(-226, -42, 460, 96);
       g.fillStyle = "#ffcf3f";
-      g.fillRect(-230, -38, 460, 76);
+      g.fillRect(-232, -48, 464, 96);
+      g.fillStyle = "#c98a00";
+      g.fillRect(-232, -48, 464, 6);
+      g.fillRect(-232, 42, 464, 6);
       g.fillStyle = "#3b2a00";
-      g.font = "900 44px system-ui, sans-serif";
       g.textAlign = "center";
       g.textBaseline = "middle";
-      g.fillText("COMING SOON", 0, 2);
+      g.font = "900 42px system-ui, sans-serif";
+      g.fillText("COMING SOON", 0, -12);
+      g.font = "800 26px system-ui, sans-serif";
+      g.fillText("もうすぐ オープン！", 0, 26);
       g.restore();
     }
   });

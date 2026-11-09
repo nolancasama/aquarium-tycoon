@@ -1,4 +1,5 @@
 import { COAST_DECOR } from "../data/decor";
+import { areaAvailable } from "../data/release";
 import type { CoastHabitat } from "../data/coast";
 import type { SlotId, SpeciesId, TankType } from "../types";
 import { happiness, HAPPY, hasSpace, NEED_CAP, newTank, tankAt, type Model, type Result, type TankRec } from "./model";
@@ -83,7 +84,8 @@ function giveItem(m: Model, kind: (typeof COAST_DECOR)[CoastHabitat][number]): M
 
 export function openCoast(m: Model): Result {
   if (m.progress.coastOpen) return { ok: false, reason: "owned" };
-  if (!coastUnlocked(m)) return { ok: false, reason: "locked" };
+  // Release lock (data/release.ts): no trophy or coin balance opens a held-back area; only a preview can.
+  if (!areaAvailable("coast") || !coastUnlocked(m)) return { ok: false, reason: "locked" };
   if (m.coins < COAST_PRICE) return { ok: false, reason: "coins" };
   const opened: Model = { ...m, coins: m.coins - COAST_PRICE, progress: { ...m.progress, coastOpen: true, coastIntroSeen: false, coast: newCoastProgress() } };
   return { ok: true, m: checkCoastMilestones(opened).m };

@@ -61,3 +61,41 @@
   opacity: 0.6;
   text-align: center;
 }
+.debug-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px dashed #ffcf3f;
+  border-radius: 10px;
+}
+.debug-preview > b {
+  font-size: 12px;
+  color: #ffe08a;
+}
+.debug-preview small {
+  color: #ffe08a;
+  opacity: 1;
+}
+
+/* A development preview is running (flow/preview.ts): nothing is saved. */
+.preview-badge {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(29, 39, 51, 0.82);
+  color: #ffe08a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+.preview-badge small {
+  font-weight: 600;
+  opacity: 0.85;
+}

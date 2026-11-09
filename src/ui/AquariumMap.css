@@ -57,7 +57,8 @@
 .map-wing.indoor { grid-area: indoor; }
 .map-card.sharks { grid-area: sharks; }
 .map-card.coast { grid-area: coast; }
-.map-card.future:nth-of-type(1) { grid-area: lagoon; }
+.map-card.lagoon { grid-area: lagoon; }
+.map-card.sanctuary { grid-area: sanctuary; }
 
 .map-card {
   position: relative;
@@ -84,7 +85,13 @@
 .map-card.hub { background: linear-gradient(180deg, #fff6da, #ffe39a); border-color: #d9a441; font-size: 22px; min-height: 150px; }
 .map-card.sharks { background: linear-gradient(180deg, #d9f1fb, #a9dbee); }
 .map-card.locked, .map-card:disabled { opacity: 0.55; cursor: default; }
-.map-card.future { background: #f1ede4; border-style: dashed; border-color: #c9b993; color: #6b5a3e; cursor: default; }
+.map-card.future { background: #f1ede4; border-style: dashed; border-color: #c9b993; color: #6b5a3e; cursor: pointer; }
+.map-card.future .map-progress { flex-wrap: wrap; justify-content: center; }
+.map-card.future.flash { animation: map-soon 0.5s ease-out; border-color: #e8a400; background: #fff6d6; }
+.map-card.future.flash b { color: #8a5a00; font-size: 15px; }
+.map-saved { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 12px; color: #6b5a3e; }
+@keyframes map-soon { 0%, 100% { transform: none; } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+@media (prefers-reduced-motion: reduce) { .map-card.future.flash { animation: none; } }
 .map-card.coast.locked { background: #eef3f6; }
 
 .map-icon { display: flex; align-items: center; justify-content: center; height: 34px; font-size: 28px; }

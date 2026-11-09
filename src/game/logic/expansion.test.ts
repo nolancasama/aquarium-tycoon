@@ -220,7 +220,7 @@ describe("rooms and shapes", () => {
     const p = route({ x: 0, z: 0 }, { x: 24, z: 0 });
     expect(p.map((q) => roomAtX(q.x))).toEqual([0, 1, 1, 2, 2]);
     expect(route({ x: 24, z: 0 }, { x: 25, z: 1 })).toEqual([{ x: 25, z: 1 }]);
-    expect(ROOMS.map((r) => r.id)).toEqual(["hall", "ocean", "gallery", "atrium", "sharks", "hub", "coast"]);
+    expect(ROOMS.map((r) => r.id)).toEqual(["hall", "ocean", "gallery", "atrium", "sharks", "hub", "coast", "lagoon", "sanctuary"]);
     expect(ROOMS.filter((r) => !r.wing).map((r) => r.id)).toEqual(["hall", "ocean", "gallery", "atrium"]);
   });
 

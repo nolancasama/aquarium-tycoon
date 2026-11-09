@@ -1,9 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useGame } from "../game/store";
-import { COAST_HALL, HUB_HALL, ROOMS, roomOpen, SHARKS_HALL } from "../game/data/rooms";
+import { COAST_HALL, HUB_HALL, LAGOON_HALL, ROOMS, roomOpen, SANCTUARY_HALL, SHARKS_HALL } from "../game/data/rooms";
+import { areaAvailable, type ReleaseArea } from "../game/data/release";
 import { tapCoastDoor } from "../game/flow/coast";
 import { COAST_PRICE, coastUnlocked } from "../game/logic/coast";
-import { canTravel, closeMap, closeTrophies, hubUnlocked, openMap, travelTo, trophiesToRush } from "../game/flow/hub";
+import { canTravel, closeMap, closeTrophies, COMING_SOON, hubUnlocked, openMap, tapOutdoorDoor, travelTo, trophiesToRush } from "../game/flow/hub";
+import { audio } from "../audio/audio";
 import { Icon, type IconId } from "./icons";
 import { Ja } from "./Talk";
 import "./AquariumMap.css";
@@ -110,25 +112,58 @@ function MapDialog() {
             <span className="map-progress" aria-label={`${tunnelMilestone} of 5 milestones`}>{progress.tunnel?.trophy ? <><Icon id="trophy" size={18} /> 5/5</> : <><Icon id="star" size={16} /> {tunnelMilestone}/5</>}</span>
             {hall === SHARKS_HALL && <Here />}
           </button>
-          <button className={`map-card wing coast ${progress.coastOpen ? "" : "locked"} ${hall === COAST_HALL ? "here" : ""}`} onClick={tapCoastDoor} data-testid="map-coast">
-            <span className="map-icon" aria-hidden="true">{progress.coastOpen ? "🐧" : <Icon id="lock" size={26} />}</span>
-            <span className="map-name">Coastal &amp; Polar Zone<Ja>かいがんと さむい ちいき</Ja></span>
-            <span className="map-progress">{progress.coastOpen ? <>{progress.coast?.trophy ? <Icon id="trophy" size={18} /> : <Icon id="star" size={16} />} {progress.coast?.milestone ?? 0}/5</> : coastUnlocked(model) ? <><Icon id="coin" size={16} /> {COAST_PRICE}</> : <>Finish the Shark Tunnel<Ja>サメの トンネルを クリア</Ja></>}</span>
-            {hall === COAST_HALL && <Here />}
-          </button>
-          <div className="map-card future" aria-disabled="true" data-testid="map-lagoon">
-            <span className="map-icon" aria-hidden="true">☀</span>
-            <span className="map-name">Dolphin Lagoon<Ja>イルカの ラグーン</Ja></span>
-            <span className="map-progress">Coming soon<Ja>もうすぐ</Ja></span>
-          </div>
-          <div className="map-card future" aria-disabled="true" data-testid="map-sanctuary">
-            <span className="map-icon" aria-hidden="true">≈</span>
-            <span className="map-name">Ocean Sanctuary<Ja>うみの サンクチュアリ</Ja></span>
-            <span className="map-progress">Coming soon<Ja>もうすぐ</Ja></span>
-          </div>
+          <ReleaseCard area="coast" hall={COAST_HALL} testId="map-coast" icon="🐧" en="Coastal & Polar Zone" ja="かいがんと さむい ちいき" onOpen={tapCoastDoor}
+            line={progress.coastOpen ? milestoneLine(progress.coast?.milestone ?? 0, Boolean(progress.coast?.trophy)) : coastUnlocked(model) ? <><Icon id="coin" size={16} /> {COAST_PRICE}</> : <>Finish the Shark Tunnel<Ja>サメの トンネルを クリア</Ja></>}
+            saved={progress.coastOpen ? progress.coast?.milestone ?? 0 : null} />
+          <ReleaseCard area="lagoon" hall={LAGOON_HALL} testId="map-lagoon" icon="☀" en="Dolphin Lagoon" ja="イルカの ラグーン" onOpen={() => tapOutdoorDoor("lagoon")}
+            line={milestoneLine(progress.lagoon?.milestone ?? 0, Boolean(progress.lagoon?.trophy))} saved={null} />
+          <ReleaseCard area="sanctuary" hall={SANCTUARY_HALL} testId="map-sanctuary" icon="≈" en="Grand Ocean Sanctuary" ja="うみの サンクチュアリ" onOpen={() => tapOutdoorDoor("sanctuary")}
+            line={milestoneLine(progress.sanctuary?.milestone ?? 0, Boolean(progress.sanctuary?.trophy))} saved={null} />
         </div>
       </div>
     </div>
+  );
+}
+
+const milestoneLine = (n: number, trophy: boolean) => <>{trophy ? <Icon id="trophy" size={18} /> : <Icon id="star" size={16} />} {n}/5</>;
+
+/**
+ * A release-locked destination (data/release.ts). Locked: a lock, "Coming
+ * soon" and, for a save that already owns it, its kept milestone count; a tap
+ * only says Coming soon (nothing travels, nothing is charged). In a
+ * development preview it is an ordinary destination.
+ */
+function ReleaseCard({ area, hall, testId, icon, en, ja, line, saved, onOpen }: {
+  area: ReleaseArea; hall: number; testId: string; icon: string; en: string; ja: string; line: ReactNode; saved: number | null; onOpen: () => void;
+}) {
+  const here = useGame((s) => s.hall === hall);
+  const soon = useGame((s) => (void s.previewAreas, !areaAvailable(area)));
+  const [flash, setFlash] = useState(0);
+  useEffect(() => {
+    if (!flash) return;
+    const t = window.setTimeout(() => setFlash(0), 2200);
+    return () => window.clearTimeout(t);
+  }, [flash]);
+  if (soon) {
+    return (
+      <button className={`map-card future ${area} ${flash ? "flash" : ""}`} aria-disabled="true" data-testid={testId} data-soon="true"
+        onClick={() => { audio.play("error"); setFlash((n) => n + 1); }}>
+        <span className="map-icon" aria-hidden="true"><Icon id="lock" size={26} /></span>
+        <span className="map-name">{en}<Ja>{ja}</Ja></span>
+        <span className="map-progress" data-testid={`${testId}-soon`}>
+          {flash ? <b>{COMING_SOON.en}<Ja>{COMING_SOON.ja}</Ja></b> : <>Coming soon<Ja>もうすぐ</Ja></>}
+          {saved !== null && !flash && <small className="map-saved"><Icon id="star" size={14} /> {saved}/5 saved<Ja>きろくは のこって いるよ</Ja></small>}
+        </span>
+      </button>
+    );
+  }
+  return (
+    <button className={`map-card wing ${area} ${here ? "here" : ""}`} onClick={onOpen} data-testid={testId}>
+      <span className="map-icon" aria-hidden="true">{icon}</span>
+      <span className="map-name">{en}<Ja>{ja}</Ja></span>
+      <span className="map-progress">{line}</span>
+      {here && <Here />}
+    </button>
   );
 }
 
@@ -152,12 +187,17 @@ function TrophyDialog() {
   const p = useGame((s) => s.model.progress);
   const rush = useGame((s) => s.model.rush);
   const close = useEscape(closeTrophies);
+  useGame((s) => s.previewAreas);
+  // A release-locked area's trophy cannot be earned yet: say so instead of how.
+  const how = (a: ReleaseArea, en: string, ja: string) => areaAvailable(a) ? { how: en, howJa: ja } : { how: "Coming soon", howJa: "もうすぐ オープン" };
   const items: { id: string; got: boolean; en: string; ja: string; how: string; howJa: string }[] = [
     { id: "star", got: p.star, en: "Aquarium Star", ja: "アクアリウム スター", how: "Finish Level 5", howJa: "レベル5を クリア" },
     { id: "crown", got: p.superStar, en: "Super Aquarium Star", ja: "スーパー アクアリウム スター", how: "Finish Level 8", howJa: "レベル8を クリア" },
     { id: "sharks", got: Boolean(p.tunnel?.trophy), en: "Shark Tunnel trophy", ja: "サメの トンネルの トロフィー", how: "Finish the Final Tour", howJa: "さいごの ツアーを クリア" },
     { id: "rush", got: Boolean(rush?.stats.best), en: "Rush Hour medal", ja: "ラッシュアワーの メダル", how: "Win a medal in Rush Hour", howJa: "ラッシュアワーで メダルを とろう" },
-    { id: "coast", got: Boolean(p.coast?.trophy), en: "Coastal & Polar trophy", ja: "かいがんと さむい ちいきの トロフィー", how: "Finish the coastal celebration", howJa: "かいがんの おいわいを クリア" }
+    { id: "coast", got: Boolean(p.coast?.trophy), en: "Coastal & Polar trophy", ja: "かいがんと さむい ちいきの トロフィー", ...how("coast", "Finish the coastal celebration", "かいがんの おいわいを クリア") },
+    { id: "lagoon", got: Boolean(p.lagoon?.trophy), en: "Dolphin Lagoon trophy", ja: "イルカの ラグーンの トロフィー", ...how("lagoon", "Finish Dolphin Discovery", "イルカの はっけんを クリア") },
+    { id: "sanctuary", got: Boolean(p.sanctuary?.trophy), en: "Grand Ocean Sanctuary trophy", ja: "うみの サンクチュアリの トロフィー", ...how("sanctuary", "Finish the Grand Sanctuary Celebration", "サンクチュアリの おいわいを クリア") }
   ];
   return (
     <div className="map-backdrop ui" onPointerDown={(e) => { if (e.target === e.currentTarget) closeTrophies(); }}>

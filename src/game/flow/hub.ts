@@ -1,6 +1,7 @@
 import { getGame, nudge, setGame, toast, updateModel, useGame } from "../store";
 import { rt } from "../runtime";
-import { HUB_HALL, inHallRow, roomOpen, SHARKS_HALL } from "../data/rooms";
+import { HUB_HALL, inHallRow, LAGOON_HALL, roomOpen, SANCTUARY_HALL, SHARKS_HALL } from "../data/rooms";
+import { enterOutdoor } from "./outdoor";
 import type { HubDestination } from "../data/hub";
 import { backToRoom, switchHall, tapSharkTunnelDoor } from "./actions";
 import { say } from "./ask";
@@ -25,7 +26,7 @@ let lastIndoor = 0;
 export function canTravel(): boolean {
   const g = getGame();
   return g.screen === "game" && g.mode === "play" && !g.prompt && !g.line && !g.stageCard && !g.settingsOpen &&
-    !g.panel && !g.placing && !g.exploring && !g.request && !g.tunnelActivity && !g.tunnelCelebration &&
+    !g.panel && !g.placing && !g.exploring && !g.request && !g.tunnelActivity && !g.tunnelCelebration && !g.areaActivity && !g.areaPanel &&
     g.model.rush?.phase !== "results" && rt.celebrations.size === 0 && hubUnlocked(g.model);
 }
 
@@ -62,8 +63,23 @@ export function tapHubDoor(kind: HubDestination) {
     return;
   }
   if (kind === "coast") { tapCoastDoor(); return; }
+  tapOutdoorDoor(kind);
+}
+
+export const COMING_SOON = { en: "Coming soon!", ja: "もうすぐ オープン！ おたのしみに！" } as const;
+
+/** A release-locked destination: only the message (no travel, no coins, no offer, no ceremony). */
+export function comingSoon() {
   audio.play("error");
-  toast({ en: "Coming soon!", ja: "もうすぐ オープン！ たのしみに してね", tone: "info" });
+  toast({ ...COMING_SOON, tone: "info" }, 3200);
+}
+
+/** The Dolphin Lagoon / Ocean Sanctuary doorway or map card: enter only where a release or a preview allows. */
+export function tapOutdoorDoor(area: "lagoon" | "sanctuary") {
+  if (!canTravel()) return;
+  const hall = area === "lagoon" ? LAGOON_HALL : SANCTUARY_HALL;
+  if (!roomOpen(hall, getGame().model.progress)) { comingSoon(); return; }
+  enterOutdoor(area);
 }
 
 export function openTrophies() {

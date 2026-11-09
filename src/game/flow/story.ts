@@ -40,6 +40,7 @@ import { tts } from "../../audio/tts";
 import { recognition, requestMicPermission } from "../../audio/recognition";
 import { ACTION } from "../../ui/i18n";
 import { rushCalm } from "../rush/flow";
+import { dropPreview, previewActive } from "./preview";
 
 /**
  * Starting, continuing and saving; the tutorial with Pico; stage rewards;
@@ -54,7 +55,8 @@ let saveTimer = 0;
 
 export function saveNow() {
   const g = getGame();
-  if (g.screen === "title") return;
+  // A development preview is a sandbox: nothing of it is written (flow/preview.ts).
+  if (g.screen === "title" || previewActive()) return;
   const text = encodeSave(g.model);
   if (text === lastSaved) return;
   lastSaved = text;
@@ -163,6 +165,7 @@ async function beginAudio(requestPermission = true) {
 }
 
 function enter(m: Model) {
+  dropPreview();
   gen++;
   busyFlow = false;
   expansionIntroduced = false;
@@ -240,6 +243,7 @@ export async function continueGame() {
 
 export function toTitle() {
   saveNow();
+  dropPreview();
   gen++;
   busyFlow = false;
   scripted.busy = false;

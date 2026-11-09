@@ -2,12 +2,16 @@ import type { ColorId, DecorKind, DecorVariant, SlotId, SpeciesId, StageId, Tank
 import { SPECIES } from "../data/fish";
 import { DECOR, decorFits } from "../data/decor";
 import { BUILT_IN_PADS, HALL_OF, isWingHabitat, PAD_TYPES, SLOT_ORDER, TANKS } from "../data/tanks";
-import { roomOpen } from "../data/rooms";
+import { roomOpen, roomOwned } from "../data/rooms";
 import { PHRASES, type PhraseId } from "./english";
 import { isSentencePattern } from "./sentenceTeaching";
 import { decodeRush } from "../rush/decode";
 import type { CoastProgress } from "./coast";
 import { coastSlotFits } from "../data/coast";
+import { areaReleased } from "../data/release";
+import { storeLocked } from "./stored";
+import { readLagoonProgress } from "./lagoon";
+import { readSanctuaryProgress } from "./sanctuary";
 import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep, type TunnelProgress } from "./model";
 
 /**
@@ -67,10 +71,10 @@ function readDecor(raw: unknown, ids: Set<string>): DecorRec | null {
   return { id, kind: raw.kind, variant };
 }
 
-/** Is this tank type on this pad possible at this level? */
+/** Is this tank type on this pad possible at this level? (Ownership, not release: a locked area's habitats are kept.) */
 function tankAllowed(type: TankType, slot: SlotId, p: Progress): boolean {
   if (!PAD_TYPES[slot].includes(type)) return false;
-  if (!roomOpen(HALL_OF[slot], p)) return false;
+  if (!roomOwned(HALL_OF[slot], p)) return false;
   if (type === "small" || type === "ocean") return true;
   return p.stage >= TANKS[type].fromStage;
 }
@@ -176,6 +180,18 @@ function readProgress(raw: unknown, version: number): Progress {
       trophy: milestone === 5
     };
   }
+  // The outdoor expansions: only a released area can be owned. Until then any
+  // saved field is dropped (no unlock rule exists, and previews are never saved).
+  if (areaReleased("lagoon") && src.lagoonOpen === true && p.freePlay) {
+    p.lagoonOpen = true;
+    p.lagoonIntroSeen = src.lagoonIntroSeen === true;
+    p.lagoon = readLagoonProgress(src.lagoon);
+  }
+  if (areaReleased("sanctuary") && src.sanctuaryOpen === true && p.freePlay) {
+    p.sanctuaryOpen = true;
+    p.sanctuaryIntroSeen = src.sanctuaryIntroSeen === true;
+    p.sanctuary = readSanctuaryProgress(src.sanctuary);
+  }
   p.said = [...new Set(arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES))];
   return p;
 }
@@ -195,7 +211,9 @@ export function decodeSave(text: string | null): SaveData | null {
   m.progress = readProgress(src.progress, version);
   const ids = new Set<string>();
   const used = new Set<SlotId>();
-  const tanks = arr(src.tanks)
+  // Stored habitats (a release-locked area's) are read with the rest, then stored again below.
+  const stored = isObj(src.stored) ? src.stored : {};
+  const tanks = [...arr(src.tanks), ...arr(stored.tanks)]
     .map((t) => readTank(t, ids, used, m.progress))
     .filter((t): t is TankRec => Boolean(t));
   // The starter tank is never lost (a small tank, or the big one it grew into, on pad A).
@@ -240,10 +258,10 @@ export function decodeSave(text: string | null): SaveData | null {
   const inv = isObj(src.inv) ? src.inv : {};
   const freePads = SLOT_ORDER.filter((s) => !tanks.some((t) => t.slot === s) && roomOpen(HALL_OF[s], m.progress) && !BUILT_IN_PADS.includes(s)).length;
   m.inv = {
-    fish: arr(inv.fish)
+    fish: [...arr(inv.fish), ...arr(stored.fish)]
       .map((f) => readFish(f, ids))
       .filter((f): f is FishRec => Boolean(f)),
-    decor: arr(inv.decor)
+    decor: [...arr(inv.decor), ...arr(stored.decor)]
       .map((d) => readDecor(d, ids))
       .filter((d): d is DecorRec => Boolean(d)),
     tanks: arr(inv.tanks)
@@ -269,7 +287,8 @@ export function decodeSave(text: string | null): SaveData | null {
     .filter((k): k is string => typeof k === "string" && k.length < 60)
     .slice(-60);
   m.rush = decodeRush(src.rush);
-  return { v: VERSION, model: m };
+  // What belongs to a release-locked area waits out of play (kept, and saved back).
+  return { v: VERSION, model: storeLocked(m) };
 }
 
 export function readSave(): SaveData | null {

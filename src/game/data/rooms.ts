@@ -1,4 +1,5 @@
 import type { RoomId, SlotId } from "../types";
+import { anyPreview, areaPreviewed, areaReleased, type ReleaseArea } from "./release";
 
 /**
  * The aquarium's rooms, in walking order along +x. Each room shares its left
@@ -17,7 +18,7 @@ export interface RoomBounds {
 }
 
 /** What a room needs from the saved progress to be open (the first hall always is). */
-export type RoomUnlock = null | "hallOpen" | "galleryOpen" | "atriumOpen" | "tunnelOpen" | "hubOpen" | "coastOpen";
+export type RoomUnlock = null | "hallOpen" | "galleryOpen" | "atriumOpen" | "tunnelOpen" | "hubOpen" | "coastOpen" | "lagoonOpen" | "sanctuaryOpen";
 
 export interface RoomDef {
   id: RoomId;
@@ -51,7 +52,12 @@ export const ROOMS: RoomDef[] = [
     pads: [], unlock: "hubOpen", wing: "hub" },
   // The Coastal & Polar Zone: three exhibits side by side, entered from the hub. See data/coast.ts.
   { id: "coast", name: "Coastal & Polar Zone", ja: "かいがんと さむい ちいき", bounds: { minX: -152, maxX: -108, minZ: -66, maxZ: -50, wallH: 4 },
-    pads: ["M", "N", "O"], unlock: "coastOpen", wing: "hub" }
+    pads: ["M", "N", "O"], unlock: "coastOpen", wing: "hub" },
+  // The outdoor expansions, entered from the hub (release-locked: see data/release.ts). See data/lagoon.ts, data/sanctuary.ts.
+  { id: "lagoon", name: "Dolphin Lagoon", ja: "イルカの ラグーン", bounds: { minX: -380, maxX: -260, minZ: 200, maxZ: 320, wallH: 0 },
+    pads: [], unlock: "lagoonOpen", wing: "hub" },
+  { id: "sanctuary", name: "Grand Ocean Sanctuary", ja: "うみの サンクチュアリ", bounds: { minX: 120, maxX: 720, minZ: 200, maxZ: 800, wallH: 0 },
+    pads: [], unlock: "sanctuaryOpen", wing: "hub" }
 ];
 
 export type RoomIndex = number;
@@ -64,14 +70,34 @@ export const ROOM_CENTER_X: number[] = ROOMS.filter((r) => !r.wing).map((r) => (
 /** Which room a pad is in. */
 export const ROOM_OF: Record<SlotId, RoomIndex> = Object.fromEntries(ROOMS.flatMap((r, i) => r.pads.map((p) => [p, i]))) as Record<SlotId, RoomIndex>;
 
-type OpenFlags = { hallOpen: boolean; galleryOpen: boolean; atriumOpen?: boolean; tunnelOpen?: boolean; freePlay?: boolean; coastOpen?: boolean };
+type OpenFlags = { hallOpen: boolean; galleryOpen: boolean; atriumOpen?: boolean; tunnelOpen?: boolean; freePlay?: boolean; coastOpen?: boolean; lagoonOpen?: boolean; sanctuaryOpen?: boolean };
 
-/** Is this room open with this progress? The hub is a free upgrade, derived (never bought). */
-export function roomOpen(i: RoomIndex, progress: OpenFlags): boolean {
+/** Rooms held back by a release lock (data/release.ts). */
+export const RELEASE_OF: Partial<Record<RoomId, ReleaseArea>> = { coast: "coast", lagoon: "lagoon", sanctuary: "sanctuary" };
+
+/**
+ * Does the player's own progress own this room? Release locks are ignored:
+ * save validation uses this, so a locked area's saved habitats are kept.
+ */
+export function roomOwned(i: RoomIndex, progress: OpenFlags): boolean {
   const r = ROOMS[i];
   if (!r) return false;
   if (r.unlock === "hubOpen") return Boolean(progress.freePlay && progress.tunnelOpen);
   return r.unlock === null || progress[r.unlock] === true;
+}
+
+/**
+ * Can the player go there now? A release-locked area needs a development
+ * preview (this session only) whatever the save says; a preview also opens the
+ * hub, so the doorways can be tested. The hub is a free upgrade, derived (never bought).
+ */
+export function roomOpen(i: RoomIndex, progress: OpenFlags): boolean {
+  const r = ROOMS[i];
+  if (!r) return false;
+  const area = RELEASE_OF[r.id];
+  if (area) return areaPreviewed(area) || (areaReleased(area) && roomOwned(i, progress));
+  if (r.unlock === "hubOpen" && anyPreview()) return true;
+  return roomOwned(i, progress);
 }
 
 /** Rooms on the hall row plus the Shark Tunnel (which branches from the Atrium): the hall arrows link only these. */
@@ -98,3 +124,6 @@ export const SHARKS_HALL: RoomIndex = ROOMS.findIndex((r) => r.id === "sharks");
 export const COAST_HALL: RoomIndex = ROOMS.findIndex((r) => r.id === "coast");
 /** The Grand Aquarium Hub's index in ROOMS. */
 export const HUB_HALL: RoomIndex = ROOMS.findIndex((r) => r.id === "hub");
+/** The outdoor expansions' indices in ROOMS. */
+export const LAGOON_HALL: RoomIndex = ROOMS.findIndex((r) => r.id === "lagoon");
+export const SANCTUARY_HALL: RoomIndex = ROOMS.findIndex((r) => r.id === "sanctuary");

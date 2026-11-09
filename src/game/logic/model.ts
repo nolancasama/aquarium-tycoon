@@ -2,6 +2,8 @@ import type { ColorId, DecorKind, DecorVariant, SlotId, SpeciesId, StageId, Tank
 import { SPECIES, SPECIES_ORDER, spaceOf, type HomeNeed } from "../data/fish";
 import { COAST_DECOR, DECOR, decorFits, decorVersion, isCoastDecor, isCoastTank, isTunnelDecor } from "../data/decor";
 import type { CoastProgress } from "./coast";
+import type { LagoonProgress } from "./lagoon";
+import type { SanctuaryProgress } from "./sanctuary";
 import { coastSlotFits } from "../data/coast";
 import { ATRIUM_PRICE, BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, isWingHabitat, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
@@ -115,6 +117,17 @@ export interface Progress {
   coastOpen?: boolean;
   coastIntroSeen?: boolean;
   coast?: CoastProgress;
+  /**
+   * Outdoor expansions (release-locked, data/release.ts). Their unlock rules are
+   * not decided yet: nothing in ordinary play sets these, and a save only keeps
+   * them for a released area. Previews hold them in memory only.
+   */
+  lagoonOpen?: boolean;
+  lagoonIntroSeen?: boolean;
+  lagoon?: LagoonProgress;
+  sanctuaryOpen?: boolean;
+  sanctuaryIntroSeen?: boolean;
+  sanctuary?: SanctuaryProgress;
   /** Distinct sentences said or chosen (results card). */
   said: PhraseId[];
 }
@@ -153,6 +166,18 @@ export interface Model {
   paid: string[];
   /** Rush Hour event; absent in older saves (see game/rush/types.ts). */
   rush?: RushState;
+  /**
+   * Owned things of a release-locked area (its habitat tanks, bagged animals and
+   * unplaced items), kept out of play so no rule (care, Rush Hour, the judge)
+   * sees what the player cannot reach, and saved back unchanged. See logic/stored.ts.
+   */
+  stored?: StoredArea;
+}
+
+export interface StoredArea {
+  tanks: TankRec[];
+  fish: FishRec[];
+  decor: DecorRec[];
 }
 
 export type Reason = "coins" | "locked" | "full" | "missing" | "slotTaken" | "foodFull" | "empty" | "habitat" | "tooBig" | "owned";

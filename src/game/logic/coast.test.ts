@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HAPPY, happiness, newModel, newTank, tankAt, type Model, type Result } from "./model";
+import { clearPreviewAccess, grantPreview } from "../data/release";
+
+// The zone is release-locked (data/release.ts; release.test.ts covers the lock).
+// Its own rules are tested as they run when it may be entered: in a preview here.
+beforeAll(() => grantPreview("coast"));
+afterAll(() => clearPreviewAccess());
 import { checkCoastMilestones, COAST_PRICE, coastUnlocked, habitatOpen, NEED_CAP, newCoastProgress, openCoast, recordCoastActivity, recordCoastSight } from "./coast";
 import { decodeSave, encodeSave } from "./save";
 import { decorFits } from "../data/decor";
