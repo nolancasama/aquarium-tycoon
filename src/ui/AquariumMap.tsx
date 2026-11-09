@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useGame } from "../game/store";
-import { HUB_HALL, ROOMS, roomOpen, SHARKS_HALL } from "../game/data/rooms";
+import { COAST_HALL, HUB_HALL, ROOMS, roomOpen, SHARKS_HALL } from "../game/data/rooms";
+import { tapCoastDoor } from "../game/flow/coast";
+import { COAST_PRICE, coastUnlocked } from "../game/logic/coast";
 import { canTravel, closeMap, closeTrophies, hubUnlocked, openMap, travelTo, trophiesToRush } from "../game/flow/hub";
 import { Icon, type IconId } from "./icons";
 import { Ja } from "./Talk";
@@ -71,6 +73,7 @@ export function AquariumMap() {
 function MapDialog() {
   const hall = useGame((s) => s.hall);
   const progress = useGame((s) => s.model.progress);
+  const model = useGame((s) => s.model);
   const close = useEscape(closeMap);
   const tunnelMilestone = progress.tunnel?.milestone ?? 0;
   return (
@@ -107,11 +110,12 @@ function MapDialog() {
             <span className="map-progress" aria-label={`${tunnelMilestone} of 5 milestones`}>{progress.tunnel?.trophy ? <><Icon id="trophy" size={18} /> 5/5</> : <><Icon id="star" size={16} /> {tunnelMilestone}/5</>}</span>
             {hall === SHARKS_HALL && <Here />}
           </button>
-          <div className="map-card wing coast locked" data-testid="map-coast" aria-disabled="true">
-            <span className="map-icon" aria-hidden="true"><Icon id="lock" size={26} /></span>
+          <button className={`map-card wing coast ${progress.coastOpen ? "" : "locked"} ${hall === COAST_HALL ? "here" : ""}`} onClick={tapCoastDoor} data-testid="map-coast">
+            <span className="map-icon" aria-hidden="true">{progress.coastOpen ? "🐧" : <Icon id="lock" size={26} />}</span>
             <span className="map-name">Coastal &amp; Polar Zone<Ja>かいがんと さむい ちいき</Ja></span>
-            <span className="map-progress">Coming soon<Ja>もうすぐ</Ja></span>
-          </div>
+            <span className="map-progress">{progress.coastOpen ? <>{progress.coast?.trophy ? <Icon id="trophy" size={18} /> : <Icon id="star" size={16} />} {progress.coast?.milestone ?? 0}/5</> : coastUnlocked(model) ? <><Icon id="coin" size={16} /> {COAST_PRICE}</> : <>Finish the Shark Tunnel<Ja>サメの トンネルを クリア</Ja></>}</span>
+            {hall === COAST_HALL && <Here />}
+          </button>
           <div className="map-card future" aria-disabled="true" data-testid="map-lagoon">
             <span className="map-icon" aria-hidden="true">☀</span>
             <span className="map-name">Dolphin Lagoon<Ja>イルカの ラグーン</Ja></span>
@@ -153,7 +157,7 @@ function TrophyDialog() {
     { id: "crown", got: p.superStar, en: "Super Aquarium Star", ja: "スーパー アクアリウム スター", how: "Finish Level 8", howJa: "レベル8を クリア" },
     { id: "sharks", got: Boolean(p.tunnel?.trophy), en: "Shark Tunnel trophy", ja: "サメの トンネルの トロフィー", how: "Finish the Final Tour", howJa: "さいごの ツアーを クリア" },
     { id: "rush", got: Boolean(rush?.stats.best), en: "Rush Hour medal", ja: "ラッシュアワーの メダル", how: "Win a medal in Rush Hour", howJa: "ラッシュアワーで メダルを とろう" },
-    { id: "coast", got: false, en: "Coastal & Polar trophy", ja: "かいがんと さむい ちいきの トロフィー", how: "Coming soon", howJa: "もうすぐ" }
+    { id: "coast", got: Boolean(p.coast?.trophy), en: "Coastal & Polar trophy", ja: "かいがんと さむい ちいきの トロフィー", how: "Finish the coastal celebration", howJa: "かいがんの おいわいを クリア" }
   ];
   return (
     <div className="map-backdrop ui" onPointerDown={(e) => { if (e.target === e.currentTarget) closeTrophies(); }}>

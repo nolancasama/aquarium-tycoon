@@ -143,10 +143,13 @@ const segDist = (a: Vec2, b: Vec2, c: Vec2) => {
   return Math.hypot(a.x + dx * t - c.x, a.z + dz * t - c.z);
 };
 
+/** Animals slide off a ramp's end into open water this far beyond it (and climb back on from there). */
+export const RAMP_STEP = 0.45;
+
 /** The solid under a ramp, as a rectangle (it slopes from the land edge to the waterline). */
 export function rampRect(ex: ExhibitDef, i: number) {
   const r = ex.ramps[i];
-  return { minX: r.top.x - 0.75, maxX: r.top.x + 0.75, minZ: Math.min(r.top.z, r.bottom.z), maxZ: Math.max(r.top.z, r.bottom.z) - 0.6 };
+  return { minX: r.top.x - 0.75, maxX: r.top.x + 0.75, minZ: Math.min(r.top.z, r.bottom.z), maxZ: Math.max(r.top.z, r.bottom.z) };
 }
 
 function segHitsRect(a: Vec2, b: Vec2, r: { minX: number; maxX: number; minZ: number; maxZ: number }, pad: number) {
@@ -245,7 +248,7 @@ function nextSwimLeg(m: Mover, ex: ExhibitDef, _ctx: MoveCtx, deep: boolean) {
 function leaveWater(m: Mover, ex: ExhibitDef, ctx: MoveCtx): boolean {
   const body = PARAMS[m.species].body;
   const exits: { at: Vec3; kind: "ramp" | "island"; i: number }[] = [
-    ...ex.ramps.map((r, i) => ({ at: { x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z + 0.15 }, kind: "ramp" as const, i })),
+    ...ex.ramps.map((r, i) => ({ at: { x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z + RAMP_STEP }, kind: "ramp" as const, i })),
     ...(m.species === "otter" ? [] : ex.islands.map((isl, i) => ({ at: { x: isl.climb.x, y: ex.pool.surface - 0.06, z: isl.climb.z }, kind: "island" as const, i })))
   ].sort(() => rand(m) - 0.5);
   for (const e of exits) {
@@ -324,7 +327,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
           const r = ex.ramps[m.rampNext!];
           m.mode = "rampDown";
           m.from = { x: m.x, y: m.y, z: m.z };
-          m.path = [{ x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z }];
+          m.path = [{ x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z }, { x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z + RAMP_STEP }];
           m.rampNext = -1;
         } else {
           if (m.attract) { m.attract = null; m.action = "eat"; m.actionUntil = ctx.time + 3; }
@@ -390,7 +393,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
             const r = ex.ramps[e.i];
             m.mode = "rampUp";
             m.from = { x: m.x, y: m.y, z: m.z };
-            m.path = [{ x: r.top.x, y: ex.land.y, z: r.top.z }];
+            m.path = [{ x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z }, { x: r.top.x, y: ex.land.y, z: r.top.z }];
           } else {
             const isl = ex.islands[e.i];
             m.mode = "climb";

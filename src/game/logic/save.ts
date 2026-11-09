@@ -7,6 +7,7 @@ import { PHRASES, type PhraseId } from "./english";
 import { isSentencePattern } from "./sentenceTeaching";
 import { decodeRush } from "../rush/decode";
 import type { CoastProgress } from "./coast";
+import { coastSlotFits } from "../data/coast";
 import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep, type TunnelProgress } from "./model";
 
 /**
@@ -95,7 +96,7 @@ function readTank(raw: unknown, ids: Set<string>, used: Set<SlotId>, p: Progress
   for (const d of arr(raw.decor)) {
     const rec = readDecor(d, ids);
     const slot = isObj(d) ? Math.floor(num(d.slot, -1)) : -1;
-    if (!rec || slot < 0 || slot >= def.slots.length || slots.has(slot) || !decorFits(rec.kind, raw.type)) continue;
+    if (!rec || slot < 0 || slot >= def.slots.length || slots.has(slot) || !decorFits(rec.kind, raw.type) || !coastSlotFits(raw.type, slot, rec.kind)) continue;
     slots.add(slot);
     decor.push({ ...rec, slot });
   }

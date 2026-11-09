@@ -1,4 +1,6 @@
 import { clearTunnelVisitors } from "../tunnel/tunnelVisitors";
+import { clearCoast } from "../coast/coastRuntime";
+import { clearHubVisitors } from "../hub/hubVisitors";
 import { commit, getGame, model, nudge, setGame, toast, updateModel, useGame, type Panel, type Reward } from "../store";
 import { clearVisitorTapQueue, effect, resetCelebrations, resetRuntime, rt, startCount } from "../runtime";
 import type { StageId } from "../types";
@@ -167,6 +169,8 @@ function enter(m: Model) {
   scripted.busy = false;
   resetRuntime();
   clearTunnelVisitors();
+  clearCoast();
+  clearHubVisitors();
   resetVisitors();
   resetHints();
   lastSaved = "";
@@ -194,6 +198,11 @@ function enter(m: Model) {
     rushAnnouncement: null,
     mapOpen: false,
     trophiesOpen: false,
+    coastView: "all",
+    coastOffer: false,
+    coastActivity: null,
+    coastWaiting: null,
+    coastCelebration: null,
     tunnelView: "whole",
     hall: 0,
     guide: null,

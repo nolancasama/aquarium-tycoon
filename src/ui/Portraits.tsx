@@ -269,6 +269,25 @@ export function DecorPicture({ kind, variant, size = 72 }: { kind: DecorKind; va
       return <svg {...p}>{sand}<path d="M10 53l4-19 9-5 24 4 4 20H39V42H21v11z" fill="#76938d" stroke="#486e70" strokeWidth="2" /><path d="M8 30l11-6h31l5 11-17 5-28-4z" fill="#b7c6a7" stroke="#486e70" strokeWidth="2" /><path d="M24 51h11" stroke="#526b69" strokeWidth="3" strokeLinecap="round" /></svg>;
     case "tunnelSand":
       return <svg {...p}>{sand}<path d="M6 51q5-13 17-20 10-6 18 4l13 17z" fill="#e7d3a6" stroke="#bfa679" strokeWidth="2" /><path d="M13 47q13-13 25-5m-15 7q12-5 24 0" fill="none" stroke="#fff0cc" strokeWidth="3" strokeLinecap="round" /></svg>;
+    // Coastal habitat items: drawn on grey shore rock or blue water instead of sand.
+    case "penguinRock":
+      return <svg {...p}><ellipse cx="30" cy="54" rx="25" ry="5" fill="#c9d3da" /><path d="M6 53l4-12 10-5 8 5 3 12z" fill="#9aa4ad" stroke="#6c7780" strokeWidth="2" /><path d="M26 53l5-16 11-6 9 7 3 15z" fill="#b3bcc3" stroke="#6c7780" strokeWidth="2" /><path d="M18 46l6-4m14-3 6-3" stroke="#e4eaee" strokeWidth="3" strokeLinecap="round" /></svg>;
+    case "penguinNest":
+      return <svg {...p}><ellipse cx="30" cy="54" rx="25" ry="5" fill="#c9b48a" /><path d="M7 53a23 21 0 0 1 46 0z" fill="#8d8a80" stroke="#605d55" strokeWidth="2" /><path d="M22 53a8 9 0 0 1 16 0z" fill="#2a2622" /><path d="M14 41l7-4m14-6 8 3" stroke="#b5b1a6" strokeWidth="3" strokeLinecap="round" /></svg>;
+    case "penguinFeeder":
+      return <svg {...p}><ellipse cx="30" cy="54" rx="25" ry="5" fill="#c9d3da" /><rect x="6" y="44" width="48" height="7" rx="2" fill="#9b7448" /><path d="M12 44l3-17h14l3 17z" fill="#2f7fc1" stroke="#1d5a8c" strokeWidth="2" /><path d="M35 40q8-6 15 0-7 6-15 0zm-1 0-4-3v6z" fill="#c9d6de" stroke="#7d8b94" strokeWidth="1.5" /></svg>;
+    case "sealRock":
+      return <svg {...p}><ellipse cx="30" cy="54" rx="26" ry="5" fill="#a89c8c" /><path d="M3 53l5-11 16-6 22 1 10 8 1 8z" fill="#8b7f72" stroke="#5e554b" strokeWidth="2" /><path d="M12 42l14-3m8 0 12 2" stroke="#b8ac9c" strokeWidth="3" strokeLinecap="round" /></svg>;
+    case "sealBall":
+      return <svg {...p}><path d="M2 46q7-4 14 0t14 0 14 0 14 0v12H2z" fill="#4fb3cf" /><circle cx="30" cy="34" r="15" fill="#e03131" /><path d="M15 34h30" stroke="#ffffff" strokeWidth="5" /><circle cx="25" cy="27" r="3" fill="#ffb3b3" /></svg>;
+    case "sealBuoy":
+      return <svg {...p}><rect x="0" y="0" width="60" height="60" rx="10" fill="#bfe6f0" /><ellipse cx="30" cy="54" rx="22" ry="4" fill="#7f8a90" /><rect x="28" y="30" width="4" height="24" fill="#555b60" /><circle cx="30" cy="22" r="14" fill="none" stroke="#ff922b" strokeWidth="6" /></svg>;
+    case "otterKelp":
+      return <svg {...p}><path d="M2 30q7-4 14 0t14 0 14 0 14 0v28H2z" fill="#58b9c4" /><ellipse cx="20" cy="30" rx="14" ry="5" fill="#3f8f4a" /><ellipse cx="38" cy="31" rx="15" ry="5" fill="#4f9f56" /><path d="M22 34q-4 10 0 22m14-22q5 10 1 22" stroke="#3c7a3e" strokeWidth="3" fill="none" /></svg>;
+    case "otterToy":
+      return <svg {...p}><path d="M2 40q7-4 14 0t14 0 14 0 14 0v18H2z" fill="#58b9c4" /><ellipse cx="30" cy="36" rx="17" ry="8" fill="none" stroke="#ffd43b" strokeWidth="7" /><circle cx="46" cy="33" r="5" fill="#4dabf7" /></svg>;
+    case "otterDen":
+      return <svg {...p}><ellipse cx="30" cy="54" rx="25" ry="5" fill="#8f9a6a" /><path d="M5 53l3-22 12-10 18-1 14 11 3 22H40l-1-13H20l-1 13z" fill="#6f6253" stroke="#4d4338" strokeWidth="2" /><path d="M20 53V40h19v13z" fill="#2c2620" /><path d="M14 22l3-8m20 5 2-9m7 12 4-6" stroke="#4f8a4a" strokeWidth="4" strokeLinecap="round" /></svg>;
     case "kelp":
       return (
         <svg {...p}>

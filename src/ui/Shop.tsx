@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { SHARKS_HALL } from "../game/data/rooms";
+import { COAST_HALL, SHARKS_HALL } from "../game/data/rooms";
 import { setGame, useGame } from "../game/store";
 import { ANIMAL_ORDER, FISH_ORDER, JELLY_BY_COLOR, SPECIES, spaceOf } from "../game/data/fish";
-import { DECOR, DECOR_ORDER, decorFits } from "../game/data/decor";
+import { DECOR, DECOR_ORDER, decorFits, isCoastDecor } from "../game/data/decor";
 import { ATRIUM_PRICE, GALLERY_PRICE, HALL_PRICE, TANKS, TANK_ORDER, TICKETS_PRICE } from "../game/data/tanks";
 import { atriumUnlocked, EXPANSION_FROM, galleryUnlocked, homesFor, isSpeciesUnlocked, padsFor, remodelPlan, tankById, UPGRADE_PRICE, type UpgradeKind } from "../game/logic/model";
 import { SHOP_COLOR_PHRASE } from "../game/logic/english";
@@ -143,7 +143,8 @@ export function DecorShop() {
   const shopItem = useMemo(() => nextStep(model)?.shopItem, [model]);
   const mode = useGame((s) => s.mode);
   const tunnel = useGame((s) => s.hall === SHARKS_HALL);
-  if (panel !== "decorShop" || mode === "ask") return null;
+  const coast = useGame((s) => s.hall === COAST_HALL);
+  if (panel !== "decorShop" || mode === "ask" || coast) return null;
   // Phase 2 decorations appear (locked) from Level 6, so there is something to look forward to.
   const expansionDecor = new Set(["kelp", "arch", "cave", "driftwood"]);
   const list = DECOR_ORDER.filter((k) => tunnel ? decorFits(k, "sharks") : !decorFits(k, "sharks") && (!expansionDecor.has(k) && (DECOR[k].fromStage <= 2 || stage >= 6) || stage >= EXPANSION_FROM));
@@ -465,12 +466,13 @@ export function DecorTray() {
   const mode = useGame((s) => s.mode);
   const allDecor = useGame((s) => s.model.inv.decor);
   const tunnel = useGame((s) => s.hall === SHARKS_HALL);
-  const inv = useMemo(() => allDecor.filter((d) => tunnel ? decorFits(d.kind, "sharks") : !decorFits(d.kind, "sharks")), [allDecor, tunnel]);
+  const coastView = useGame((s) => s.hall === COAST_HALL ? s.coastView : null);
+  const inv = useMemo(() => allDecor.filter((d) => coastView ? coastView !== "all" && decorFits(d.kind, coastView) : tunnel ? decorFits(d.kind, "sharks") : !decorFits(d.kind, "sharks") && !isCoastDecor(d.kind)), [allDecor, tunnel, coastView]);
   const placing = useGame((s) => s.placing);
   const guide = useGame((s) => s.guide === "tray" || s.nudge?.target === "tray");
   const tutorial = useGame((s) => s.model.progress.tutorial !== "done");
   const selectedIndex = placing?.kind === "decor" ? inv.findIndex((d) => d.id === placing.decorId) : -1;
-  if (panel !== "decorate" || (view !== "tank" && !tunnel) || mode !== "play") return null;
+  if (panel !== "decorate" || (view !== "tank" && !tunnel && !coastView) || mode !== "play") return null;
   const hint =
     placing?.kind === "decor"
       ? { en: "Tap a circle to place or swap!", ja: "まるを タップして おく・いれかえる！" }

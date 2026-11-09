@@ -4,7 +4,9 @@ import { nextStep, objectivesUnlocked } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
 import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, usedSpace, type Goal } from "../game/logic/model";
 import { HALL_OF, TANKS } from "../game/data/tanks";
-import { HUB_HALL, inHallRow, ROOMS, roomOpen, SHARKS_HALL } from "../game/data/rooms";
+import { COAST_HALL, HUB_HALL, inHallRow, ROOMS, roomOpen, SHARKS_HALL } from "../game/data/rooms";
+import { CoastCelebration, CoastGoals, CoastHud, CoastOffer, NEED_TEXT } from "./CoastHud";
+import { needMet } from "../game/logic/coast";
 import { AquariumMap, MapButton, TrophyCard } from "./AquariumMap";
 import { watchHubIntro } from "../game/flow/hub";
 import { ExploreHud, TunnelGoals, WingHud } from "./TunnelHud";
@@ -134,6 +136,7 @@ function GoalCard() {
 function GoalsPanel({ expanded, setExpanded, rushBack }: { expanded: boolean; setExpanded: (fn: (open: boolean) => boolean) => void; rushBack: ReactNode }) {
   const model = useGame((s) => s.model);
   const inWing = useGame((s) => s.screen === "game" && (s.hall === SHARKS_HALL || s.exploring));
+  const inCoast = useGame((s) => s.screen === "game" && s.hall === COAST_HALL);
   const request = useGame((s) => s.request);
   const interrupted = useGame((s) => Boolean(s.prompt || s.line || s.stageCard));
   const waiting = useGame((s) => Boolean(s.waiting));
@@ -152,6 +155,7 @@ function GoalsPanel({ expanded, setExpanded, rushBack }: { expanded: boolean; se
   // Start each level compact and clear an expanded list for scripted interactions.
   useEffect(() => setExpanded(() => false), [model.progress.stage, interrupted, Boolean(request)]);
   if (inWing && !request) return <TunnelGoals before={rushBack} />;
+  if (inCoast && !request) return <CoastGoals before={rushBack} />;
   // The tutorial's "Tap the visitor!" card takes this place; in free play the objectives stay.
   if (!unlocked || request || (waiting && !interrupted && model.progress.tutorial !== "done")) return null;
   const p = model.progress;
@@ -196,7 +200,7 @@ function HelpButton() {
   const request = useGame((s) => Boolean(s.request));
   if (request) return null;
   return (
-    <button className="chip help-btn ui" onClick={() => (getGame().hall === HUB_HALL ? hubHelp() : getGame().exploring || getGame().hall === SHARKS_HALL ? tunnelHelp() : showGuideHint())} disabled={!canHelp} data-testid="btn-help">
+    <button className="chip help-btn ui" onClick={() => (getGame().hall === COAST_HALL ? coastHelp() : getGame().hall === HUB_HALL ? hubHelp() : getGame().exploring || getGame().hall === SHARKS_HALL ? tunnelHelp() : showGuideHint())} disabled={!canHelp} data-testid="btn-help">
       <b aria-hidden="true">?</b> <span className="help-label">Help <small lang="ja">ヒント</small></span>
     </button>
   );
@@ -558,13 +562,15 @@ export function Hud() {
   const free = mode === "play" && !prompt && !line && !shot;
   const wing = hall === SHARKS_HALL;
   const hub = hall === HUB_HALL;
+  const coast = hall === COAST_HALL;
   const showRoomBar = free && view === "room" && !panel && !placing && (step === "done" || step === "buy" || step === "visitor");
   const showTankBar = free && view === "tank" && panel !== "decorate";
   return (
     <>
       <TopBar />
       {view === "tank" && <TankStatus />}
-      {showRoomBar && !wing && !hub && !exploring && <RoomBar />}
+      {showRoomBar && !wing && !hub && !coast && !exploring && <RoomBar />}
+      {view === "room" && coast && <CoastHud />}
       {free && view === "room" && !exploring && <HallSwitch />}
       {free && hub && <HubBar />}
       {view === "room" && wing && !exploring && <WingHud />}
@@ -576,6 +582,8 @@ export function Hud() {
       <TapHand />
       <RushHour />
       <AquariumMap />
+      <CoastOffer />
+      <CoastCelebration />
       <TrophyCard />
       <HubIntro />
     </>
@@ -598,6 +606,14 @@ function HubBar() {
       </button>
     </div>
   );
+}
+
+function coastHelp() {
+  const g = getGame();
+  const t = g.coastView === "all" ? null : g.model.tanks.find((x) => x.type === g.coastView);
+  if (t && !needMet(t) && t.fish.length) nudge({ en: NEED_TEXT[g.coastView as "penguins"].en, ja: NEED_TEXT[g.coastView as "penguins"].ja, kind: "tap", target: "btn-coast-items" });
+  else if (g.coastView === "all") nudge({ en: "Tap a habitat!", ja: "すみかを タップしよう", kind: "tap" });
+  else nudge({ en: "Watch the animals! Help visitors with !", ja: "どうぶつを みよう！ 「!」の おきゃくさんを たすけよう", kind: "look" });
 }
 
 function hubHelp() {

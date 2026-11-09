@@ -20,7 +20,9 @@ export const SENTENCE_PATTERNS = {
   yesNo: { en: "___, I do / don't.", ja: "＿＿、そうです／そうでは ありません。" },
   where: { en: "Where is it? — It's ___ me!", ja: "どこに いる？ わたしの ＿＿に いるよ。" },
   canIt: { en: "Can it ___? — ___, it can / can't.", ja: "＿＿できる？ できる／できない。" },
-  countSharks: { en: "How many sharks? — ___ sharks!", ja: "サメは なんびき？ ＿＿ひきです。" }
+  countSharks: { en: "How many sharks? — ___ sharks!", ja: "サメは なんびき？ ＿＿ひきです。" },
+  countPenguins: { en: "How many penguins? — ___ penguins!", ja: "ペンギンは なんわ？ ＿＿わです。" },
+  whereSeal: { en: "Where is the seal? — ___!", ja: "アザラシは どこ？ ＿＿だよ。" }
 } as const;
 export type SentencePatternId = keyof typeof SENTENCE_PATTERNS;
 export const isSentencePattern = (id: unknown): id is SentencePatternId => typeof id === "string" && Object.prototype.hasOwnProperty.call(SENTENCE_PATTERNS, id);

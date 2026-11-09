@@ -13,6 +13,9 @@ import { decorVersion } from "./data/decor";
 import { PICO } from "./world";
 import { project } from "../scene/CameraRig";
 import { HUB_BAYS, HUB_R, onRing } from "./data/hub";
+import { coastTo } from "../ui/DebugPanel";
+import { coastRt } from "./coast/coastRuntime";
+import { EXHIBITS } from "./data/coast";
 import { dprState, perf } from "../scene/GameScene";
 import { sandSurfaceY, slotMarkerY } from "./logic/tankLayout";
 import type { SlotId, VisitorType } from "./types";
@@ -121,9 +124,16 @@ export function installE2eHook(seed: number) {
       };
     },
     /** Screen position of a thing: fish id, tank id, `tankId:slot` (decoration or slot), pad slot, visitor id, pico. */
-    where(kind: "fish" | "tank" | "badge" | "decor" | "slot" | "pad" | "visitor" | "pico" | "tunnel-door" | "hub-door", id = "") {
+    where(kind: "fish" | "tank" | "badge" | "decor" | "slot" | "pad" | "visitor" | "pico" | "tunnel-door" | "hub-door" | "coast-slot", id = "") {
       const m = getGame().model;
       if (kind === "tunnel-door") return project(SHARK_DOOR.x, 1.3, SHARK_DOOR.z + 0.2);
+      if (kind === "coast-slot") {
+        const [h, i] = id.split(":") as ["penguins" | "seals" | "otters", string];
+        const ex = EXHIBITS[h], s = ex?.slots[Number(i)];
+        if (!s) return null;
+        const y = s.on === "land" ? ex.land.y : s.on === "water" ? ex.pool.surface : ex.pool.floor;
+        return project(ex.x + s.x, y + 0.1, ex.z + s.z);
+      }
       if (kind === "hub-door") {
         const bay = HUB_BAYS.find((b) => b.kind === id);
         if (!bay) return null;
@@ -254,7 +264,29 @@ export function installE2eHook(seed: number) {
     set(patch: Record<string, unknown>) {
       setGame(patch as never);
     },
-    visitorsOn: () => visitorsOn
+    visitorsOn: () => visitorsOn,
+    /** Coastal zone: jump through its real rules to milestone n (1 opens it). */
+    coastTo(n: number) {
+      updateModel((m) => coastTo(m, n));
+    },
+    /** The coastal animals now (exhibit-local positions). */
+    coast() {
+      const g = getGame();
+      return {
+        open: Boolean(g.model.progress.coastOpen),
+        milestone: g.model.progress.coast?.milestone ?? 0,
+        progress: g.model.progress.coast ?? null,
+        view: g.coastView,
+        waiting: g.coastWaiting,
+        activity: g.coastActivity,
+        entries: { ...coastRt.entries },
+        animals: [...coastRt.animals.values()].map((a) => ({ id: a.m.id, habitat: a.habitat, mode: a.m.mode, area: a.m.area, x: a.m.x, y: a.m.y, z: a.m.z }))
+      };
+    },
+    /** Bring a coastal visitor with a question to this habitat now. */
+    coastVisitor(habitat: "penguins" | "seals" | "otters") {
+      setGame({ coastWaiting: { habitat, type: "child" } });
+    }
   };
   (window as unknown as { __at: typeof api }).__at = api;
   (window as unknown as { __tunnel: typeof tunnelApi }).__tunnel = tunnelApi;

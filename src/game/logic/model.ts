@@ -1,7 +1,8 @@
 import type { ColorId, DecorKind, DecorVariant, SlotId, SpeciesId, StageId, TankType } from "../types";
 import { SPECIES, SPECIES_ORDER, spaceOf, type HomeNeed } from "../data/fish";
-import { COAST_DECOR, DECOR, decorFits, decorVersion, isCoastTank, isTunnelDecor } from "../data/decor";
+import { COAST_DECOR, DECOR, decorFits, decorVersion, isCoastDecor, isCoastTank, isTunnelDecor } from "../data/decor";
 import type { CoastProgress } from "./coast";
+import { coastSlotFits } from "../data/coast";
 import { ATRIUM_PRICE, BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, isWingHabitat, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
 import type { PhraseId } from "./english";
@@ -315,7 +316,7 @@ export const unlockedSpecies = (m: Model) => SPECIES_ORDER.filter((s) => isSpeci
 export const decorUnlocked = (m: Model) => m.progress.stage >= 2;
 export const tanksUnlocked = (m: Model) => m.progress.stage >= 4;
 export const upgradesUnlocked = (m: Model) => m.progress.stage >= UPGRADES_FROM;
-export const isDecorUnlocked = (m: Model, kind: DecorKind) => m.progress.stage >= DECOR[kind].fromStage && (!isTunnelDecor(kind) || Boolean(m.progress.tunnelOpen));
+export const isDecorUnlocked = (m: Model, kind: DecorKind) => m.progress.stage >= DECOR[kind].fromStage && (!isTunnelDecor(kind) || Boolean(m.progress.tunnelOpen)) && (!isCoastDecor(kind) || Boolean(m.progress.coastOpen));
 export const isTankUnlocked = (m: Model, type: TankType) => type !== "ocean" && type !== "small" && type !== "reef" && !isWingHabitat(type) && m.progress.stage >= TANKS[type].fromStage;
 /** Expansion 1 content (special tanks, new animals and decorations, the Gallery) opens at Level 8. */
 export const EXPANSION_FROM: StageId = 8;
@@ -456,6 +457,7 @@ export function placeDecor(m: Model, decorId: string, tankId: string, slot: numb
   if (!d || !tank) return fail("missing");
   if (slot < 0 || slot >= TANKS[tank.type].slots.length) return fail("missing");
   if (!decorFits(d.kind, tank.type)) return fail("tooBig");
+  if (!coastSlotFits(tank.type, slot, d.kind)) return fail("habitat");
   if (tank.decor.some((x) => x.slot === slot)) return fail("slotTaken");
   const placed = { ...m, inv: { ...m.inv, decor: m.inv.decor.filter((x) => x.id !== decorId) } };
   return { ok: true, id: decorId, m: mapTank(placed, tankId, (t) => ({ ...t, decor: [...t.decor, { ...d, slot }] })) };
@@ -468,6 +470,7 @@ export function swapDecor(m: Model, tankId: string, slot: number, invDecorId: st
   if (!incoming || !tank) return fail("missing");
   if (!Number.isInteger(slot) || slot < 0 || slot >= TANKS[tank.type].slots.length) return fail("missing");
   if (!decorFits(incoming.kind, tank.type)) return fail("tooBig");
+  if (!coastSlotFits(tank.type, slot, incoming.kind)) return fail("habitat");
   const displaced = tank.decor.find((d) => d.slot === slot);
   const inventory = m.inv.decor.filter((d) => d.id !== invDecorId);
   if (displaced) inventory.push({ id: displaced.id, kind: displaced.kind, variant: displaced.variant });
@@ -489,6 +492,9 @@ export function moveDecor(m: Model, tankId: string, from: number, to: number): R
   if (!tank) return fail("missing");
   if (to < 0 || to >= TANKS[tank.type].slots.length) return fail("missing");
   if (!tank.decor.some((d) => d.slot === from)) return fail("missing");
+  // Both items must suit their new slots (a coastal swap between land and water is refused).
+  const a = tank.decor.find((d) => d.slot === from)!, b = tank.decor.find((d) => d.slot === to);
+  if (!coastSlotFits(tank.type, to, a.kind) || (b && !coastSlotFits(tank.type, from, b.kind))) return fail("habitat");
   return {
     ok: true,
     m: mapTank(m, tankId, (t) => ({

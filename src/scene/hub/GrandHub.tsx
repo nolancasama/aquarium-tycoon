@@ -107,7 +107,7 @@ const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 
 function Door({ kind }: { kind: HubDestination }) {
   const bay = bayOf(kind);
-  const open = useGame((s) => kind === "indoor" || (kind === "sharks" && Boolean(s.model.progress.tunnelOpen)));
+  const open = useGame((s) => kind === "indoor" || (kind === "sharks" && Boolean(s.model.progress.tunnelOpen)) || (kind === "coast" && Boolean(s.model.progress.coastOpen)));
   const future = FUTURE_DOORS.includes(kind);
   const lock = useRef<THREE.Sprite>(null);
   const a = bay.angle, p = onRing(a, HUB_R - 0.08), s = onRing(a, HUB_R - 1.0), lk = onRing(a, HUB_R - 0.8);
@@ -209,9 +209,10 @@ function Trophies() {
     const [mx, , mz] = spot(-0.6, 2.66);
     b.add(new THREE.CylinderGeometry(0.26, 0.26, 0.06, 18), medal, [mx, 2.66 + 0.4, mz], [Math.PI / 2, -a, 0]);
     b.boxAt(0.08, 0.3, 0.04, [mx, 2.66 + 0.18, mz], [0, -a, 0], "#c0392b");
-    cup(0.6, 2.66, grey, (x, y, z) => b.sphere(0.12, x, y, z, grey, [1, 0.7, 1], 8));
+    const coastGot = Boolean(p.coast?.trophy);
+    cup(0.6, 2.66, coastGot ? "#63e6be" : grey, (x, y, z) => b.sphere(0.12, x, y, z, coastGot ? "#f4f6f8" : grey, [1, 0.7, 1], 8));
     return b.build();
-  }, [p.star, p.superStar, p.tunnel?.trophy, best, a, t.x, t.z]);
+  }, [p.star, p.superStar, p.tunnel?.trophy, p.coast?.trophy, best, a, t.x, t.z]);
   const s = onRing(a, HUB_R - 0.6);
   const sign = signMaterial("TROPHIES\nトロフィー", "#d9a441", "#3b2a00", 640, 220);
   const hit = onRing(a, HUB_R - 0.9);

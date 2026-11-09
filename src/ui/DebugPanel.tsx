@@ -4,6 +4,9 @@ import { openAtrium, openGallery, openHall, type Model } from "../game/logic/mod
 import type { StageId } from "../game/types";
 import { debugStartRush } from "../game/rush/flow";
 import { openSharkTunnel } from "../game/logic/tunnel";
+import { checkCoastMilestones, openCoast, recordCoastActivity, recordCoastSight } from "../game/logic/coast";
+import { coastSlotFits } from "../game/data/coast";
+import type { CoastDecorKind } from "../game/types";
 import "./DebugPanel.css";
 
 const STAGES: StageId[] = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -46,11 +49,45 @@ const ACTIONS: { label: string; run: (m: Model) => Model }[] = [
   { label: "Finish tutorial", run: (m) => ({ ...m, progress: { ...m.progress, tutorial: "done" } }) },
   { label: "All tanks fed and clean", run: (m) => ({ ...m, tanks: m.tanks.map((t) => ({ ...t, food: 100, clean: 100 })) }) },
   { label: "Give the crown (finish Level 8)", run: (m) => ({ ...m, progress: { ...m.progress, superStar: true } }) },
-  { label: "Open Grand Aquarium Hub (opens the Shark Tunnel)", run: openHub }
+  { label: "Open Grand Aquarium Hub (opens the Shark Tunnel)", run: openHub },
+  { label: "Unlock Coastal & Polar Zone (tunnel trophy + zone)", run: (m) => coastTo(m, 1) },
+  { label: "Open all coastal habitats", run: (m) => coastTo(m, 3) }
 ];
 
+/** The Shark Tunnel finished (trophy) and the coast opened through its real rule, then milestones up to `n` with their real rewards. */
+export function coastTo(m: Model, n: number): Model {
+  let o = openHub(m);
+  const t = o.progress.tunnel!;
+  o = { ...o, progress: { ...o.progress, tunnel: { ...t, milestone: 5, findDone: true, whereDone: true, countDone: true, trophy: true } } };
+  if (!o.progress.coastOpen) {
+    const r = openCoast({ ...o, coins: 1e9 });
+    if (r.ok) o = { ...r.m, coins: o.coins };
+  }
+  // Each step satisfies the next milestone's conditions the way a player would (items, sights, activities).
+  const need: Record<number, (x: Model) => Model> = {
+    2: (x) => withItem(recordCoastActivity(recordCoastActivity(recordCoastSight(x, "penguinSwim"), "penguins"), "penguins"), "M", "penguinRock", 0),
+    3: (x) => withItem(recordCoastActivity(recordCoastActivity(recordCoastSight(x, "sealDive"), "seals"), "seals"), "N", "sealRock", 0),
+    4: (x) => withItem(recordCoastActivity(recordCoastSight(x, "otterFloat"), "otters"), "O", "otterToy", 0),
+    5: (x) => {
+      const y = withItem(x, "O", "otterKelp", 1);
+      const fed = { ...y, tanks: y.tanks.map((tk) => ({ ...tk, food: 100, clean: 100 })) };
+      return (["penguins", "seals", "otters"] as const).reduce((acc, h) => recordCoastActivity(acc, h), fed);
+    }
+  };
+  for (let k = (o.progress.coast?.milestone ?? 0) + 1; k <= n; k++) o = checkCoastMilestones(need[k]?.(o) ?? o).m;
+  return o;
+}
+
+function withItem(m: Model, slot: "M" | "N" | "O", kind: CoastDecorKind, at: number): Model {
+  const t = m.tanks.find((x) => x.slot === slot);
+  if (!t || t.decor.some((d) => d.kind === kind)) return m;
+  const free = [at, 0, 1, 2, 3, 4, 5].find((i) => !t.decor.some((d) => d.slot === i) && coastSlotFits(t.type, i, kind));
+  if (free === undefined) return m;
+  return { ...m, nextId: m.nextId + 1, tanks: m.tanks.map((x) => x.id === t.id ? { ...x, decor: [...x.decor, { id: `d${m.nextId}`, kind, variant: null, slot: free }] } : x) };
+}
+
 /** Everything the hub needs, through the real rules: all halls, free play, the Shark Tunnel (free). */
-function openHub(m: Model): Model {
+export function openHub(m: Model): Model {
   let o = unlockAll(m);
   o = { ...o, progress: { ...o.progress, freePlay: true, tutorial: "done" } };
   if (!o.progress.tunnelOpen) {
@@ -115,6 +152,12 @@ export function DebugPanel() {
           {a.label}
         </button>
       ))}
+      <div className="debug-levels" role="group" aria-label="Coastal milestone">
+        <span>Coast</span>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} onClick={() => run(`Coastal milestone ${n}`, (m) => coastTo(m, n))} data-testid={`debug-coast-${n}`}>{n}</button>
+        ))}
+      </div>
       <button className="debug-action" data-testid="debug-rush-start" onClick={() => {
         if (debugStartRush()) {
           setOpen(false);

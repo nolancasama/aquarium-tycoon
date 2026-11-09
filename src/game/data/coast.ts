@@ -1,4 +1,4 @@
-import type { Vec2, Vec3 } from "../types";
+import type { CoastDecorKind, DecorKind, TankType, Vec2, Vec3 } from "../types";
 
 /**
  * The Coastal & Polar Zone: three separate exhibits side by side behind a
@@ -76,7 +76,7 @@ export const EXHIBITS: Record<CoastHabitat, ExhibitDef> = {
     ramps: [{ top: { x: -1.6, z: -0.9 }, bottom: { x: -1.6, z: 1.2 } }],
     islands: [{ x: 3.4, z: 2.5, r: 1.15, top: 2.3, climb: { x: 3.4, z: 0.95 }, rest: { x: 3.4, z: 2.45 } }],
     boulders: [{ x: -5.2, z: -4.0, r: 0.7, h: 1.0 }, { x: 5.3, z: -3.9, r: 0.65, h: 0.9 }, { x: 0.6, z: -4.3, r: 0.5, h: 0.6 }],
-    slots: [{ x: -3.8, z: -2.6, on: "land" }, { x: 1.4, z: -2.5, on: "land" }, { x: 4.2, z: -2.0, on: "land" }],
+    slots: [{ x: -3.8, z: -2.6, on: "land" }, { x: 1.4, z: -2.5, on: "land" }, { x: 4.2, z: -2.0, on: "land" }, { x: -1.2, z: -3.6, on: "land" }],
     colors: { rock: "#8f9ba6", top: "#c9d3da", water: "#6fd0ec", accent: "#f4fbff" }
   },
   seals: {
@@ -87,7 +87,7 @@ export const EXHIBITS: Record<CoastHabitat, ExhibitDef> = {
     ramps: [{ top: { x: 3.6, z: -2.4 }, bottom: { x: 3.6, z: -0.3 } }],
     islands: [{ x: -2.6, z: 1.3, r: 1.6, top: 2.25, climb: { x: -0.6, z: 1.6 }, rest: { x: -2.6, z: 1.2 } }],
     boulders: [{ x: -5.0, z: -3.8, r: 0.8, h: 1.1 }, { x: 0.4, z: -4.0, r: 0.6, h: 0.8 }],
-    slots: [{ x: -2.4, z: -3.3, on: "land" }, { x: 1.2, z: 3.2, on: "water" }, { x: 5.0, z: 2.2, on: "floor" }],
+    slots: [{ x: -2.4, z: -3.3, on: "land" }, { x: 1.8, z: -3.4, on: "land" }, { x: 1.2, z: 3.2, on: "water" }, { x: 4.6, z: 3.6, on: "water" }, { x: 5.0, z: 1.6, on: "floor" }, { x: 0.2, z: 3.9, on: "floor" }],
     colors: { rock: "#7d7368", top: "#a89c8c", water: "#4fb3cf", accent: "#d9cbb6" }
   },
   otters: {
@@ -98,7 +98,7 @@ export const EXHIBITS: Record<CoastHabitat, ExhibitDef> = {
     ramps: [{ top: { x: -3.4, z: -1.6 }, bottom: { x: -3.4, z: 0.5 } }],
     islands: [],
     boulders: [{ x: 5.0, z: -3.9, r: 0.75, h: 1.0 }, { x: -0.5, z: -4.2, r: 0.55, h: 0.7 }],
-    slots: [{ x: 1.6, z: 2.0, on: "water" }, { x: -1.0, z: 3.3, on: "water" }, { x: 3.4, z: -3.0, on: "land" }],
+    slots: [{ x: 1.6, z: 2.0, on: "water" }, { x: -1.0, z: 3.3, on: "water" }, { x: 4.2, z: 3.4, on: "water" }, { x: 3.4, z: -3.0, on: "land" }, { x: 0.8, z: -3.2, on: "land" }],
     colors: { rock: "#6f6253", top: "#8f9a6a", water: "#58b9c4", accent: "#3e8f5a" }
   }
 };
@@ -108,12 +108,31 @@ export const exWorld = (ex: ExhibitDef, p: { x: number; z: number }, y = 0): Vec
 
 /** Viewpoints: the whole wing, or one exhibit. Narrow screens step back along the view. */
 export type CoastView = "all" | CoastHabitat;
-export function coastCamera(view: CoastView): { pos: Vec3; target: Vec3 } {
+export function coastCamera(view: CoastView, counting = false): { pos: Vec3; target: Vec3 } {
+  // Counting: higher and further back, so every animal (shelf and pool) stays clear of the HUD while the question panel lifts the view.
+  if (counting && view !== "all") {
+    const ex = EXHIBITS[view];
+    return { pos: { x: ex.x, y: 15, z: ex.z + 11 }, target: { x: ex.x, y: 0.4, z: ex.z - 1.2 } };
+  }
   if (view === "all") {
-    return { pos: { x: COAST_ORIGIN.x, y: 19, z: COAST_ORIGIN.z + 33 }, target: { x: COAST_ORIGIN.x, y: 1.3, z: COAST_ORIGIN.z + 0.5 } };
+    return { pos: { x: COAST_ORIGIN.x, y: 21, z: COAST_ORIGIN.z + 38 }, target: { x: COAST_ORIGIN.x, y: 0.9, z: COAST_ORIGIN.z + 0.5 } };
   }
   const ex = EXHIBITS[view];
-  return { pos: { x: ex.x, y: 7.6, z: ex.z + 14.5 }, target: { x: ex.x, y: 1.55, z: ex.z + 0.6 } };
+  return { pos: { x: ex.x, y: 8.8, z: ex.z + 13.6 }, target: { x: ex.x, y: 1.45, z: ex.z + 0.2 } };
+}
+
+/** Where each coastal item can stand: on the land shelf, floating on the water, or on the pool floor. */
+export const ITEM_ON: Record<CoastDecorKind, "land" | "water" | "floor"> = {
+  penguinRock: "land", penguinNest: "land", penguinFeeder: "land",
+  sealRock: "land", sealBall: "water", sealBuoy: "floor",
+  otterKelp: "water", otterToy: "water", otterDen: "land"
+};
+
+/** Can this item go in this slot of a coastal habitat? (Other tanks: always.) */
+export function coastSlotFits(type: TankType, slot: number, kind: DecorKind): boolean {
+  if (type !== "penguins" && type !== "seals" && type !== "otters") return true;
+  const on = ITEM_ON[kind as CoastDecorKind];
+  return Boolean(on) && EXHIBITS[type].slots[slot]?.on === on;
 }
 
 /** Swimmers keep this far inside the pool sides, floor and surface. */

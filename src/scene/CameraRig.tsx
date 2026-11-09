@@ -7,7 +7,9 @@ import { TANKS } from "../game/data/tanks";
 import { HALL_X, PEDESTAL, tankOrigin, waterCentre } from "../game/world";
 import { tankById } from "../game/logic/model";
 import { footprintPoints } from "../game/logic/tankLayout";
-import { HUB_HALL, ROOMS, SHARKS_HALL } from "../game/data/rooms";
+import { COAST_HALL, HUB_HALL, ROOMS, SHARKS_HALL } from "../game/data/rooms";
+import { coastCamera, EXHIBITS, type CoastView } from "../game/data/coast";
+import { coastRt } from "../game/coast/coastRuntime";
 import { HUB_CAMERA } from "../game/data/hub";
 import { TUNNEL_VIEWS, type TunnelView } from "../game/data/sharkTunnel";
 import { stepTransition } from "../game/tunnel/explore";
@@ -46,6 +48,32 @@ export function tunnelView(view: TunnelView, aspect: number) {
     pos: { x: v.target.x + (v.pos.x - v.target.x) * k, y: v.target.y + (v.pos.y - v.target.y) * k, z: v.target.z + (v.pos.z - v.target.z) * k },
     target: v.target
   };
+}
+
+/** Coastal zone viewpoints (the whole wing or one exhibit); narrower screens step back. */
+type Shot = { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } };
+export function coastView(view: CoastView, aspect: number, counting = false): Shot {
+  if (counting && view !== "all") return countingView(view, aspect);
+  const { pos, target } = coastCamera(view);
+  const k = Math.max(1, 1.78 / aspect);
+  return { pos: { x: target.x + (pos.x - target.x) * k, y: target.y + (pos.y - target.y) * k, z: target.z + (pos.z - target.z) * k }, target };
+}
+
+/**
+ * Counting animals: aim at the animals themselves and step back to fit their spread, so every
+ * numbered one sits in the open band between the top HUD and the question panel (the panel
+ * lifts the view, which puts the aim point a little above the middle of that band).
+ */
+function countingView(view: Exclude<CoastView, "all">, aspect: number): Shot {
+  const ex = EXHIBITS[view];
+  const pts = [...coastRt.animals.values()].filter((a) => a.habitat === view).map((a) => ({ x: ex.x + a.m.x, y: a.m.y, z: ex.z + a.m.z }));
+  if (!pts.length) return coastView(view, aspect);
+  const c = pts.reduce((s, p) => ({ x: s.x + p.x / pts.length, y: s.y + p.y / pts.length, z: s.z + p.z / pts.length }), { x: 0, y: 0, z: 0 });
+  const spread = Math.max(1.5, ...pts.map((p) => Math.hypot(p.x - c.x, (p.y - c.y) * 1.5, p.z - c.z)));
+  const dist = Math.max(9, spread * 6.2) * Math.max(1, 1.78 / aspect);
+  // From above and in front, steep enough to see over the window frame into the pool.
+  const dir = new THREE.Vector3(0, 0.62, 0.78).normalize();
+  return { pos: { x: c.x + dir.x * dist, y: c.y + dir.y * dist, z: c.z + dir.z * dist }, target: { x: c.x, y: c.y + 0.3, z: c.z } };
 }
 
 /** The hub's fixed camera; narrower screens step back along the view so both side doorways stay in frame. */
@@ -206,6 +234,10 @@ export function CameraRig() {
       wantLook.current.set(c.shot.target.x, c.shot.target.y, c.shot.target.z);
     } else if (g.screen === "game" && g.hall === SHARKS_HALL && g.view === "room") {
       const v = tunnelView(g.tunnelView, aspect);
+      want.current.set(v.pos.x, v.pos.y, v.pos.z);
+      wantLook.current.set(v.target.x, v.target.y, v.target.z);
+    } else if (g.screen === "game" && g.hall === COAST_HALL) {
+      const v = coastView(g.coastView, aspect, g.coastActivity?.habitat === "penguins");
       want.current.set(v.pos.x, v.pos.y, v.pos.z);
       wantLook.current.set(v.target.x, v.target.y, v.target.z);
     } else if (g.screen === "game" && g.hall === HUB_HALL) {

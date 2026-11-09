@@ -181,6 +181,13 @@ export interface GameState {
   /** The Aquarium Map overlay, and the hub's trophy card. */
   mapOpen: boolean;
   trophiesOpen: boolean;
+  /** Coastal & Polar Zone: which exhibit the camera shows, the purchase offer, and an English activity in progress. */
+  coastView: "all" | "penguins" | "seals" | "otters";
+  coastOffer: boolean;
+  coastActivity: { habitat: "penguins" | "seals" | "otters"; by: VisitorType } | null;
+  /** A visitor at a coastal window has a question (the chip). */
+  coastWaiting: { habitat: "penguins" | "seals" | "otters"; type: VisitorType } | null;
+  coastCelebration: { milestone: number } | null;
 
   model: Model;
 
@@ -296,7 +303,12 @@ export const useGame = create<GameState>(() => ({
   decorAsk: null,
   rushAnnouncement: null,
   mapOpen: false,
-  trophiesOpen: false
+  trophiesOpen: false,
+  coastView: "all",
+  coastOffer: false,
+  coastActivity: null,
+  coastWaiting: null,
+  coastCelebration: null
 }));
 
 export const setGame = useGame.setState;

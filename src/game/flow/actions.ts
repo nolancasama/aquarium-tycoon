@@ -3,8 +3,11 @@ import { effect, rt } from "../runtime";
 import type { DecorKind, DecorVariant, SlotId, SpeciesId, TankType } from "../types";
 import { ANIMAL_ORDER, FISH_ORDER, JELLY_BY_COLOR, SPECIES, SPECIES_BY_COLOR } from "../data/fish";
 import { DECOR } from "../data/decor";
-import { HALL_OF, PAD_TYPES, TANKS } from "../data/tanks";
-import { isWingHall, roomOpen, SHARKS_HALL } from "../data/rooms";
+import { HALL_OF, isWingHabitat, PAD_TYPES, TANKS } from "../data/tanks";
+import { COAST_HALL, isWingHall, roomOpen, SHARKS_HALL } from "../data/rooms";
+import { isCoastTank } from "../data/decor";
+import { coastTank, feedCoastVisual } from "./coast";
+import { EXHIBITS } from "../data/coast";
 import { openSharkTunnel, tunnelUnlocked } from "../logic/tunnel";
 import { startExplore, stopExplore } from "../tunnel/explore";
 import { tunnelRuntime } from "../tunnel/contract";
@@ -90,6 +93,10 @@ export function openTank(tankId: string) {
   audio.play("tick");
   if (t.type === "sharks") {
     setGame({ view: "room", tankId: null, hall: SHARKS_HALL, panel: null, placing: null });
+    return;
+  }
+  if (isCoastTank(t.type)) {
+    setGame({ view: "room", tankId: null, hall: COAST_HALL, coastView: t.type, panel: null, placing: null });
     return;
   }
   // Back from the close-up lands in this tank's hall.
@@ -747,6 +754,9 @@ export function tapSlot(tankId: string, slot: number) {
     if (r.ok) {
       setGame({ placing: here ? { kind: "decor", decorId: here.id } : null });
       placedFx(tankId, slot);
+    } else if (r.reason === "habitat") {
+      audio.play("error");
+      toast({ en: "Not there!", ja: "それは ここには おけないよ。ちがう まるを えらぼう", tone: "warn" }, 3600);
     } else if (r.reason === "tooBig") {
       audio.play("error");
       toast({ en: "Too big!", ja: "おおきすぎる! おおきな タンクか うみの タンクに おこう", tone: "warn" }, 3600);
@@ -797,7 +807,7 @@ export function doneDecorate() {
 export async function feedTank() {
   if (!allowed("feed")) return;
   const g = getGame();
-  const t = g.hall === SHARKS_HALL ? tankAt(model(), "L") : g.tankId ? tankById(model(), g.tankId) : null;
+  const t = g.hall === SHARKS_HALL ? tankAt(model(), "L") : g.hall === COAST_HALL ? coastTank() : g.tankId ? tankById(model(), g.tankId) : null;
   if (!t) return;
   if (!t.fish.length) {
     toast({ en: "No fish!", ja: "さかなが いないよ", tone: "info" });
@@ -808,7 +818,7 @@ export async function feedTank() {
     toast({ en: "Full!", ja: "おなか いっぱい!", tone: "info" });
     return;
   }
-  if (!model().progress.fedOnce && t.type !== "sharks") {
+  if (!model().progress.fedOnce && !isWingHabitat(t.type)) {
     const id = await ask({
       kind: "command",
       options: ["feedFish"],
@@ -822,6 +832,7 @@ export async function feedTank() {
   if (!r.ok) return;
   latchRushCare();
   if (t.type === "sharks") feedHabitat();
+  else if (isCoastTank(t.type)) feedCoastVisual(t.type);
   else dropPellets(t.id, t.type);
   audio.play("sprinkle");
   setGame({ foodStrip: { id: foodStripId++, tankId: t.id, foods: foodsFor(t.fish), until: rt.time + 4 } });
@@ -844,9 +855,9 @@ export function tasteFood(food: FoodId) {
 export async function cleanTank() {
   if (!allowed("clean")) return;
   const g = getGame();
-  const t = g.hall === SHARKS_HALL ? tankAt(model(), "L") : g.tankId ? tankById(model(), g.tankId) : null;
+  const t = g.hall === SHARKS_HALL ? tankAt(model(), "L") : g.hall === COAST_HALL ? coastTank() : g.tankId ? tankById(model(), g.tankId) : null;
   if (!t) return;
-  if (!model().progress.cleanedOnce && t.type !== "sharks") {
+  if (!model().progress.cleanedOnce && !isWingHabitat(t.type)) {
     const id = await ask({
       kind: "command",
       options: ["cleanPlease"],
@@ -860,6 +871,11 @@ export async function cleanTank() {
   if (!r.ok) return;
   latchRushCare();
   rt.cleaning.set(t.id, rt.time);
+  if (isCoastTank(t.type)) {
+    // The habitat water clears (its surface shader follows clean); sparkles over the pool.
+    const ex = EXHIBITS[t.type];
+    for (const dx of [-3, 0, 3]) effect("sparkle", ex.x + dx, ex.pool.surface + 0.3, ex.z + 2, 8);
+  }
   audio.play("scrub");
 }
 

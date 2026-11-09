@@ -7,6 +7,7 @@ import { say } from "./ask";
 import { audio } from "../../audio/audio";
 import type { Model } from "../logic/model";
 import { openRushAwards } from "../rush/bridge";
+import { tapCoastDoor } from "./coast";
 
 /**
  * Hub navigation: the Aquarium Map chip, the hub's doorways and Pico's
@@ -60,11 +61,7 @@ export function tapHubDoor(kind: HubDestination) {
     else tapSharkTunnelDoor();
     return;
   }
-  if (kind === "coast") {
-    audio.play("error");
-    toast({ en: "Coming soon!", ja: "もうすぐ オープン！", tone: "info" });
-    return;
-  }
+  if (kind === "coast") { tapCoastDoor(); return; }
   audio.play("error");
   toast({ en: "Coming soon!", ja: "もうすぐ オープン！ たのしみに してね", tone: "info" });
 }

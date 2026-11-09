@@ -1659,3 +1659,45 @@ rock!" message), mic-free English, debug actions, and optional save fields only.
   nothing to sell.
 - A second achievement store: the hub's trophy wall reads the existing flags
   (`star`, `superStar`, `tunnel.trophy`, `rush.trophies`, and the coastal trophy).
+
+### Hub and coast: decided while building (2026-11-10)
+
+- **The hub is a rotunda with eight bays.** From left to right: Indoor Aquarium,
+  Trophies, Dolphin Lagoon (future), two tall windows under the GRAND AQUARIUM
+  sign, Ocean Sanctuary (future), Shark Tunnel, Coastal & Polar Zone. Each
+  doorway is painted with a view of its wing, so the picture says where it goes.
+  The door signs turn partly toward the camera so the outer ones stay readable.
+  The fixed camera steps back on narrow screens, like the Shark Tunnel's views.
+- **The indoor doorway returns to the hall the player came from** (Hall 1 by
+  default). The map lists all four halls separately.
+- **The hub crowd is groups of 1–3** (families: an adult or grandma with
+  children). They arrive from the plaza front or out of a wing, stop on the
+  viewing ring round the tank to look, point or take a photo, sometimes pause
+  on the plaza, and leave by another doorway. Routes go round the tank, never
+  across it (tested). They are stepped only while the hub is shown and never
+  tip.
+- **Map chip at narrow widths:** below 1180 px only the glyph shows, so the
+  centred coins, level and hearts keep their room at 1024.
+- **Pico's hub line is followed by a "Tap Map!" nudge** that points at the chip
+  (the state-derived guide resets `guide` every tick, so a nudge is used).
+- **Coastal species:** a Humboldt penguin (rocky temperate coast, so no snow
+  is needed), a harbor seal and a sea otter. They are not sold at the counters.
+  They arrive as milestone rewards (penguins 3 + 1, seals 1 + 1, otters 2).
+- **Coastal items are bought by tapping, not with English.** The zone's English
+  is in its observation questions. Each item has a place kind (land, floating,
+  pool floor) and only fits slots of that kind (`coastSlotFits`, also checked
+  in saves). Every habitat has more slots than items, so placement is a choice.
+- **Ramps are solid to their end.** Animals slide off the end into open water
+  (`RAMP_STEP`) and come back the same way, so the drawn block and the area
+  swimmers avoid are the same shape.
+- **The questions at the windows:** "How many penguins?" (the penguins hold
+  still and show number tags), "Where is the seal?" (one seal is held and
+  ringed; "On the rock!" or "In the water!" from where it really is), and "Can
+  it swim?" / "Can it fly?" about a ringed otter. A visitor chip with "!"
+  appears every 22–36 s while the zone is shown. Each answer pays 3 coins.
+- **Behaviours count only when watched:** a penguin entering the water, a seal
+  diving and an otter floating are recorded only while the zone is on screen.
+  Animals do not move while the zone is hidden; their care keeps decaying as
+  usual.
+- **Price 320 coins**, close to the Shark Tunnel's 300. Players reach it after
+  the tunnel's five milestones, when they already have more tanks paying tips.
