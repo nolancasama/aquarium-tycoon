@@ -1,5 +1,43 @@
 # Current State
 
+## Grand Aquarium Hub (2026-11-10)
+
+Design: DESIGN_DECISIONS.md "Grand Aquarium Hub + Coastal & Polar Zone (plan review)"
+and "Hub and coast: decided while building".
+
+- **What:** a half-rotunda concourse (`ROOMS` id `hub`, index 5, `wing: "hub"`, at
+  x −84..−56). It opens for free in Free Play once the Shark Tunnel is open (derived
+  in `roomOpen`; only `progress.hubIntroSeen` is saved). Pico announces it once,
+  then nudges the new **Map / マップ** chip (top right; just the glyph below 1180 px).
+- **Navigation:** the Aquarium Map (`ui/AquariumMap.tsx`) offers Grand Hub,
+  the four halls, the Shark Tunnel, the coast (locked) and two future
+  attractions, with a "You are here" pin and milestone counts. The hub's
+  doorways travel too: indoor (back to the last indoor hall), Shark Tunnel,
+  coast, and Lagoon/Sanctuary ("Coming soon"). Hall arrows only link the hall row
+  and the Shark Tunnel (`inHallRow`). Any wing switch fades (`isWingHall`). Travel
+  is blocked during prompts, lines, panels, placement, celebrations and the
+  tunnel walk (`canTravel` in `game/flow/hub.ts`).
+- **Scene:** `scene/hub/GrandHub.tsx` (+ painted canvases in `hubArt.ts`). It
+  has a display tank (22 instanced fish and bubbles, no care), trophy shelves
+  that read the existing flags (tap opens a trophy card linking to the Rush
+  awards), an information desk, a directory kiosk (tap opens the map) and potted
+  palms. The layout data and walking routes are in `game/data/hub.ts`; the crowd
+  is groups of 1–3 in `game/hub/hubVisitors.ts` (stepped only while shown, never
+  tips).
+- **Budget (SwiftShader):** 46 draw calls and 12.9k triangles in the hub (the
+  halls are 62 / 40k).
+- **Verified (4fe312b):** typecheck; unit tests 681/681 (`data/hub.test.ts`,
+  shown to fail on routes cut across the tank); build. Full Playwright suite
+  77/77 on the production preview (20.3 min), including `hub.spec.ts` (2 tests,
+  shown to fail with the Shark Tunnel door sending to the wrong hall). Frames
+  checked by eye at 1366×768, 1280×720 and 1024×768 (`node
+  scripts/hub-review.mjs <url>` writes `.tmp/hub-review/`).
+- **Known:** `layout.spec` "HUD, close-up and prompts fit" is intermittent. It
+  failed 2 of 24 quiet runs on this build (status panel gap 50 px against a
+  48 px limit), 0 of 9 on the previous commit, and it also passed in the full
+  run. The test reads the panel 500 ms after a 350 ms CSS transition. No hub
+  code touches the close-up.
+
 ## Debug Rush Hour trigger (2026-11-07)
 
 - Added a "Start Rush Hour now" action in Ctrl+Alt+D Debug. It bypasses the semi-random wait but uses the real preparation countdown, visitor rush, medals, payouts, and existing save state. The debug action closes the panel when successful.
