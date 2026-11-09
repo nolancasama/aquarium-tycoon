@@ -1,4 +1,4 @@
-import { HUB_R, HUB_CENTRE, onRing } from "../../game/data/hub";
+import { HUB_R, onRing } from "../../game/data/hub";
 
 /** Thin backing is embedded into the curved wall at its edges rather than
  * floating a metre toward the player. Its flat front faces the hub centre. */
