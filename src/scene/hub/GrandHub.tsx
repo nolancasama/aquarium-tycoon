@@ -5,7 +5,7 @@ import { getGame, useGame } from "../../game/store";
 import { rt } from "../../game/runtime";
 import { HUB_HALL } from "../../game/data/rooms";
 import {
-  bayOf, DOOR_OPENING, FUTURE_DOORS, HUB_BAYS, HUB_CAMERA, HUB_CENTRE, HUB_FRONT, HUB_R, HUB_TANK, HUB_WALL_H, onRing,
+  bayOf, DOOR_OPENING, FUTURE_DOORS, HUB_BAYS, HUB_CENTRE, HUB_FRONT, HUB_R, HUB_TANK, HUB_WALL_H, onRing,
   type HubDestination
 } from "../../game/data/hub";
 import { hubGroups, memberWorld, stepHubVisitors } from "../../game/hub/hubVisitors";
@@ -16,6 +16,7 @@ import { useAreaGate } from "../tunnel/wing";
 import { newPose, TunnelFigure } from "../tunnel/TunnelFigure";
 import { tunnelPersonModel } from "../models/people";
 import { directoryTexture, doorArtTexture, hubFloorTexture, hubWindowTexture } from "./hubArt";
+import { wallPlaquePose, WALL_PLAQUE_DEPTH, WALL_PLAQUE_FACE_Z } from "./hubSignMount";
 
 /**
  * The Grand Aquarium Hub: a sunlit half rotunda with the wing doorways round
@@ -28,13 +29,26 @@ export const hubShown = () => { const g = getGame(); return g.screen === "game" 
 const C = HUB_CENTRE;
 const BAY = Math.PI / 8;
 const tangent = (a: number) => ({ x: Math.cos(a), z: Math.sin(a) });
-/** Yaw that turns a sign's +z part-way from facing the centre toward the camera. */
-function signYaw(x: number, z: number, a: number, toCamera = 0.55) {
-  const toCam = Math.atan2(HUB_CAMERA.pos.x - x, HUB_CAMERA.pos.z - z);
-  let d = toCam - -a;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return -a + d * toCamera;
+/** Mount plaques tangent to the curved rotunda wall, never angled toward the camera.
+ * The shallow backing intersects the curved plaster slightly at the outer corners
+ * so it reads as physically attached, with its printed face just proud of the frame. */
+const plaqueFrameMat = new THREE.MeshLambertMaterial({ color: "#d4b16b" });
+function WallPlaque({ angle, y, width, height, material, onClick }: {
+  angle: number; y: number; width: number; height: number;
+  material: THREE.Material;
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
+}) {
+  const pose = wallPlaquePose(angle, y);
+  return (
+    <group position={pose.position} rotation={pose.rotation}>
+      <mesh material={plaqueFrameMat} raycast={() => undefined}>
+        <boxGeometry args={[width + 0.22, height + 0.16, WALL_PLAQUE_DEPTH]} />
+      </mesh>
+      <mesh position={[0, 0, WALL_PLAQUE_FACE_Z]} material={material} onClick={onClick}>
+        <planeGeometry args={[width, height]} />
+      </mesh>
+    </group>
+  );
 }
 
 const wallMats = {
@@ -110,7 +124,7 @@ function Door({ kind }: { kind: HubDestination }) {
   const open = useGame((s) => kind === "indoor" || (kind === "sharks" && Boolean(s.model.progress.tunnelOpen)) || (kind === "coast" && Boolean(s.model.progress.coastOpen)));
   const future = FUTURE_DOORS.includes(kind);
   const lock = useRef<THREE.Sprite>(null);
-  const a = bay.angle, p = onRing(a, HUB_R - 0.08), s = onRing(a, HUB_R - 1.0), lk = onRing(a, HUB_R - 0.8);
+  const a = bay.angle, p = onRing(a, HUB_R - 0.08), lk = onRing(a, HUB_R - 0.8);
   const art = useMemo(() => new THREE.MeshBasicMaterial({ map: doorArtTexture(kind, open || future), toneMapped: false }), [kind, open, future]);
   const label = `${bay.en.toUpperCase()}\n${bay.ja}`;
   const sign = signMaterial(label, future ? "#7a6a52" : "#14506a", future ? "#fff4d6" : "#e8fbff", 900, 280);
@@ -124,9 +138,7 @@ function Door({ kind }: { kind: HubDestination }) {
       <mesh position={[p.x, DOOR_OPENING.h / 2, p.z]} rotation={[0, -a, 0]} material={art} onClick={onClick} name={`hub-door-${kind}`}>
         <planeGeometry args={[DOOR_OPENING.w, DOOR_OPENING.h]} />
       </mesh>
-      <mesh position={[s.x, DOOR_OPENING.h + 1.25, s.z]} rotation={[0, signYaw(s.x, s.z, a, 0.4), 0]} material={sign} onClick={onClick}>
-        <planeGeometry args={[3.0, 0.94]} />
-      </mesh>
+      <WallPlaque angle={a} y={DOOR_OPENING.h + 1.25} width={3.0} height={0.94} material={sign} onClick={onClick} />
       {/* A generous tap zone: the whole doorway and its sign, a little proud of the wall. */}
       <mesh position={[lk.x, 2.4, lk.z]} rotation={[0, -a, 0]} material={hitMat} onClick={onClick} name={`hub-door-hit-${kind}`}>
         <planeGeometry args={[3.4, 4.8]} />
@@ -213,13 +225,12 @@ function Trophies() {
     cup(0.6, 2.66, coastGot ? "#63e6be" : grey, (x, y, z) => b.sphere(0.12, x, y, z, coastGot ? "#f4f6f8" : grey, [1, 0.7, 1], 8));
     return b.build();
   }, [p.star, p.superStar, p.tunnel?.trophy, p.coast?.trophy, best, a, t.x, t.z]);
-  const s = onRing(a, HUB_R - 0.6);
   const sign = signMaterial("TROPHIES\nトロフィー", "#d9a441", "#3b2a00", 640, 220);
   const hit = onRing(a, HUB_R - 0.9);
   return (
     <group>
       <mesh geometry={geo} material={smoothMat} raycast={() => undefined} />
-      <mesh position={[s.x, 4.75, s.z]} rotation={[0, signYaw(s.x, s.z, a), 0]} material={sign} onClick={tap(openTrophies)}><planeGeometry args={[2.4, 0.83]} /></mesh>
+      <WallPlaque angle={a} y={4.75} width={2.4} height={0.83} material={sign} onClick={tap(openTrophies)} />
       <mesh position={[hit.x, 2.3, hit.z]} rotation={[0, -a, 0]} material={hitMat} onClick={tap(openTrophies)} name="hub-trophies"><planeGeometry args={[3.6, 4.4]} /></mesh>
     </group>
   );

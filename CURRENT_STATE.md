@@ -1,5 +1,10 @@
 # Current State
 
+## Grand Hub wall-mounted signs (2026-11-10)
+
+- All five doorway plaques and the Trophies plaque now follow each bay's actual wall tangent, instead of rotating part-way toward the camera. Thin framed backings sit at the curved plaster and the sign faces project slightly forward, so the labels appear physically mounted above their doorways.
+- The camera, doors, map links, interactive sign hit areas, and saves are unchanged. A new mount-orientation test guards the alignment. Inspect side-door legibility and wall contact in the deployed hub.
+
 ## Coastal & Polar Zone (2026-11-10)
 
 Design: DESIGN_DECISIONS.md "Grand Aquarium Hub + Coastal & Polar Zone (plan review)"
