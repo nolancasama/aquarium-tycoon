@@ -1,5 +1,75 @@
 # Current State
 
+## Coastal & Polar Zone (2026-11-10)
+
+Design: DESIGN_DECISIONS.md "Grand Aquarium Hub + Coastal & Polar Zone (plan review)"
+and "Hub and coast: decided while building".
+
+- **What:** a wing entered from the hub (`ROOMS` id `coast`, index 6, x −152..−108).
+  It unlocks when the Shark Tunnel trophy is won and costs 320 coins
+  (`logic/coast.ts`), bought through an offer card from the hub doorway or the
+  Map. Three cutaway exhibits behind one walkway: Penguin Coast (pad M,
+  Humboldt penguins), Seal Cove (pad N, harbor seals) and Otter Bay (pad O, sea
+  otters). Each is an ordinary `TankRec` (types `penguins`/`seals`/`otters`), so
+  food, cleaning, decay, happiness and Rush Hour readiness are the usual rules.
+  `isWingHabitat` keeps them out of hall visitors, requests and the fish
+  simulation.
+- **Layout and movement:** exhibit data (land shelf, pool, ramps, islands, item
+  slots) is in `game/data/coast.ts`. Movement is `game/coast/motion.ts`: a mode
+  machine (rest / walk / rampDown / rampUp / climb / hop / swim / breathe /
+  float) that travels only along segments checked clear beforehand. The live
+  movers are in `game/coast/coastRuntime.ts`; they are stepped only while the
+  zone is shown. The scene is `scene/coast/CoastZone.tsx` (+ `coastModels.ts`),
+  and the HUD is `ui/CoastHud.tsx` (goals, All/Penguins/Seals/Otters views,
+  habitat card with the need line, Items / Place / Feed / Clean, the visitor
+  chip, the celebration and the offer).
+- **Gameplay:** nine items (3 per habitat), bought by tapping. Each item fits only
+  slots of its kind: land, floating or pool floor (`coastSlotFits`, also checked
+  on load). A habitat without its needed item (resting rocks / haul-out rock /
+  kelp bed) is capped at 60 happiness, inside `happiness()`. Feeding draws
+  penguins to the fish station if one is placed. Behaviours count only when seen
+  on screen (penguin swim, seal dive, otter float). Visitor questions every
+  22–36 s: "How many penguins?" (held, numbered, camera framed to fit them),
+  "Where is the seal?" (On the rock! / In the water!) and "Can it swim / fly?"
+  (otter). All are mic-free through `ask()`; each pays 3 coins. The flow is in
+  `game/flow/coast.ts`.
+- **Milestones:** 1 Open (3 penguins) → 2 Penguin Paradise (rocks, a swim seen, 2
+  questions; reward: a penguin + Seal Cove with a seal) → 3 Seal Cove (haul-out
+  rock, a dive, 2 visitors; reward: play ball + Otter Bay with 2 otters) → 4 Otter
+  Bay (floating toy, a float seen, 1 question; reward: den + a seal) → 5
+  Celebration (all three happy, one question each; trophy, also on the hub
+  shelves and the trophy card).
+- **Saves:** optional `coastOpen`, `coastIntroSeen` and `coast`. A save that
+  claims the coast without the tunnel trophy is not trusted, and missing
+  habitats are rebuilt for the milestone reached. Save version unchanged.
+- **Debug (Ctrl+Alt+D):** "Unlock Coastal & Polar Zone", "Open all coastal
+  habitats", and Coast 1–5 milestone jumps through the real rules.
+  `window.__at.coastTo(n)` and `coast()` are the test hooks.
+- **Budget (SwiftShader, milestone 5):** the overview is 80 draw calls / 21.1k triangles (above the halls' 62 calls; triangles well below); penguins 31 / 9.6k, seals 23 / 5.2k, otters 30 / 8.7k.
+- **Verified (00b6ff5):** full Playwright suite 79/79 on the production preview (21.1 min); typecheck; unit tests 686/686, including `logic/coast.test.ts`
+  and `coast/motion.test.ts`. The motion test runs all three species × 3 seeds ×
+  240 s against invariants: on land at land height and off boulders; in water
+  inside the pool, above the floor, clear of islands and ramp bases; on ramps
+  between the land top and the waterline; no step longer than the top speed.
+  It caught three real bugs while being written: seals stuck at a ramp foot,
+  island exits never chosen, and an otter snapping from depth to the surface.
+  `tests/e2e/coast.spec.ts` (2 tests) failed when watched swims were not
+  recorded. Frames checked by eye at 1366×768 and 1024×768 (`node
+  scripts/coast-review.mjs <url> <w> <h> <milestone>` writes
+  `.tmp/coast-review/`).
+- **Not verified / known limits:**
+  - Motion was judged from still frames, not watched live.
+  - Real Chromebook fps in the coast is unmeasured.
+  - The 320-coin price is set by comparison with the tunnel, not simulated in
+    `economy.test.ts`.
+  - Seals rest beside their haul-out rock rather than on top of it.
+  - The penguin nest is scenery (penguins do not go inside).
+  - The exhibit-local item slots are fixed points.
+  - Coastal visitors on the walkway are a simple stroll (4 people), separate
+    from the hub crowd.
+  - Real microphone answers to the coastal questions are untested (the phrase
+    keys include common accent variants).
+
 ## Grand Aquarium Hub (2026-11-10)
 
 Design: DESIGN_DECISIONS.md "Grand Aquarium Hub + Coastal & Polar Zone (plan review)"
@@ -563,9 +633,18 @@ approach frames, the trophy from front/side/rear.
    full habitat; whether children find the joystick, the "!" visitors and the
    Final Tour. Is 300 coins / about 13 minutes right?
 7. Shark Tunnel follow-ups: spots on the zebra shark's fins, rockier ledge and
+   shelf shapes, a glass-floor section for "under", spoken visitor reactions.
 8. Rush Hour with children: is 2 min enough for 1–4 tanks across rooms, do they
    find the checklist, do medals motivate; fps of the crowd on a Chromebook.
-   shelf shapes, a glass-floor section for "under", spoken visitor reactions.
+9. Hub and coast on a real Chromebook: fps in the hub (46 calls on SwiftShader)
+   and the coast views; whether children find the Map chip and the "!" window
+   visitors; watch the penguins/seals/otters move live (only frames were judged).
+10. Coast follow-ups: simulate the 320-coin price in `economy.test.ts`; seals
+   resting on top of their haul-out rock; penguins using the nest burrow; more
+   coastal questions ("What's this? It's a seal."), a coast arrival camera
+   sweep; the two future attractions (Dolphin Lagoon, Ocean Sanctuary).
+11. Decide whether `layout.spec` "HUD, close-up and prompts fit" needs to wait for
+   the status panel's own transition (intermittent 50 px vs 48 px gap).
 
 ## Codex / Delegated Work
 None pending. The Shark Tunnel's two Codex slices (worktrees aq-st1 and aq-st2) stopped

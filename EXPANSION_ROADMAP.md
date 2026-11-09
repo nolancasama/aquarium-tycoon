@@ -16,6 +16,8 @@ Maintain the original audience: Japanese Grade 3 beginner EFL students on touch 
 - **Ocean Hall:** bigger tanks, sea turtle, additional animals, upgrades.
 - **Jellyfish Gallery:** third room, glowing displays, specialized tank types.
 - **Shark Tunnel (2026-11-06):** a wing behind the Atrium: one huge shark habitat with a walk-through glass tunnel, blacktip and zebra sharks, eagle rays, structures, tunnel visitors and English activities.
+- **Grand Aquarium Hub (2026-11-10):** a rotunda reached from the Aquarium Map (free once the Shark Tunnel is open), with doorways to every wing, two closed future attractions, a display tank, trophy shelves and a decorative crowd.
+- **Coastal & Polar Zone (2026-11-10):** penguins, seals and sea otters in three cutaway land-and-water exhibits entered from the hub; habitat items with needs, observation questions, five milestones and a trophy.
 - **Coral Reef Atrium (2026-11-01):** fourth, taller sunlit room with a freestanding giant reef habitat, coral decorations, parrotfish and (cleaner) shrimp, and two open pads for secondary exhibits.
 - Existing special tanks: hexagonal, panoramic, jellyfish cylinder, rocky cave.
 - Existing expansion animals include angelfish, goby, chromis school, moray eel, octopus, crab, stingray and distinct jellyfish species.
@@ -98,7 +100,9 @@ These are **distinct types of experiences**, not merely additional copies of the
 
 **English opportunities:** animal names, location words (above/under), simple questions and observation requests.
 
-### C. Coastal & Polar Zone
+### C. Coastal & Polar Zone — implemented 2026-11-10
+
+**Status:** built (see `DESIGN_DECISIONS.md` "Grand Aquarium Hub + Coastal & Polar Zone" and `CURRENT_STATE.md`). Not yet built: seals lying on their haul-out rock, penguins entering the nest, more question kinds, a coast arrival sweep.
 
 **Visual identity:** rocky shoreline and cold-water displays with both above-water and underwater viewing.
 
@@ -144,7 +148,7 @@ These are **distinct types of experiences**, not merely additional copies of the
 - Render the active area in full detail and keep distant/unseen sections lightweight; simulate relevant economy/care across areas without rendering all animals at once.
 - Preserve reliable touch input, fixed/easy-to-understand management camera, offline-safe saves, existing animals and coins, and no destructive save migration.
 - Use low-poly/procedural geometry, efficient material reuse and controlled draw calls; test on real school Chromebooks, not only desktop/SwiftShader.
-- Use a readable world map or wing selector when the number of destinations makes repeated room switching cumbersome; do not add it prematurely.
+- The Grand Hub and the Aquarium Map (2026-11-10) are the campus navigation: branching areas are `ROOMS` entries with `wing` set, entered with a fade (`isWingHall`), drawn only while shown. The Dolphin Lagoon and Ocean Sanctuary doorways already stand in the hub, closed.
 
 ## Decisions explicitly left open
 
