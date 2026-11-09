@@ -29,7 +29,10 @@ export type IconId =
   | "turtle"
   | "up"
   | "lamp"
-  | "crown";
+  | "crown"
+  | "ball"
+  | "notebook"
+  | "binoculars";
 
 export function Icon({ id, size = 24, className }: { id: IconId; size?: number; className?: string }) {
   const p = { width: size, height: size, viewBox: "0 0 48 48", className, "aria-hidden": true } as const;
@@ -256,6 +259,35 @@ export function Icon({ id, size = 24, className }: { id: IconId; size?: number; 
         <svg {...p}>
           <circle cx="24" cy="24" r="19" fill="#4cd27a" />
           <path d="M24 34V15M15 23l9-9 9 9" fill="none" stroke="#fff" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "ball":
+      return (
+        <svg {...p}>
+          <circle cx="24" cy="24" r="19" fill="#ffffff" stroke="currentColor" strokeWidth="3" />
+          <path d="M24 5a19 19 0 0 1 0 38" fill="#ff5c5c" />
+          <path d="M5 24h38" stroke="#4dabf7" strokeWidth="6" />
+          <circle cx="24" cy="24" r="19" fill="none" stroke="currentColor" strokeWidth="3" />
+        </svg>
+      );
+    case "notebook":
+      return (
+        <svg {...p}>
+          <rect x="9" y="5" width="30" height="38" rx="4" fill="#fff6d8" stroke="currentColor" strokeWidth="3" />
+          <path d="M9 5h6v38H9z" fill="#2f8f9d" />
+          <path d="M20 15h13M20 22h13M20 29h9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="33" cy="34" r="5" fill="#ffc933" stroke="#c98a00" strokeWidth="2" />
+        </svg>
+      );
+    case "binoculars":
+      return (
+        <svg {...p}>
+          <rect x="6" y="18" width="14" height="20" rx="6" fill="#2f4f66" stroke="currentColor" strokeWidth="3" />
+          <rect x="28" y="18" width="14" height="20" rx="6" fill="#2f4f66" stroke="currentColor" strokeWidth="3" />
+          <rect x="18" y="20" width="12" height="8" rx="3" fill="#2f4f66" stroke="currentColor" strokeWidth="3" />
+          <circle cx="13" cy="32" r="4" fill="#9fe6ff" />
+          <circle cx="35" cy="32" r="4" fill="#9fe6ff" />
+          <path d="M10 18l2-8h6l1 8M38 18l-2-8h-6l-1 8" fill="#3d6680" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
         </svg>
       );
     case "crown":

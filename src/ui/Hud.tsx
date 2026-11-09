@@ -4,7 +4,8 @@ import { nextStep, objectivesUnlocked } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
 import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, usedSpace, type Goal } from "../game/logic/model";
 import { HALL_OF, TANKS } from "../game/data/tanks";
-import { COAST_HALL, HUB_HALL, inHallRow, ROOMS, roomOpen, SHARKS_HALL } from "../game/data/rooms";
+import { COAST_HALL, HUB_HALL, inHallRow, LAGOON_HALL, ROOMS, roomOpen, SANCTUARY_HALL, SHARKS_HALL } from "../game/data/rooms";
+import { LagoonGoals, LagoonHud, lagoonHelp } from "./LagoonHud";
 import { CoastCelebration, CoastGoals, CoastHud, CoastOffer, NEED_TEXT } from "./CoastHud";
 import { needMet } from "../game/logic/coast";
 import { AquariumMap, MapButton, TrophyCard } from "./AquariumMap";
@@ -137,6 +138,7 @@ function GoalsPanel({ expanded, setExpanded, rushBack }: { expanded: boolean; se
   const model = useGame((s) => s.model);
   const inWing = useGame((s) => s.screen === "game" && (s.hall === SHARKS_HALL || s.exploring));
   const inCoast = useGame((s) => s.screen === "game" && s.hall === COAST_HALL);
+  const outdoor = useGame((s) => (s.screen !== "game" ? null : s.hall === LAGOON_HALL ? "lagoon" : s.hall === SANCTUARY_HALL ? "sanctuary" : null));
   const request = useGame((s) => s.request);
   const interrupted = useGame((s) => Boolean(s.prompt || s.line || s.stageCard));
   const waiting = useGame((s) => Boolean(s.waiting));
@@ -156,6 +158,7 @@ function GoalsPanel({ expanded, setExpanded, rushBack }: { expanded: boolean; se
   useEffect(() => setExpanded(() => false), [model.progress.stage, interrupted, Boolean(request)]);
   if (inWing && !request) return <TunnelGoals before={rushBack} />;
   if (inCoast && !request) return <CoastGoals before={rushBack} />;
+  if (outdoor === "lagoon") return <LagoonGoals before={rushBack} />;
   // The tutorial's "Tap the visitor!" card takes this place; in free play the objectives stay.
   if (!unlocked || request || (waiting && !interrupted && model.progress.tutorial !== "done")) return null;
   const p = model.progress;
@@ -200,7 +203,14 @@ function HelpButton() {
   const request = useGame((s) => Boolean(s.request));
   if (request) return null;
   return (
-    <button className="chip help-btn ui" onClick={() => (getGame().hall === COAST_HALL ? coastHelp() : getGame().hall === HUB_HALL ? hubHelp() : getGame().exploring || getGame().hall === SHARKS_HALL ? tunnelHelp() : showGuideHint())} disabled={!canHelp} data-testid="btn-help">
+    <button className="chip help-btn ui" onClick={() => {
+      const hall = getGame().hall;
+      if (hall === COAST_HALL) coastHelp();
+      else if (hall === HUB_HALL) hubHelp();
+      else if (hall === LAGOON_HALL) lagoonHelp();
+      else if (getGame().exploring || hall === SHARKS_HALL) tunnelHelp();
+      else showGuideHint();
+    }} disabled={!canHelp} data-testid="btn-help">
       <b aria-hidden="true">?</b> <span className="help-label">Help <small lang="ja">ヒント</small></span>
     </button>
   );
@@ -563,14 +573,17 @@ export function Hud() {
   const wing = hall === SHARKS_HALL;
   const hub = hall === HUB_HALL;
   const coast = hall === COAST_HALL;
+  const lagoon = hall === LAGOON_HALL;
+  const sanctuary = hall === SANCTUARY_HALL;
   const showRoomBar = free && view === "room" && !panel && !placing && (step === "done" || step === "buy" || step === "visitor");
   const showTankBar = free && view === "tank" && panel !== "decorate";
   return (
     <>
       <TopBar />
       {view === "tank" && <TankStatus />}
-      {showRoomBar && !wing && !hub && !coast && !exploring && <RoomBar />}
+      {showRoomBar && !wing && !hub && !coast && !lagoon && !sanctuary && !exploring && <RoomBar />}
       {view === "room" && coast && <CoastHud />}
+      {lagoon && <LagoonHud />}
       {free && view === "room" && !exploring && <HallSwitch />}
       {free && hub && <HubBar />}
       {view === "room" && wing && !exploring && <WingHud />}
@@ -586,6 +599,7 @@ export function Hud() {
       <CoastCelebration />
       <TrophyCard />
       <HubIntro />
+      <PreviewBadge />
     </>
   );
 }
@@ -593,6 +607,17 @@ export function Hud() {
 function HubIntro() {
   useEffect(() => watchHubIntro(), []);
   return null;
+}
+
+/** A development preview is running: nothing is being saved (flow/preview.ts). */
+function PreviewBadge() {
+  const areas = useGame((s) => s.previewAreas);
+  if (!areas.length) return null;
+  return (
+    <div className="preview-badge ui" data-testid="preview-badge" role="status">
+      PREVIEW · not saved <small>({areas.join(", ")}) · Ctrl+Alt+D</small>
+    </div>
+  );
 }
 
 /** In the hub: one short instruction, tappable to hear it. */

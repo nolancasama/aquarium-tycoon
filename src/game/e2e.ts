@@ -13,7 +13,13 @@ import { decorVersion } from "./data/decor";
 import { PICO } from "./world";
 import { project } from "../scene/CameraRig";
 import { HUB_BAYS, HUB_R, onRing } from "./data/hub";
-import { coastTo } from "../ui/DebugPanel";
+import { coastTo, lagoonTo } from "../ui/DebugPanel";
+import { enterOutdoor } from "./flow/outdoor";
+import { lagoonRt } from "./lagoon/lagoonRuntime";
+import { LAGOON_ORIGIN } from "./data/lagoon";
+import type { OutdoorArea } from "./store";
+import type * as THREE from "three";
+import { atmosphere } from "../scene/marine/outdoor";
 import { endPreview, previewActive, startPreview } from "./flow/preview";
 import { areaReleased, previewAreas, RELEASE_AREAS, type ReleaseArea } from "./data/release";
 import { coastRt } from "./coast/coastRuntime";
@@ -281,6 +287,56 @@ export function installE2eHook(seed: number) {
     },
     release() {
       return { preview: previewAreas(), active: previewActive(), released: Object.fromEntries(RELEASE_AREAS.map((a) => [a, areaReleased(a)])), stored: getGame().model.stored ?? null };
+    },
+    /** Walk into an outdoor area as its doorway does (only where a release or a preview allows). */
+    outdoor(area: OutdoorArea) {
+      enterOutdoor(area);
+      return getGame().hall;
+    },
+    /** The Dolphin Lagoon now: progress, view, the dolphins (area-local), the toy and the Look! moment. */
+    lagoon() {
+      const g = getGame();
+      const pod = lagoonRt.pod;
+      return {
+        progress: g.model.progress.lagoon ?? null, view: g.lagoonView, waiting: g.areaWaiting, activity: g.areaActivity, panel: g.areaPanel,
+        look: lagoonRt.look ? { kind: lagoonRt.look.kind, ids: lagoonRt.look.ids } : null, time: lagoonRt.time, lastLeap: lagoonRt.lastLeap,
+        toy: lagoonRt.toy ? { kind: lagoonRt.toy.kind, x: lagoonRt.toy.x, z: lagoonRt.toy.z } : null, bubbles: lagoonRt.time < lagoonRt.bubblesUntil,
+        dolphins: pod ? pod.members.map((m) => ({ id: m.id, mode: m.mode, x: m.x, y: m.y, z: m.z, speed: m.speed })) : []
+      };
+    },
+    /** The outdoor look now (air, water or off) and what the scene really holds. */
+    atmosphere() {
+      const s = atmosphere.scene, c = atmosphere.camera;
+      const fog = s?.fog as THREE.Fog | null | undefined;
+      return { mode: atmosphere.mode, fog: fog ? { color: "#" + fog.color.getHexString(), near: fog.near, far: fog.far } : null, far: c?.far ?? null, cameraY: rt.camera.pos.y };
+    },
+    lagoonTo(n: number) {
+      startPreview("lagoon");
+      updateModel((m) => lagoonTo(m, n));
+    },
+    /** Show a Look! moment now (tests do not wait for a natural one), at a dolphin. */
+    lagoonLook(kind: "pair" | "breath" | "dive" | "leap", id = "kai") {
+      const m = lagoonRt.pod?.byId(id);
+      if (!m) return false;
+      lagoonRt.look = { kind, ids: [id], x: m.x, y: 1, z: m.z, until: lagoonRt.time + 30 };
+      return true;
+    },
+    /** A visitor with a question at the lagoon now. */
+    lagoonVisitor() {
+      setGame({ areaWaiting: { area: "lagoon", type: "child" } });
+    },
+    /** Screen position of a lagoon thing: the Look! bubble or a dolphin. */
+    lagoonWhere(what: "look" | string) {
+      if (what === "look") {
+        const l = lagoonRt.look;
+        if (!l) return null;
+        const ms = l.ids.map((id) => lagoonRt.pod?.byId(id)).filter(Boolean);
+        const x = ms.length ? ms[0]!.x : l.x, z = ms.length ? ms[0]!.z : l.z;
+        const y = rt.camera.pos.y < -0.1 ? Math.min(-0.8, (ms[0]?.y ?? -2) + 1.3) : 2.2;
+        return project(LAGOON_ORIGIN.x + x, y, LAGOON_ORIGIN.z + z);
+      }
+      const m = lagoonRt.pod?.byId(what);
+      return m ? project(LAGOON_ORIGIN.x + m.x, m.y, LAGOON_ORIGIN.z + m.z) : null;
     },
     /** The coastal animals now (exhibit-local positions). */
     coast() {

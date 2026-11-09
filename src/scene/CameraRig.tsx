@@ -7,7 +7,12 @@ import { TANKS } from "../game/data/tanks";
 import { HALL_X, PEDESTAL, tankOrigin, waterCentre } from "../game/world";
 import { tankById } from "../game/logic/model";
 import { footprintPoints } from "../game/logic/tankLayout";
-import { COAST_HALL, HUB_HALL, ROOMS, SHARKS_HALL } from "../game/data/rooms";
+import { COAST_HALL, HUB_HALL, LAGOON_HALL, ROOMS, SHARKS_HALL } from "../game/data/rooms";
+import { LAGOON_COUNT_SHOT, LAGOON_ORIGIN, LAGOON_REVEAL_FROM, LAGOON_SHOTS } from "../game/data/lagoon";
+import type { LagoonView } from "../game/logic/lagoon";
+import { lagoonFocus } from "../game/flow/lagoon";
+import { lagoonRt } from "../game/lagoon/lagoonRuntime";
+import { revealProgress } from "../game/flow/outdoor";
 import { coastCamera, EXHIBITS, type CoastView } from "../game/data/coast";
 import { coastRt } from "../game/coast/coastRuntime";
 import { HUB_CAMERA } from "../game/data/hub";
@@ -74,6 +79,41 @@ function countingView(view: Exclude<CoastView, "all">, aspect: number): Shot {
   // From above and in front, steep enough to see over the window frame into the pool.
   const dir = new THREE.Vector3(0, 0.62, 0.78).normalize();
   return { pos: { x: c.x + dir.x * dist, y: c.y + dir.y * dist, z: c.z + dir.z * dist }, target: { x: c.x, y: c.y + 0.3, z: c.z } };
+}
+
+/**
+ * The Dolphin Lagoon's viewpoints (area-local shots made world), the high
+ * counting shot, and the first-visit reveal from the boardwalk. Narrow screens
+ * step back, except in the underwater gallery (its back wall is right there).
+ */
+export function lagoonCam(view: LagoonView, aspect: number, counting: boolean): Shot {
+  if (counting) {
+    // Aim at the dolphins themselves and step back to fit their spread (as the coast's counting view does).
+    const ms = lagoonRt.pod?.members ?? [];
+    if (ms.length) {
+      const c = ms.reduce((s, m) => ({ x: s.x + m.x / ms.length, z: s.z + m.z / ms.length }), { x: 0, z: 0 });
+      const spread = Math.max(4, ...ms.map((m) => Math.hypot(m.x - c.x, m.z - c.z)));
+      const dist = Math.max(16, spread * 4.2) * Math.max(1, 1.78 / aspect);
+      const dir = new THREE.Vector3(0, 0.78, 0.62).normalize();
+      return {
+        pos: { x: LAGOON_ORIGIN.x + c.x + dir.x * dist, y: dir.y * dist, z: LAGOON_ORIGIN.z + c.z + dir.z * dist },
+        target: { x: LAGOON_ORIGIN.x + c.x, y: -0.4, z: LAGOON_ORIGIN.z + c.z }
+      };
+    }
+  }
+  const base = counting ? LAGOON_COUNT_SHOT : LAGOON_SHOTS[view];
+  const k = view === "gallery" && !counting ? 1 : Math.max(1, 1.78 / aspect);
+  let pos = { x: base.target.x + (base.pos.x - base.target.x) * k, y: base.target.y + (base.pos.y - base.target.y) * k, z: base.target.z + (base.pos.z - base.target.z) * k };
+  let target = base.target;
+  const p = revealProgress("lagoon");
+  if (p < 1) {
+    const e = THREE.MathUtils.smoothstep(p, 0, 1), f = LAGOON_REVEAL_FROM;
+    const lerp = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => ({ x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, z: a.z + (b.z - a.z) * e });
+    pos = lerp(f.pos, pos);
+    target = lerp(f.target, target);
+  }
+  const w = (q: { x: number; y: number; z: number }) => ({ x: LAGOON_ORIGIN.x + q.x, y: q.y, z: LAGOON_ORIGIN.z + q.z });
+  return { pos: w(pos), target: w(target) };
 }
 
 /** The hub's fixed camera; narrower screens step back along the view so both side doorways stay in frame. */
@@ -238,6 +278,10 @@ export function CameraRig() {
       wantLook.current.set(v.target.x, v.target.y, v.target.z);
     } else if (g.screen === "game" && g.hall === COAST_HALL) {
       const v = coastView(g.coastView, aspect, g.coastActivity?.habitat === "penguins");
+      want.current.set(v.pos.x, v.pos.y, v.pos.z);
+      wantLook.current.set(v.target.x, v.target.y, v.target.z);
+    } else if (g.screen === "game" && g.hall === LAGOON_HALL) {
+      const v = lagoonCam(g.lagoonView, aspect, lagoonFocus.count);
       want.current.set(v.pos.x, v.pos.y, v.pos.z);
       wantLook.current.set(v.target.x, v.target.y, v.target.z);
     } else if (g.screen === "game" && g.hall === HUB_HALL) {

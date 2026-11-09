@@ -111,7 +111,29 @@ export type PhraseId =
   | "pg5"
   | "pg6"
   | "onRock"
-  | "inWater";
+  | "inWater"
+  // Dolphin Lagoon and Grand Ocean Sanctuary: names, counting, where, size.
+  | "itsDolphin"
+  | "itsOrca"
+  | "itsBeluga"
+  | "dl1"
+  | "dl2"
+  | "dl3"
+  | "dl4"
+  | "dl5"
+  | "dl6"
+  | "oc1"
+  | "oc2"
+  | "oc3"
+  | "oc4"
+  | "oc5"
+  | "oc6"
+  | "onWater"
+  | "underWater"
+  | "byIsland"
+  | "byBoat"
+  | "itsBig"
+  | "itsSmall";
 
 const YES = ["yes", "yeah", "yep", "yup", "yea", "yas", "yess", "yesh", "jess", "ies", "guess", "okay", "ok", "sure"];
 const NO = ["no", "nope", "nah", "know", "noh", "nou", "nor", "not", "don't", "dont"];
@@ -284,6 +306,21 @@ const penguins = (n: number): Phrase => ({
   keys: [NUMBER_WORDS[n]],
   key: NUMBER_EN[n]
 });
+export const DOLPHIN_NUMBER_PHRASE: Record<number, PhraseId> = { 1: "dl1", 2: "dl2", 3: "dl3", 4: "dl4", 5: "dl5", 6: "dl6" };
+export const ORCA_NUMBER_PHRASE: Record<number, PhraseId> = { 1: "oc1", 2: "oc2", 3: "oc3", 4: "oc4", 5: "oc5", 6: "oc6" };
+const counted = (ids: Record<number, PhraseId>, one: string, many: string) => (n: number): Phrase => ({
+  id: ids[n],
+  en: `${NUMBER_EN[n]} ${n === 1 ? one : many}!`,
+  keys: [NUMBER_WORDS[n]],
+  key: NUMBER_EN[n]
+});
+const dolphins = counted(DOLPHIN_NUMBER_PHRASE, "dolphin", "dolphins");
+const orcas = counted(ORCA_NUMBER_PHRASE, "orca", "orcas");
+const DOLPHIN = ["dolphin", "dolphins", "dorufin", "dolfin", "dolphine", "doruhin", "dolphin's", "dolphi"];
+const ORCA = ["orca", "orcas", "oruka", "olca", "orka", "orcah", "killer whale", "aruka"];
+const BELUGA = ["beluga", "belugas", "beruga", "berluga", "belga", "bluga"];
+const ISLAND = ["island", "islands", "airando", "ireland", "eyeland", "i land", "aisland"];
+const BOAT = ["boat", "boats", "booto", "bought", "boot", "vote", "bote"];
 const PENGUIN = ["penguin", "penguins", "pengin", "pengwin", "pengin", "pen gin"];
 const SEAL = ["seal", "seals", "shiru", "sea l", "seel", "ceil"];
 const OTTER = ["otter", "otters", "sea otter", "auto", "otta", "oter", "rakko"];
@@ -368,6 +405,18 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   pg6: penguins(6),
   onRock: { id: "onRock", en: "On the rock!", keys: [["rock", "rocks", "rokku", "lock", "rok", "luck"]], forbid: ["water", "wota", "warter"], key: "rock" },
   inWater: { id: "inWater", en: "In the water!", keys: [["water", "wota", "warter", "wata", "woter", "waiter"]], forbid: ["rock", "rokku"], key: "water" },
+  itsDolphin: animal("itsDolphin", "It's a dolphin.", DOLPHIN, "dolphin"),
+  itsOrca: animal("itsOrca", "It's an orca.", ORCA, "orca"),
+  itsBeluga: animal("itsBeluga", "It's a beluga.", BELUGA, "beluga"),
+  dl1: dolphins(1), dl2: dolphins(2), dl3: dolphins(3), dl4: dolphins(4), dl5: dolphins(5), dl6: dolphins(6),
+  oc1: orcas(1), oc2: orcas(2), oc3: orcas(3), oc4: orcas(4), oc5: orcas(5), oc6: orcas(6),
+  // Where is it: judged on the place word ("on" is short, so its common mishearings count too).
+  onWater: { id: "onWater", en: "It's on the water!", keys: [["on", "own", "an", "upon", "top", "onn"]], forbid: ["under", "anda", "onder", "unda", "andar"], key: "on" },
+  underWater: { id: "underWater", en: "It's under the water!", keys: [["under", "anda", "onder", "unda", "andar", "undah"]], key: "under" },
+  byIsland: { id: "byIsland", en: "It's by the island!", keys: [ISLAND], forbid: BOAT, key: "island" },
+  byBoat: { id: "byBoat", en: "It's by the boat!", keys: [BOAT], forbid: ISLAND, key: "boat" },
+  itsBig: { id: "itsBig", en: "It's big!", keys: [["big", "bigu", "bick", "pig", "beeg"]], forbid: ["small", "smaru", "smol"], key: "big" },
+  itsSmall: { id: "itsSmall", en: "It's small!", keys: [["small", "smaru", "smol", "smoll", "sumaru"]], forbid: ["big", "bigu"], key: "small" },
   itsEel: animal("itsEel", "It's an eel.", EEL, "eel"),
   itsOctopus: animal("itsOctopus", "It's an octopus.", OCTOPUS, "octopus"),
   itsCrab: animal("itsCrab", "It's a crab.", CRAB, "crab"),

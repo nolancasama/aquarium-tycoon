@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import type * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { rt } from "../game/runtime";
 import { decayRunning, tick } from "../game/sim";
@@ -15,6 +16,7 @@ import { CountNumbers } from "./Animals";
 import { MainRooms, SharkTunnel } from "./tunnel/SharkTunnel";
 import { GrandHub } from "./hub/GrandHub";
 import { CoastZone } from "./coast/CoastZone";
+import { DolphinLagoon } from "./lagoon/DolphinLagoon";
 
 /** Renderer stats for the test hook (draw calls / triangles per frame). */
 export const perf = { calls: 0, triangles: 0, fps: 0 };
@@ -65,12 +67,15 @@ function AdaptiveDpr() {
   return null;
 }
 
+/** The scene's three lights; an outdoor area retunes them while it is shown (no new lights, so no shader recompiles). */
+export const sceneLights: { hemi: THREE.HemisphereLight | null; sun: THREE.DirectionalLight | null; fill: THREE.DirectionalLight | null } = { hemi: null, sun: null, fill: null };
+
 function Lights() {
   return (
     <>
-      <hemisphereLight args={["#e6f7ff", "#c9b89a", 1.7]} />
-      <directionalLight position={[-4, 10, 7]} intensity={1.5} color="#fff4e2" />
-      <directionalLight position={[6, 5, -3]} intensity={0.35} color="#bfe6ff" />
+      <hemisphereLight ref={(l) => void (sceneLights.hemi = l)} args={["#e6f7ff", "#c9b89a", 1.7]} />
+      <directionalLight ref={(l) => void (sceneLights.sun = l)} position={[-4, 10, 7]} intensity={1.5} color="#fff4e2" />
+      <directionalLight ref={(l) => void (sceneLights.fill = l)} position={[6, 5, -3]} intensity={0.35} color="#bfe6ff" />
     </>
   );
 }
@@ -98,6 +103,7 @@ export function GameScene() {
       <SharkTunnel />
       <GrandHub />
       <CoastZone />
+      <DolphinLagoon />
       <Effects />
       <Markers />
       <CountNumbers />

@@ -27,21 +27,35 @@ export function MainRooms({ children }: { children: ReactNode }) {
 
 const TUNNEL_SPECIES = new Set<string>(["blacktip", "zebrashark", "eagleray"]);
 
-/** Scene background and underwater fog: dark around the diorama, blue-green inside the tunnel. */
+/** The game's own background (GameScene), restored when the wing is left. */
+const DEFAULT_BG = new THREE.Color("#bfe8f3");
+
+/**
+ * Scene background and underwater fog: dark around the diorama, blue-green
+ * inside the tunnel. It only touches the scene while the wing is shown (and
+ * restores it once on leaving), so other areas can set their own atmosphere.
+ */
 function Environment() {
   const { scene } = useThree();
-  const original = useRef<{ bg: THREE.Color | THREE.Texture | null } | null>(null);
+  const active = useRef(false);
   const fog = useMemo(() => new THREE.FogExp2("#1f7a8f", 0.052), []);
   const wingBg = useMemo(() => new THREE.Color("#0e3344"), []);
   const exploreBg = useMemo(() => new THREE.Color("#1c6f84"), []);
   useEffect(() => () => {
-    if (original.current) scene.background = original.current.bg;
-    scene.fog = null;
+    if (active.current) { scene.background = DEFAULT_BG; scene.fog = null; }
   }, [scene]);
   useFrame(() => {
-    if (!original.current && !(scene.background === wingBg || scene.background === exploreBg)) original.current = { bg: scene.background as THREE.Color | null };
     const wing = wingShown(), explore = rt.explore.active;
-    const bg = explore ? exploreBg : wing ? wingBg : original.current?.bg ?? null;
+    if (!wing && !explore) {
+      if (active.current) {
+        active.current = false;
+        scene.background = DEFAULT_BG;
+        scene.fog = null;
+      }
+      return;
+    }
+    active.current = true;
+    const bg = explore ? exploreBg : wingBg;
     if (scene.background !== bg) scene.background = bg;
     const f = explore ? fog : null;
     if (scene.fog !== f) scene.fog = f;

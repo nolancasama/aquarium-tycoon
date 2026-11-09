@@ -1,0 +1,95 @@
+/* The outdoor areas' HUD (Dolphin Lagoon, Grand Ocean Sanctuary). Built on the wing and coast styles. */
+
+/* Viewpoints on the left under the goals; the status card holds the right side. */
+.wing-views.outdoor-views { right: auto; left: 14px; top: 236px; }
+.wing-views.outdoor-views button { min-width: 112px; min-height: 48px; }
+.wing-views.outdoor-views button.guide { border-color: #ffb100; box-shadow: 0 0 0 4px rgba(255, 177, 0, 0.35), var(--shadow); }
+@media (max-height: 620px) { .wing-views.outdoor-views { top: 200px; gap: 6px; } .wing-views.outdoor-views button { min-height: 42px; } }
+
+.outdoor-status { width: 232px; }
+.outdoor-status header span { display: inline-flex; align-items: center; gap: 6px; }
+.outdoor-status .outdoor-status-title > span { display: grid; line-height: 1.05; }
+.outdoor-status .outdoor-status-title .ja { font-size: 11px; font-weight: 700; color: var(--ink-soft); }
+.outdoor-status .coast-need { pointer-events: auto; }
+.bar.need { display: flex; align-items: center; gap: 6px; }
+.bar.need .need-icon { display: inline-flex; width: 26px; justify-content: center; }
+.need-legend { display: grid; grid-template-columns: repeat(3, 1fr); font-size: 11px; color: var(--ink-soft); text-align: center; margin-top: -3px; }
+
+.outdoor-goals .outdoor-tour {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+  padding: 8px 12px;
+  font-size: 17px;
+  animation: outdoor-tour 1.4s ease-in-out infinite;
+}
+.outdoor-goals .outdoor-tour .ja { display: inline; margin-left: 4px; font-size: 13px; }
+@keyframes outdoor-tour { 50% { box-shadow: 0 0 0 5px rgba(255, 201, 60, 0.45); } }
+@media (prefers-reduced-motion: reduce) { .outdoor-goals .outdoor-tour { animation: none; } }
+
+.outdoor-toys .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.outdoor-toys .need-tag { display: inline-flex; align-items: center; gap: 3px; }
+
+/* The first-visit card: big and bright, over the reveal. */
+.outdoor-arrival {
+  position: fixed;
+  top: 16%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 28;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 14px 34px 16px;
+  border-radius: 26px;
+  border: 4px solid #ffffff;
+  background: linear-gradient(180deg, rgba(56, 195, 211, 0.95), rgba(31, 111, 153, 0.95));
+  color: #ffffff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  animation: outdoor-arrive 0.6s ease-out;
+}
+.outdoor-arrival.sanctuary { background: linear-gradient(180deg, rgba(64, 120, 166, 0.95), rgba(23, 63, 92, 0.96)); }
+.outdoor-arrival b { font-size: 34px; letter-spacing: 0.02em; }
+.outdoor-arrival .ja { color: #e8fbff; font-size: 18px; }
+.outdoor-arrival small { font-size: 16px; font-weight: 800; display: grid; justify-items: center; }
+@keyframes outdoor-arrive { from { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(0.92); } }
+@media (prefers-reduced-motion: reduce) { .outdoor-arrival { animation: none; } }
+
+.outdoor-celebration { z-index: 31; }
+
+/* The research notebook (sanctuary). */
+.notebook-panel { width: min(640px, calc(100vw - 32px)); }
+.notebook-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+.sticker {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-radius: 14px;
+  border: 3px dashed #c9d8e2;
+  background: #f4f8fb;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--ink-soft);
+}
+.sticker.got { border-style: solid; border-color: #ffc93c; background: #fffbea; color: var(--ink); }
+.sticker .ja { font-size: 11px; }
+.sticker svg { width: 52px; height: 52px; }
+.research-chip { display: inline-flex; align-items: center; gap: 6px; font-weight: 900; }
+
+.improve-panel { width: min(600px, calc(100vw - 32px)); }
+.improve-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.improve-card { display: grid; justify-items: center; gap: 4px; padding: 10px 6px; border-radius: 16px; border: 3px solid var(--aqua-soft); background: var(--panel); font: inherit; font-weight: 800; cursor: pointer; }
+.improve-card.wrong { animation: map-soon 0.45s ease-out; border-color: #e8590c; background: #fff4e6; }
+.improve-card.right { border-color: #2f9e44; background: #ebfbee; }
+.improve-card small { font-weight: 700; color: var(--ink-soft); font-size: 12px; }
+.improve-reason { margin: 8px 0 0; font-size: 15px; text-align: center; }
+
+@media (max-width: 1100px) {
+  .notebook-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .sticker svg { width: 40px; height: 40px; }
+}

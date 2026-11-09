@@ -22,7 +22,12 @@ export const SENTENCE_PATTERNS = {
   canIt: { en: "Can it ___? — ___, it can / can't.", ja: "＿＿できる？ できる／できない。" },
   countSharks: { en: "How many sharks? — ___ sharks!", ja: "サメは なんびき？ ＿＿ひきです。" },
   countPenguins: { en: "How many penguins? — ___ penguins!", ja: "ペンギンは なんわ？ ＿＿わです。" },
-  whereSeal: { en: "Where is the seal? — ___!", ja: "アザラシは どこ？ ＿＿だよ。" }
+  whereSeal: { en: "Where is the seal? — ___!", ja: "アザラシは どこ？ ＿＿だよ。" },
+  countDolphins: { en: "How many dolphins? — ___ dolphins!", ja: "イルカは なんとう？ ＿＿とうです。" },
+  whereDolphin: { en: "Where is the dolphin? — It's ___ the water!", ja: "イルカは どこ？ みずの ＿＿だよ。" },
+  countOrcas: { en: "How many orcas? — ___ orcas!", ja: "シャチは なんとう？ ＿＿とうです。" },
+  whereOrca: { en: "Where is the orca? — It's by the ___!", ja: "シャチは どこ？ ＿＿の そばだよ。" },
+  bigSmall: { en: "Is it big or small? — It's ___!", ja: "おおきい？ ちいさい？ ＿＿だよ。" }
 } as const;
 export type SentencePatternId = keyof typeof SENTENCE_PATTERNS;
 export const isSentencePattern = (id: unknown): id is SentencePatternId => typeof id === "string" && Object.prototype.hasOwnProperty.call(SENTENCE_PATTERNS, id);
