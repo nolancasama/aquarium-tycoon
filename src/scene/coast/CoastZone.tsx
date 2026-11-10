@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { getGame, updateModel, useGame } from "../../game/store";
@@ -19,6 +19,7 @@ import { newPose, TunnelFigure } from "../tunnel/TunnelFigure";
 import { tunnelPersonModel } from "../models/people";
 import { itemGeometry, otterParts, penguinParts, sealParts } from "./coastModels";
 import type { Mover } from "../../game/coast/motion";
+import { createPenguin, loadPenguin, type PenguinInstance } from "./penguinAsset";
 
 /**
  * The Coastal & Polar Zone: three cutaway exhibits behind one walkway. Each has
@@ -462,24 +463,56 @@ const PENGUIN_SCALE = 1.3;
 function Penguin({ id, index }: { id: string; index: number }) {
   const get = useAnimal(id);
   const parts = useMemo(penguinParts, []);
+  const [asset, setAsset] = useState<PenguinInstance | null>(null);
+  useEffect(() => {
+    let live = true;
+    let instance: PenguinInstance | null = null;
+    // Match the procedural silhouette's measured height, including its 1.3 scale.
+    parts.body.computeBoundingBox();
+    const box = parts.body.boundingBox!;
+    void loadPenguin().then((source) => {
+      if (!live || !source) return;
+      instance = createPenguin(source, (box.max.y - box.min.y) * PENGUIN_SCALE);
+      setAsset(instance);
+    }).catch(() => { /* Keep the procedural fallback if decoding/instantiation fails. */ });
+    return () => { live = false; instance?.dispose(); };
+  }, [parts]);
   const root = useRef<THREE.Group>(null), body = useRef<THREE.Group>(null), fl = useRef<THREE.Group>(null), fr = useRef<THREE.Group>(null);
   const tag = useRef<THREE.Sprite>(null), ring = useRef<THREE.Mesh>(null);
   const blend = useRef<Blend>({ swim: 0, float: 0, splashSeen: -100 });
+  const posed = useRef(false);
   useFrame((_, dt) => {
+    if (!coastShown()) return;
     const a = get();
     const r = root.current, b = body.current;
     if (!a || !r || !b) return;
     const m = a.m, ex = EXHIBITS.penguins;
     const swimming = m.area === "water";
     const k = blend.current;
+    if (!posed.current) { k.swim = swimming ? 1 : 0; posed.current = true; }
     k.swim += ((swimming ? 1 : 0) - k.swim) * Math.min(1, dt * 6);
     r.position.set(ex.x + m.x, m.y, ex.z + m.z);
     r.rotation.y = m.heading;
     // Upright on land (feet at the root), lying along +z in the water (body centre at the root).
-    b.position.y = parts.centre * PENGUIN_SCALE * (1 - k.swim);
+    const centre = asset?.centre ?? parts.centre * PENGUIN_SCALE;
+    b.position.set(0, centre * (1 - k.swim), 0);
     const walking = !swimming && m.speed > 0.05;
     const waddle = walking ? Math.sin(m.phase) * 0.14 : m.action === "look" ? Math.sin(rt.time * 1.3 + index) * 0.05 : 0;
     b.rotation.set((Math.PI / 2 - m.pitch) * k.swim, 0, waddle * (1 - k.swim));
+    if (asset) {
+      // The shore's support plane tilts the feet, about the mover's ground contact.
+      // Climb/hop heights and all movement still come solely from coastRt.
+      const ramp = ex.ramps[0];
+      const onSlope = !swimming && (m.mode === "rampDown" || m.mode === "rampUp") && m.z >= ramp.top.z && m.z <= ramp.bottom.z;
+      const gradient = onSlope ? (ex.pool.surface - 0.05 - ex.land.y) / (ramp.bottom.z - ramp.top.z) : 0;
+      b.rotation.set(
+        (Math.PI / 2 - m.pitch) * k.swim - Math.atan(gradient * Math.cos(m.heading)) * (1 - k.swim),
+        0,
+        Math.atan(-gradient * Math.sin(m.heading)) * (1 - k.swim)
+      );
+      b.position.set(0, centre, 0).applyQuaternion(b.quaternion).multiplyScalar(1 - k.swim);
+      asset.update(m, Math.min(dt, 0.1), k.swim, coastRt.time);
+    }
     const flap = swimming ? Math.sin(m.phase * 1.6) * 0.9 : walking ? 0.35 + Math.sin(m.phase) * 0.15 : m.action === "groom" ? 0.2 + Math.abs(Math.sin(rt.time * 6)) * 0.3 : 0.12;
     if (fl.current) fl.current.rotation.z = -flap;
     if (fr.current) fr.current.rotation.z = flap;
@@ -493,11 +526,11 @@ function Penguin({ id, index }: { id: string; index: number }) {
   return (
     <group ref={root} name={`coast-animal-${id}`}>
       <group ref={body}>
-        <group position={[0, -parts.centre * PENGUIN_SCALE, 0]} scale={PENGUIN_SCALE}>
+        {asset ? <primitive object={asset.scene} dispose={null} /> : <group position={[0, -parts.centre * PENGUIN_SCALE, 0]} scale={PENGUIN_SCALE}>
           <mesh geometry={parts.body} material={smoothMat} raycast={() => undefined} />
           <group ref={fl} position={[0.19, 0.48, 0]}><mesh geometry={parts.flipper} material={smoothMat} raycast={() => undefined} /></group>
           <group ref={fr} position={[-0.19, 0.48, 0]}><mesh geometry={parts.flipper} material={smoothMat} raycast={() => undefined} /></group>
-        </group>
+        </group>}
       </group>
       <sprite ref={tag} position={[0, 1.15, 0]} scale={[0.8, 0.8, 1]} visible={false} raycast={() => undefined} renderOrder={8} />
       <mesh ref={ring} geometry={focusGeo} material={focusMat} position={[0, 0.05, 0]} rotation={[Math.PI / 2, 0, 0]} visible={false} renderOrder={7} raycast={() => undefined} />

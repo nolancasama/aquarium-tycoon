@@ -263,11 +263,12 @@ export const coastReveal = { t0: null as number | null };
 let revealTimer: number | undefined;
 export function skipCoastReveal() {
   if (coastReveal.t0 === null) return;
+  // Clear first: the model update below re-runs watchCoastIntro, which calls back in here.
+  coastReveal.t0 = null;
+  window.clearTimeout(revealTimer);
   if (getGame().previewAreas.includes("coast") && getGame().model.progress.coastOpen) {
     updateModel((m) => ({ ...m, progress: { ...m.progress, coastIntroSeen: true } }));
   }
-  coastReveal.t0 = null;
-  window.clearTimeout(revealTimer);
   setGame({ coastRevealing: false });
 }
 

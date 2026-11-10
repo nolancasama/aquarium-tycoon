@@ -192,6 +192,17 @@ test("a real tap on a coastal slot ring places the item (in a preview)", async (
   expect(errors).toEqual([]);
 });
 
+test("leaving the coast while its first-visit reveal plays ends the reveal cleanly", async ({ page }) => {
+  const errors = await load(page, save(700));
+  await hook(page, "coastTo", 5);
+  await hook(page, "set", { hall: 6, view: "room", tankId: null, panel: null, coastView: "all" });
+  await expect(page.getByTestId("coast-reveal")).toBeVisible();
+  // Skipping marks the intro seen, and that model update re-runs the reveal watcher: it must not call back in forever.
+  await hook(page, "set", { hall: 0 });
+  await expect(page.getByTestId("coast-reveal")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768]] as const) {
   test(`penguin window camera and coast HUD fit at ${width}x${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });

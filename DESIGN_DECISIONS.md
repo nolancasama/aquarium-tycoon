@@ -1885,3 +1885,37 @@ Built / released / unlocked are separate; nothing auto-unlocks; no prices.
   was cancelled by the owner. The exhibit centres, window, walkway, release
   locks, save format and progression are unchanged; outdoor access remains
   through Ctrl+Alt+D preview only.
+
+## 2026-11-10 — Owner-supplied rigged penguin (debug preview only)
+
+- **Source and pipeline:** the generic stylized penguin is `Pinguin_001.fbx`
+  from the owner's own ithappy **Animals FREE** v2.3 Unity package. Run
+  `npm run build:penguin` to read the original gzip/tar `.unitypackage` in
+  Downloads, extract the FBX and palette in memory, and generate the single
+  self-contained `src/assets/models/penguin.glb`. The original pack stays
+  outside the repository. Its embedded idle/walk/run takes are retained;
+  armature `_rig` root-motion and `_end` leaf tracks are removed, constant
+  tracks keep one key, and the shared colour palette is reduced to 128 px.
+  Vite's `?url` import preserves GitHub Pages sub-path support.
+- **Runtime:** one cached load, cloned skeletons and one mixer per penguin.
+  Idle, walk and run weights crossfade with mover speed; planted-foot motion
+  in the source supplies speed-scaled gait timing. Bounding-box normalization
+  matches the old procedural model's 1.3-scale height and places the feet at
+  the mover's land contact. Animated sole vertices correct small source-gait
+  foot dips; the shore tilts the visual support plane only.
+- **Swimming and actions:** there is no swim clip. The visual body blends to
+  the existing horizontal `(PI/2 - pitch)` convention about its centre,
+  fades walking away, then applies strokes to the inspected `finL`/`finR`
+  bones after mixer evaluation and tucks the legs. The actual head bone is
+  `scull`; it supplies a small look/groom motion. Mixers advance only in the
+  existing coast frame callback while the coast is shown.
+- **Fallback and scope:** the existing procedural penguin remains during
+  loading or failure. Root names, count tags, focus rings, splashes and all
+  movement, care, questions, saves and progression remain in their existing
+  paths. Scenery and other animals are untouched. All outdoor release flags
+  remain false; this model is visible through debug preview only. Generic
+  "penguin" supersedes the old Humboldt identification; exercises are unchanged.
+- **Rejected:** importing into Unity and re-exporting adds an unnecessary
+  tool round-trip when the original FBX already contains the rig and takes.
+  Keeping the procedural model as the primary visual was rejected for this
+  owner-requested asset replacement; it remains the resilient fallback.

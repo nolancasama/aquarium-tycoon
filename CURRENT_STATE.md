@@ -121,6 +121,35 @@ locks (plan review)" and "Lagoon and sanctuary: decided while building".
 - All five doorway plaques and the Trophies plaque now follow each bay's actual wall tangent, instead of rotating part-way toward the camera. Thin framed backings sit at the curved plaster and the sign faces project slightly forward, so the labels appear physically mounted above their doorways.
 - The camera, doors, map links, interactive sign hit areas, and saves are unchanged. A new mount-orientation test guards the alignment. Inspect side-door legibility and wall contact in the deployed hub.
 
+## Penguin Coast redesign + ITHappy penguin (2026-11-10, preview only)
+
+Design: DESIGN_DECISIONS.md 2026-11-10 entries on the Penguin Coast redesign and
+the owner-supplied penguin model.
+
+- **Scenery** (`scene/coast/CoastZone.tsx`, procedural, same footprint): layered
+  snowy cliffs, a sloping stony shore, a deeper-looking pool (rocky floor,
+  underwater cliffs, boulders, bubbles), a climbable ice floe (an island in
+  `data/coast.ts`), small floes and boulders as swim obstacles, two low resting
+  ledges, nest visits. Seal Cove and Otter Bay unchanged.
+- **Views:** Penguins view re-framed; an Underwater / みずのなか button appears only
+  in the Penguins view (`coastUnderwater` in the store). A 7.2 s skippable
+  first-visit reveal (`coastReveal` in `flow/coast.ts`), debug preview only.
+- **Penguin model:** `src/assets/models/penguin.glb` (232 KiB, 818 tris, idle /
+  walk / run, root motion stripped) built by `npm run build:penguin` from the
+  owner's `Downloads/3D & Game Assets/Unity_2021_Animals_FREE_v2.3.unitypackage`
+  (the pack stays outside the repo; see `src/assets/models/README.md`). Runtime
+  `scene/coast/penguinAsset.ts`: one cached load, cloned skeletons, a mixer per
+  penguin, procedural horizontal swim with flipper strokes; the old procedural
+  penguin is the loading/failure fallback. Named just "penguin" (no species).
+- **Perf (SwiftShader 1366×768):** overview 67 calls / 24.6k tris; Penguins 35 /
+  16.6k; Underwater 13 / 11.1k.
+- **Fixed:** leaving the coast during the reveal recursed until the stack
+  overflowed (`skipCoastReveal` updated the model before clearing its timer);
+  `coast.spec.ts` "leaving the coast while its first-visit reveal plays" fails
+  without the fix.
+- **Not verified:** real Chromebook fps; motion watched live (frames only);
+  the shore outline is still fairly square from the Penguins view.
+
 ## Coastal & Polar Zone (2026-11-10)
 
 Design: DESIGN_DECISIONS.md "Grand Aquarium Hub + Coastal & Polar Zone (plan review)"
@@ -187,7 +216,7 @@ and "Hub and coast: decided while building".
   - The 320-coin price is set by comparison with the tunnel, not simulated in
     `economy.test.ts`.
   - Seals rest beside their haul-out rock rather than on top of it.
-  - The penguin nest is scenery (penguins do not go inside).
+  - Penguins visit the nest (rest beside it) since the 2026-11-10 redesign.
   - The exhibit-local item slots are fixed points.
   - Coastal visitors on the walkway are a simple stroll (4 people), separate
     from the hub crowd.

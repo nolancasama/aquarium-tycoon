@@ -5,6 +5,7 @@
   "description": "Aquarium Tycoon - a 3D aquarium management game where English helps you care for fish and visitors (Japanese grade 3).",
   "type": "module",
   "scripts": {
+    "build:penguin": "node scripts/build-penguin.mjs",
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview",
