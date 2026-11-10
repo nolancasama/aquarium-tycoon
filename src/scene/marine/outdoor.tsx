@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { shaderTime } from "../materials";
@@ -155,6 +155,8 @@ export function outlineMask(outline: Pt[], box: { minX: number; minZ: number; w:
   g.fill();
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  // Canvas row 0 is the box's minZ, and the shader reads v = 0 there: no vertical flip.
+  t.flipY = false;
   return t;
 }
 
@@ -342,6 +344,76 @@ export function MarineFx({ pool, active }: { pool: { current: FxPool | null }; a
   return <mesh ref={ref} geometry={geo} material={mat} frustumCulled={false} renderOrder={9} raycast={() => undefined} />;
 }
 
+// ------------------------------------------------------------------ "Look!" bubbles and number tags
+
+function lookTexture(label: string, ja: string) {
+  const c = document.createElement("canvas");
+  c.width = 512; c.height = 256;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "rgba(0,0,0,0.25)";
+  g.beginPath(); g.roundRect(14, 22, 488, 196, 60); g.fill();
+  g.fillStyle = "#ffcf3f";
+  g.beginPath(); g.roundRect(8, 10, 488, 196, 60); g.fill();
+  g.lineWidth = 10; g.strokeStyle = "#ffffff"; g.stroke();
+  g.beginPath(); g.moveTo(230, 206); g.lineTo(256, 250); g.lineTo(282, 206); g.fill();
+  g.fillStyle = "#3b2a00"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.font = "900 74px system-ui, sans-serif"; g.fillText("Look!", 252, 74);
+  g.font = "800 38px system-ui, sans-serif"; g.fillText(label, 252, 140);
+  g.font = "700 26px system-ui, sans-serif"; g.fillText(ja, 252, 180);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const lookMats = new Map<string, THREE.SpriteMaterial>();
+export function lookMaterial(label: string, ja: string) {
+  let m = lookMats.get(label);
+  if (!m) { m = new THREE.SpriteMaterial({ map: lookTexture(label, ja), depthTest: false }); lookMats.set(label, m); }
+  return m;
+}
+
+export interface LookView { label: string; ja: string; x: number; y: number; z: number }
+
+/**
+ * A tappable "Look!" bubble over something worth watching (area-local position
+ * from `get` each frame; null hides it). It keeps about the same size on screen.
+ */
+export function LookSprite({ get, origin, onTap, name, scale = 0.07 }: { get: () => LookView | null; origin: { x: number; z: number }; onTap: () => void; name: string; scale?: number }) {
+  const ref = useRef<THREE.Sprite>(null);
+  const [label, setLabel] = useState<{ label: string; ja: string } | null>(null);
+  useFrame(({ camera }) => {
+    const v = get();
+    if ((v?.label ?? null) !== (label?.label ?? null)) setLabel(v ? { label: v.label, ja: v.ja } : null);
+    const s = ref.current;
+    if (!s || !v) return;
+    s.position.set(v.x, v.y + Math.sin(shaderTime.value * 3) * 0.12, v.z);
+    const d = camera.position.distanceTo(new THREE.Vector3(origin.x + v.x, v.y, origin.z + v.z));
+    const k = THREE.MathUtils.clamp(d * scale, 1.4, 60);
+    s.scale.set(k * 2, k, 1);
+  });
+  if (!label) return null;
+  return <sprite ref={ref} material={lookMaterial(label.label, label.ja)} renderOrder={14} onClick={(e) => { if (e.delta > 8) return; e.stopPropagation(); onTap(); }} name={name} />;
+}
+
+const numberMats = new Map<number, THREE.SpriteMaterial>();
+/** A round yellow number tag (counting questions). */
+export function numberMaterial(n: number) {
+  let m = numberMats.get(n);
+  if (!m) {
+    const c = document.createElement("canvas");
+    c.width = c.height = 128;
+    const g = c.getContext("2d")!;
+    g.fillStyle = "#ffcf3f"; g.beginPath(); g.arc(64, 64, 58, 0, Math.PI * 2); g.fill();
+    g.lineWidth = 8; g.strokeStyle = "#ffffff"; g.stroke();
+    g.fillStyle = "#3b2a00"; g.font = "900 78px system-ui, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(String(n), 64, 70);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    m = new THREE.SpriteMaterial({ map: t, depthTest: false });
+    numberMats.set(n, m);
+  }
+  return m;
+}
+
 // ------------------------------------------------------------------ light shafts (under water)
 
 /** Soft sun shafts slanting down from the surface, seen only from under water. One draw each, additive. */
@@ -376,6 +448,50 @@ export function LightShafts({ spots, depth, active }: { spots: { x: number; z: n
       ))}
     </group>
   );
+}
+
+// ------------------------------------------------------------------ a small fish school (under water)
+
+/** Little silver fish milling outside an underwater window (one instanced draw; only drawn from below the surface). */
+export function FishSchool({ centre, radius, depth, n = 26, active }: { centre: { x: number; z: number }; radius: number; depth: number; n?: number; active: () => boolean }) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const geo = useMemo(() => {
+    const body = new THREE.SphereGeometry(0.08, 6, 4).scale(0.45, 0.8, 1.7);
+    const tail = new THREE.ConeGeometry(0.07, 0.12, 4).rotateX(-Math.PI / 2).scale(0.3, 1, 1).translate(0, 0, -0.17);
+    return mergeTwo(body, tail);
+  }, []);
+  const mat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#c8d6de" }), []);
+  const fish = useMemo(() => Array.from({ length: n }, (_, i) => ({ r: radius * (0.55 + ((i * 37) % 45) / 100), y: depth + ((i * 53) % 100) / 100 * 1.6, p: i * 0.61, w: 0.32 + ((i * 17) % 10) / 60 })), [n, radius, depth]);
+  const o = useMemo(() => new THREE.Object3D(), []);
+  useFrame(() => {
+    const m = ref.current;
+    if (!m) return;
+    m.visible = active();
+    if (!m.visible) return;
+    const t = shaderTime.value;
+    // The school drifts as one, each fish a little out of step.
+    const sway = Math.sin(t * 0.13) * radius * 0.5;
+    fish.forEach((f, i) => {
+      const a = f.p + t * f.w;
+      o.position.set(centre.x + sway + Math.sin(a) * f.r, f.y + Math.sin(t * 0.8 + f.p) * 0.2, centre.z + Math.cos(a) * f.r * 0.6);
+      o.rotation.set(0, a + Math.PI / 2 + Math.sin(t * 7 + i) * 0.12, 0);
+      o.updateMatrix();
+      m.setMatrixAt(i, o.matrix);
+    });
+    m.instanceMatrix.needsUpdate = true;
+  });
+  return <instancedMesh ref={ref} args={[geo, mat, n]} frustumCulled={false} raycast={() => undefined} />;
+}
+
+function mergeTwo(a: THREE.BufferGeometry, b: THREE.BufferGeometry) {
+  const g = new THREE.BufferGeometry();
+  const pa = a.toNonIndexed().getAttribute("position"), pb = b.toNonIndexed().getAttribute("position");
+  const pos = new Float32Array(pa.count * 3 + pb.count * 3);
+  pos.set(pa.array as Float32Array, 0);
+  pos.set(pb.array as Float32Array, pa.count * 3);
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
 }
 
 // ------------------------------------------------------------------ gulls

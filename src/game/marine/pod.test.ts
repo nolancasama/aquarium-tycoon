@@ -3,6 +3,8 @@ import { bodyR, Pod, surfaceY, type MemberDef, type PodEvent, type PodOptions } 
 import type { WaterDomain } from "./domain";
 import { LAGOON_DOMAIN } from "../data/lagoon";
 import { LAGOON_POD, LAGOON_POD_OPTIONS } from "../lagoon/lagoonRuntime";
+import { COVE_DOMAIN, SANCTUARY_DOMAIN } from "../data/sanctuary";
+import { BELUGA_POD, BELUGA_POD_OPTIONS, ORCA_POD, ORCA_POD_OPTIONS } from "../sanctuary/sanctuaryRuntime";
 
 /**
  * The swimming simulation against invariants, for several seeds and minutes
@@ -24,7 +26,7 @@ export function runPod(domain: WaterDomain, defs: MemberDef[], opts: PodOptions,
       const where = `${m.id} t=${t.toFixed(1)} mode=${m.mode}`;
       if (![m.x, m.y, m.z, m.yaw, m.pitch, m.speed, m.phase, m.amp].every(Number.isFinite)) { problems.push(`NaN ${where}`); continue; }
       const inside = domain.inside(m.x, m.z);
-      if (inside < m.p.margin * 0.45 - 0.05) problems.push(`shore ${inside.toFixed(2)} ${where}`);
+      if (inside < m.margin * 0.45 - 0.05) problems.push(`shore ${inside.toFixed(2)} ${where}`);
       const reach = m.len * 0.5 * Math.cos(m.pitch);
       const snout = domain.inside(m.x + Math.sin(m.yaw) * reach, m.z + Math.cos(m.yaw) * reach);
       if (snout < -0.15) problems.push(`snout in the shore ${snout.toFixed(2)} ${where}`);
@@ -67,6 +69,32 @@ describe("dolphin pod in the lagoon", () => {
     }
     expect(leaps).toBeGreaterThanOrEqual(1);
     expect(leaps).toBeLessThan(breaths / 3);
+  });
+
+  it("orcas: stay in the bay, clear of the island, boat and station; breathe, dive, travel together, spy-hop now and then", () => {
+    let spyhops = 0;
+    for (const seed of [1, 2, 3]) {
+      const { events, problems, pod } = runPod(SANCTUARY_DOMAIN, ORCA_POD, ORCA_POD_OPTIONS, seed, 300);
+      expect(problems).toEqual([]);
+      expect(count(events, "breathe")).toBeGreaterThanOrEqual(8);
+      expect(count(events, "dive")).toBeGreaterThanOrEqual(1);
+      expect(count(events, "pair")).toBeGreaterThanOrEqual(1);
+      spyhops += count(events, "spyhop");
+      const yuki = pod.byId("yuki")!, chibi = pod.byId("chibi")!;
+      expect(Math.hypot(yuki.x - chibi.x, yuki.z - chibi.z)).toBeLessThan(12);
+      for (const m of pod.members) expect(SANCTUARY_DOMAIN.inside(m.x, m.z)).toBeGreaterThan(0);
+    }
+    expect(spyhops).toBeGreaterThanOrEqual(1);
+  });
+
+  it("belugas: stay in their own cove", () => {
+    for (const seed of [4, 5]) {
+      const { problems, events, pod } = runPod(COVE_DOMAIN, BELUGA_POD, BELUGA_POD_OPTIONS, seed, 240);
+      expect(problems).toEqual([]);
+      expect(count(events, "breathe")).toBeGreaterThanOrEqual(6);
+      // The cove and the orcas' bay never overlap.
+      for (const m of pod.members) expect(SANCTUARY_DOMAIN.inside(m.x, m.z)).toBeLessThan(0);
+    }
   });
 
   it("comes to a point when attracted (feeding) and holds still for a question", () => {

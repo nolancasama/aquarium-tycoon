@@ -2,6 +2,7 @@ import { useGame, type OutdoorArea } from "../game/store";
 import { Icon } from "./icons";
 import { Ja } from "./Talk";
 import { LAGOON_MILESTONES } from "../game/flow/lagoon";
+import { SANCTUARY_MILESTONES } from "../game/flow/sanctuary";
 import "./OutdoorHud.css";
 
 /** Shared pieces of the two outdoor areas' HUDs: the arrival card and the milestone celebration. */
@@ -25,17 +26,12 @@ export function OutdoorArrival() {
 }
 
 type Milestones = readonly { en: string; ja: string; reward: { en: string; ja: string } }[];
-const MILESTONES: Partial<Record<OutdoorArea, Milestones>> = { lagoon: LAGOON_MILESTONES };
-
-/** Register the sanctuary's milestones (kept here so the card stays one component). */
-export function registerMilestones(area: OutdoorArea, list: Milestones) {
-  MILESTONES[area] = list;
-}
+const MILESTONES: Record<OutdoorArea, Milestones> = { lagoon: LAGOON_MILESTONES, sanctuary: SANCTUARY_MILESTONES };
 
 export function AreaCelebration() {
   const c = useGame((s) => s.areaCelebration);
   if (!c) return null;
-  const ms = MILESTONES[c.area]?.[c.milestone - 1];
+  const ms = MILESTONES[c.area][c.milestone - 1];
   if (!ms) return null;
   return (
     <div className="coast-celebration outdoor-celebration ui" data-testid="area-celebration" data-area={c.area} data-milestone={c.milestone} role="status">

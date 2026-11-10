@@ -1,5 +1,121 @@
 # Current State
 
+## Release locks: Coastal & Polar, Dolphin Lagoon, Grand Ocean Sanctuary (2026-11-10)
+
+Design: DESIGN_DECISIONS.md "Dolphin Lagoon + Grand Ocean Sanctuary, release
+locks (plan review)" and "Lagoon and sanctuary: decided while building".
+
+- **All three are built and release-locked** (`src/game/data/release.ts`: one
+  `{ built, released }` entry per area; all `released: false`). Travel needs a
+  release and the save's ownership, or a development preview (`roomOpen`);
+  save validation uses ownership only (`roomOwned`), so saved coastal habitats
+  are kept. The coast's purchase rule (`openCoast`) also refuses while locked.
+- **Hub and map:** the three doorways show their artwork with a lock, a rope
+  and a bilingual COMING SOON ribbon; plaques read DOLPHIN LAGOON / イルカの
+  ラグーン and GRAND OCEAN SANCTUARY / うみの サンクチュアリ. A tap says "Coming
+  soon! / もうすぐ オープン！ おたのしみに！" (doorway: toast; map card: the card
+  itself) and nothing else happens. A coast owner's map card shows "n/5 saved".
+- **Saved coastal progress** (`coastOpen`, milestones, habitats, bagged animals,
+  unplaced items) loads into `model.stored` (`logic/stored.ts`), out of every
+  rule (care decay, Rush Hour checklists, the Level 8 judge), and is written
+  back unchanged. Releasing the coast later brings it back as it was.
+- **Lagoon and sanctuary state** (`progress.lagoon`, `progress.sanctuary`) is
+  dropped on load while the area is unreleased; nothing in ordinary play
+  creates it. No unlock rule or price exists yet (deliberately undecided).
+- **Previews (Ctrl+Alt+D, "Release-locked areas · preview"):** Preview
+  Coastal & Polar Zone / coast: all habitats / Dolphin Lagoon / Grand Ocean
+  Sanctuary, milestone jumps 1–5 for each (through the real rules), Return to
+  Grand Hub, End preview. A preview is a sandbox (`flow/preview.ts`): the save
+  is flushed first, autosave stops, a "PREVIEW · not saved" badge shows; End
+  preview restores the model; a reload, the title, New Game or Continue simply
+  forget it. Test hooks: `__at.preview(area)`, `endPreview()`, `release()`,
+  `outdoor(area)`, `lagoonTo(n)`, `sanctuaryTo(n)`, `coastTo(n)` (now in a preview).
+- **To release an area:** set `released: true` in `data/release.ts`, decide
+  its unlock rule (and price) and set `progress.lagoonOpen` / `sanctuaryOpen`
+  through it; the coast already has its rule (Shark Tunnel trophy, 320 coins).
+
+## Dolphin Lagoon (2026-11-10, preview only)
+
+- **Where:** `ROOMS` id `lagoon` (wing of the hub), area origin (−320, 260).
+  Layout data `game/data/lagoon.ts`; rules `logic/lagoon.ts`; live state
+  `game/lagoon/lagoonRuntime.ts`; flow `game/flow/lagoon.ts`; scene
+  `scene/lagoon/DolphinLagoon.tsx`; HUD `ui/LagoonHud.tsx`.
+- **Scene:** open sky with clouds, the lagoon (44 × 24 m, 6.5 m deep) and a bay
+  pool under a footbridge, a breakwater with a sea gate, headlands with a
+  lighthouse, sailboats, gulls; the boardwalk on a quay; the underwater
+  gallery (a room behind a 3-pane window; blue haze, light shafts, a fish
+  school); the observation deck; the care pontoon and its keeper; beach,
+  palms. First visit: a sweep out of the boardwalk into the open air and an
+  arrival card.
+- **Dolphins:** Sora and her calf Mimi (echelon), Kai, Nami: one mesh each,
+  vertical fluke beat, turns, breaths with blows, fluke-up dives, rare leaps,
+  pairs and group swims, curious passes by the viewpoint in use.
+- **Play:** viewpoints Lagoon / Underwater (fade) / Deck / Care; three needs
+  (Food, Play, Together) that change only while the lagoon is shown; Feed (the
+  keeper throws fish, the pod comes up to the pontoon); Toys (ball, bubble
+  curtain, kelp as a reward); Look! moments (swimming together, breathing, a
+  deep dive, a jump) recorded by tapping; visitor questions every 22–36 s:
+  How many dolphins? (pod gathered, numbered), Where is the dolphin? (on /
+  under the water, held at that depth), Can it swim / fly / jump? (jump only
+  after a leap), What's this?, Do you like dolphins?; Pico's Dolphin Discovery
+  tour (4 questions). Milestones: Welcome (arch) → Dolphin Friends (kelp) →
+  Deep Dive (deck telescopes) → Happy Dolphins (dolphin fountain) → Dolphin
+  Discovery (trophy, also on the hub shelves and the trophy card).
+- **Budget (SwiftShader, 1366×768):** 9–45 draw calls, 33–50k triangles
+  depending on the view (halls: 62 / 40k).
+
+## Grand Ocean Sanctuary (2026-11-10, preview only)
+
+- **Where:** `ROOMS` id `sanctuary`, origin (420, 500). Data
+  `game/data/sanctuary.ts`; rules `logic/sanctuary.ts`; live state
+  `game/sanctuary/sanctuaryRuntime.ts`; flow `game/flow/sanctuary.ts`; scene
+  `scene/sanctuary/OceanSanctuary.tsx`; HUD `ui/SanctuaryHud.tsx`.
+- **Scene:** a 230 × 130 m bay (14 m deep) between cliff-topped headlands,
+  open to the ocean beyond a buoy line; an island with pines and an islet; the
+  research boat; the underwater observation station on its pier (a round room
+  with windows, light shafts, fish); the research station and dock; the care
+  platform; the observation point on the west clifftop (rail, telescopes,
+  visitors); Beluga Cove behind its own breakwater (ice floes, a viewing
+  platform). First visit: an aerial sweep in from the ocean.
+- **Animals:** orcas Yuki (matriarch, leads), her calf Chibi, Kuro (male, tall
+  fin), Umi (nicked fin), with eye patches, saddles and white bellies; they
+  patrol past the station, the island and the boat, spy-hop now and then.
+  Belugas Shiro, Mochi, Kumo (milestone 3), in their own water, nodding and
+  turning their heads.
+- **Play:** viewpoints Lookout / Orcas (follow camera low over the water) /
+  Underwater (fade) / Research / Belugas; Research Notebook of 8 stickers
+  (breathing, a deep dive, big, together, mother and baby, looking at us,
+  belugas, a clean ocean) from Look! moments and answers; Ocean Cleanup (tap 5
+  pieces of floating litter, each named aloud); Habitat Improvement (kelp
+  forest / quiet zone / ice treats; loud music and a small pool are explained
+  in Japanese, not applied); questions: What's this?, Is it big or small?, How
+  many orcas?, Where is the orca? (by the island / by the boat), Do you like
+  orcas?, beluga What's this? / What color is it?; Pico's final tour (5
+  questions). Milestones: Welcome (flags) → Ocean Giants (size board) → Family
+  and Friends (Beluga Cove) → Ocean Guardians (guardian flag) → Grand Sanctuary
+  Celebration (trophy). No feeding, cleaning or decorating.
+- **Budget (SwiftShader, 1366×768):** 11–39 draw calls, 44–58k triangles.
+
+## Outdoor areas: how they were checked (2026-11-10)
+
+- Unit: `logic/release.test.ts` (shown to fail with `roomOpen` in save
+  validation and without storing), `logic/outdoor.test.ts` (shown to fail with
+  milestone 2 missing its questions and with saved decorations trusted),
+  `marine/pod.test.ts` (dolphins, orcas, belugas over minutes of simulated
+  time against invariants; it caught beach stranding, a snout in the shore, a
+  calf pinned by the pontoon and an orca calf left behind by adult margins).
+- E2E: `tests/e2e/outdoor.spec.ts` (lagoon through the real Ctrl+Alt+D menu;
+  sanctuary to its trophy with real taps on litter; HUD fit at 1366×768,
+  1280×720, 1024×768: it caught the goals card covering the viewpoints).
+  `coast.spec.ts` and `hub.spec.ts` now cover the locks.
+- Frames by eye on SwiftShader: `node scripts/lagoon-review.mjs <url> <w> <h> <ms>`
+  and `node scripts/sanctuary-review.mjs <url> <w> <h> <ms>` (serve a build:
+  `npx vite build && npx vite preview --port 5341`; the dev server's watcher
+  reloads mid-run on this Windows host).
+- **Not verified:** real Chromebook frame rates in either area; motion judged
+  from frames, not watched live; real microphones on the new phrases; children
+  playing either area.
+
 ## Grand Hub wall-mounted signs (2026-11-10)
 
 - All five doorway plaques and the Trophies plaque now follow each bay's actual wall tangent, instead of rotating part-way toward the camera. Thin framed backings sit at the curved plaster and the sign faces project slightly forward, so the labels appear physically mounted above their doorways.
@@ -10,8 +126,10 @@
 Design: DESIGN_DECISIONS.md "Grand Aquarium Hub + Coastal & Polar Zone (plan review)"
 and "Hub and coast: decided while building".
 
+- **Release-locked since 2026-11-10** (see "Release locks" above): nothing
+  below is reachable in ordinary play; saved coastal progress is kept.
 - **What:** a wing entered from the hub (`ROOMS` id `coast`, index 6, x −152..−108).
-  It unlocks when the Shark Tunnel trophy is won and costs 320 coins
+  When released, it unlocks when the Shark Tunnel trophy is won and costs 320 coins
   (`logic/coast.ts`), bought through an offer card from the hub doorway or the
   Map. Three cutaway exhibits behind one walkway: Penguin Coast (pad M,
   Humboldt penguins), Seal Cove (pad N, harbor seals) and Otter Bay (pad O, sea
@@ -47,9 +165,10 @@ and "Hub and coast: decided while building".
 - **Saves:** optional `coastOpen`, `coastIntroSeen` and `coast`. A save that
   claims the coast without the tunnel trophy is not trusted, and missing
   habitats are rebuilt for the milestone reached. Save version unchanged.
-- **Debug (Ctrl+Alt+D):** "Unlock Coastal & Polar Zone", "Open all coastal
-  habitats", and Coast 1–5 milestone jumps through the real rules.
-  `window.__at.coastTo(n)` and `coast()` are the test hooks.
+- **Debug (Ctrl+Alt+D):** "Preview Coastal & Polar Zone", "Preview coast: all
+  habitats", and Coast 1–5 milestone jumps through the real rules, all inside
+  the session-only preview sandbox (they used to change the save).
+  `window.__at.coastTo(n)` (starts a preview) and `coast()` are the test hooks.
 - **Budget (SwiftShader, milestone 5):** the overview is 80 draw calls / 21.1k triangles (above the halls' 62 calls; triangles well below); penguins 31 / 9.6k, seals 23 / 5.2k, otters 30 / 8.7k.
 - **Verified (00b6ff5):** full Playwright suite 79/79 on the production preview (21.1 min); typecheck; unit tests 686/686, including `logic/coast.test.ts`
   and `coast/motion.test.ts`. The motion test runs all three species × 3 seeds ×
@@ -647,9 +766,17 @@ approach frames, the trophy from front/side/rear.
 10. Coast follow-ups: simulate the 320-coin price in `economy.test.ts`; seals
    resting on top of their haul-out rock; penguins using the nest burrow; more
    coastal questions ("What's this? It's a seal."), a coast arrival camera
-   sweep; the two future attractions (Dolphin Lagoon, Ocean Sanctuary).
+   sweep.
 11. Decide whether `layout.spec` "HUD, close-up and prompts fit" needs to wait for
    the status panel's own transition (intermittent 50 px vs 48 px gap).
+12. Release decisions (owner): the order and unlock rules of the coast, the
+   lagoon and the sanctuary (prices, prerequisites); then flip `released` in
+   `data/release.ts` and add the lagoon's / sanctuary's opening rule.
+13. Before releasing the outdoor areas: preview them on a real school
+   Chromebook (fps in the lagoon overview and the sanctuary lookout, which draw
+   the most), watch the dolphins and orcas move live, and try the new phrases
+   with a real microphone (on / under, island / boat, big / small, the animal
+   names).
 
 ## Codex / Delegated Work
 None pending. The Shark Tunnel's two Codex slices (worktrees aq-st1 and aq-st2) stopped

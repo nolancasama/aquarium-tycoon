@@ -13,7 +13,11 @@ import { decorVersion } from "./data/decor";
 import { PICO } from "./world";
 import { project } from "../scene/CameraRig";
 import { HUB_BAYS, HUB_R, onRing } from "./data/hub";
-import { coastTo, lagoonTo } from "../ui/DebugPanel";
+import { coastTo, lagoonTo, sanctuaryTo } from "../ui/DebugPanel";
+import { sanctRt } from "./sanctuary/sanctuaryRuntime";
+import { sanctFocus, startSanctActivity, type SanctQuestionKind } from "./flow/sanctuary";
+import { startLagoonActivity, type LagoonQuestion } from "./flow/lagoon";
+import { SANCTUARY_ORIGIN } from "./data/sanctuary";
 import { enterOutdoor } from "./flow/outdoor";
 import { lagoonRt } from "./lagoon/lagoonRuntime";
 import { LAGOON_ORIGIN } from "./data/lagoon";
@@ -309,6 +313,59 @@ export function installE2eHook(seed: number) {
       const s = atmosphere.scene, c = atmosphere.camera;
       const fog = s?.fog as THREE.Fog | null | undefined;
       return { mode: atmosphere.mode, fog: fog ? { color: "#" + fog.color.getHexString(), near: fog.near, far: fog.far } : null, far: c?.far ?? null, cameraY: rt.camera.pos.y };
+    },
+    /** The sanctuary now: progress, view, the orcas and belugas (area-local), the Look! moment, the litter. */
+    sanctuary() {
+      const g = getGame();
+      const pod = (p: typeof sanctRt.orcas) => (p ? p.members.map((m) => ({ id: m.id, mode: m.mode, x: m.x, y: m.y, z: m.z, len: m.len })) : []);
+      return {
+        progress: g.model.progress.sanctuary ?? null, view: g.sanctuaryView, waiting: g.areaWaiting, activity: g.areaActivity, panel: g.areaPanel,
+        look: sanctRt.look ? { kind: sanctRt.look.kind, ids: sanctRt.look.ids } : null, time: sanctRt.time,
+        orcas: pod(sanctRt.orcas), belugas: pod(sanctRt.belugas),
+        litter: sanctRt.litter.map((l) => ({ i: l.i, kind: l.kind, picked: l.picked >= 0 })), cleanupOn: sanctRt.cleanupOn
+      };
+    },
+    sanctuaryTo(n: number) {
+      startPreview("sanctuary");
+      updateModel((m) => sanctuaryTo(m, n));
+    },
+    sanctuaryLook(kind: "breath" | "dive" | "together" | "family" | "spyhop" | "beluga", id = "kuro") {
+      const cove = kind === "beluga";
+      const m = (cove ? sanctRt.belugas : sanctRt.orcas)?.byId(id);
+      if (!m) return false;
+      sanctRt.look = { kind, ids: [id], x: m.x, y: 1, z: m.z, until: sanctRt.time + 30, cove };
+      return true;
+    },
+    sanctuaryVisitor() {
+      setGame({ areaWaiting: { area: "sanctuary", type: "child" } });
+    },
+    /** Ask a particular question now (tests then know the answer). */
+    sanctuaryAsk(kind: SanctQuestionKind) {
+      void startSanctActivity(kind);
+    },
+    lagoonAsk(kind: LagoonQuestion) {
+      void startLagoonActivity(kind);
+    },
+    /** What a sanctuary question is about: the ringed animal and what the camera frames (island / boat for "where"). */
+    sanctuaryFocus() {
+      return { ...sanctFocus };
+    },
+    /** Screen position of a sanctuary thing: the Look! bubble, a piece of litter ("litter:2") or an animal. */
+    sanctuaryWhere(what: string) {
+      const O = SANCTUARY_ORIGIN;
+      if (what === "look") {
+        const l = sanctRt.look;
+        if (!l) return null;
+        const m = (l.cove ? sanctRt.belugas : sanctRt.orcas)?.byId(l.ids[0]);
+        const y = rt.camera.pos.y < -0.1 ? Math.min(-1, (m?.y ?? -3) + 2) : 4 + (m?.len ?? 6) * 0.3;
+        return project(O.x + (m?.x ?? l.x), y, O.z + (m?.z ?? l.z));
+      }
+      if (what.startsWith("litter:")) {
+        const l = sanctRt.litter.find((x) => x.i === Number(what.slice(7)));
+        return l ? project(O.x + l.x, 0.3, O.z + l.z) : null;
+      }
+      const m = sanctRt.orcas?.byId(what) ?? sanctRt.belugas?.byId(what);
+      return m ? project(O.x + m.x, m.y, O.z + m.z) : null;
     },
     lagoonTo(n: number) {
       startPreview("lagoon");

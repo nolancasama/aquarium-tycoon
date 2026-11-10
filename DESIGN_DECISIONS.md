@@ -1778,3 +1778,46 @@ Built / released / unlocked are separate; nothing auto-unlocks; no prices.
 - Unlimited flying cameras: curated viewpoints only (as briefed).
 - Coins from decorative visitors: they never tip. Answered questions pay 3
   coins like the coast's.
+
+### Lagoon and sanctuary: decided while building (2026-11-10)
+
+- **Shared marine kit.** Both areas use one swimming simulation
+  (`game/marine/pod.ts`) over an authored polygon of water
+  (`game/marine/domain.ts`: beach edges shelve, wall edges such as a quay, a
+  viewing window or the buoy line stay deep). Steering looks ahead and a last
+  guard always allows a step that gains room, so no animal can strand or be
+  pinned; shore margins scale with body size so a calf can follow its mother
+  anywhere she goes. One shader (`scene/marine/cetaceanMaterial.ts`) does the
+  vertical fluke beat, turn bend, surfacing arch, the beluga's neck and the
+  markings per pixel. Rejected: skeletal rigs (draw calls) and per-species
+  shaders.
+- **Each area sets its own atmosphere** (sky dome, haze, far plane, sun,
+  underwater look) only while shown. The Shark Tunnel's environment used to
+  rewrite the scene's fog and background every frame even when hidden; it now
+  only does so while the wing is shown.
+- **Underwater windows are entered with a fade** (the gallery, the station):
+  the camera never passes through walls, rock or glass. Other viewpoint
+  changes glide.
+- **Curious animals.** Dolphins regularly cruise past the viewpoint the
+  visitors are using (the gallery window, below the deck, beside the
+  pontoon). Orcas patrol favourite places (past the station windows, beside the
+  island, by the boat) and the matriarch leads the family past the station
+  when its view opens; if they are far, a line says "The orcas are coming!".
+  Why: a big bay should not look like a tank, but a child must see animals.
+- **The pod.** Dolphins: Sora with her calf Mimi (echelon swimming), Kai, Nami.
+  Orcas: Yuki (the matriarch, leader) with her calf Chibi, Kuro (an adult male,
+  tall straight fin) and Umi (a nicked fin). Belugas: Shiro, Mochi, Kumo, in
+  their own cove and water (they never meet the orcas).
+- **Counting gathers the pod** loosely in open water, then the camera frames
+  their actual spread (no number hidden under the HUD).
+- **"Where is the orca?"** brings one orca beside the island or the boat and
+  holds it there before asking; the camera frames both.
+- **Look! moments pay no coins** (they repeat): they fill milestones and the
+  notebook. Answered visitor questions pay 3 coins, as at the coast; Pico's
+  tours pay 10 and 15 once.
+- **Cleanup litter is big and easy to tap** (a wide hit area) because it
+  floats far from the camera.
+- **Viewpoint buttons sit bottom-left** above the bottom bar: the goals card
+  grows with wrapped text at 1280 and 1024 wide (an e2e layout test caught it
+  covering the first button).
+- **A preview badge** ("PREVIEW · not saved") shows whenever the sandbox is on.

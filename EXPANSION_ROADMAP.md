@@ -17,7 +17,10 @@ Maintain the original audience: Japanese Grade 3 beginner EFL students on touch 
 - **Jellyfish Gallery:** third room, glowing displays, specialized tank types.
 - **Shark Tunnel (2026-11-06):** a wing behind the Atrium: one huge shark habitat with a walk-through glass tunnel, blacktip and zebra sharks, eagle rays, structures, tunnel visitors and English activities.
 - **Grand Aquarium Hub (2026-11-10):** a rotunda reached from the Aquarium Map (free once the Shark Tunnel is open), with doorways to every wing, two closed future attractions, a display tank, trophy shelves and a decorative crowd.
-- **Coastal & Polar Zone (2026-11-10):** penguins, seals and sea otters in three cutaway land-and-water exhibits entered from the hub; habitat items with needs, observation questions, five milestones and a trophy.
+- **Coastal & Polar Zone (2026-11-10):** penguins, seals and sea otters in three cutaway land-and-water exhibits entered from the hub; habitat items with needs, observation questions, five milestones and a trophy. **Release-locked the same day** (built, not available to players; saved progress kept).
+- **Dolphin Lagoon (2026-11-10, built, release-locked):** the first outdoor habitat, open only through a development preview. See D below.
+- **Grand Ocean Sanctuary (2026-11-10, built, release-locked):** the vast orca bay with a separate Beluga Cove, open only through a development preview. See E below.
+- **Release control (2026-11-10):** `src/game/data/release.ts` separates built, released and unlocked for each big area; previews are session-only sandboxes (Ctrl+Alt+D).
 - **Coral Reef Atrium (2026-11-01):** fourth, taller sunlit room with a freestanding giant reef habitat, coral decorations, parrotfish and (cleaner) shrimp, and two open pads for secondary exhibits.
 - Existing special tanks: hexagonal, panoramic, jellyfish cylinder, rocky cave.
 - Existing expansion animals include angelfish, goby, chromis school, moray eel, octopus, crab, stingray and distinct jellyfish species.
@@ -112,7 +115,9 @@ These are **distinct types of experiences**, not merely additional copies of the
 
 **English opportunities:** actions such as swim, dive, eat, sit, jump; simple animal observation tasks.
 
-### D. Outdoor Dolphin Lagoon
+### D. Outdoor Dolphin Lagoon — built 2026-11-10, release-locked
+
+**Status:** built and tested through the development preview (see `CURRENT_STATE.md` "Dolphin Lagoon" and `DESIGN_DECISIONS.md`). Not released; no unlock rule or price yet. Not yet built: more dolphins or a second pod, staff management beyond the keeper, a lagoon arrival tour, seasonal events.
 
 **Visual identity:** exiting the indoor aquarium into sunlight, open sky, spacious lagoon-like connected habitats, bridges, underwater windows and observation decks.
 
@@ -122,7 +127,9 @@ These are **distinct types of experiences**, not merely additional copies of the
 
 **Gameplay:** focus on observing, caring for and enriching animals, **not forced performance shows**. Do not make the main mechanic endlessly tapping Feed/Clean.
 
-### E. Grand Ocean Sanctuary — proposed ultimate centerpiece
+### E. Grand Ocean Sanctuary — built 2026-11-10, release-locked
+
+**Status:** built and tested through the development preview (orcas in a 230 × 130 m bay, Beluga Cove opening at milestone 3, research notebook, ocean cleanup, habitat improvement, five milestones). Not released; it is not called a numbered Level. Not yet built: rescue stories, more conservation missions, a second orca family.
 
 **Visual identity:** an enormous coastal bay or seaside sanctuary with islands/headlands, naturalistic water boundaries, viewing decks and underwater observation areas; it should dwarf the original halls.
 
@@ -152,6 +159,7 @@ These are **distinct types of experiences**, not merely additional copies of the
 
 ## Decisions explicitly left open
 
+- When to release the Coastal & Polar Zone, the Dolphin Lagoon and the Grand Ocean Sanctuary, in what order, and their unlock rules and prices (flip `released` in `src/game/data/release.ts` only as a deliberate release change; nothing auto-unlocks one area after another).
 - Which new wing comes first after Jellyfish Gallery.
 - Exact level/unlock sequence, costs, rewards and game duration.
 - The final shape of the world map or branching routes.

@@ -98,6 +98,8 @@ export interface Swimmer {
   air: { vx: number; vz: number } | null;
   diveEmitted: boolean;
   deepY: number;
+  /** Shore margin for this body (a calf keeps closer than an adult: it can follow its mother anywhere she goes). */
+  margin: number;
 }
 
 export interface PodEvent {
@@ -133,6 +135,8 @@ export interface PodOptions {
   planEvery: readonly [number, number];
   /** The usual leader (else the first adult). */
   leader?: string;
+  /** Favourite places on the patrol (a window, an island): a share of new waypoints go near one. */
+  hotspots?: { x: number; z: number; r: number; w: number }[];
 }
 
 export class Pod {
@@ -156,7 +160,8 @@ export class Pod {
         x: spot.x, y: -between(r, p.depth), z: spot.z, yaw: r() * TAU, pitch: 0, roll: 0,
         speed: p.cruise * 0.6, vy: 0, phase: r() * TAU, amp: 0.4, turn: 0, arch: 0,
         mode: "swim", modeT: 0, modeLen: 0, breathAt: 3 + i * 4 + r() * 6, depthPref: between(r, p.depth),
-        target: spot, follow: null, attract: null, hold: 0, holdY: null, air: null, diveEmitted: false, deepY: -2
+        target: spot, follow: null, attract: null, hold: 0, holdY: null, air: null, diveEmitted: false, deepY: -2,
+        margin: p.margin * Math.min(1.15, Math.max(0.5, d.size))
       };
       this.members.push(s);
     });
@@ -260,15 +265,26 @@ export class Pod {
 
   private newTarget(s: Swimmer) {
     const r = this.rand, d = this.domain;
+    // Now and then, a favourite place on the patrol.
+    let pick = r();
+    for (const h of this.opts.hotspots ?? []) {
+      pick -= h.w;
+      if (pick >= 0) continue;
+      for (let i = 0; i < 8; i++) {
+        const a = r() * Math.PI * 2, rr = r() * h.r, x = h.x + Math.cos(a) * rr, z = h.z + Math.sin(a) * rr;
+        if (d.inside(x, z) >= s.margin + 1 && d.floor(x, z) <= -(s.p.depth[0] + 1.2)) { s.target = { x, z }; return; }
+      }
+      break;
+    }
     let best: Pt | null = null, score = -Infinity;
     for (let i = 0; i < 18; i++) {
       const a = s.yaw + (r() - 0.5) * 2.6, dist = between(r, s.p.roam);
       const x = s.x + Math.sin(a) * dist, z = s.z + Math.cos(a) * dist;
-      if (d.inside(x, z) < s.p.margin + 1 || d.floor(x, z) > -(s.p.depth[0] + 1.2)) continue;
+      if (d.inside(x, z) < s.margin + 1 || d.floor(x, z) > -(s.p.depth[0] + 1.2)) continue;
       const sc = -Math.abs(wrap(a - s.yaw)) + r() * 0.8;
       if (sc > score) { score = sc; best = { x, z }; }
     }
-    s.target = best ?? randomPoint(d, r, s.p.margin + 1, s.p.depth[0] + 1) ?? d.centre;
+    s.target = best ?? randomPoint(d, r, s.margin + 1, s.p.depth[0] + 1) ?? d.centre;
   }
 
   private tick(dt: number) {
@@ -296,7 +312,8 @@ export class Pod {
     } else if (s.attract) {
       gx = s.attract.x; gz = s.attract.z;
       const dist = Math.hypot(gx - s.x, gz - s.z);
-      want = dist < 2 ? p.slow * 0.5 : Math.min(p.cruise * 1.25, 0.7 + dist * 0.35);
+      // Far away: hurry over (a big animal crossing a whole bay); close: ease in.
+      want = dist < 2 ? p.slow * 0.5 : dist > s.len * 4 ? p.fast * 0.85 : Math.min(p.cruise * 1.25, 0.7 + dist * 0.35);
       if ((s.attract.kind === "toy" || s.attract.kind === "bubbles") && dist < s.len * 0.6) {
         this.emit("touch", s);
         s.attract = null;
@@ -323,7 +340,7 @@ export class Pod {
     // --------------------------------------------------- steering (look ahead, never into the shore)
     if (s.mode !== "leap") {
       let yawWant = desiredYaw ?? Math.atan2(gx - s.x, gz - s.z);
-      const margin = s.attract ? p.margin * 0.6 : p.margin;
+      const margin = s.attract ? s.margin * 0.6 : s.margin;
       const look = s.len * 0.6 + Math.max(s.speed, 0.5) * 2.2 + 1;
       if (!this.clear(s, yawWant, look, margin)) {
         let found: number | null = null;
@@ -364,7 +381,7 @@ export class Pod {
       case "rise":
         yWant = surf;
         if (s.y > surf - 0.15) {
-          const room = this.clear(s, s.yaw, 7, p.margin) && floor < -2.4;
+          const room = this.clear(s, s.yaw, 7, s.margin) && floor < -2.4;
           if (p.leap > 0 && s.speed > p.cruise * 0.75 && room && r() < p.leap) this.launch(s);
           else if (p.spyhop > 0 && floor < -s.len * 0.6 && r() < p.spyhop) this.setMode(s, "spyhop", 2.4 + r() * 1.4);
           else {
@@ -444,7 +461,7 @@ export class Pod {
       const inNow = d.inside(s.x, s.z), inNext = d.inside(nx, nz);
       const snNow = d.inside(s.x + fx * reach, s.z + fz * reach), snNext = d.inside(nx + fx * reach, nz + fz * reach);
       const flNow = d.floor(s.x, s.z), flNext = d.floor(nx, nz);
-      const ok = (inNext >= p.margin * 0.45 || inNext > inNow) && (snNext >= 0.25 || snNext > snNow) && (flNext <= -(p.depth[0] * 0.7) || flNext < flNow);
+      const ok = (inNext >= s.margin * 0.45 || inNext > inNow) && (snNext >= 0.25 || snNext > snNow) && (flNext <= -(p.depth[0] * 0.7) || flNext < flNow);
       if (ok) { s.x = nx; s.z = nz; }
       else {
         const away = this.openWater(s.x, s.z);

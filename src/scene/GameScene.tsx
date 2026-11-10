@@ -17,6 +17,7 @@ import { MainRooms, SharkTunnel } from "./tunnel/SharkTunnel";
 import { GrandHub } from "./hub/GrandHub";
 import { CoastZone } from "./coast/CoastZone";
 import { DolphinLagoon } from "./lagoon/DolphinLagoon";
+import { OceanSanctuary } from "./sanctuary/OceanSanctuary";
 
 /** Renderer stats for the test hook (draw calls / triangles per frame). */
 export const perf = { calls: 0, triangles: 0, fps: 0 };
@@ -104,6 +105,7 @@ export function GameScene() {
       <GrandHub />
       <CoastZone />
       <DolphinLagoon />
+      <OceanSanctuary />
       <Effects />
       <Markers />
       <CountNumbers />

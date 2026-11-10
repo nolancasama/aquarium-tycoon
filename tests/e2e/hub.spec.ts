@@ -84,8 +84,8 @@ test("hub: introduction, map travel, doorways both ways, arrows unchanged, reloa
   await page.getByTestId("btn-map").click();
   await expect(page.getByTestId("aquarium-map")).toBeVisible();
   await expect(page.getByTestId("map-room-hall").getByTestId("map-here")).toBeVisible();
-  await expect(page.getByTestId("map-lagoon")).toHaveAttribute("aria-disabled", "true");
   // All three release-locked destinations: a lock and "Coming soon"; a tap only says so.
+  await expect(page.getByTestId("map-lagoon")).toHaveAttribute("aria-label", /coming soon/);
   for (const id of ["map-coast", "map-lagoon", "map-sanctuary"]) await expect(page.getByTestId(id)).toHaveAttribute("data-soon", "true");
   await expect(page.getByTestId("map-sanctuary")).toContainText("Grand Ocean Sanctuary");
   await page.getByTestId("map-sanctuary").click();

@@ -18,7 +18,7 @@ import { newPose, TunnelFigure } from "../tunnel/TunnelFigure";
 import { tunnelPersonModel } from "../models/people";
 import { cetaceanGeometry } from "../marine/cetaceans";
 import { createCetaceanMaterial, type CetaceanMaterial } from "../marine/cetaceanMaterial";
-import { Gulls, LightShafts, MarineFx, outlineMask, SkyDome, seaMaterial, terrainMaterial, useAtmosphere, type AirLook, type FxPool, type WaterLook } from "../marine/outdoor";
+import { FishSchool, Gulls, LightShafts, MarineFx, outlineMask, SkyDome, seaMaterial, terrainMaterial, useAtmosphere, type AirLook, type FxPool, type WaterLook } from "../marine/outdoor";
 
 /**
  * The Dolphin Lagoon scene: open sky, the lagoon and its bay pool, the
@@ -750,6 +750,7 @@ export function DolphinLagoon() {
         <People />
         <LookBubble />
         <LightShafts spots={SHAFTS} depth={6.5} active={underwaterNow} />
+        <FishSchool centre={{ x: 9, z: 4.5 }} radius={4} depth={-4.6} n={22} active={underwaterNow} />
         <Sea />
       </group>
       <MarineFx pool={fxPool} active={lagoonShown} />

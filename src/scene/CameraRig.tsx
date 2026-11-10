@@ -7,7 +7,11 @@ import { TANKS } from "../game/data/tanks";
 import { HALL_X, PEDESTAL, tankOrigin, waterCentre } from "../game/world";
 import { tankById } from "../game/logic/model";
 import { footprintPoints } from "../game/logic/tankLayout";
-import { COAST_HALL, HUB_HALL, LAGOON_HALL, ROOMS, SHARKS_HALL } from "../game/data/rooms";
+import { COAST_HALL, HUB_HALL, LAGOON_HALL, ROOMS, SANCTUARY_HALL, SHARKS_HALL } from "../game/data/rooms";
+import { BOAT, ISLAND, SANCTUARY_ORIGIN, SANCTUARY_REVEAL_FROM, SANCTUARY_SHOTS } from "../game/data/sanctuary";
+import type { SanctuaryView } from "../game/logic/sanctuary";
+import { sanctFocus } from "../game/flow/sanctuary";
+import { sanctRt } from "../game/sanctuary/sanctuaryRuntime";
 import { LAGOON_COUNT_SHOT, LAGOON_ORIGIN, LAGOON_REVEAL_FROM, LAGOON_SHOTS } from "../game/data/lagoon";
 import type { LagoonView } from "../game/logic/lagoon";
 import { lagoonFocus } from "../game/flow/lagoon";
@@ -114,6 +118,54 @@ export function lagoonCam(view: LagoonView, aspect: number, counting: boolean): 
   }
   const w = (q: { x: number; y: number; z: number }) => ({ x: LAGOON_ORIGIN.x + q.x, y: q.y, z: LAGOON_ORIGIN.z + q.z });
   return { pos: w(pos), target: w(target) };
+}
+
+/**
+ * The Grand Ocean Sanctuary's cameras (area-local made world): the fixed
+ * viewpoints, the orca watch (low over the water, following the pod, so their
+ * size shows), the question framings (the whole pod; an orca by the island or
+ * the boat; one orca close up), and the first-visit sweep in from the ocean.
+ */
+export function sanctuaryCam(view: SanctuaryView, aspect: number): Shot {
+  const k = Math.max(1, 1.78 / aspect);
+  const w = (q: { x: number; y: number; z: number }) => ({ x: SANCTUARY_ORIGIN.x + q.x, y: q.y, z: SANCTUARY_ORIGIN.z + q.z });
+  const back = (pos: { x: number; y: number; z: number }, target: { x: number; y: number; z: number }, f = k) => ({ x: target.x + (pos.x - target.x) * f, y: target.y + (pos.y - target.y) * f, z: target.z + (pos.z - target.z) * f });
+  const pod = sanctRt.orcas?.members ?? [];
+  const focus = sanctFocus.id ? pod.find((m) => m.id === sanctFocus.id) ?? sanctRt.belugas?.byId(sanctFocus.id) : undefined;
+  let shot: { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } } | null = null;
+  if (sanctFocus.frame === "pod" && pod.length) {
+    const c = pod.reduce((s, m) => ({ x: s.x + m.x / pod.length, z: s.z + m.z / pod.length }), { x: 0, z: 0 });
+    const spread = Math.max(10, ...pod.map((m) => Math.hypot(m.x - c.x, m.z - c.z)));
+    const d = Math.max(30, spread * 3.4) * k;
+    shot = { pos: { x: c.x, y: d * 0.72, z: c.z + d * 0.62 }, target: { x: c.x, y: -1, z: c.z } };
+  } else if ((sanctFocus.frame === "island" || sanctFocus.frame === "boat") && focus) {
+    const mark = sanctFocus.frame === "island" ? ISLAND : BOAT;
+    const c = { x: (focus.x + mark.x) / 2, z: (focus.z + mark.z) / 2 };
+    shot = { pos: back({ x: c.x + 6, y: 17, z: c.z + 44 }, { x: c.x, y: 0, z: c.z }), target: { x: c.x, y: 0, z: c.z } };
+  } else if (sanctFocus.frame === "orca" && focus) {
+    const L = focus.len;
+    shot = { pos: back({ x: focus.x + L * 1.1, y: L * 0.9, z: focus.z + L * 2.4 }, { x: focus.x, y: -0.6, z: focus.z }), target: { x: focus.x, y: -0.6, z: focus.z } };
+  } else if (sanctFocus.frame === "beluga" && focus) {
+    shot = { pos: { x: focus.x, y: 6.5, z: Math.min(focus.z + 14, 64) }, target: { x: focus.x, y: -0.6, z: focus.z } };
+  } else if (view === "orcas" && pod.length) {
+    // Low over the water, a little behind and beside the pod: big animals, a far horizon.
+    const lead = pod.find((m) => m.id === "yuki") ?? pod[0];
+    const c = { x: (lead.x * 2 + pod.reduce((s, m) => s + m.x, 0) / pod.length) / 3, z: (lead.z * 2 + pod.reduce((s, m) => s + m.z, 0) / pod.length) / 3 };
+    const px = THREE.MathUtils.clamp(c.x + 12, -92, 92), pz = THREE.MathUtils.clamp(c.z + 28, -70, 62);
+    shot = { pos: back({ x: px, y: 8.5, z: pz }, { x: c.x, y: 0, z: c.z }), target: { x: c.x, y: 0, z: c.z } };
+  } else {
+    // The fixed viewpoints stand on the clifftop, the shore and in the station: stepping back
+    // would put the camera inside the hill behind them, so a narrow screen just sees a narrower view.
+    const base = SANCTUARY_SHOTS[view === "orcas" ? "overview" : view];
+    shot = { pos: base.pos, target: base.target };
+  }
+  const p = revealProgress("sanctuary");
+  if (p < 1) {
+    const e = THREE.MathUtils.smoothstep(p, 0, 1), f = SANCTUARY_REVEAL_FROM;
+    const lerp = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) => ({ x: a.x + (b.x - a.x) * e, y: a.y + (b.y - a.y) * e, z: a.z + (b.z - a.z) * e });
+    shot = { pos: lerp(f.pos, shot.pos), target: lerp(f.target, shot.target) };
+  }
+  return { pos: w(shot.pos), target: w(shot.target) };
 }
 
 /** The hub's fixed camera; narrower screens step back along the view so both side doorways stay in frame. */
@@ -282,6 +334,10 @@ export function CameraRig() {
       wantLook.current.set(v.target.x, v.target.y, v.target.z);
     } else if (g.screen === "game" && g.hall === LAGOON_HALL) {
       const v = lagoonCam(g.lagoonView, aspect, lagoonFocus.count);
+      want.current.set(v.pos.x, v.pos.y, v.pos.z);
+      wantLook.current.set(v.target.x, v.target.y, v.target.z);
+    } else if (g.screen === "game" && g.hall === SANCTUARY_HALL) {
+      const v = sanctuaryCam(g.sanctuaryView, aspect);
       want.current.set(v.pos.x, v.pos.y, v.pos.z);
       wantLook.current.set(v.target.x, v.target.y, v.target.z);
     } else if (g.screen === "game" && g.hall === HUB_HALL) {

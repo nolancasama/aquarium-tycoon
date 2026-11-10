@@ -6,6 +6,7 @@ import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, us
 import { HALL_OF, TANKS } from "../game/data/tanks";
 import { COAST_HALL, HUB_HALL, inHallRow, LAGOON_HALL, ROOMS, roomOpen, SANCTUARY_HALL, SHARKS_HALL } from "../game/data/rooms";
 import { LagoonGoals, LagoonHud, lagoonHelp } from "./LagoonHud";
+import { SanctuaryGoals, SanctuaryHud, sanctuaryHelp } from "./SanctuaryHud";
 import { CoastCelebration, CoastGoals, CoastHud, CoastOffer, NEED_TEXT } from "./CoastHud";
 import { needMet } from "../game/logic/coast";
 import { AquariumMap, MapButton, TrophyCard } from "./AquariumMap";
@@ -159,6 +160,7 @@ function GoalsPanel({ expanded, setExpanded, rushBack }: { expanded: boolean; se
   if (inWing && !request) return <TunnelGoals before={rushBack} />;
   if (inCoast && !request) return <CoastGoals before={rushBack} />;
   if (outdoor === "lagoon") return <LagoonGoals before={rushBack} />;
+  if (outdoor === "sanctuary") return <SanctuaryGoals before={rushBack} />;
   // The tutorial's "Tap the visitor!" card takes this place; in free play the objectives stay.
   if (!unlocked || request || (waiting && !interrupted && model.progress.tutorial !== "done")) return null;
   const p = model.progress;
@@ -208,6 +210,7 @@ function HelpButton() {
       if (hall === COAST_HALL) coastHelp();
       else if (hall === HUB_HALL) hubHelp();
       else if (hall === LAGOON_HALL) lagoonHelp();
+      else if (hall === SANCTUARY_HALL) sanctuaryHelp();
       else if (getGame().exploring || hall === SHARKS_HALL) tunnelHelp();
       else showGuideHint();
     }} disabled={!canHelp} data-testid="btn-help">
@@ -584,6 +587,7 @@ export function Hud() {
       {showRoomBar && !wing && !hub && !coast && !lagoon && !sanctuary && !exploring && <RoomBar />}
       {view === "room" && coast && <CoastHud />}
       {lagoon && <LagoonHud />}
+      {sanctuary && <SanctuaryHud />}
       {free && view === "room" && !exploring && <HallSwitch />}
       {free && hub && <HubBar />}
       {view === "room" && wing && !exploring && <WingHud />}

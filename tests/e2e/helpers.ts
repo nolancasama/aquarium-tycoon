@@ -143,6 +143,20 @@ export async function click3d(page: Page, kind: string, id = "") {
   await page.mouse.click(p.x, p.y);
 }
 
+/** Wait until the camera has stopped moving (two samples 250 ms apart agree), so a projected click lands where it is drawn. */
+export async function cameraStill(page: Page, timeout = 10_000) {
+  const pos = async () => ((await state(page)) as unknown as { camera: { pos: { x: number; y: number; z: number } } }).camera;
+  const t0 = Date.now();
+  let a = (await pos()).pos;
+  for (;;) {
+    await page.waitForTimeout(250);
+    const b = (await pos()).pos;
+    if (Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 0.01) return;
+    if (Date.now() - t0 > timeout) throw new Error("camera never settled");
+    a = b;
+  }
+}
+
 /** Wait until the camera has settled in the close-up (or the room), then click. */
 export async function settle(page: Page, ms = 900) {
   await page.waitForTimeout(ms);

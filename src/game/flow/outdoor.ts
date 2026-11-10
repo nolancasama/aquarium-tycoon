@@ -39,11 +39,14 @@ export function enterOutdoor(area: OutdoorArea) {
   }
 }
 
+/** Seconds of each area's first-visit sweep (the sanctuary's comes in from far out at sea). */
+const REVEAL_SECONDS: Record<OutdoorArea, number> = { lagoon: 4, sanctuary: 5.5 };
+
 /** The reveal's progress 0..1 (1 when none is running or it is done). */
 export function revealProgress(area: OutdoorArea): number {
   const r = outdoorRt.reveal;
   if (!r || r.area !== area) return 1;
-  const p = (rt.time - r.t0) / 4;
+  const p = (rt.time - r.t0) / REVEAL_SECONDS[area];
   if (p >= 1) { outdoorRt.reveal = null; return 1; }
   return Math.max(0, p);
 }

@@ -1,5 +1,8 @@
 import { clearTunnelVisitors } from "../tunnel/tunnelVisitors";
 import { clearCoast } from "../coast/coastRuntime";
+import { clearLagoonRt } from "../lagoon/lagoonRuntime";
+import { clearSanctRt } from "../sanctuary/sanctuaryRuntime";
+import { resetOutdoorReveal } from "./outdoor";
 import { clearHubVisitors } from "../hub/hubVisitors";
 import { commit, getGame, model, nudge, setGame, toast, updateModel, useGame, type Panel, type Reward } from "../store";
 import { clearVisitorTapQueue, effect, resetCelebrations, resetRuntime, rt, startCount } from "../runtime";
@@ -173,6 +176,9 @@ function enter(m: Model) {
   resetRuntime();
   clearTunnelVisitors();
   clearCoast();
+  clearLagoonRt();
+  clearSanctRt();
+  resetOutdoorReveal();
   clearHubVisitors();
   resetVisitors();
   resetHints();

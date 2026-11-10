@@ -146,7 +146,8 @@ function ReleaseCard({ area, hall, testId, icon, en, ja, line, saved, onOpen }: 
   }, [flash]);
   if (soon) {
     return (
-      <button className={`map-card future ${area} ${flash ? "flash" : ""}`} aria-disabled="true" data-testid={testId} data-soon="true"
+      // An enabled button: a tap answers "Coming soon!" (it never travels); its name says it is locked.
+      <button className={`map-card future ${area} ${flash ? "flash" : ""}`} aria-label={`${en}: coming soon`} data-testid={testId} data-soon="true"
         onClick={() => { audio.play("error"); setFlash((n) => n + 1); }}>
         <span className="map-icon" aria-hidden="true"><Icon id="lock" size={26} /></span>
         <span className="map-name">{en}<Ja>{ja}</Ja></span>
