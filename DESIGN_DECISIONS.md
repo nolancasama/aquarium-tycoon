@@ -1821,3 +1821,12 @@ Built / released / unlocked are separate; nothing auto-unlocks; no prices.
   grows with wrapped text at 1280 and 1024 wide (an e2e layout test caught it
   covering the first button).
 - **A preview badge** ("PREVIEW · not saved") shows whenever the sandbox is on.
+
+## Outdoor areas stay debug-only (2026-11-10, owner decision)
+
+- **What:** Coastal & Polar Zone, Dolphin Lagoon and Grand Ocean Sanctuary are
+  reachable only through the development preview (Ctrl+Alt+D). No price,
+  prerequisite or ordinary-play unlock is added; every `released` flag in
+  `data/release.ts` stays `false`.
+- **Why:** the owner wants them unlockable only in debug mode for now.
+- **Rejected:** choosing an unlock order and coin prices for release.

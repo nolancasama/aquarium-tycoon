@@ -769,9 +769,8 @@ approach frames, the trophy from front/side/rear.
    sweep.
 11. Decide whether `layout.spec` "HUD, close-up and prompts fit" needs to wait for
    the status panel's own transition (intermittent 50 px vs 48 px gap).
-12. Release decisions (owner): the order and unlock rules of the coast, the
-   lagoon and the sanctuary (prices, prerequisites); then flip `released` in
-   `data/release.ts` and add the lagoon's / sanctuary's opening rule.
+12. Decided 2026-11-10: the coast, the lagoon and the sanctuary stay
+   debug-only (Ctrl+Alt+D preview); no release order or unlock rule for now.
 13. Before releasing the outdoor areas: preview them on a real school
    Chromebook (fps in the lagoon overview and the sanctuary lookout, which draw
    the most), watch the dolphins and orcas move live, and try the new phrases
