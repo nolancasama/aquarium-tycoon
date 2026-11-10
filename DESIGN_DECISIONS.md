@@ -1830,3 +1830,58 @@ Built / released / unlocked are separate; nothing auto-unlocks; no prices.
   `data/release.ts` stays `false`.
 - **Why:** the owner wants them unlockable only in debug mode for now.
 - **Rejected:** choosing an unlock order and coin prices for release.
+
+## 2026-11-10 — Penguin Coast Antarctic habitat redesign (preview only)
+
+- **Habitat:** Penguin Coast now uses an Antarctic palette of exposed blue-grey
+  rock, irregular snow-capped cliff strata and blue ice. The cliffs stay behind
+  the walkable shelf and fall in height toward Seal Cove. A broad shallow
+  stone-and-gravel shoreline joins the shelf to the pool; underwater rock
+  faces, low uneven floor patches, three submerged boulders and quiet bubble
+  trails give the glass view depth without fog or heavy tint. The procedural
+  penguin model and English exercise word "penguin" are retained; this
+  supersedes the earlier Humboldt/temperate-coast scenery decision.
+  The shore uses broken, sloping rock and scattered gravel, while submerged boulders are rounded and ice floes have uneven, broad keels.
+- **Walkable versus solid:** the existing shelf and the widened 3.5 m shore
+  ramp remain traversable. Two low snowy resting ledges (+0.33 m and +0.43 m)
+  have authored approach points and bounded step/hop paths; penguins pause,
+  groom and look toward the water there. The broad flat floe is an island,
+  reached and left only through its exposed left climb point. Two small ice
+  pieces, one mostly submerged ice formation and three underwater boulders
+  are conservative swim obstacles at every depth. Cliffs are outside the land
+  bounds; underwater wall relief stays outside navigable margins. Penguins
+  sometimes walk to a quiet spot beside a placed nest. All four land item
+  slots retain their indices and kinds on clear, reachable shelf ground.
+- **Motion:** optional ledges, ramp widths and swim obstacles engage only for
+  exhibits defining them; Seal Cove and Otter Bay data and random decision
+  paths are unchanged. Invariants cover ledge heights and clearance, floe
+  climb points, solid-water avoidance, maximum step speed, nest-side resting
+  and water/land returns with all item slots occupied. A route diagnostic
+  caught an inaccessible rear floe approach; the final left approach connects
+  directly to the shore and the glass swimming lane.
+- **Views and arrival:** the Penguins view frames the cliffs, land, shore and
+  glass together. Its extra "Underwater / みずのなか" button selects a fixed low
+  window view; tapping Penguins restores the land view. All, Seals, Otters and
+  the counting camera remain available. The first visit has a 7.2 s sweep from
+  cliffs to land companions, a real shore entry, a glass-side swimmer and the
+  normal view. Initial arrival positions use valid movement paths before the
+  first frame. Any tap or key skips; reduced-motion skips automatically. The
+  existing optional `coastIntroSeen` flag is used inside the preview sandbox.
+- **Rendering:** static scenery remains one merged vertex-coloured
+  `PartBuilder` geometry with shared materials; twelve instanced bubbles add
+  one draw. No textures, new shadows, reflections or render targets. Production
+  SwiftShader captures and performance snapshots are in `.tmp/coast-review/`
+  at 1366×768 and 1024×768, including 1 s shoreline and arrival sequences.
+  At 1366×768, milestone 5: All changed from 80 calls / 21,128 triangles to
+  82 / 24,542 (+2 calls, within the roughly +15 overview allowance); Penguins
+  changed from 25 / 7,464 to 43 / 14,880. The new land camera shows the complete
+  exhibit and more surrounding geometry than the old close shot; visibility
+  and animal pose affect these frame snapshots. Underwater is 21 / 9,384.
+  These are fresh before/after measurements, distinct from the earlier 31 /
+  9.6k penguin budget note. Hardware Chromebook frame rate remains unmeasured.
+- **Rejected:** third-party Arctic/winter asset packs clash with the game's
+  procedural style, and the considered paid pack was unavailable. Growing the
+  exhibit footprint would move Seal Cove/Otter Bay. Replacing the penguin model
+  was cancelled by the owner. The exhibit centres, window, walkway, release
+  locks, save format and progression are unchanged; outdoor access remains
+  through Ctrl+Alt+D preview only.

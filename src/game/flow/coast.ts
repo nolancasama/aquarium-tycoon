@@ -8,7 +8,7 @@ import { checkCoastMilestones, COAST_PRICE, coastUnlocked, HABITAT_PAD, habitatO
 import { coastRt, feedCoast, holdAnimal } from "../coast/coastRuntime";
 import { isOnRock } from "../coast/motion";
 import type { CoastDecorKind, VisitorType } from "../types";
-import { ask, say, speak } from "./ask";
+import { ask, speak } from "./ask";
 import { canTravel, comingSoon, travelTo } from "./hub";
 import { areaAvailable } from "../data/release";
 import { audio } from "../../audio/audio";
@@ -37,6 +37,7 @@ const free = () => {
 };
 
 export function setCoastView(view: GameState["coastView"]) {
+  skipCoastReveal();
   if (!free()) return;
   if (view !== "all" && !habitatOpen(model(), view)) {
     audio.play("error");
@@ -44,7 +45,15 @@ export function setCoastView(view: GameState["coastView"]) {
     return;
   }
   audio.play("tick");
-  setGame({ coastView: view, panel: null, placing: null });
+  setGame({ coastView: view, coastUnderwater: false, panel: null, placing: null });
+}
+
+/** The extra fixed window view belongs to Penguin Coast only. */
+export function setCoastUnderwater() {
+  skipCoastReveal();
+  if (!free() || !inCoast() || getGame().coastView !== "penguins") return;
+  audio.play("tick");
+  setGame({ coastUnderwater: true });
 }
 
 /** The hub's coast doorway (and the map card): travel, the purchase offer, or what is still needed. */
@@ -107,7 +116,7 @@ let nextVisitorAt = 12;
 /** A visitor comes to a window with a question now and then (only while the zone is shown and calm). */
 export function coastVisitorTick() {
   const g = getGame();
-  if (!inCoast(g) || g.coastWaiting || g.coastActivity || !free() || g.panel || g.placing) return;
+  if (!inCoast(g) || g.coastRevealing || g.coastWaiting || g.coastActivity || !free() || g.panel || g.placing) return;
   if (coastRt.time < nextVisitorAt) return;
   nextVisitorAt = coastRt.time + 22 + Math.random() * 14;
   const open = (["penguins", "seals", "otters"] as CoastHabitat[]).filter((h) => habitatOpen(g.model, h) && (tankAt(g.model, HABITAT_PAD[h])?.fish.length ?? 0) > 0);
@@ -126,7 +135,8 @@ export async function startCoastActivity() {
   const g = getGame();
   const w = g.coastWaiting;
   if (!w || !free()) return;
-  setGame({ coastWaiting: null, coastView: w.habitat, coastActivity: { habitat: w.habitat, by: w.type }, panel: null, placing: null });
+  skipCoastReveal();
+  setGame({ coastWaiting: null, coastView: w.habitat, coastUnderwater: false, coastActivity: { habitat: w.habitat, by: w.type }, panel: null, placing: null });
   // Let the camera arrive before asking.
   await new Promise((r) => window.setTimeout(r, rt.time > 0 ? 700 : 0));
   let ok = false;
@@ -248,23 +258,45 @@ export function checkCoastNow() {
   celebrate(before);
 }
 
-let introRunning = false;
-/** First visit: the overview, then Pico introduces the zone. */
+/** Runtime-only sweep; the existing optional seen flag keeps saves compatible. */
+export const coastReveal = { t0: null as number | null };
+let revealTimer: number | undefined;
+export function skipCoastReveal() {
+  if (coastReveal.t0 === null) return;
+  if (getGame().previewAreas.includes("coast") && getGame().model.progress.coastOpen) {
+    updateModel((m) => ({ ...m, progress: { ...m.progress, coastIntroSeen: true } }));
+  }
+  coastReveal.t0 = null;
+  window.clearTimeout(revealTimer);
+  setGame({ coastRevealing: false });
+}
+
+export function coastRevealProgress() {
+  if (coastReveal.t0 === null) return 1;
+  return Math.max(0, Math.min(1, (rt.time - coastReveal.t0) / 7.2));
+}
+
+/** First visit: a brief coastal tour. Any tap, including a HUD action, skips it. */
 export function watchCoastIntro(): () => void {
   const check = () => {
     const g = getGame();
-    if (introRunning || !inCoast(g) || !g.model.progress.coastOpen || g.model.progress.coastIntroSeen || g.mode !== "play" || g.fade !== 0 || g.line || g.prompt) return;
-    introRunning = true;
-    updateModel((m) => ({ ...m, progress: { ...m.progress, coastIntroSeen: true } }));
-    void (async () => {
-      await say("pico", "The Coastal & Polar Zone! Penguins live here!", "かいがんと さむい ちいきへ ようこそ！ ペンギンが すんでいるよ！");
-      await say("pico", "Penguins need rocks. Tap Penguins, then Items!", "ペンギンには やすむ いわが ひつよう。「Penguins」→「Items」で おこう！");
-      introRunning = false;
-    })();
+    if (!inCoast(g) || !g.previewAreas.includes("coast")) { skipCoastReveal(); return; }
+    if (coastReveal.t0 !== null || !g.model.progress.coastOpen || g.model.progress.coastIntroSeen || g.mode !== "play" || g.fade !== 0 || g.line || g.prompt) return;
+    coastReveal.t0 = rt.time;
+    setGame({ coastUnderwater: false, coastRevealing: true });
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { skipCoastReveal(); return; }
+    revealTimer = window.setTimeout(skipCoastReveal, 7200);
   };
+  window.addEventListener("pointerdown", skipCoastReveal, true);
+  window.addEventListener("keydown", skipCoastReveal, true);
   const unsubscribe = useGame.subscribe(check);
   check();
-  return () => { unsubscribe(); introRunning = false; };
+  return () => {
+    unsubscribe();
+    window.removeEventListener("pointerdown", skipCoastReveal, true);
+    window.removeEventListener("keydown", skipCoastReveal, true);
+    skipCoastReveal();
+  };
 }
 
 /** The exhibit sign was tapped: hear the animal's name (never during a question). */

@@ -188,6 +188,9 @@ export interface GameState {
   trophiesOpen: boolean;
   /** Coastal & Polar Zone: which exhibit the camera shows, the purchase offer, and an English activity in progress. */
   coastView: "all" | "penguins" | "seals" | "otters";
+  /** Penguin window viewpoint and first-visit sweep (session UI only). */
+  coastUnderwater: boolean;
+  coastRevealing: boolean;
   coastOffer: boolean;
   coastActivity: { habitat: "penguins" | "seals" | "otters"; by: VisitorType } | null;
   /** A visitor at a coastal window has a question (the chip). */
@@ -322,6 +325,8 @@ export const useGame = create<GameState>(() => ({
   mapOpen: false,
   trophiesOpen: false,
   coastView: "all",
+  coastUnderwater: false,
+  coastRevealing: false,
   coastOffer: false,
   coastActivity: null,
   coastWaiting: null,

@@ -51,15 +51,205 @@ function rampGeometry(ex: ExhibitDef, i: number): THREE.BufferGeometry {
   shape.lineTo(r.top.z, top);
   shape.lineTo(z0, top);
   shape.closePath();
-  const g = new THREE.ExtrudeGeometry(shape, { depth: 1.5, bevelEnabled: false });
-  // Shape (u, v) and extrusion w -> world (x = -w + centre + 0.75, y = v, z = u): a proper rotation.
-  const m = new THREE.Matrix4().set(0, 0, -1, r.top.x + 0.75, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1);
+  const width = r.width ?? 1.5;
+  const g = new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: false });
+  // Shape (u, v) and extrusion w -> world (x = -w + centre + half width, y = v, z = u).
+  const m = new THREE.Matrix4().set(0, 0, -1, r.top.x + width / 2, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1);
   g.applyMatrix4(m);
   return g;
 }
 
+/** Angular, flat-topped strata. All vertices stay inside the authored footprint. */
+function coastStratum(rx: number, rz: number, height: number, phase = 0): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  for (let i = 0; i < 9; i++) {
+    const a = i / 8 * Math.PI * 2;
+    const r = 0.91 + Math.sin(i * 2.7 + phase) * 0.07;
+    const x = Math.cos(a) * rx * r, z = Math.sin(a) * rz * r;
+    if (!i) shape.moveTo(x, z); else shape.lineTo(x, z);
+  }
+  shape.closePath();
+  const g = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
+  // Shape xy becomes world xz, with extrusion up along y.
+  g.rotateX(Math.PI / 2);
+  g.translate(0, height, 0);
+  return g;
+}
+
+/** Broken cliff slabs have sloping rims and uneven faces, rather than level bands. */
+function cliffSlab(rx: number, rz: number, height: number, phase: number, snowDepth = 0): THREE.BufferGeometry {
+  const outline = [[-0.96, -0.42], [-0.67, -0.96], [0.38, -1], [0.94, -0.66], [0.98, 0.31], [0.59, 0.91], [-0.12, 0.72], [-0.78, 0.96], [-1, 0.35]];
+  const rim = outline.map(([x, z], i) => ({ x: x * rx, z: z * rz, y: height + Math.sin(i * 1.91 + phase) * 0.105 + x * Math.sin(phase) * 0.11 }));
+  const vertices: number[] = [];
+  const triangle = (a: number[], b: number[], c: number[]) => vertices.push(...a, ...b, ...c);
+  for (let i = 0; i < rim.length; i++) {
+    const a = rim[i], c = rim[(i + 1) % rim.length];
+    const aTop = [a.x, a.y, a.z], cTop = [c.x, c.y, c.z];
+    const aBottom = [a.x, snowDepth ? a.y - snowDepth * (0.7 + (i % 3) * 0.2) : 0, a.z];
+    const cBottom = [c.x, snowDepth ? c.y - snowDepth * (0.7 + ((i + 1) % 3) * 0.2) : 0, c.z];
+    triangle([0, height, 0], cTop, aTop);
+    triangle(aBottom, aTop, cTop);
+    triangle(aBottom, cTop, cBottom);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** Faceted ice with an uneven, broad underside, bounded by its swim obstacle. */
+function iceKeel(radius: number, depth: number, phase: number): THREE.BufferGeometry {
+  const vertices: number[] = [], count = 9;
+  const ring = (i: number, lower: boolean) => {
+    const a = i * Math.PI * 2 / count;
+    const r = radius * (lower ? 0.58 + 0.12 * Math.sin(i * 2.3 + phase) : 0.94);
+    return [Math.cos(a) * r, lower ? -depth * (0.65 + 0.2 * Math.sin(i * 1.7 + phase)) : 0, Math.sin(a) * r];
+  };
+  for (let i = 0; i < count; i++) {
+    const a = ring(i, false), b = ring((i + 1) % count, false);
+    const c = ring(i, true), d = ring((i + 1) % count, true);
+    vertices.push(...a, ...c, ...b, ...b, ...c, ...d, ...c, 0, -depth * 0.8, 0, ...d);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** The centre follows the authored ramp; its broken margins slope into the pool. */
+function penguinShore(ex: ExhibitDef, i: number): THREE.BufferGeometry {
+  const r = ex.ramps[i], half = (r.width ?? 1.5) / 2;
+  const drop = ex.land.y - (ex.pool.surface - 0.05), dz = r.bottom.z - r.top.z;
+  const vertices: number[] = [];
+  const tri = (a: number[], b: number[], c: number[]) => vertices.push(...a, ...b, ...c);
+  const rows = [0, 0.22, 0.48, 0.73, 1];
+  const edge = (t: number, side: number, index: number) => [r.top.x + side * half * (0.88 + 0.1 * Math.sin(index * 2.4 + side)), ex.land.y - drop * t, r.top.z + dz * t];
+  for (let j = 0; j < rows.length - 1; j++) {
+    const t = rows[j], next = rows[j + 1];
+    const a = edge(t, -1, j), b = edge(t, 1, j), c = edge(next, -1, j + 1), d = edge(next, 1, j + 1);
+    tri(a, c, b); tri(b, c, d);
+    for (const [u, v] of [[a, c], [d, b]]) {
+      const lower = (p: number[]) => [r.top.x + (p[0] - r.top.x) * 0.72, ex.pool.floor, p[2] - 0.18];
+      tri(u, lower(u), v); tri(v, lower(u), lower(v));
+    }
+  }
+  const left = edge(1, -1, 4), right = edge(1, 1, 4);
+  tri(left, [r.top.x, ex.pool.floor, r.bottom.z - 0.3], right);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** Penguin-only Antarctic scenery, merged into the exhibit's one static draw. */
+function penguinScenery(ex: ExhibitDef): THREE.BufferGeometry {
+  const b = new PartBuilder(0.45), { land: l, pool: p } = ex;
+  const rock = "#667d89", dark = "#425d68", snow = "#e7f0f1", ice = "#a1d3df";
+  // Exposed shelf remains continuous and level; snow is thin, irregular ground cover.
+  b.box(EX_W, l.y, l.maxZ + EX_D / 2, 0, 0, (l.maxZ - EX_D / 2) / 2, rock);
+  b.box(EX_W - 0.04, 0.025, l.maxZ + EX_D / 2 - 0.04, 0, l.y - 0.025, (l.maxZ - EX_D / 2) / 2, "#8d9b9f");
+  for (const [x, z, rx, rz] of [[-4.6, -3.85, 1.55, 0.52], [-2.5, -4.25, 2, 0.4], [0.4, -3.55, 1.25, 0.38], [4.75, -3.85, 1.35, 0.6], [1.7, -1.05, 1.35, 0.22]]) {
+    b.add(coastStratum(rx, rz, 0.018, x), snow, [x, l.y, z]);
+  }
+  // Layered cliffs sit wholly behind the walkable shelf. Lower toward Seal Cove.
+  const cliffs = [
+    { x: -5.4, rx: 1.05, h: 4.05, cuts: [0, 0.52, 1] },
+    { x: -3.6, rx: 1.6, h: 5.35, cuts: [0, 0.32, 0.73, 1] },
+    { x: -1.0, rx: 1.7, h: 5.55, cuts: [0, 0.46, 0.68, 1] },
+    { x: 1.55, rx: 1.75, h: 4.85, cuts: [0, 0.57, 1] },
+    { x: 3.9, rx: 1.3, h: 4.35, cuts: [0, 0.3, 0.81, 1] },
+    { x: 5.4, rx: 0.98, h: 3.9, cuts: [0, 0.61, 1] }
+  ];
+  for (let i = 0; i < cliffs.length; i++) {
+    const cliff = cliffs[i];
+    for (let k = 0; k < cliff.cuts.length - 1; k++) {
+      const y = l.y + (cliff.h - l.y) * cliff.cuts[k] - (k ? 0.12 : 0);
+      const height = (cliff.h - l.y) * (cliff.cuts[k + 1] - cliff.cuts[k]) + (k ? 0.12 : 0);
+      const phase = i * 1.34 + k * 2.1;
+      const x = cliff.x + Math.sin(phase) * 0.14;
+      const rx = cliff.rx * (1 - k * 0.055), rz = 0.43 - (i + k) % 3 * 0.035;
+      const z = -5.13 + (k % 2) * 0.025;
+      b.add(cliffSlab(rx, rz, height, phase), (i + k) % 3 === 1 ? "#7d939f" : rock, [x, y, z]);
+      if (k === cliff.cuts.length - 2 || (i + k) % 3 === 0) {
+        // A slight overhang keeps snow drapes clear of the rock's coplanar faces.
+        b.add(cliffSlab(rx + 0.012, rz + 0.012, height + 0.018, phase, 0.15 + (i + k) % 3 * 0.065), snow, [x, y, z]);
+      }
+      if (k === 1 && i % 2 === 0) b.add(new THREE.ConeGeometry(0.045, 0.32, 4), ice, [x + 0.4, y + height - 0.23, -4.72], [0, 0, Math.PI]);
+    }
+  }
+  // Back and side faces continue below the water. Their relief stays outside the swim bounds.
+  for (const side of [-1, 1]) {
+    b.box(0.4, GLASS_TOP, EX_D, side * (EX_W / 2 + 0.15), 0, 0, rock);
+    for (let i = 0; i < 5; i++) {
+      const z = p.minZ + 0.55 + i * 1.1;
+      b.add(new THREE.DodecahedronGeometry(0.6, 0), i % 2 ? "#587781" : dark, [side * 6.3, 0.85, z], [0.1, i * 0.7, 0], [0.28, 1.1 + i % 2 * 0.25, 1.1]);
+    }
+  }
+  for (let i = 0; i < 10; i++) {
+    b.add(new THREE.DodecahedronGeometry(0.65, 0), i % 2 ? rock : dark, [-5.8 + i * 1.28, 1.1, p.minZ - 0.2], [0, i * 0.65, 0], [1, 1.5, 0.32]);
+  }
+  // A low, uneven rocky floor and broad colour changes suggest depth without fog.
+  b.box(EX_W, p.floor, p.maxZ - p.minZ + 0.2, 0, 0, (p.minZ + p.maxZ) / 2, "#60848a");
+  for (let i = 0; i < 15; i++) {
+    const x = -5.15 + i % 5 * 2.55, z = p.minZ + 0.75 + Math.floor(i / 5) * 1.8;
+    b.add(coastStratum(1.5, 1.15, 0.025 + i % 3 * 0.018, i), i % 3 === 0 ? "#779a9c" : i % 3 === 1 ? "#527780" : "#67888a", [x, p.floor, z]);
+  }
+  // Shelf rocks are the same footprints avoided by land movement.
+  for (const o of ex.boulders) b.add(new THREE.DodecahedronGeometry(o.r, 0), rock, [o.x, l.y + o.h * 0.35, o.z], [o.x, o.z, 0], [1, o.h / o.r * 0.7, 1]);
+  // Low resting shelves: sloped sides and flat snow caps match ledge climb data.
+  for (const ledge of ex.ledges ?? []) {
+    const h = ledge.top - l.y;
+    b.add(new THREE.CylinderGeometry(ledge.r * 0.55, ledge.r, h, 8), rock, [ledge.x, l.y + h / 2, ledge.z]);
+    b.add(new THREE.CylinderGeometry(ledge.r * 0.55, ledge.r * 0.55, 0.035, 8), snow, [ledge.x, ledge.top - 0.0175, ledge.z]);
+  }
+  // The broad flat floe is a usable island, with an ice keel visible through the glass.
+  for (const isl of ex.islands) {
+    const topRadius = isl.topRadius ?? isl.r * 0.55;
+    b.add(iceKeel(isl.r, 0.85, isl.x), "#83bdce", [isl.x, p.surface, isl.z]);
+    b.add(new THREE.CylinderGeometry(topRadius, isl.r, isl.top - p.surface, 8), ice, [isl.x, (isl.top + p.surface) / 2, isl.z]);
+    b.add(new THREE.CylinderGeometry(topRadius, topRadius, 0.035, 8), snow, [isl.x, isl.top - 0.0175, isl.z]);
+  }
+  // Small floes and submerged boulders use the exact circles reserved for swimmer obstacles.
+  for (const o of ex.swimObstacles ?? []) {
+    if (o.kind === "ice") {
+      b.add(iceKeel(o.r, 0.5, o.x), "#83bdce", [o.x, p.surface, o.z]);
+      b.add(new THREE.CylinderGeometry(o.r * 0.75, o.r * 0.96, o.top - p.surface, 7), ice, [o.x, (o.top + p.surface) / 2, o.z], [0, o.x, 0]);
+      b.add(new THREE.CylinderGeometry(o.r * 0.75, o.r * 0.75, 0.025, 7), snow, [o.x, o.top - 0.0125, o.z], [0, o.x, 0]);
+    } else {
+      b.add(new THREE.DodecahedronGeometry(1, 0), dark, [o.x, (p.floor + o.top) / 2, o.z], [0.25, o.x, 0.18], [o.r * 0.9, (o.top - p.floor) * 0.48, o.r * 0.85]);
+    }
+  }
+  // The shore is the centrepiece: one broad, shallow continuous slope, with gravel and upper snow.
+  for (let i = 0; i < ex.ramps.length; i++) {
+    const r = ex.ramps[i], width = r.width ?? 1.5;
+    b.add(penguinShore(ex, i), "#75878b", [0, 0, 0]);
+    const drop = l.y - (p.surface - 0.05), dz = r.bottom.z - r.top.z;
+    for (let j = 0; j < 80; j++) {
+      const t = 0.14 + (j % 7) / 7 * 0.77, x = r.top.x + (Math.sin(j * 7.1) * 0.43) * width;
+      const y = l.y - drop * t, z = r.top.z + dz * t;
+      b.add(new THREE.DodecahedronGeometry(0.035 + j % 3 * 0.015, 0), j % 4 ? "#92998f" : "#b4b7ad", [x, y + 0.012, z], [j, j, 0], [1, 0.25, 0.8]);
+    }
+    for (let j = 0; j < 9; j++) {
+      const x = r.top.x - width * 0.44 + j * width * 0.11;
+      b.add(new THREE.DodecahedronGeometry(0.22 + j % 3 * 0.06, 0), j % 2 ? rock : "#899a99", [x, p.surface - 0.07, r.bottom.z - 0.12 - (j % 3) * 0.09], [0.2, j, 0.1], [1, 0.65, 0.85]);
+    }
+    b.add(coastStratum(width * 0.25, 0.14, 0.035, i), snow, [r.top.x - width * 0.24, l.y, r.top.z - 0.08]);
+  }
+  // Small relief along the shelf face, outside the shore and walking surface.
+  for (const [x, scale] of [[-5.2, 0.55], [-4.2, 0.4], [1.1, 0.45], [2.5, 0.55], [4.7, 0.5]]) {
+    b.add(new THREE.DodecahedronGeometry(scale, 0), rock, [x, l.y - 0.27, l.maxZ - 0.08], [0.2, x, 0], [1, 0.55, 0.45]);
+    b.add(coastStratum(scale * 0.85, 0.16, 0.025, x), snow, [x, l.y + 0.005, l.maxZ - 0.12]);
+  }
+  // Keep the established viewing-window frame and sightline.
+  b.box(EX_W + 0.6, 0.18, 0.3, 0, GLASS_TOP, WINDOW_Z + 0.05, "#3d5566");
+  b.box(EX_W + 0.6, 0.22, 0.32, 0, -0.02, WINDOW_Z + 0.05, "#3d5566");
+  for (const s of [-1, 0, 1]) b.box(0.16, GLASS_TOP, 0.2, s * (EX_W / 2 + 0.05), 0, WINDOW_Z + 0.05, "#3d5566");
+  return b.build();
+}
+
 function ExhibitStatic({ ex }: { ex: ExhibitDef }) {
   const geo = useMemo(() => {
+    if (ex.id === "penguins") return penguinScenery(ex);
     const b = new PartBuilder(0.6);
     const { land, pool, colors } = ex;
     const halfW = EX_W / 2;
@@ -101,7 +291,6 @@ function ExhibitStatic({ ex }: { ex: ExhibitDef }) {
       for (const [x, z] of [[-5.2, 3.6], [-4.4, 2.1], [5.4, 0.6], [2.6, 4.2]]) b.cyl(0.04, 0.06, pool.surface - pool.floor - 0.2, x, pool.floor, z, "#3c7a3e", 5);
       for (const [x, z] of [[-1.5, -3.8], [2.2, -4.1], [-5.3, -2.6]]) b.cone(0.3, 0.55, x, land.y, z, ex.colors.accent, 6);
     }
-    if (ex.id === "penguins") for (const [x, z] of [[-2.6, -1.6], [3.0, -3.8], [-4.6, -1.3], [0.2, -1.5]]) b.add(new THREE.DodecahedronGeometry(0.16, 0), "#e3e8ec", [x, land.y + 0.05, z], [x, z, 0], [1, 0.5, 1]);
     if (ex.id === "seals") for (const [x, z] of [[-4.6, -3.0], [4.8, -3.6]]) b.cone(0.25, 0.4, x, land.y, z, "#7f9a5a", 5);
     return b.build();
   }, [ex]);
@@ -111,7 +300,7 @@ function ExhibitStatic({ ex }: { ex: ExhibitDef }) {
 function Water({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
   const p = ex.pool;
   const surf = useMemo(() => surfaceMaterial(), []);
-  const vol = useMemo(() => new THREE.MeshLambertMaterial({ color: ex.colors.water, transparent: true, opacity: 0.32, depthWrite: false }), [ex]);
+  const vol = useMemo(() => new THREE.MeshLambertMaterial({ color: ex.colors.water, transparent: true, opacity: ex.id === "penguins" ? 0.13 : 0.32, depthWrite: false }), [ex]);
   const glass = useMemo(() => new THREE.MeshBasicMaterial({ color: "#dff6ff", transparent: true, opacity: 0.08, depthWrite: false }), []);
   const dirt = useRef(0);
   useFrame(() => {
@@ -135,6 +324,31 @@ function Water({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
         <planeGeometry args={[EX_W, GLASS_TOP]} />
       </mesh>
     </group>
+  );
+}
+
+/** A few quiet bubble trails: one instanced draw, no extra water layers or lights. */
+function PenguinBubbles() {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const ex = EXHIBITS.penguins;
+  useFrame(() => {
+    if (!coastShown() || !ref.current) return;
+    for (let i = 0; i < 12; i++) {
+      const trail = Math.floor(i / 4), phase = (coastRt.time * 0.13 + i * 0.247) % 1;
+      const x = [-5.7, 5.75, 1.8][trail], z = [2.1, 1.2, -0.15][trail];
+      dummy.position.set(x + Math.sin(phase * 8 + i) * 0.055, ex.pool.floor + 0.2 + phase * (ex.pool.surface - ex.pool.floor - 0.3), z);
+      dummy.scale.setScalar(0.65 + i % 3 * 0.22);
+      dummy.updateMatrix();
+      ref.current.setMatrixAt(i, dummy.matrix);
+    }
+    ref.current.instanceMatrix.needsUpdate = true;
+  });
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, 12]} position={[ex.x, 0, ex.z]} raycast={() => undefined} frustumCulled={false}>
+      <sphereGeometry args={[0.035, 6, 4]} />
+      <meshBasicMaterial color="#b8e0e3" transparent opacity={0.42} depthWrite={false} />
+    </instancedMesh>
   );
 }
 
@@ -501,6 +715,7 @@ export function CoastZone() {
           <ExhibitHit ex={EXHIBITS[h]} h={h} />
         </group>
       ))}
+      <PenguinBubbles />
       <Animals />
       <Strollers />
     </group>

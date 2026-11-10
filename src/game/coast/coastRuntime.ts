@@ -1,7 +1,7 @@
 import { COAST_HABITATS, EXHIBITS, type CoastHabitat } from "../data/coast";
 import { tankAt, type Model } from "../logic/model";
 import { HABITAT_PAD, recordCoastSight } from "../logic/coast";
-import { newMover, SPECIES_OF, stepMover, type Mover, type MoveCtx } from "./motion";
+import { newMover, RAMP_STEP, SPECIES_OF, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
 
 /**
  * Live animals of the coastal habitats (runtime only, never saved). One mover
@@ -38,25 +38,46 @@ export function syncCoast(model: Model) {
     if (!t || t.type !== h) continue;
     for (const f of t.fish) {
       live.add(f.id);
-      if (!coastRt.animals.has(f.id)) coastRt.animals.set(f.id, { habitat: h, m: newMover(f.id, SPECIES_OF[h], EXHIBITS[h], seed++ * 31 + f.id.length, coastRt.time) });
+      if (!coastRt.animals.has(f.id)) {
+        const m = newMover(f.id, SPECIES_OF[h], EXHIBITS[h], seed++ * 31 + f.id.length, coastRt.time, h === "penguins" ? habitatCtx(model, h).landItems : []);
+        // Initial positions only: the arrival camera watches real, continuously moving animals.
+        if (h === "penguins" && !model.progress.coastIntroSeen) {
+          const n = [...coastRt.animals.values()].filter((a) => a.habitat === h).length;
+          const ex = EXHIBITS[h], r = ex.ramps[0], surface = ex.pool.surface - 0.06;
+          if (n === 0 && r.width) {
+            Object.assign(m, { x: r.top.x, z: (r.top.z + r.bottom.z) / 2, y: (ex.land.y + surface) / 2, mode: "rampDown", speed: 0.5, heading: 0 });
+            m.path = [{ ...r.bottom, y: surface }, { x: r.bottom.x, z: r.bottom.z + RAMP_STEP, y: surface }];
+            m.from = { x: m.x, y: m.y, z: m.z };
+          } else if (n === 1 && ex.swimObstacles) {
+            const from = { x: -3.6, z: 2.7, y: 1.05 }, to = { x: 1.85, z: 2.7, y: 1.05 };
+            if (waterLegClear(ex, from, to, 0.35)) {
+              Object.assign(m, from, { mode: "swim", area: "water", heading: Math.PI / 2, speed: 0.9, boutEnd: coastRt.time + 18, nextBreath: coastRt.time + 7 });
+              m.path = [to];
+            }
+          }
+        }
+        coastRt.animals.set(f.id, { habitat: h, m });
+      }
     }
   }
   for (const id of [...coastRt.animals.keys()]) if (!live.has(id)) coastRt.animals.delete(id);
 }
 
 /** Item footprints on the land shelf (obstacles and rest spots), and a floating toy, from the habitat's placed items. */
-export function habitatCtx(model: Model, h: CoastHabitat): Pick<MoveCtx, "landItems" | "toy"> {
+export function habitatCtx(model: Model, h: CoastHabitat): Pick<MoveCtx, "landItems" | "toy" | "restSpots"> {
   const t = tankAt(model, HABITAT_PAD[h]);
   const ex = EXHIBITS[h];
   const landItems: MoveCtx["landItems"] = [];
+  const restSpots: NonNullable<MoveCtx["restSpots"]> = [];
   let toy: MoveCtx["toy"] = null;
   for (const d of t?.decor ?? []) {
     const s = ex.slots[d.slot];
     if (!s) continue;
     if (s.on === "land") landItems.push({ x: s.x, z: s.z, r: d.kind === "penguinFeeder" ? 0.45 : 0.6 });
+    if (d.kind === "penguinNest") restSpots.push({ x: s.x, z: s.z + 0.9 });
     if (s.on === "water" && (d.kind === "otterToy" || d.kind === "sealBall")) toy = { x: s.x, z: s.z };
   }
-  return { landItems, toy };
+  return { landItems, toy, restSpots };
 }
 
 /** Advance every coastal animal (called each frame while the zone is shown). */
@@ -64,7 +85,7 @@ export function stepCoast(model: Model, dt: number, shown: boolean) {
   if (!shown) return;
   coastRt.time += dt;
   syncCoast(model);
-  const ctxBy = new Map<CoastHabitat, Pick<MoveCtx, "landItems" | "toy">>();
+  const ctxBy = new Map<CoastHabitat, Pick<MoveCtx, "landItems" | "toy" | "restSpots">>();
   for (const a of coastRt.animals.values()) {
     const until = coastRt.hold.get(a.m.id);
     if (until !== undefined) {

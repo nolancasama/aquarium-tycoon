@@ -15,7 +15,7 @@ export interface SealParts { front: THREE.BufferGeometry; rear: THREE.BufferGeom
 export interface OtterParts { body: THREE.BufferGeometry; head: THREE.BufferGeometry; paw: THREE.BufferGeometry; tail: THREE.BufferGeometry; lift: number }
 
 let penguin: PenguinParts | null = null;
-/** A Humboldt penguin (rocky temperate coasts): black back, white front with a black chest band, pink face patch. */
+/** A penguin: black back, white front with a black chest band, pink face patch. */
 export function penguinParts(): PenguinParts {
   if (penguin) return penguin;
   const b = new PartBuilder(0);

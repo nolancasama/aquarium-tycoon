@@ -85,7 +85,7 @@ test("locked at the hub and on the map; a preview sandbox opens it; penguins nee
   expect(c.open).toBe(true);
   expect(c.milestone).toBe(1);
   expect((await state(page)).coins).toBe(700 - 320);
-  // Pico's two introduction lines (they close by themselves in fast mode).
+  // The first-visit camera tour finishes or can be skipped by any tap.
   await waitFor(page, (s) => !s.line && (s.progress as { coastIntroSeen?: boolean }).coastIntroSeen === true, 15_000, "intro done");
   await expect(page.getByTestId("coast-goals")).toContainText("Penguin Paradise");
 
@@ -191,3 +191,52 @@ test("a real tap on a coastal slot ring places the item (in a preview)", async (
   await waitFor(page, (s) => s.tanks.find((t) => t.type === "penguins")!.decor.some((d) => d.kind === "penguinNest" && d.slot === 3), 5_000, "nest placed");
   expect(errors).toEqual([]);
 });
+
+for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768]] as const) {
+  test(`penguin window camera and coast HUD fit at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    const errors = await load(page, save(700));
+    await hook(page, "coastTo", 5);
+    await hook(page, "set", { hall: 6, view: "room", tankId: null, panel: null, coastView: "all" });
+    await expect(page.getByTestId("coast-reveal")).toBeVisible();
+    await expect(page.getByTestId("coast-view-underwater")).toHaveCount(0);
+    // A HUD action both skips the tour and performs its original action.
+    await page.getByTestId("coast-view-penguins").click();
+    await expect(page.getByTestId("coast-reveal")).toHaveCount(0);
+    await expect(page.getByTestId("coast-view-underwater")).toBeVisible();
+    await page.waitForTimeout(1600);
+    type CameraState = { camera: { pos: { x: number; y: number; z: number } } };
+    const land = (await state(page) as unknown as CameraState).camera.pos;
+    await page.getByTestId("coast-view-underwater").click();
+    await expect(page.getByTestId("coast-view-underwater")).toHaveAttribute("aria-pressed", "true");
+    await page.waitForTimeout(1600);
+    const water = (await state(page) as unknown as CameraState).camera.pos;
+    expect(water.y).toBeLessThan(land.y - 3);
+    expect(water.y).toBeLessThan(1.4);
+
+    const box = async (tid: string) => (await page.getByTestId(tid).boundingBox())!;
+    const goals = await box("coast-goals"), views = await box("coast-views"), status = await box("coast-status");
+    const settings = await box("btn-settings"), bar = await box("btn-coast-items");
+    for (const b of [goals, views, status, bar]) {
+      expect(b.x).toBeGreaterThanOrEqual(0);
+      expect(b.y).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.width).toBeLessThanOrEqual(width + 0.5);
+      expect(b.y + b.height).toBeLessThanOrEqual(height + 0.5);
+    }
+    expect(views.y).toBeGreaterThanOrEqual(goals.y + goals.height - 1);
+    expect(status.y).toBeGreaterThanOrEqual(settings.y + settings.height - 1);
+    expect(views.y + views.height).toBeLessThanOrEqual(bar.y + 1);
+    expect(status.x).toBeGreaterThan(views.x + views.width);
+
+    await page.getByTestId("coast-view-penguins").click();
+    await expect(page.getByTestId("coast-view-underwater")).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByTestId("coast-view-penguins")).toHaveAttribute("aria-pressed", "true");
+    await page.waitForTimeout(1600);
+    expect((await state(page) as unknown as CameraState).camera.pos.y).toBeGreaterThan(land.y - 0.2);
+    for (const view of ["all", "seals", "otters"]) {
+      await page.getByTestId(`coast-view-${view}`).click();
+      await expect(page.getByTestId("coast-view-underwater")).toHaveCount(0);
+    }
+    expect(errors).toEqual([]);
+  });
+}

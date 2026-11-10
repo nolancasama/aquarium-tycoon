@@ -58,4 +58,24 @@
 
 /* The habitat card (with its need line) holds the right side; the viewpoints sit on the left under the goals. */
 .wing-views.coast-views { right: auto; left: 14px; top: 236px; }
+.coast-reveal {
+  position: absolute;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 10px 20px;
+  z-index: 28;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.coast-reveal b { font-size: 20px; }
+.coast-reveal small { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+@media (max-height: 740px) {
+  .wing-views.coast-views { gap: 6px; }
+  .wing-views.coast-views button { min-height: 48px; }
+}
 @media (max-height: 620px) { .wing-views.coast-views { top: 200px; } }

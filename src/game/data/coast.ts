@@ -32,6 +32,8 @@ export interface Island {
   /** Footprint radius at the waterline, and the flat top's height. */
   r: number;
   top: number;
+  /** Optional broad flat top (legacy rocks use 55% of the waterline radius). */
+  topRadius?: number;
   /** Where an animal waits in the water before climbing out (exhibit-local, at the surface). */
   climb: Vec2;
   /** Where it rests on top. */
@@ -42,6 +44,18 @@ export interface Ramp {
   /** Top on the land shelf and bottom at the waterline (exhibit-local x/z). */
   top: Vec2;
   bottom: Vec2;
+  /** Full width of the solid shore slope; older exhibits keep their 1.5 m ramp. */
+  width?: number;
+}
+
+/** A low shelf rock with a flat snowy resting top and a single safe step route. */
+export interface RestLedge {
+  x: number;
+  z: number;
+  r: number;
+  top: number;
+  approach: Vec2;
+  rest: Vec2;
 }
 
 export interface ExhibitDef {
@@ -55,6 +69,10 @@ export interface ExhibitDef {
   pool: { minX: number; maxX: number; minZ: number; maxZ: number; floor: number; surface: number };
   ramps: Ramp[];
   islands: Island[];
+  /** Optional authored resting rocks; ordinary land paths go around their solid bases. */
+  ledges?: RestLedge[];
+  /** Solid pool pieces, conservatively avoided at every swimming depth. */
+  swimObstacles?: { x: number; z: number; r: number; top: number; kind: "ice" | "rock" }[];
   /** Built-in boulders on the land shelf (scenery and obstacles: centre and radius). */
   boulders: { x: number; z: number; r: number; h: number }[];
   /** Item positions (exhibit-local). `land` items stand on the shelf, `water` ones float, `floor` ones sit on the pool bottom. */
@@ -73,11 +91,23 @@ export const EXHIBITS: Record<CoastHabitat, ExhibitDef> = {
     x: COAST_ORIGIN.x - 15, z: COAST_ORIGIN.z,
     land: { minX: -6.1, maxX: 6.1, minZ: -4.6, maxZ: -0.7, y: 2.35 },
     pool: { minX: -6.3, maxX: 6.3, minZ: -0.6, maxZ: 4.85, floor: 0.15, surface: SURFACE },
-    ramps: [{ top: { x: -1.6, z: -0.9 }, bottom: { x: -1.6, z: 1.2 } }],
-    islands: [{ x: 3.4, z: 2.5, r: 1.15, top: 2.3, climb: { x: 3.4, z: 0.95 }, rest: { x: 3.4, z: 2.45 } }],
+    ramps: [{ top: { x: -1.6, z: -1.0 }, bottom: { x: -1.6, z: 1.15 }, width: 3.5 }],
+    islands: [{ x: 3.75, z: 1.65, r: 1.15, top: 2.18, topRadius: 1.0, climb: { x: 2.08, z: 1.65 }, rest: { x: 3.75, z: 1.6 } }],
+    ledges: [
+      { x: -4.25, z: -2.5, r: 0.85, top: 2.68, approach: { x: -4.25, z: -1.15 }, rest: { x: -4.25, z: -2.5 } },
+      { x: 3.95, z: -2.8, r: 0.8, top: 2.78, approach: { x: 3.95, z: -1.5 }, rest: { x: 3.95, z: -2.8 } }
+    ],
+    swimObstacles: [
+      { x: -5.25, z: 0.75, r: 0.65, top: 2.12, kind: "ice" },
+      { x: 5.35, z: 3.55, r: 0.5, top: 2.08, kind: "ice" },
+      { x: 5.45, z: -0.05, r: 0.5, top: 2.02, kind: "ice" },
+      { x: -4.55, z: 3.6, r: 0.6, top: 1.12, kind: "rock" },
+      { x: 0.75, z: 3.8, r: 0.55, top: 0.95, kind: "rock" },
+      { x: 0.65, z: 0.45, r: 0.5, top: 1.05, kind: "rock" }
+    ],
     boulders: [{ x: -5.2, z: -4.0, r: 0.7, h: 1.0 }, { x: 5.3, z: -3.9, r: 0.65, h: 0.9 }, { x: 0.6, z: -4.3, r: 0.5, h: 0.6 }],
-    slots: [{ x: -3.8, z: -2.6, on: "land" }, { x: 1.4, z: -2.5, on: "land" }, { x: 4.2, z: -2.0, on: "land" }, { x: -1.2, z: -3.6, on: "land" }],
-    colors: { rock: "#8f9ba6", top: "#c9d3da", water: "#6fd0ec", accent: "#f4fbff" }
+    slots: [{ x: -2.7, z: -3.2, on: "land" }, { x: 0.65, z: -2.5, on: "land" }, { x: 2.5, z: -1.8, on: "land" }, { x: -1.0, z: -3.85, on: "land" }],
+    colors: { rock: "#697f8e", top: "#bacbd0", water: "#68bdc9", accent: "#eff7f6" }
   },
   seals: {
     id: "seals", name: "Seal Cove", ja: "アザラシの いりえ",
@@ -108,7 +138,7 @@ export const exWorld = (ex: ExhibitDef, p: { x: number; z: number }, y = 0): Vec
 
 /** Viewpoints: the whole wing, or one exhibit. Narrow screens step back along the view. */
 export type CoastView = "all" | CoastHabitat;
-export function coastCamera(view: CoastView, counting = false): { pos: Vec3; target: Vec3 } {
+export function coastCamera(view: CoastView, counting = false, underwater = false): { pos: Vec3; target: Vec3 } {
   // Counting: higher and further back, so every animal (shelf and pool) stays clear of the HUD while the question panel lifts the view.
   if (counting && view !== "all") {
     const ex = EXHIBITS[view];
@@ -118,6 +148,10 @@ export function coastCamera(view: CoastView, counting = false): { pos: Vec3; tar
     return { pos: { x: COAST_ORIGIN.x, y: 21, z: COAST_ORIGIN.z + 38 }, target: { x: COAST_ORIGIN.x, y: 0.9, z: COAST_ORIGIN.z + 0.5 } };
   }
   const ex = EXHIBITS[view];
+  if (view === "penguins") {
+    if (underwater) return { pos: { x: ex.x, y: 1.05, z: ex.z + 13.1 }, target: { x: ex.x, y: 1.15, z: ex.z + 0.4 } };
+    return { pos: { x: ex.x + 0.7, y: 7.4, z: ex.z + 17.6 }, target: { x: ex.x, y: 1.85, z: ex.z - 0.3 } };
+  }
   return { pos: { x: ex.x, y: 8.8, z: ex.z + 13.6 }, target: { x: ex.x, y: 1.45, z: ex.z + 0.2 } };
 }
 

@@ -26,6 +26,8 @@ export type MoveMode =
   | "rampDown" | "rampUp"
   /** From the water up onto an island's top, or off it into the water. */
   | "climb" | "hop"
+  /** A short authored hop onto or off a low land resting ledge. */
+  | "stepUp" | "stepDown"
   /** Under water (or along the surface for otters). */
   | "swim"
   /** Head at the surface to breathe. */
@@ -33,7 +35,7 @@ export type MoveMode =
   /** Otters: floating on the back at the surface. */
   | "float";
 
-export type Area = "land" | "island" | "water";
+export type Area = "land" | "island" | "ledge" | "water";
 
 export interface Mover {
   id: string;
@@ -72,6 +74,10 @@ export interface Mover {
   exit?: { at: Vec3; kind: "ramp" | "island"; i: number } | null;
   /** The ramp a walk ends at (then down into the water), or -1. */
   rampNext?: number;
+  /** Optional authored shelf ledge occupied, or approached at the end of a walk. */
+  ledge?: number;
+  ledgeNext?: number;
+  ledgeRest?: Vec2;
 }
 
 export interface MoveCtx {
@@ -80,6 +86,8 @@ export interface MoveCtx {
   landItems: { x: number; z: number; r: number }[];
   /** A floating enrichment item otters play with, if any. */
   toy: Vec2 | null;
+  /** Optional quiet resting destinations beside placed habitat items. */
+  restSpots?: Vec2[];
   /** Events: entered or left the water (for milestones and activities). */
   onEvent?: (m: Mover, kind: "enterWater" | "leaveWater" | "breathe" | "dive" | "play") => void;
 }
@@ -116,7 +124,7 @@ function rand(m: Mover) {
 }
 const between = (m: Mover, [a, b]: [number, number]) => a + (b - a) * rand(m);
 
-export function newMover(id: string, species: CoastSpecies, ex: ExhibitDef, seed: number, time = 0): Mover {
+export function newMover(id: string, species: CoastSpecies, ex: ExhibitDef, seed: number, time = 0, landItems: MoveCtx["landItems"] = []): Mover {
   const m: Mover = {
     id, species, x: 0, y: ex.land.y, z: 0, heading: 0, pitch: 0, mode: "rest", area: "land", island: -1,
     path: [], from: { x: 0, y: 0, z: 0 }, speed: 0, until: time, boutEnd: 0, nextBreath: 0,
@@ -127,7 +135,7 @@ export function newMover(id: string, species: CoastSpecies, ex: ExhibitDef, seed
     const p = waterPoint(m, ex, true);
     Object.assign(m, { x: p.x, y: p.y, z: p.z, mode: "float", area: "water", until: time + between(m, PARAMS.otter.float) });
   } else {
-    const p = landPoint(m, ex, []) ?? { x: (ex.land.minX + ex.land.maxX) / 2, z: (ex.land.minZ + ex.land.maxZ) / 2 };
+    const p = landPoint(m, ex, landItems) ?? { x: (ex.land.minX + ex.land.maxX) / 2, z: (ex.land.minZ + ex.land.maxZ) / 2 };
     Object.assign(m, { x: p.x, z: p.z, until: time + between(m, [0.5, PARAMS[species].rest[1]]) });
   }
   m.heading = rand(m) * Math.PI * 2;
@@ -149,7 +157,8 @@ export const RAMP_STEP = 0.45;
 /** The solid under a ramp, as a rectangle (it slopes from the land edge to the waterline). */
 export function rampRect(ex: ExhibitDef, i: number) {
   const r = ex.ramps[i];
-  return { minX: r.top.x - 0.75, maxX: r.top.x + 0.75, minZ: Math.min(r.top.z, r.bottom.z), maxZ: Math.max(r.top.z, r.bottom.z) };
+  const half = (r.width ?? 1.5) / 2;
+  return { minX: r.top.x - half, maxX: r.top.x + half, minZ: Math.min(r.top.z, r.bottom.z), maxZ: Math.max(r.top.z, r.bottom.z) };
 }
 
 function segHitsRect(a: Vec2, b: Vec2, r: { minX: number; maxX: number; minZ: number; maxZ: number }, pad: number) {
@@ -171,6 +180,7 @@ export function waterLegClear(ex: ExhibitDef, a: Vec2, b: Vec2, body: number): b
     const ends = Math.min(Math.hypot(a.x - isl.x, a.z - isl.z), Math.hypot(b.x - isl.x, b.z - isl.z)) - 1e-3;
     if (segDist(a, b, isl) < Math.max(isl.r + 0.3, Math.min(want, ends))) return false;
   }
+  for (const o of ex.swimObstacles ?? []) if (segDist(a, b, o) < o.r + body * 0.45 + 0.12) return false;
   for (let i = 0; i < ex.ramps.length; i++) if (segHitsRect(a, b, rampRect(ex, i), body * 0.35)) return false;
   return true;
 }
@@ -179,7 +189,7 @@ export function waterLegClear(ex: ExhibitDef, a: Vec2, b: Vec2, body: number): b
 export function landLegClear(ex: ExhibitDef, a: Vec2, b: Vec2, items: { x: number; z: number; r: number }[], body: number): boolean {
   const l = ex.land, mg = 0.3;
   for (const q of [a, b]) if (q.x < l.minX + mg || q.x > l.maxX - mg || q.z < l.minZ + mg || q.z > l.maxZ - 0.1) return false;
-  for (const o of [...ex.boulders, ...items]) if (segDist(a, b, o) < o.r + body * 0.45) return false;
+  for (const o of [...ex.boulders, ...(ex.ledges ?? []), ...items]) if (segDist(a, b, o) < o.r + body * 0.45) return false;
   return true;
 }
 
@@ -187,7 +197,7 @@ function landPoint(m: Mover, ex: ExhibitDef, items: { x: number; z: number; r: n
   const l = ex.land;
   for (let i = 0; i < 24; i++) {
     const p = { x: l.minX + 0.5 + rand(m) * (l.maxX - l.minX - 1), z: l.minZ + 0.5 + rand(m) * (l.maxZ - l.minZ - 0.7) };
-    if ([...ex.boulders, ...items].every((o) => Math.hypot(p.x - o.x, p.z - o.z) > o.r + 0.4)) return p;
+    if ([...ex.boulders, ...(ex.ledges ?? []), ...items].every((o) => Math.hypot(p.x - o.x, p.z - o.z) > o.r + 0.4)) return p;
   }
   return null;
 }
@@ -197,6 +207,7 @@ function waterPoint(m: Mover, ex: ExhibitDef, surface: boolean, deepOnly = false
   for (let i = 0; i < 40; i++) {
     const q = { x: p.minX + mg + rand(m) * (p.maxX - p.minX - 2 * mg), z: p.minZ + mg + rand(m) * (p.maxZ - p.minZ - 2 * mg) };
     if (ex.islands.some((isl) => Math.hypot(q.x - isl.x, q.z - isl.z) < isl.r + ISLAND_CLEAR + 0.4)) continue;
+    if (ex.swimObstacles?.some((o) => Math.hypot(q.x - o.x, q.z - o.z) < o.r + PARAMS[m.species].body * 0.45 + 0.2)) continue;
     if (ex.ramps.some((_, k) => segHitsRect(q, q, rampRect(ex, k), 0.4))) continue;
     const top = p.surface - SWIM_MARGIN, bottom = p.floor + SWIM_MARGIN + 0.1;
     const y = surface ? p.surface - 0.06 : deepOnly ? bottom + rand(m) * 0.35 : bottom + rand(m) * (top - bottom);
@@ -274,6 +285,11 @@ function leaveWater(m: Mover, ex: ExhibitDef, ctx: MoveCtx): boolean {
 
 function afterRest(m: Mover, ex: ExhibitDef, ctx: MoveCtx) {
   const p = PARAMS[m.species];
+  if (m.area === "ledge") {
+    m.mode = "stepDown";
+    m.path = ledgePath(ex, m.ledge!, m.ledgeRest).reverse().slice(1);
+    return;
+  }
   if (m.area === "island") {
     // Off the island: a hop back into the water at the climb point.
     const isl = ex.islands[m.island];
@@ -281,6 +297,28 @@ function afterRest(m: Mover, ex: ExhibitDef, ctx: MoveCtx) {
     m.from = { x: m.x, y: m.y, z: m.z };
     m.path = [{ x: isl.climb.x, y: ex.pool.surface - 0.06, z: isl.climb.z }];
     return;
+  }
+  // Authored ledges and quiet item destinations only engage for exhibits defining them.
+  if (ex.ledges?.length) {
+    if (rand(m) < 0.45) {
+      const i = Math.floor(rand(m) * ex.ledges.length), ledge = ex.ledges[i];
+      if (landLegClear(ex, m, ledge.approach, ctx.landItems, p.body)) {
+        m.mode = "walk";
+        m.path = [{ ...ledge.approach, y: ex.land.y }];
+        m.rampNext = -1;
+        m.ledgeNext = i;
+        return;
+      }
+    }
+    if (ctx.restSpots?.length && rand(m) < 0.6) {
+      const q = ctx.restSpots[Math.floor(rand(m) * ctx.restSpots.length)];
+      if (landLegClear(ex, m, q, ctx.landItems, p.body)) {
+        m.mode = "walk";
+        m.path = [{ ...q, y: ex.land.y }];
+        m.rampNext = -1;
+        return;
+      }
+    }
   }
   if (rand(m) < p.toWater && ex.ramps.length) {
     // Walk to a ramp top (clear leg, or via a point straight behind it), then down.
@@ -306,6 +344,19 @@ function afterRest(m: Mover, ex: ExhibitDef, ctx: MoveCtx) {
   startRest(m, ctx);
 }
 
+/** Sample the small hop once, then travel the actual 3D path at bounded speed. */
+function ledgePath(ex: ExhibitDef, i: number, rest = ex.ledges![i].rest): Vec3[] {
+  const l = ex.ledges![i];
+  return Array.from({ length: 13 }, (_, j) => {
+    const k = j / 12;
+    return {
+      x: l.approach.x + (rest.x - l.approach.x) * k,
+      z: l.approach.z + (rest.z - l.approach.z) * k,
+      y: ex.land.y + (l.top - ex.land.y) * k + Math.sin(k * Math.PI) * 0.22
+    };
+  });
+}
+
 
 // ------------------------------------------------------------------ the step
 
@@ -323,7 +374,16 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
     }
     case "walk": {
       if (travel(m, dt, p.walk, true)) {
-        if ((m.rampNext ?? -1) >= 0) {
+        if ((m.ledgeNext ?? -1) >= 0) {
+          m.ledge = m.ledgeNext;
+          m.ledgeNext = -1;
+          m.mode = "stepUp";
+          const l = ex.ledges![m.ledge!];
+          const hash = [...m.id].reduce((n, c) => (Math.imul(n, 31) + c.charCodeAt(0)) | 0, 7);
+          const angle = hash * 2.399963;
+          m.ledgeRest = { x: l.rest.x + Math.sin(angle) * l.r * 0.3, z: l.rest.z + Math.cos(angle) * l.r * 0.3 };
+          m.path = ledgePath(ex, m.ledge!, m.ledgeRest).slice(1);
+        } else if ((m.rampNext ?? -1) >= 0) {
           const r = ex.ramps[m.rampNext!];
           m.mode = "rampDown";
           m.from = { x: m.x, y: m.y, z: m.z };
@@ -332,6 +392,20 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
         } else {
           if (m.attract) { m.attract = null; m.action = "eat"; m.actionUntil = ctx.time + 3; }
           startRest(m, ctx);
+        }
+      }
+      break;
+    }
+    case "stepUp":
+    case "stepDown": {
+      const up = m.mode === "stepUp";
+      if (travel(m, dt, p.walk * 1.4, true)) {
+        m.area = up ? "ledge" : "land";
+        if (!up) m.ledge = -1;
+        startRest(m, ctx);
+        if (up && m.action === "look") {
+          // Resting colonies face the shore instead of staring into the back cliffs.
+          m.heading = 0;
         }
       }
       break;
@@ -514,4 +588,4 @@ export function angleDiff(a: number, b: number) {
 const turnToward = (from: number, to: number, k: number) => from + angleDiff(from, to) * Math.min(1, k);
 
 /** Where an animal's body is (a test and activity helper): on land, on an island, or in the water. */
-export const isOnRock = (m: Mover) => m.area === "land" || m.area === "island";
+export const isOnRock = (m: Mover) => m.area === "land" || m.area === "island" || m.area === "ledge";

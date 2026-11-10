@@ -5,7 +5,7 @@ import { DECOR, COAST_DECOR } from "../game/data/decor";
 import { TANKS } from "../game/data/tanks";
 import { COAST_PRICE, HABITAT_PAD, habitatOpen, needMet } from "../game/logic/coast";
 import { happiness, tankAt, usedSpace } from "../game/logic/model";
-import { buyCoast, buyCoastItem, COAST_MILESTONES, setCoastView, startCoastActivity, watchCoastIntro } from "../game/flow/coast";
+import { buyCoast, buyCoastItem, COAST_MILESTONES, setCoastUnderwater, setCoastView, skipCoastReveal, startCoastActivity, watchCoastIntro } from "../game/flow/coast";
 import { cleanTank, feedTank, openDecorate } from "../game/flow/actions";
 import type { CoastHabitat } from "../game/data/coast";
 import type { CoastDecorKind } from "../game/types";
@@ -76,6 +76,7 @@ export function CoastGoals({ before }: { before?: ReactNode } = {}) {
 
 function Views() {
   const view = useGame((s) => s.coastView);
+  const underwater = useGame((s) => s.coastView === "penguins" && s.coastUnderwater);
   const model = useGame((s) => s.model);
   const views: Array<{ id: "all" | CoastHabitat; en: string; ja: string }> = [{ id: "all", en: "All", ja: "ぜんたい" }, ...(["penguins", "seals", "otters"] as CoastHabitat[]).map((h) => ({ id: h, ...NAMES[h] }))];
   return (
@@ -83,11 +84,16 @@ function Views() {
       {views.map((v) => {
         const locked = v.id !== "all" && !habitatOpen(model, v.id);
         return (
-          <button key={v.id} className={`${view === v.id ? "on" : ""} ${locked ? "locked" : ""}`} aria-pressed={view === v.id} aria-disabled={locked} data-testid={`coast-view-${v.id}`} onClick={() => setCoastView(v.id)}>
+          <button key={v.id} className={`${view === v.id && !underwater ? "on" : ""} ${locked ? "locked" : ""}`} aria-pressed={view === v.id && !underwater} aria-disabled={locked} data-testid={`coast-view-${v.id}`} onClick={() => setCoastView(v.id)}>
             {locked && <Icon id="lock" size={14} />}{v.en}<Ja>{v.ja}</Ja>
           </button>
         );
       })}
+      {view === "penguins" && (
+        <button className={underwater ? "on" : ""} aria-pressed={underwater} data-testid="coast-view-underwater" onClick={setCoastUnderwater}>
+          Underwater<Ja>みずのなか</Ja>
+        </button>
+      )}
     </div>
   );
 }
@@ -162,6 +168,7 @@ function WaitingVisitor() {
 
 export function CoastHud() {
   const view = useGame((s) => s.coastView);
+  const revealing = useGame((s) => s.coastRevealing);
   const free = useGame((s) => s.mode === "play" && !s.prompt && !s.line && !s.stageCard && !s.placing && !s.coastActivity);
   const panel = useGame((s) => s.panel);
   const decorating = panel === "decorate";
@@ -169,6 +176,12 @@ export function CoastHud() {
   const h = view === "all" ? null : view;
   return (
     <>
+      {revealing && (
+        <button className="panel coast-reveal ui" data-testid="coast-reveal" onClick={skipCoastReveal}>
+          <b>Welcome to Penguin Coast!</b><Ja>ペンギンの かいがんへ ようこそ！</Ja>
+          <small>Tap to skip <Ja>タップで スキップ</Ja></small>
+        </button>
+      )}
       {h && !decorating && <HabitatCard h={h} />}
       {free && !panel && <Views />}
       {h && panel === "decorShop" && <ItemShop h={h} />}

@@ -19,6 +19,7 @@ import { lagoonRt } from "../game/lagoon/lagoonRuntime";
 import { revealProgress } from "../game/flow/outdoor";
 import { coastCamera, EXHIBITS, type CoastView } from "../game/data/coast";
 import { coastRt } from "../game/coast/coastRuntime";
+import { coastRevealProgress } from "../game/flow/coast";
 import { HUB_CAMERA } from "../game/data/hub";
 import { TUNNEL_VIEWS, type TunnelView } from "../game/data/sharkTunnel";
 import { stepTransition } from "../game/tunnel/explore";
@@ -61,11 +62,40 @@ export function tunnelView(view: TunnelView, aspect: number) {
 
 /** Coastal zone viewpoints (the whole wing or one exhibit); narrower screens step back. */
 type Shot = { pos: { x: number; y: number; z: number }; target: { x: number; y: number; z: number } };
-export function coastView(view: CoastView, aspect: number, counting = false): Shot {
+export function coastView(view: CoastView, aspect: number, counting = false, underwater = false): Shot {
   if (counting && view !== "all") return countingView(view, aspect);
-  const { pos, target } = coastCamera(view);
+  const base = coastCamera(view, false, underwater);
   const k = Math.max(1, 1.78 / aspect);
-  return { pos: { x: target.x + (pos.x - target.x) * k, y: target.y + (pos.y - target.y) * k, z: target.z + (pos.z - target.z) * k }, target };
+  const back = ({ pos, target }: Shot): Shot => ({ pos: { x: target.x + (pos.x - target.x) * k, y: target.y + (pos.y - target.y) * k, z: target.z + (pos.z - target.z) * k }, target });
+  const normal = back(base);
+  const progress = coastRevealProgress();
+  if (progress >= 1) return normal;
+  const ex = EXHIBITS.penguins;
+  const animals = [...coastRt.animals.values()].filter((a) => a.habitat === "penguins");
+  const land = animals.find((a) => a.m.area === "land" && a.m.mode !== "rampDown")?.m;
+  const entering = animals.find((a) => a.m.mode === "rampDown")?.m;
+  const swimmer = animals[1]?.m.area === "water" ? animals[1].m : animals.filter((a) => a.m.area === "water").sort((a, b) => b.m.z - a.m.z)[0]?.m;
+  const ramp = ex.ramps[0];
+  const local = (x: number, y: number, z: number) => ({ x: ex.x + x, y, z: ex.z + z });
+  const landTarget = local(land?.x ?? 0, (land?.y ?? ex.land.y) + 0.4, land?.z ?? -2);
+  const shoreTarget = local(entering?.x ?? ramp.bottom.x, (entering?.y ?? ex.pool.surface) + 0.2, entering?.z ?? ramp.bottom.z);
+  const swimTarget = local(swimmer?.x ?? 0, (swimmer?.y ?? 1.1) + 0.15, swimmer?.z ?? 3.4);
+  // Follow real movers without moving them: cliffs, a land companion, the shore,
+  // then the swimming animal nearest the glass, before returning to the chosen view.
+  const shots: Array<{ at: number; shot: Shot }> = [
+    { at: 0, shot: back({ pos: local(-2.2, 8.4, 13.3), target: local(0, 3.2, -3.5) }) },
+    { at: 1.1, shot: back({ pos: local(1.4, 6.1, 12.6), target: landTarget }) },
+    { at: 2.3, shot: back({ pos: local(-0.3, 4.9, 12.4), target: shoreTarget }) },
+    { at: 4.2, shot: back({ pos: local(0.4, 1.25, 13.2), target: swimTarget }) },
+    { at: 5.7, shot: back({ pos: local(-0.4, 1.15, 13.5), target: swimTarget }) },
+    { at: 7.2, shot: normal }
+  ];
+  const seconds = progress * 7.2;
+  const i = Math.max(0, shots.findIndex((s) => s.at > seconds) - 1);
+  const a = shots[i], b = shots[i + 1];
+  const t = THREE.MathUtils.smoothstep(seconds, a.at, b.at);
+  const lerp = (p: Shot["pos"], q: Shot["pos"]) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t, z: p.z + (q.z - p.z) * t });
+  return { pos: lerp(a.shot.pos, b.shot.pos), target: lerp(a.shot.target, b.shot.target) };
 }
 
 /**
@@ -329,7 +359,7 @@ export function CameraRig() {
       want.current.set(v.pos.x, v.pos.y, v.pos.z);
       wantLook.current.set(v.target.x, v.target.y, v.target.z);
     } else if (g.screen === "game" && g.hall === COAST_HALL) {
-      const v = coastView(g.coastView, aspect, g.coastActivity?.habitat === "penguins");
+      const v = coastView(g.coastView, aspect, g.coastActivity?.habitat === "penguins", g.coastUnderwater);
       want.current.set(v.pos.x, v.pos.y, v.pos.z);
       wantLook.current.set(v.target.x, v.target.y, v.target.z);
     } else if (g.screen === "game" && g.hall === LAGOON_HALL) {
