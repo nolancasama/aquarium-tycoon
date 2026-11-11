@@ -4,7 +4,7 @@ import { openAtrium, openGallery, openHall, type Model } from "../game/logic/mod
 import type { StageId } from "../game/types";
 import { debugStartRush } from "../game/rush/flow";
 import { openSharkTunnel } from "../game/logic/tunnel";
-import { checkCoastMilestones, openCoast, recordCoastActivity, recordCoastSight } from "../game/logic/coast";
+import { checkCoastMilestones, coastMilestoneLimit, openCoast, recordCoastActivity, recordCoastSight, storeHiddenCoast } from "../game/logic/coast";
 import { coastSlotFits } from "../game/data/coast";
 import type { CoastDecorKind } from "../game/types";
 import type { ReleaseArea } from "../game/data/release";
@@ -115,7 +115,7 @@ function previewThen(area: ReleaseArea, fn: ((m: Model) => Model) | null, go: bo
   if (fn) updateModel(fn);
   if (!go) return true;
   if (area === "coast") {
-    if (getGame().hall !== COAST_HALL) { setGame({ coastView: "all" }); travelTo(COAST_HALL); }
+    if (getGame().hall !== COAST_HALL) { setGame({ coastView: "penguins" }); travelTo(COAST_HALL); }
   } else if (getGame().hall !== OUTDOOR_HALL[area]) enterOutdoor(area);
   return true;
 }
@@ -129,6 +129,8 @@ const PREVIEWS: { label: string; id: string; area: ReleaseArea; run: ((m: Model)
 
 /** The Shark Tunnel finished (trophy) and the coast opened through its real rule, then milestones up to `n` with their real rewards. */
 export function coastTo(m: Model, n: number): Model {
+  n = Math.min(n, coastMilestoneLimit());
+  m = storeHiddenCoast(m);
   let o = openHub(m);
   const t = o.progress.tunnel!;
   o = { ...o, progress: { ...o.progress, tunnel: { ...t, milestone: 5, findDone: true, whereDone: true, countDone: true, trophy: true } } };
@@ -228,13 +230,13 @@ export function DebugPanel() {
       ))}
       <section className="debug-preview" aria-label="Release-locked areas (preview)">
         <b>Release-locked areas · preview (this session only, not saved)</b>
-        {PREVIEWS.map((p) => (
+        {PREVIEWS.filter((p) => p.id !== "debug-preview-coast-all" || coastMilestoneLimit() === 5).map((p) => (
           <button key={p.id} className="debug-action" data-testid={p.id} onClick={() => { if (previewThen(p.area, p.run, true)) toast({ en: `Debug: ${p.label} (not saved)`, tone: "info" }); }}>{p.label}</button>
         ))}
         {([["coast", "Coast", coastTo], ["lagoon", "Lagoon", lagoonTo], ["sanctuary", "Sanctuary", sanctuaryTo]] as const).map(([area, name, to]) => (
           <div key={area} className="debug-levels" role="group" aria-label={`${name} milestones (preview)`}>
             <span>{name}</span>
-            {[1, 2, 3, 4, 5].map((n) => (
+            {[1, 2, 3, 4, 5].filter((n) => area !== "coast" || n <= coastMilestoneLimit()).map((n) => (
               <button key={n} onClick={() => { if (previewThen(area, (m) => to(m, n), true)) toast({ en: `Debug: ${name} milestone ${n} (preview, not saved)`, tone: "info" }); }} data-testid={`debug-${area}-${n}`}>{n}</button>
             ))}
           </div>

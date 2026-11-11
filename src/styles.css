@@ -1875,6 +1875,32 @@ mark.key {
   display: block;
 }
 
+/* The coast's viewpoint buttons sit at mid-left: its left arrow goes below them. */
+.app:has(.coast-views) .hall-arrow.left {
+  top: auto;
+  bottom: 124px;
+  transform: none;
+}
+
+/* The Shark Tunnel's viewpoint buttons sit at mid-right: its right arrow (Grand Hub) goes below them, above Explore. */
+.app:has([data-testid="wing-views"]) .hall-arrow.right {
+  top: auto;
+  bottom: 124px;
+  transform: none;
+}
+
+/* A release-locked neighbour: still shown (so the tour reads), but plainly closed. */
+.hall-arrow.locked {
+  color: #6b7f88;
+  border-color: #c9d3d8;
+  background: color-mix(in srgb, var(--panel) 82%, #c9d3d8);
+}
+
+.hall-arrow.locked svg {
+  vertical-align: -3px;
+  margin-right: 4px;
+}
+
 .app:has(.goals.expanded) .hall-arrow.left,
 .app:has(.request) .hall-arrow.left {
   top: auto;

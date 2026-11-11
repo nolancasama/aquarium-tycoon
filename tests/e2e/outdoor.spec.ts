@@ -53,7 +53,8 @@ async function clearLines(page: Page) {
     await page.waitForTimeout(300);
   }
 }
-type Lagoon = { progress: { milestone: number; food: number; seen: string[]; acts: number; toys: string[]; decor: string[] } | null; view: string; toy: { kind: string } | null };
+type Lagoon = { progress: { milestone: number; food: number; fed: number; seen: string[]; acts: number; toys: string[]; decor: string[] } | null; view: string; toy: { kind: string } | null };
+type Feeding = { phase: string; completed: number; ready: string[]; history: { phase: string; at: number }[] };
 type Sanct = { progress: { milestone: number; stickers: string[]; belugas: boolean; cleanupDone: boolean; improvement: string | null; decor: string[]; trophy: boolean } | null; litter: { i: number; picked: boolean }[] };
 const lagoon = (page: Page) => hook<Lagoon>(page, "lagoon");
 const sanct = (page: Page) => hook<Sanct>(page, "sanctuary");
@@ -88,10 +89,32 @@ test("Ctrl+Alt+D previews the Dolphin Lagoon; it plays mic-free; back to the hub
   await page.getByTestId("lagoon-view-deck").click();
   await expect.poll(async () => (await hook<{ mode: string }>(page, "atmosphere")).mode, { timeout: 10_000 }).toBe("air");
   await page.waitForTimeout(1600);
+  const beforeFeed = (await lagoon(page)).progress!;
   await page.getByTestId("btn-lagoon-feed").click();
+  const feeding = () => hook<Feeding>(page, "lagoonFeeding");
+  expect((await feeding()).phase).toBe("gathering");
+  const fedFood = (await lagoon(page)).progress!;
+  expect(fedFood.fed).toBe(beforeFeed.fed + 1);
+  expect(fedFood.food).toBeGreaterThan(Math.min(100, beforeFeed.food + 45) - 2);
+  // The care gain (and so milestone 1) comes with the tap; its card closes by itself after ~4 s,
+  // long before the gathering → throwing → catching sequence ends.
   await expect.poll(async () => (await lagoon(page)).progress?.milestone, { timeout: 10_000 }).toBe(1);
   await expect(page.getByTestId("area-celebration")).toHaveAttribute("data-milestone", "1");
   expect((await lagoon(page)).progress!.decor).toEqual(["arch"]);
+  const startedAt = (await feeding()).history[0].at;
+  // Repeated taps cannot restart the coordinator or apply a second care gain.
+  await page.waitForTimeout(4500);
+  await page.getByTestId("btn-lagoon-feed").dispatchEvent("click");
+  expect((await feeding()).history[0].at).toBe(startedAt);
+  await expect.poll(async () => (await feeding()).history.some((h) => h.phase === "throwing"), { timeout: 12_000 }).toBe(true);
+  await expect.poll(async () => (await feeding()).phase, { timeout: 20_000 }).toBe("finished");
+  const sequence = await feeding();
+  expect(sequence.history.map((h) => h.phase)).toEqual(expect.arrayContaining(["gathering", "ready", "throwing", "catching", "finished"]));
+  expect(sequence.completed).toBe(Math.max(1, sequence.ready.length));
+  const afterFeed = (await lagoon(page)).progress!;
+  expect(afterFeed.fed).toBe(beforeFeed.fed + 1);
+  expect(afterFeed.food).toBeLessThanOrEqual(fedFood.food);
+  expect(afterFeed.food).toBeGreaterThan(fedFood.food - 10);
 
   // A toy into the water.
   await page.waitForTimeout(4500);

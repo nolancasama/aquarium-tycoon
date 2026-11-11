@@ -119,7 +119,13 @@ export function createPenguin(asset: GLTF, targetHeight: number): PenguinInstanc
       pose("thighR", xAxis, 0.7, swim);
       pose("footL", xAxis, -0.35, swim);
       pose("footR", xAxis, -0.35, swim);
-      if (!moving && m.action === "groom" && m.area !== "water") {
+      if (!moving && m.action === "eat" && m.area === "land") {
+        // A short repeated beak dip, layered on the owner's idle animation.
+        // Body lean is applied around the visual feet by the scene group.
+        pose("scull", xAxis, 0.5 + Math.sin(time * 8) * 0.16, 1 - swim);
+        pose("finL", zAxis, 0.18, 1 - swim);
+        pose("finR", zAxis, -0.18, 1 - swim);
+      } else if (!moving && m.action === "groom" && m.area !== "water") {
         pose("finL", zAxis, 0.3 + Math.abs(Math.sin(time * 6)) * 0.35, 1 - swim);
         pose("scull", xAxis, Math.sin(time * 6) * 0.12, 1 - swim);
       } else if (!moving && m.action === "look") {

@@ -1,15 +1,23 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { HAPPY, happiness, newModel, newTank, tankAt, type Model, type Result } from "./model";
-import { clearPreviewAccess, grantPreview } from "../data/release";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { decay, HAPPY, happiness, latchHappy, newModel, newTank, tankAt, type Model, type Result } from "./model";
+import { clearPreviewAccess, COAST_HABITATS_SHOWN, grantPreview } from "../data/release";
+import type { CoastHabitat } from "../data/coast";
+import { startEvent } from "../rush/logic";
+import { newRushState } from "../rush/types";
+import { unstoreAvailable } from "./stored";
 
 // The zone is release-locked (data/release.ts; release.test.ts covers the lock).
 // Its own rules are tested as they run when it may be entered: in a preview here.
 beforeAll(() => grantPreview("coast"));
 afterAll(() => clearPreviewAccess());
-import { checkCoastMilestones, COAST_PRICE, coastUnlocked, habitatOpen, NEED_CAP, newCoastProgress, openCoast, recordCoastActivity, recordCoastSight } from "./coast";
+import { checkCoastMilestones, COAST_PRICE, coastMilestoneLimit, coastQuestionHabitats, coastUnlocked, habitatOpen, NEED_CAP, newCoastProgress, openCoast, recordCoastActivity, recordCoastSight, storeHiddenCoast } from "./coast";
 import { decodeSave, encodeSave } from "./save";
 import { decorFits } from "../data/decor";
 import { COAST_HALL, HUB_HALL, roomOpen } from "../data/rooms";
+
+const shown = COAST_HABITATS_SHOWN as CoastHabitat[];
+const originalShown = [...shown];
+afterEach(() => shown.splice(0, shown.length, ...originalShown));
 
 function ok(r: Result): Model {
   if (!r.ok) throw new Error(r.reason);
@@ -72,6 +80,9 @@ describe("Coastal & Polar Zone rules", () => {
   });
 
   it("advances the five milestones in order, each reward once", () => {
+    // Widen the single release switch: the original full progression stays available.
+    shown.splice(0, shown.length, "penguins", "seals", "otters");
+    expect(coastMilestoneLimit()).toBe(5);
     let m = ok(openCoast(tunnelDone()));
     // Penguin Paradise: resting rocks, a swim seen, two activities.
     m = recordCoastSight(m, "penguinSwim");
@@ -104,6 +115,55 @@ describe("Coastal & Polar Zone rules", () => {
     for (const h of ["penguins", "seals", "otters"] as const) m = recordCoastActivity(m, h);
     expect(m.progress.coast?.milestone).toBe(5);
     expect(m.progress.coast?.trophy).toBe(true);
+  });
+
+  it("caps the penguin-only preview at milestone 2 and grants only its penguin reward", () => {
+    let m = ok(openCoast(tunnelDone()));
+    m = place(m, "M", "penguinRock");
+    m = recordCoastSight(m, "penguinSwim");
+    m = recordCoastActivity(recordCoastActivity(m, "penguins"), "penguins");
+    expect(coastMilestoneLimit()).toBe(2);
+    expect(m.progress.coast?.milestone).toBe(2);
+    expect(tankAt(m, "M")?.fish).toHaveLength(4);
+    expect(tankAt(m, "N")).toBeNull();
+    expect(tankAt(m, "O")).toBeNull();
+    expect(m.inv.fish).toEqual([]);
+    expect(checkCoastMilestones(m).m).toBe(m);
+    expect(recordCoastSight(m, "sealDive")).toBe(m);
+    expect(recordCoastActivity(m, "otters")).toBe(m);
+  });
+
+  it("preserves hidden habitats, items and later progress through saves and excludes them from care, questions, Rush and the judge", () => {
+    let m = ok(openCoast(tunnelDone()));
+    const seal = { ...newTank("t200", "seals", "N"), food: 17, clean: 24, fish: [{ id: "f201", species: "seal" as const }], decor: [{ id: "d202", kind: "sealRock" as const, variant: null, slot: 0 }] };
+    const otter = { ...newTank("t203", "otters", "O"), food: 13, clean: 19, fish: [{ id: "f204", species: "otter" as const }], decor: [{ id: "d205", kind: "otterToy" as const, variant: null, slot: 0 }] };
+    m = { ...m, nextId: 210, tanks: [...m.tanks, seal, otter], inv: { ...m.inv, fish: [{ id: "f206", species: "seal" }], decor: [{ id: "d207", kind: "otterDen", variant: null }] }, progress: { ...m.progress, coast: { ...m.progress.coast!, milestone: 4, sawSealDive: true, sawOtterFloat: true, sealActs: 7, otterActs: 9 } } };
+    const frozen = storeHiddenCoast(m);
+    expect(frozen.stored?.tanks).toEqual([seal, otter]);
+    expect(frozen.stored?.fish).toEqual(m.inv.fish);
+    expect(frozen.stored?.decor).toEqual(m.inv.decor);
+    expect(storeHiddenCoast(frozen)).toBe(frozen);
+    expect(decay(frozen, 600).stored).toBe(frozen.stored);
+    const back = storeHiddenCoast(decodeSave(encodeSave(frozen))!.model);
+    expect(back.stored).toEqual(frozen.stored);
+    expect(back.progress.coast).toEqual(frozen.progress.coast);
+    expect(coastQuestionHabitats(m)).toEqual(["penguins"]);
+    expect(coastQuestionHabitats(frozen)).toEqual(["penguins"]);
+    const pending = { ...frozen, rush: { ...newRushState(), unlocked: true, phase: "pending" as const } };
+    expect(startEvent(pending).rush!.event!.tankIds).not.toContain(seal.id);
+    expect(startEvent(pending).rush!.event!.tankIds).not.toContain(otter.id);
+    // Only the penguin is occupied, happy and reachable; hungry hidden animals cannot block the judge.
+    const penguin = place(frozen, "M", "penguinRock").tanks.find((t) => t.type === "penguins")!;
+    const judge: Model = { ...frozen, tanks: [{ ...penguin, food: 100, clean: 100 }], progress: { ...frozen.progress, superStar: false, allHappy: false } };
+    expect(latchHappy(judge).progress.allHappy).toBe(true);
+    // Editing the same switch restores stored records, questions and the original milestone range.
+    shown.splice(0, shown.length, "penguins", "seals", "otters");
+    const restored = storeHiddenCoast(unstoreAvailable(frozen));
+    expect(restored.stored).toBeUndefined();
+    expect(tankAt(restored, "N")).toBe(seal);
+    expect(tankAt(restored, "O")).toBe(otter);
+    expect(coastQuestionHabitats(restored)).toEqual(["penguins", "seals", "otters"]);
+    expect(coastMilestoneLimit()).toBe(5);
   });
 
   it("saves and loads the zone; older saves load with it closed; a forged one is not trusted", () => {

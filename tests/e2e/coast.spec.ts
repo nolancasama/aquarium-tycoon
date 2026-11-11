@@ -210,7 +210,9 @@ for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768]] as const) 
     await hook(page, "coastTo", 5);
     await hook(page, "set", { hall: 6, view: "room", tankId: null, panel: null, coastView: "all" });
     await expect(page.getByTestId("coast-reveal")).toBeVisible();
-    await expect(page.getByTestId("coast-view-underwater")).toHaveCount(0);
+    await expect(page.getByTestId("coast-view-underwater")).toBeVisible();
+    await expect(page.getByTestId("coast-view-seals")).toHaveCount(0);
+    await expect(page.getByTestId("coast-view-otters")).toHaveCount(0);
     // A HUD action both skips the tour and performs its original action.
     await page.getByTestId("coast-view-penguins").click();
     await expect(page.getByTestId("coast-reveal")).toHaveCount(0);
@@ -244,10 +246,8 @@ for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768]] as const) 
     await expect(page.getByTestId("coast-view-penguins")).toHaveAttribute("aria-pressed", "true");
     await page.waitForTimeout(1600);
     expect((await state(page) as unknown as CameraState).camera.pos.y).toBeGreaterThan(land.y - 0.2);
-    for (const view of ["all", "seals", "otters"]) {
-      await page.getByTestId(`coast-view-${view}`).click();
-      await expect(page.getByTestId("coast-view-underwater")).toHaveCount(0);
-    }
+    // Penguin-only coast: no "All" view (the same picture as Penguins), no Seals / Otters views.
+    for (const view of ["all", "seals", "otters"]) await expect(page.getByTestId(`coast-view-${view}`)).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }

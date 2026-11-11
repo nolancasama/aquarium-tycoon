@@ -4,13 +4,13 @@ import { EXHIBITS, type CoastHabitat } from "../data/coast";
 import { COAST_DECOR } from "../data/decor";
 import { PENGUIN_NUMBER_PHRASE, type PhraseId } from "../logic/english";
 import { award, buyDecor, tankAt } from "../logic/model";
-import { checkCoastMilestones, COAST_PRICE, coastUnlocked, HABITAT_PAD, habitatOpen, openCoast, recordCoastActivity } from "../logic/coast";
+import { checkCoastMilestones, COAST_PRICE, coastUnlocked, coastQuestionHabitats, HABITAT_PAD, habitatOpen, openCoast, recordCoastActivity, storeHiddenCoast } from "../logic/coast";
 import { coastRt, feedCoast, holdAnimal } from "../coast/coastRuntime";
 import { isOnRock } from "../coast/motion";
 import type { CoastDecorKind, VisitorType } from "../types";
 import { ask, speak } from "./ask";
 import { canTravel, comingSoon, travelTo } from "./hub";
-import { areaAvailable } from "../data/release";
+import { areaAvailable, COAST_HABITATS_SHOWN, coastHabitatShown } from "../data/release";
 import { audio } from "../../audio/audio";
 import { rt } from "../runtime";
 
@@ -26,7 +26,7 @@ export const inCoast = (g: GameState = getGame()) => g.screen === "game" && g.ha
 /** The habitat tank the current view manages (null in the overview). */
 export function coastTank() {
   const g = getGame();
-  if (!inCoast(g) || g.coastView === "all") return null;
+  if (!inCoast(g) || g.coastView === "all" || !coastHabitatShown(g.coastView)) return null;
   const t = tankAt(g.model, HABITAT_PAD[g.coastView]);
   return t && t.type === g.coastView ? t : null;
 }
@@ -37,6 +37,7 @@ const free = () => {
 };
 
 export function setCoastView(view: GameState["coastView"]) {
+  if (view !== "all" && !coastHabitatShown(view)) return;
   skipCoastReveal();
   if (!free()) return;
   if (view !== "all" && !habitatOpen(model(), view)) {
@@ -81,13 +82,13 @@ export function buyCoast() {
     return;
   }
   audio.play("purchase");
-  setGame({ coastView: "all" });
+  setGame({ coastView: "penguins" });
   travelTo(COAST_HALL);
 }
 
 /** Habitat items are bought by tapping (the zone's English is in its observation questions). */
 export function buyCoastItem(kind: CoastDecorKind) {
-  if (!free()) return;
+  if (!free() || !COAST_HABITATS_SHOWN.some((h) => COAST_DECOR[h].includes(kind))) return;
   const r = commit(buyDecor(model(), kind, null));
   if (!r.ok) {
     audio.play("error");
@@ -98,10 +99,11 @@ export function buyCoastItem(kind: CoastDecorKind) {
   setGame({ panel: "decorate", placing: { kind: "decor", decorId: r.id! } });
 }
 
-export const habitatItems = (h: CoastHabitat) => COAST_DECOR[h];
+export const habitatItems = (h: CoastHabitat) => coastHabitatShown(h) ? COAST_DECOR[h] : [];
 
 /** Feed: the food the habitat's animals eat; on land they go to the fish station, in the water to the front. */
 export function feedCoastVisual(h: CoastHabitat) {
+  if (!coastHabitatShown(h)) return;
   feedCoast(model(), h);
 }
 
@@ -119,7 +121,7 @@ export function coastVisitorTick() {
   if (!inCoast(g) || g.coastRevealing || g.coastWaiting || g.coastActivity || !free() || g.panel || g.placing) return;
   if (coastRt.time < nextVisitorAt) return;
   nextVisitorAt = coastRt.time + 22 + Math.random() * 14;
-  const open = (["penguins", "seals", "otters"] as CoastHabitat[]).filter((h) => habitatOpen(g.model, h) && (tankAt(g.model, HABITAT_PAD[h])?.fish.length ?? 0) > 0);
+  const open = coastQuestionHabitats(g.model);
   if (!open.length) return;
   // Prefer the habitat on screen, then the one the next milestone is about.
   const on = g.coastView !== "all" && open.includes(g.coastView) ? g.coastView : null;
@@ -134,7 +136,7 @@ export function coastVisitorTick() {
 export async function startCoastActivity() {
   const g = getGame();
   const w = g.coastWaiting;
-  if (!w || !free()) return;
+  if (!w || !free() || !coastHabitatShown(w.habitat)) return;
   skipCoastReveal();
   setGame({ coastWaiting: null, coastView: w.habitat, coastUnderwater: false, coastActivity: { habitat: w.habitat, by: w.type }, panel: null, placing: null });
   // Let the camera arrive before asking.
@@ -251,6 +253,11 @@ export function celebrate(before: number) {
   window.setTimeout(() => { if (getGame().coastCelebration?.milestone === after) setGame({ coastCelebration: null }); }, 4200);
 }
 
+/** Reward text follows the same content switch as the actual reward. */
+export const coastMilestoneReward = (milestone: number) => milestone === 2 && !coastHabitatShown("seals")
+  ? { en: "A penguin", ja: "ペンギン 1わ" }
+  : COAST_MILESTONES[milestone - 1].reward;
+
 /** Commit the model's own milestone check (items placed, happiness reached) and celebrate. */
 export function checkCoastNow() {
   const before = model().progress.coast?.milestone ?? 0;
@@ -279,8 +286,23 @@ export function coastRevealProgress() {
 
 /** First visit: a brief coastal tour. Any tap, including a HUD action, skips it. */
 export function watchCoastIntro(): () => void {
+  let lastInCoast = false;
   const check = () => {
     const g = getGame();
+    const here = inCoast(g);
+    const entering = here && !lastInCoast;
+    lastInCoast = here;
+    if (here) {
+      const active = storeHiddenCoast(g.model);
+      // With one habitat shown, "all" is the same picture as that habitat, so it is not offered.
+      const invalidView = g.coastView === "all" ? COAST_HABITATS_SHOWN.length < 2 : !coastHabitatShown(g.coastView);
+      const hiddenVisitor = g.coastWaiting && !coastHabitatShown(g.coastWaiting.habitat);
+      const hiddenActivity = g.coastActivity && !coastHabitatShown(g.coastActivity.habitat);
+      if (active !== g.model || invalidView || entering || hiddenVisitor || hiddenActivity) {
+        setGame({ ...(active !== g.model ? { model: active } : {}), ...(invalidView || entering ? { coastView: "penguins", coastUnderwater: false, panel: null, placing: null } : {}), ...(hiddenVisitor ? { coastWaiting: null } : {}), ...(hiddenActivity ? { coastActivity: null } : {}) });
+        return;
+      }
+    }
     if (!inCoast(g) || !g.previewAreas.includes("coast")) { skipCoastReveal(); return; }
     if (coastReveal.t0 !== null || !g.model.progress.coastOpen || g.model.progress.coastIntroSeen || g.mode !== "play" || g.fade !== 0 || g.line || g.prompt) return;
     coastReveal.t0 = rt.time;
@@ -303,7 +325,7 @@ export function watchCoastIntro(): () => void {
 /** The exhibit sign was tapped: hear the animal's name (never during a question). */
 export function tapCoastSign(h: CoastHabitat) {
   const g = getGame();
-  if (g.prompt || g.coastActivity) return;
+  if (g.prompt || g.coastActivity || !coastHabitatShown(h)) return;
   const word = h === "penguins" ? "Penguin." : h === "seals" ? "Seal." : "Sea otter.";
   void speak(word);
   toast({ en: word.replace(".", "!"), ja: EXHIBITS[h].ja, tone: "info" }, 1800);

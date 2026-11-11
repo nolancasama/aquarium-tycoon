@@ -52,7 +52,26 @@ export const SPECIES_PARAMS: Record<Cetacean, SpeciesParams> = {
   beluga: { length: 4.2, cruise: 1.15, fast: 2.4, slow: 0.4, turnRate: 0.7, accel: 0.7, vMax: 0.7, breath: [16, 30], depth: [1.2, 3.4], deepDive: 0.25, leap: 0, spyhop: 0.14, rest: 0.15, margin: 3.2, clearance: 1.0, pairDist: 4.8, roam: [8, 22] }
 };
 
-export type SwimMode = "swim" | "rise" | "surface" | "dive" | "deep" | "leap" | "spyhop" | "rest";
+export type SwimMode = "swim" | "rise" | "surface" | "dive" | "deep" | "leap" | "spyhop" | "rest" | "charge";
+
+/**
+ * Lagoon dolphin tricks (only with PodOptions.tricks): a run-up under water
+ * ("charge": down a little, then fast and up through the surface) and one
+ * airborne figure. A calf only does a small hop beside its mother.
+ */
+export type TrickKind = "high" | "arc" | "frontflip" | "backflip" | "spin" | "hop";
+export const TRICK_KINDS: TrickKind[] = ["high", "arc", "frontflip", "backflip", "spin"];
+/** Take-off: vertical and horizontal speed (m/s), whole somersaults (- forward, + backward) and whole twists. */
+export const TRICK_LAUNCH: Record<TrickKind, { vy: number; hv: number; flip: number; spin: number }> = {
+  high: { vy: 7.0, hv: 1.5, flip: 0, spin: 0 },
+  arc: { vy: 5.1, hv: 5.0, flip: 0, spin: 0 },
+  frontflip: { vy: 6.3, hv: 3.0, flip: -1, spin: 0 },
+  backflip: { vy: 6.5, hv: 2.6, flip: 1, spin: 0 },
+  spin: { vy: 6.1, hv: 2.8, flip: 0, spin: 2 },
+  hop: { vy: 3.2, hv: 3.0, flip: 0, spin: 0 }
+};
+/** Seconds in the air from a take-off at y ≈ -0.2 to the re-entry at y = -0.25. */
+export const trickAirtime = (k: TrickKind) => (2 * TRICK_LAUNCH[k].vy) / 9.8 + 0.01;
 export type AttractKind = "feed" | "toy" | "bubbles" | "point";
 
 export interface MemberDef {
@@ -91,11 +110,13 @@ export interface Swimmer {
   depthPref: number;
   target: Pt;
   follow: { id: string; side: number; back: number; down: number } | null;
-  attract: { x: number; y: number; z: number; until: number; kind: AttractKind } | null;
+  attract: { x: number; y: number; z: number; until: number; kind: AttractKind; facing?: number } | null;
   /** Hold still (a question is about this animal) until this time, at this depth. */
   hold: number;
   holdY: number | null;
   air: { vx: number; vz: number } | null;
+  /** A trick under way (run-up or airborne), with the take-off time once launched. */
+  trick: { kind: TrickKind; t0: number; airtime: number } | null;
   diveEmitted: boolean;
   deepY: number;
   /** Shore margin for this body (a calf keeps closer than an adult: it can follow its mother anywhere she goes). */
@@ -103,7 +124,7 @@ export interface Swimmer {
 }
 
 export interface PodEvent {
-  kind: "breathe" | "dive" | "leap" | "splash" | "pair" | "family" | "spyhop" | "touch";
+  kind: "breathe" | "dive" | "leap" | "splash" | "pair" | "family" | "spyhop" | "touch" | "ring";
   ids: string[];
   x: number;
   y: number;
@@ -137,6 +158,10 @@ export interface PodOptions {
   leader?: string;
   /** Favourite places on the patrol (a window, an island): a share of new waypoints go near one. */
   hotspots?: { x: number; z: number; r: number; w: number }[];
+  /** Lagoon dolphins only: tricks on request (Pod.trick). */
+  tricks?: boolean;
+  /** Extra air-space rule for tricks (a footbridge, a gate): may a body fly over this point? */
+  airClear?: (x: number, z: number) => boolean;
 }
 
 export class Pod {
@@ -160,7 +185,7 @@ export class Pod {
         x: spot.x, y: -between(r, p.depth), z: spot.z, yaw: r() * TAU, pitch: 0, roll: 0,
         speed: p.cruise * 0.6, vy: 0, phase: r() * TAU, amp: 0.4, turn: 0, arch: 0,
         mode: "swim", modeT: 0, modeLen: 0, breathAt: 3 + i * 4 + r() * 6, depthPref: between(r, p.depth),
-        target: spot, follow: null, attract: null, hold: 0, holdY: null, air: null, diveEmitted: false, deepY: -2,
+        target: spot, follow: null, attract: null, hold: 0, holdY: null, air: null, trick: null, diveEmitted: false, deepY: -2,
         margin: p.margin * Math.min(1.15, Math.max(0.5, d.size))
       };
       this.members.push(s);
@@ -212,7 +237,7 @@ export class Pod {
   }
 
   /** Swim to a point (feeding, a toy, a question); `y` is the depth to come to. */
-  attract(id: string, pt: { x: number; y: number; z: number }, seconds: number, kind: AttractKind) {
+  attract(id: string, pt: { x: number; y: number; z: number; facing?: number }, seconds: number, kind: AttractKind) {
     const s = this.byId(id);
     if (s) s.attract = { ...pt, until: this.time + seconds, kind };
   }
@@ -228,6 +253,51 @@ export class Pod {
   release(id: string) {
     const s = this.byId(id);
     if (s) { s.hold = 0; s.holdY = null; }
+  }
+
+  /** How far it could run and fly straight along this heading (open, deep water with room overhead). */
+  private runRoom(s: Swimmer, yaw: number, max: number): number {
+    const fx = Math.sin(yaw), fz = Math.cos(yaw), d = this.domain, air = this.opts.airClear;
+    for (let k = 1; k <= max; k += 0.5) {
+      const x = s.x + fx * k, z = s.z + fz * k;
+      if (d.inside(x, z) < s.margin * 0.75 || d.floor(x, z) > -2.4 || (air && !air(x, z))) return k - 0.5;
+    }
+    return max;
+  }
+
+  /** Is the whole airborne arc (body length included) over open water from here, along the current heading? */
+  arcClear(s: Swimmer, kind: TrickKind): boolean {
+    const L = TRICK_LAUNCH[kind], span = L.hv * trickAirtime(kind) + s.len * 0.7;
+    // The flukes at take-off are behind the body centre: that air space must be clear too.
+    const air = this.opts.airClear, d = this.domain, bx = Math.sin(s.yaw), bz = Math.cos(s.yaw);
+    for (let k = 0; k <= s.len * 0.6; k += 0.3) {
+      const x = s.x - bx * k, z = s.z - bz * k;
+      if (d.inside(x, z) < 0.5 || (air && !air(x, z))) return false;
+    }
+    return this.runRoom(s, s.yaw, span + 1.5) >= span + 1.5;
+  }
+
+  /**
+   * Start a trick (lagoon dolphins only): the run-up heads along the most open
+   * lane nearby; the figure is flown only if the arc is still clear at the surface.
+   * Returns false (nothing changes) when it cannot start now.
+   */
+  trick(id: string, kind: TrickKind): boolean {
+    const s = this.byId(id);
+    if (!s || !this.opts.tricks || s.species !== "dolphin" || s.mode !== "swim" || s.attract || this.time < s.hold) return false;
+    if ((kind === "hop") !== Boolean(s.mother)) return false;
+    let best = -1, bestYaw = s.yaw;
+    for (let k = 0; k < 16; k++) {
+      const yaw = wrap(s.yaw + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 8));
+      const room = this.runRoom(s, yaw, 24) - Math.abs(wrap(yaw - s.yaw)) * 2;
+      if (room > best) { best = room; bestYaw = yaw; }
+    }
+    const need = 9 + TRICK_LAUNCH[kind].hv * trickAirtime(kind) + s.len;
+    if (!s.mother && best < need) return false;
+    s.target = { x: s.x + Math.sin(bestYaw) * 20, z: s.z + Math.cos(bestYaw) * 20 };
+    this.setMode(s, "charge");
+    s.trick = { kind, t0: -1, airtime: trickAirtime(kind) };
+    return true;
   }
 
   step(dt: number) {
@@ -300,6 +370,14 @@ export class Pod {
     s.modeT += dt;
     if (s.attract && now > s.attract.until) s.attract = null;
     const holding = now < s.hold;
+    // Only authored dolphin feeding slots opt into arrival-and-face steering.
+    // Ordinary attractions (including sanctuary animals) retain their patrol behaviour.
+    const feeding = s.species === "dolphin" && s.attract?.kind === "feed" && s.attract.facing !== undefined;
+    const feedDistance = feeding ? Math.hypot(s.attract!.x - s.x, s.attract!.z - s.z) : Infinity;
+    if (feeding && s.mode !== "leap" && s.mode !== "swim") this.setMode(s, "swim");
+    // A run-up gives way to feeding or a question (the figure itself, once airborne, always lands).
+    if (s.mode === "charge" && (s.attract || holding)) this.setMode(s, "swim");
+    if (s.mode !== "charge" && s.mode !== "leap") s.trick = null;
     const leader = this.byId(s.follow?.id);
     const surf = surfaceY(s);
 
@@ -314,6 +392,10 @@ export class Pod {
       const dist = Math.hypot(gx - s.x, gz - s.z);
       // Far away: hurry over (a big animal crossing a whole bay); close: ease in.
       want = dist < 2 ? p.slow * 0.5 : dist > s.len * 4 ? p.fast * 0.85 : Math.min(p.cruise * 1.25, 0.7 + dist * 0.35);
+      if (feeding) {
+        want = dist < 0.85 ? 0 : Math.min(p.fast, Math.max(0.3, (dist - 0.65) * 1.6));
+        if (dist < 1.15) desiredYaw = s.attract.facing!;
+      }
       if ((s.attract.kind === "toy" || s.attract.kind === "bubbles") && dist < s.len * 0.6) {
         this.emit("touch", s);
         s.attract = null;
@@ -336,12 +418,14 @@ export class Pod {
     }
     if (s.mode === "rest") want = p.slow * 0.45;
     if (s.mode === "rise" || s.mode === "surface") want = Math.min(want, p.cruise);
+    // The run-up: settle a little deeper, then a sprint up to the surface.
+    if (s.mode === "charge") want = s.modeT < 1.1 ? p.cruise * 1.1 : p.fast;
 
     // --------------------------------------------------- steering (look ahead, never into the shore)
     if (s.mode !== "leap") {
       let yawWant = desiredYaw ?? Math.atan2(gx - s.x, gz - s.z);
       const margin = s.attract ? s.margin * 0.6 : s.margin;
-      const look = s.len * 0.6 + Math.max(s.speed, 0.5) * 2.2 + 1;
+      const look = feeding ? s.len * 0.5 + Math.min(feedDistance, Math.max(s.speed, 0.3)) * 0.35 : s.len * 0.6 + Math.max(s.speed, 0.5) * 2.2 + 1;
       if (!this.clear(s, yawWant, look, margin)) {
         let found: number | null = null;
         for (let k = 1; k <= 9 && found === null; k++) {
@@ -361,7 +445,8 @@ export class Pod {
       s.yaw = wrap(s.yaw + dy);
       s.turn += (dy / dt - s.turn) * Math.min(1, dt * 3);
     }
-    s.speed += clamp(want - s.speed, -p.accel * dt, p.accel * dt);
+    const accel = p.accel * (feeding ? 2 : 1);
+    s.speed += clamp(want - s.speed, -accel * dt, accel * dt);
 
     // --------------------------------------------------- the vertical life: breathing, diving, leaps
     const floor = d.floor(s.x, s.z);
@@ -371,7 +456,7 @@ export class Pod {
     let pitchWant: number | null = null;
     switch (s.mode) {
       case "swim":
-        if (now >= s.breathAt && !holding) this.setMode(s, "rise");
+        if (now >= s.breathAt && !holding && !feeding) this.setMode(s, "rise");
         break;
       case "rest":
         yWant = surf;
@@ -381,7 +466,8 @@ export class Pod {
       case "rise":
         yWant = surf;
         if (s.y > surf - 0.15) {
-          const room = this.clear(s, s.yaw, 7, s.margin) && floor < -2.4;
+          // With an air-space rule (the lagoon), the whole flight must also be over open water and clear of structures.
+          const room = this.clear(s, s.yaw, 7, s.margin) && floor < -2.4 && (!this.opts.airClear || this.arcClear(s, "arc"));
           if (p.leap > 0 && s.speed > p.cruise * 0.75 && room && r() < p.leap) this.launch(s);
           else if (p.spyhop > 0 && floor < -s.len * 0.6 && r() < p.spyhop) this.setMode(s, "spyhop", 2.4 + r() * 1.4);
           else {
@@ -419,6 +505,24 @@ export class Pod {
         break;
       case "leap":
         break;
+      case "charge": {
+        const t = s.modeT;
+        yWant = t < 1.1 ? Math.max(lowest, -2.2) : surf;
+        pitchWant = t < 1.1 ? -0.2 : 0.5;
+        if (t > 1.1 && s.y > surf - 0.25 && s.speed > p.cruise * 1.2) {
+          const kind = s.trick?.kind ?? "arc";
+          if (this.arcClear(s, kind)) this.launchTrick(s, kind);
+          else if (kind !== "high" && kind !== "hop" && this.arcClear(s, "high")) this.launchTrick(s, "high");
+          else {
+            // No room after all: just a breath at the surface.
+            s.trick = null;
+            this.setMode(s, "surface", 1.2);
+            this.emit("breathe", s, this.blowhole(s));
+          }
+          s.breathAt = now + between(r, p.breath);
+        } else if (t > 6) { s.trick = null; this.setMode(s, "swim"); }
+        break;
+      }
       case "spyhop": {
         const k = s.modeT / s.modeLen;
         const up = k < 0.2 ? k / 0.2 : k > 0.8 ? (1 - k) / 0.2 : 1;
@@ -432,6 +536,7 @@ export class Pod {
       }
     }
     if (holding && s.holdY !== null) yWant = s.holdY;
+    if (feeding && feedDistance < 1.2) pitchWant = 0;
 
     if (s.mode === "leap") {
       // Ballistic through the air, nose following the arc.
@@ -440,18 +545,31 @@ export class Pod {
       s.z += air.vz * dt;
       s.vy -= 9.8 * dt;
       s.y += s.vy * dt;
-      s.pitch = Math.atan2(s.vy, Math.hypot(air.vx, air.vz));
+      const along = Math.atan2(s.vy, Math.hypot(air.vx, air.vz));
+      s.pitch = along;
+      if (s.trick) {
+        // Somersaults and twists are whole turns, finished just before re-entry (nose first).
+        const L = TRICK_LAUNCH[s.trick.kind];
+        const k = clamp((now - s.trick.t0) / (s.trick.airtime * 0.9), 0, 1), e = k * k * (3 - 2 * k);
+        s.pitch = along + L.flip * TAU * e;
+        s.roll = L.spin * TAU * e;
+      }
       if (s.y < -0.25 && s.vy < 0) {
-        this.emit("splash", s, { y: 0 });
+        const big = s.trick && s.trick.kind !== "hop" ? 1.35 : 1;
+        this.emit("splash", s, { y: 0, len: s.len * big });
         s.air = null;
         s.vy *= 0.25;
+        s.pitch = wrap(s.pitch);
+        s.roll = wrap(s.roll);
+        s.trick = null;
         this.setMode(s, "swim");
       }
     } else {
       yWant = clamp(yWant, lowest, s.mode === "spyhop" ? 2 : surf);
-      const vMax = s.mode === "dive" ? p.vMax * 1.8 : p.vMax;
-      const vyWant = clamp((yWant - s.y) * 1.1, -vMax, vMax);
-      s.vy += clamp(vyWant - s.vy, -2 * dt, 2 * dt);
+      const vMax = s.mode === "dive" ? p.vMax * 1.8 : s.mode === "charge" ? p.vMax * 2.2 : p.vMax;
+      const vyWant = clamp((yWant - s.y) * (s.mode === "charge" ? 3 : 1.1), -vMax, vMax);
+      const vyAcc = s.mode === "charge" ? 4 : 2;
+      s.vy += clamp(vyWant - s.vy, -vyAcc * dt, vyAcc * dt);
       s.y += s.vy * dt;
       const fx = Math.sin(s.yaw), fz = Math.cos(s.yaw);
       const nx = s.x + fx * s.speed * dt, nz = s.z + fz * s.speed * dt;
@@ -477,7 +595,7 @@ export class Pod {
     }
 
     // --------------------------------------------------- body motion for drawing
-    s.roll += (clamp(-s.turn * 0.9, -0.55, 0.55) - s.roll) * Math.min(1, dt * 3);
+    if (!(s.mode === "leap" && s.trick)) s.roll += (clamp(-s.turn * 0.9, -0.55, 0.55) - s.roll) * Math.min(1, dt * 3);
     const archWant = s.mode === "dive" ? -0.7 : s.mode === "surface" ? 0.25 : s.mode === "leap" ? -s.vy * 0.06 : 0;
     s.arch += (archWant - s.arch) * Math.min(1, dt * 3);
     const effort = s.mode === "leap" ? 0 : s.mode === "spyhop" ? 0.25 : clamp(0.18 + (s.speed / p.cruise) * 0.55 + Math.abs(s.vy) * 0.25, 0.12, 1.25);
@@ -506,6 +624,18 @@ export class Pod {
     s.air = { vx: Math.sin(s.yaw) * v, vz: Math.cos(s.yaw) * v };
     s.vy = 4.3 + r() * 0.9;
     s.y = Math.max(s.y, -0.2);
+    this.emit("leap", s);
+    this.emit("splash", s, { y: 0 });
+  }
+
+  /** Take off into a trick figure (the run-up has reached the surface at speed). */
+  private launchTrick(s: Swimmer, kind: TrickKind) {
+    const L = TRICK_LAUNCH[kind];
+    this.setMode(s, "leap");
+    s.speed = L.hv;
+    s.air = { vx: Math.sin(s.yaw) * L.hv, vz: Math.cos(s.yaw) * L.hv };
+    s.vy = L.vy;
+    s.trick = { kind, t0: this.time, airtime: trickAirtime(kind) };
     this.emit("leap", s);
     this.emit("splash", s, { y: 0 });
   }

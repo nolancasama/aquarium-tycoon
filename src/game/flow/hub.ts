@@ -1,6 +1,7 @@
 import { getGame, nudge, setGame, toast, updateModel, useGame } from "../store";
 import { rt } from "../runtime";
-import { HUB_HALL, inHallRow, LAGOON_HALL, roomOpen, SANCTUARY_HALL, SHARKS_HALL } from "../data/rooms";
+import { HUB_HALL, inHallRow, LAGOON_HALL, RELEASE_OF, roomOpen, ROOMS, SANCTUARY_HALL, SHARKS_HALL } from "../data/rooms";
+import { areaAvailable } from "../data/release";
 import { enterOutdoor } from "./outdoor";
 import type { HubDestination } from "../data/hub";
 import { backToRoom, switchHall, tapSharkTunnelDoor } from "./actions";
@@ -80,6 +81,28 @@ export function tapOutdoorDoor(area: "lagoon" | "sanctuary") {
   const hall = area === "lagoon" ? LAGOON_HALL : SANCTUARY_HALL;
   if (!roomOpen(hall, getGame().model.progress)) { comingSoon(); return; }
   enterOutdoor(area);
+}
+
+/**
+ * A side arrow of a branching area (AREA_LINKS): "open" travels, "locked" is a
+ * release-locked area outside a preview (the arrow shows a lock and only says
+ * "Coming soon"), null hides the arrow (nothing there for this player yet).
+ */
+export function arrowState(hall: number, m: Model): "open" | "locked" | null {
+  const r = ROOMS[hall];
+  if (!r || !hubUnlocked(m)) return null;
+  const area = RELEASE_OF[r.id];
+  if (area && !areaAvailable(area)) return "locked";
+  return roomOpen(hall, m.progress) ? "open" : null;
+}
+
+/** Travel by a side arrow: the same checked entry as the matching doorway (fade, reveal, offer, locks). */
+export function arrowTravel(hall: number) {
+  if (!canTravel()) return;
+  const id = ROOMS[hall]?.id;
+  if (id === "coast") tapCoastDoor();
+  else if (id === "lagoon" || id === "sanctuary") tapOutdoorDoor(id);
+  else travelTo(hall);
 }
 
 export function openTrophies() {

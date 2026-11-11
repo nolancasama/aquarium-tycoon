@@ -5,6 +5,7 @@ import { getGame, updateModel, useGame } from "../../game/store";
 import { effect, rt } from "../../game/runtime";
 import { COAST_HALL } from "../../game/data/rooms";
 import { COAST_HABITATS, COAST_ORIGIN, EX_D, EX_W, EXHIBITS, GLASS_TOP, WALKWAY_D, WINDOW_Z, type CoastHabitat, type ExhibitDef } from "../../game/data/coast";
+import { coastHabitatShown } from "../../game/data/release";
 import { HABITAT_PAD, habitatOpen } from "../../game/logic/coast";
 import { coastRt, drainSights, stepCoast } from "../../game/coast/coastRuntime";
 import { checkCoastNow, coastFocus, coastVisitorTick, setCoastView, tapCoastSign } from "../../game/flow/coast";
@@ -17,7 +18,7 @@ import { signMaterial, smoothMat, surfaceMaterial } from "../materials";
 import { useAreaGate } from "../tunnel/wing";
 import { newPose, TunnelFigure } from "../tunnel/TunnelFigure";
 import { tunnelPersonModel } from "../models/people";
-import { itemGeometry, otterParts, penguinParts, sealParts } from "./coastModels";
+import { itemGeometry, otterParts, penguinFishGeometry, penguinParts, sealParts } from "./coastModels";
 import type { Mover } from "../../game/coast/motion";
 import { createPenguin, loadPenguin, type PenguinInstance } from "./penguinAsset";
 
@@ -148,7 +149,8 @@ function penguinScenery(ex: ExhibitDef): THREE.BufferGeometry {
   const rock = "#667d89", dark = "#425d68", snow = "#e7f0f1", ice = "#a1d3df";
   // Exposed shelf remains continuous and level; snow is thin, irregular ground cover.
   b.box(EX_W, l.y, l.maxZ + EX_D / 2, 0, 0, (l.maxZ - EX_D / 2) / 2, rock);
-  b.box(EX_W - 0.04, 0.025, l.maxZ + EX_D / 2 - 0.04, 0, l.y - 0.025, (l.maxZ - EX_D / 2) / 2, "#8d9b9f");
+  // The old 25 mm cover ended at exactly l.y, coplanar with the shelf's
+  // entire top. Keep one ground surface; the separated snow patches supply relief.
   for (const [x, z, rx, rz] of [[-4.6, -3.85, 1.55, 0.52], [-2.5, -4.25, 2, 0.4], [0.4, -3.55, 1.25, 0.38], [4.75, -3.85, 1.35, 0.6], [1.7, -1.05, 1.35, 0.22]]) {
     b.add(coastStratum(rx, rz, 0.018, x), snow, [x, l.y, z]);
   }
@@ -200,21 +202,22 @@ function penguinScenery(ex: ExhibitDef): THREE.BufferGeometry {
   // Low resting shelves: sloped sides and flat snow caps match ledge climb data.
   for (const ledge of ex.ledges ?? []) {
     const h = ledge.top - l.y;
-    b.add(new THREE.CylinderGeometry(ledge.r * 0.55, ledge.r, h, 8), rock, [ledge.x, l.y + h / 2, ledge.z]);
+    // The snow is the only top cap (both solid cylinders previously ended at ledge.top).
+    b.add(new THREE.CylinderGeometry(ledge.r * 0.55, ledge.r, h, 8, 1, true), rock, [ledge.x, l.y + h / 2, ledge.z]);
     b.add(new THREE.CylinderGeometry(ledge.r * 0.55, ledge.r * 0.55, 0.035, 8), snow, [ledge.x, ledge.top - 0.0175, ledge.z]);
   }
   // The broad flat floe is a usable island, with an ice keel visible through the glass.
   for (const isl of ex.islands) {
     const topRadius = isl.topRadius ?? isl.r * 0.55;
     b.add(iceKeel(isl.r, 0.85, isl.x), "#83bdce", [isl.x, p.surface, isl.z]);
-    b.add(new THREE.CylinderGeometry(topRadius, isl.r, isl.top - p.surface, 8), ice, [isl.x, (isl.top + p.surface) / 2, isl.z]);
+    b.add(new THREE.CylinderGeometry(topRadius, isl.r, isl.top - p.surface, 8, 1, true), ice, [isl.x, (isl.top + p.surface) / 2, isl.z]);
     b.add(new THREE.CylinderGeometry(topRadius, topRadius, 0.035, 8), snow, [isl.x, isl.top - 0.0175, isl.z]);
   }
   // Small floes and submerged boulders use the exact circles reserved for swimmer obstacles.
   for (const o of ex.swimObstacles ?? []) {
     if (o.kind === "ice") {
       b.add(iceKeel(o.r, 0.5, o.x), "#83bdce", [o.x, p.surface, o.z]);
-      b.add(new THREE.CylinderGeometry(o.r * 0.75, o.r * 0.96, o.top - p.surface, 7), ice, [o.x, (o.top + p.surface) / 2, o.z], [0, o.x, 0]);
+      b.add(new THREE.CylinderGeometry(o.r * 0.75, o.r * 0.96, o.top - p.surface, 7, 1, true), ice, [o.x, (o.top + p.surface) / 2, o.z], [0, o.x, 0]);
       b.add(new THREE.CylinderGeometry(o.r * 0.75, o.r * 0.75, 0.025, 7), snow, [o.x, o.top - 0.0125, o.z], [0, o.x, 0]);
     } else {
       b.add(new THREE.DodecahedronGeometry(1, 0), dark, [o.x, (p.floor + o.top) / 2, o.z], [0.25, o.x, 0.18], [o.r * 0.9, (o.top - p.floor) * 0.48, o.r * 0.85]);
@@ -368,6 +371,39 @@ function Items({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
   );
 }
 
+/** Runtime food is separate from the station: one draw for the whole fresh pile. */
+function PenguinStationFish() {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const geo = useMemo(penguinFishGeometry, []);
+  const colour = useMemo(() => new THREE.Color(), []);
+  const capacity = 48;
+  useFrame(() => {
+    const mesh = ref.current;
+    if (!mesh || !coastShown()) return;
+    const food = coastRt.stationFood;
+    const tank = tankAt(getGame().model, HABITAT_PAD.penguins);
+    const feeder = food && tank?.decor.find((d) => d.kind === "penguinFeeder" && d.slot === food.slot);
+    const slot = feeder && EXHIBITS.penguins.slots[feeder.slot];
+    mesh.count = food && slot ? Math.min(capacity, food.fish) : 0;
+    if (!slot) return;
+    mesh.position.set(EXHIBITS.penguins.x + slot.x, EXHIBITS.penguins.land.y, EXHIBITS.penguins.z + slot.z);
+    for (let i = 0; i < mesh.count; i++) {
+      // Keep the bucket clear on the left; a few crossed fish make the pile legible.
+      dummy.position.set(0.08 + (i % 3) * 0.1, 0.115 + Math.floor(i / 6) * 0.045, -0.12 + Math.floor(i % 6 / 3) * 0.22);
+      dummy.rotation.set(0, Math.sin(i * 4.7) * 0.7, (i % 2 ? 1 : -1) * 0.15);
+      dummy.scale.setScalar(0.9 + i % 3 * 0.08);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      colour.set(["#ffffff", "#c1e0ee", "#9bbdd5"][i % 3]);
+      mesh.setColorAt(i, colour);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  });
+  return <instancedMesh ref={ref} args={[geo, smoothMat, capacity]} count={0} name="coast-station-fish" frustumCulled={false} raycast={() => undefined} />;
+}
+
 const ringGeo = new THREE.RingGeometry(0.42, 0.56, 28).rotateX(-Math.PI / 2);
 const ringMat = new THREE.MeshBasicMaterial({ color: "#ffe066", transparent: true, opacity: 0.9, depthTest: false });
 const ringBusy = new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.55, depthTest: false });
@@ -497,8 +533,11 @@ function Penguin({ id, index }: { id: string; index: number }) {
     const centre = asset?.centre ?? parts.centre * PENGUIN_SCALE;
     b.position.set(0, centre * (1 - k.swim), 0);
     const walking = !swimming && m.speed > 0.05;
+    const eating = !swimming && m.feeding?.stage === "eating";
+    const eatLean = eating ? 0.4 + Math.sin(coastRt.time * 8 + index) * 0.1 : 0;
     const waddle = walking ? Math.sin(m.phase) * 0.14 : m.action === "look" ? Math.sin(rt.time * 1.3 + index) * 0.05 : 0;
-    b.rotation.set((Math.PI / 2 - m.pitch) * k.swim, 0, waddle * (1 - k.swim));
+    b.rotation.set((Math.PI / 2 - m.pitch) * k.swim + eatLean, 0, waddle * (1 - k.swim));
+    if (eating) b.position.set(0, centre, 0).applyQuaternion(b.quaternion);
     if (asset) {
       // The shore's support plane tilts the feet, about the mover's ground contact.
       // Climb/hop heights and all movement still come solely from coastRt.
@@ -506,7 +545,7 @@ function Penguin({ id, index }: { id: string; index: number }) {
       const onSlope = !swimming && (m.mode === "rampDown" || m.mode === "rampUp") && m.z >= ramp.top.z && m.z <= ramp.bottom.z;
       const gradient = onSlope ? (ex.pool.surface - 0.05 - ex.land.y) / (ramp.bottom.z - ramp.top.z) : 0;
       b.rotation.set(
-        (Math.PI / 2 - m.pitch) * k.swim - Math.atan(gradient * Math.cos(m.heading)) * (1 - k.swim),
+        (Math.PI / 2 - m.pitch) * k.swim - Math.atan(gradient * Math.cos(m.heading)) * (1 - k.swim) + eatLean,
         0,
         Math.atan(-gradient * Math.sin(m.heading)) * (1 - k.swim)
       );
@@ -648,7 +687,7 @@ function Animals() {
     }
   });
   let pi = 0;
-  return <>{list.map(({ id, h }) => h === "penguins" ? <Penguin key={id} id={id} index={pi++} /> : h === "seals" ? <Seal key={id} id={id} /> : <Otter key={id} id={id} />)}</>;
+  return <>{list.filter(({ h }) => coastHabitatShown(h)).map(({ id, h }) => h === "penguins" ? <Penguin key={id} id={id} index={pi++} /> : h === "seals" ? <Seal key={id} id={id} /> : <Otter key={id} id={id} />)}</>;
 }
 
 // ------------------------------------------------------------------ walkway and visitors
@@ -656,14 +695,24 @@ function Animals() {
 function Walkway() {
   const geo = useMemo(() => {
     const b = new PartBuilder(0.3);
-    const x0 = COAST_ORIGIN.x - 23, x1 = COAST_ORIGIN.x + 23, z0 = COAST_ORIGIN.z + WINDOW_Z + 0.2;
+    const shown = COAST_HABITATS.filter(coastHabitatShown).map((h) => EXHIBITS[h]);
+    const x0 = Math.min(...shown.map((ex) => ex.x)) - 8, x1 = Math.max(...shown.map((ex) => ex.x)) + 8, z0 = COAST_ORIGIN.z + WINDOW_Z + 0.2;
     b.box(x1 - x0, 0.06, WALKWAY_D, (x0 + x1) / 2, -0.06, z0 + WALKWAY_D / 2, "#cdbfa6");
     b.box(x1 - x0, 0.03, 0.4, (x0 + x1) / 2, 0, z0 + WALKWAY_D - 0.3, "#2f8f9d");
     // Rock dividers between exhibits and at the ends.
-    for (const dx of [-22.5, -7.5, 7.5, 22.5]) b.box(2, 3.6, EX_D + 0.6, COAST_ORIGIN.x + dx, 0, COAST_ORIGIN.z - 0.3, "#6e7b80");
-    for (const dx of [-7.5, 7.5]) {
-      b.add(new THREE.DodecahedronGeometry(0.9, 0), "#7c8a8f", [COAST_ORIGIN.x + dx, 3.7, COAST_ORIGIN.z - 1], [dx, 1, 0], [1, 0.6, 1]);
-      b.cone(0.35, 1.0, COAST_ORIGIN.x + dx, 0, z0 + 0.7, "#3e8f5a", 6);
+    const edges = [...new Set(shown.flatMap((ex) => [ex.x - 7.5, ex.x + 7.5]))];
+    for (const x of edges) b.box(2, 3.6, EX_D + 0.6, x, 0, COAST_ORIGIN.z - 0.3, "#6e7b80");
+    for (const x of edges.filter((x) => x > x0 + 1 && x < x1 - 1)) {
+      b.add(new THREE.DodecahedronGeometry(0.9, 0), "#7c8a8f", [x, 3.7, COAST_ORIGIN.z - 1], [x - COAST_ORIGIN.x, 1, 0], [1, 0.6, 1]);
+      b.cone(0.35, 1.0, x, 0, z0 + 0.7, "#3e8f5a", 6);
+    }
+    if (shown.length < COAST_HABITATS.length) {
+      // End the visitor terrace beside the last shown exhibit, with solid rock
+      // returns rather than a walkway continuing into absent neighbouring bays.
+      for (const x of [x0 + 0.5, x1 - 0.5]) {
+        b.box(1, 1.15, WALKWAY_D, x, 0, z0 + WALKWAY_D / 2, "#6e7b80");
+        b.box(1.08, 0.12, WALKWAY_D, x, 1.15, z0 + WALKWAY_D / 2, "#b5cbd0");
+      }
     }
     return b.build();
   }, []);
@@ -679,16 +728,28 @@ const STROLLERS: Stroller[] = [
 ];
 
 function Strollers() {
-  return <>{STROLLERS.map((s) => <StrollerFigure key={s.id} s={s} />)}</>;
+  const underwater = useGame((s) => s.coastUnderwater);
+  const count = Math.max(1, Math.floor(STROLLERS.length * COAST_HABITATS.filter(coastHabitatShown).length / COAST_HABITATS.length));
+  if (underwater) return null;
+  return <>{STROLLERS.slice(0, count).map((s) => <StrollerFigure key={s.id} s={s} />)}</>;
 }
 
 function StrollerFigure({ s }: { s: Stroller }) {
   const model = useMemo(() => tunnelPersonModel(s.type, s.variant), [s.type, s.variant]);
+  const [minX, maxX] = useMemo(() => {
+    const shown = COAST_HABITATS.filter(coastHabitatShown).map((h) => EXHIBITS[h]);
+    return [Math.min(...shown.map((ex) => ex.x)) - 6, Math.max(...shown.map((ex) => ex.x)) + 6];
+  }, []);
   const pose = useRef(newPose());
   const step = useRef(0);
   useFrame((_, dt) => {
     if (!coastShown()) return;
     const q = pose.current;
+    // Old three-bay stroller starts must not leave visitors in a hidden habitat.
+    if (s.x < minX || s.x > maxX) {
+      s.x = minX + (Number(s.id.slice(1)) - 1) * (maxX - minX) / 4;
+      s.nextStop = s.x + s.dir * 3;
+    }
     const z = COAST_ORIGIN.z + WINDOW_Z + 1.4 + (s.id === "c2" ? 0.6 : s.id === "c4" ? 0.9 : 0);
     if (rt.time < s.stopUntil) {
       q.moving = false;
@@ -698,8 +759,11 @@ function StrollerFigure({ s }: { s: Stroller }) {
     } else {
       s.x += s.dir * 0.75 * Math.min(dt, 0.1);
       step.current += dt * 6;
-      if (s.x > COAST_ORIGIN.x + 21) s.dir = -1;
-      if (s.x < COAST_ORIGIN.x - 21) s.dir = 1;
+      if (s.x >= maxX || s.x <= minX) {
+        s.x = Math.max(minX, Math.min(maxX, s.x));
+        s.dir = s.x >= maxX ? -1 : 1;
+        s.nextStop = s.x + s.dir * Math.min(5, (maxX - minX) / 2);
+      }
       if ((s.dir > 0 && s.x >= s.nextStop) || (s.dir < 0 && s.x <= s.nextStop)) {
         s.stopUntil = rt.time + 4 + ((s.x * 13) % 5 + 5) % 5;
         s.act = (["look", "photo", "point"] as const)[Math.abs(Math.round(s.x)) % 3];
@@ -738,7 +802,7 @@ export function CoastZone() {
     <group ref={ref} name="coast-zone">
       <Tick />
       <Walkway />
-      {COAST_HABITATS.map((h) => (
+      {COAST_HABITATS.filter(coastHabitatShown).map((h) => (
         <group key={h}>
           <ExhibitStatic ex={EXHIBITS[h]} />
           <Water ex={EXHIBITS[h]} h={h} />
@@ -748,7 +812,8 @@ export function CoastZone() {
           <ExhibitHit ex={EXHIBITS[h]} h={h} />
         </group>
       ))}
-      <PenguinBubbles />
+      {coastHabitatShown("penguins") && <PenguinBubbles />}
+      {coastHabitatShown("penguins") && <PenguinStationFish />}
       <Animals />
       <Strollers />
     </group>

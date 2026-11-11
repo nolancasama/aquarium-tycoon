@@ -1,5 +1,5 @@
 import type { Vec2, VisitorType } from "../types";
-import { doorStep, HUB_CENTRE, HUB_ENTRANCE, hubRoute, onRing, PLAZA_SPOTS, VIEW_RING, type HubBayKind } from "../data/hub";
+import { bayOf, doorCoordinates, doorLocal, HUB_CENTRE, HUB_CORRIDOR, HUB_DOORS, HUB_ENTRANCE, hubArrivalRoute, hubArrivalSpawn, hubDoorOpen, hubDoorRoute, hubRoute, onRing, PLAZA_SPOTS, VIEW_RING, type HubDestination, type HubOpenFlags } from "../data/hub";
 
 /**
  * Decorative hub visitors, in small groups: they come in through the main
@@ -36,11 +36,18 @@ export interface HubGroup {
   spot: number | null;
   face: Vec2 | null;
   visible: boolean;
+  /** The passage is reserved until the whole group has cleared it. */
+  door: HubDestination | null;
+  corridor: "arrival" | "departure" | null;
+  /** Recent travelled centreline, newest first: members file around the bend. */
+  trail: Vec2[];
 }
 
 export const HUB_GROUPS = 4;
 const WALK = 0.95;
-const EXITS: HubBayKind[] = ["indoor", "sharks", "coast"];
+export const HUB_MEMBER_RADIUS = 0.25;
+export const HUB_FILE_SPACING = 0.72;
+const DEFAULT_ACCESS: HubOpenFlags = { hallOpen: false, galleryOpen: false };
 const SPOTS = Array.from({ length: 8 }, (_, i) => -Math.PI + (i + 0.5) * (Math.PI * 2 / 8));
 
 let seed = 7;
@@ -77,14 +84,23 @@ function freeSpot(): number | null {
   return free.length ? pick(free) : null;
 }
 
-function spawn(): HubGroup {
+function availableDoors(progress: HubOpenFlags): HubDestination[] {
+  return HUB_DOORS.filter((k) => hubDoorOpen(k, progress) && !hubGroups.some((g) => g.door === k && g.visible));
+}
+
+function spawn(progress: HubOpenFlags): HubGroup {
   // Half come in from the main entrance, the rest out of a wing.
-  const from = rand() < 0.5 ? HUB_ENTRANCE : doorStep(pick(EXITS));
+  const doors = availableDoors(progress);
+  const door = doors.length && rand() >= 0.5 ? pick(doors) : null;
+  const from = door ? hubArrivalSpawn(door) : HUB_ENTRANCE;
   const g: HubGroup = {
     id: `g${nextId++}`, members: makeMembers(), x: from.x, z: from.z, heading: 0, speed: 0, phase: rand() * 6,
-    path: [], next: "view", activity: "walk", until: 0, spot: null, face: null, visible: true
+    path: [], next: "view", activity: "walk", until: 0, spot: null, face: null, visible: true,
+    door, corridor: door ? "arrival" : null, trail: []
   };
   goToTank(g);
+  if (g.path.length) g.heading = Math.atan2(g.path[0].x - g.x, g.path[0].z - g.z);
+  initialiseTrail(g);
   return g;
 }
 
@@ -92,7 +108,7 @@ function goToTank(g: HubGroup) {
   const a = freeSpot();
   if (a === null) { goToPlaza(g); return; }
   g.spot = a;
-  g.path = hubRoute({ x: g.x, z: g.z }, onRing(a, VIEW_RING));
+  g.path = g.door && g.corridor === "arrival" ? hubArrivalRoute(g.door, onRing(a, VIEW_RING)) : hubRoute({ x: g.x, z: g.z }, onRing(a, VIEW_RING));
   g.next = "view";
   g.activity = "walk";
 }
@@ -104,12 +120,15 @@ function goToPlaza(g: HubGroup) {
   g.activity = "walk";
 }
 
-function leave(g: HubGroup) {
+function leave(g: HubGroup, progress: HubOpenFlags) {
   g.spot = null;
-  const out = rand() < 0.4 ? HUB_ENTRANCE : doorStep(pick(EXITS));
-  g.path = hubRoute({ x: g.x, z: g.z }, out);
+  const doors = availableDoors(progress);
+  g.door = doors.length && rand() >= 0.4 ? pick(doors) : null;
+  g.corridor = g.door ? "departure" : null;
+  g.path = g.door ? hubDoorRoute({ x: g.x, z: g.z }, g.door) : hubRoute({ x: g.x, z: g.z }, HUB_ENTRANCE);
   g.next = "leave";
   g.activity = "walk";
+  g.face = null;
 }
 
 function arrive(g: HubGroup) {
@@ -128,7 +147,7 @@ function arrive(g: HubGroup) {
 }
 
 /** Advance the crowd (called from the game tick while the hub is shown; cheap otherwise). */
-export function stepHubVisitors(dt: number, active: boolean) {
+export function stepHubVisitors(dt: number, active: boolean, progress: HubOpenFlags = DEFAULT_ACCESS) {
   clock += dt;
   if (!active) return;
   for (let i = hubGroups.length - 1; i >= 0; i--) if (hubGroups[i].next === "gone") {
@@ -138,10 +157,26 @@ export function stepHubVisitors(dt: number, active: boolean) {
   while (hubGroups.length + respawnAt.length < HUB_GROUPS) respawnAt.push(clock + rand() * 2);
   respawnAt = respawnAt.filter((t) => {
     if (t > clock || hubGroups.length >= HUB_GROUPS) return true;
-    hubGroups.push(spawn());
+    hubGroups.push(spawn(progress));
     return false;
   });
   for (const g of hubGroups) {
+    if (g.door && !hubDoorOpen(g.door, progress)) {
+      // A just-closed pair of leaves hides members inside. Those still on the
+      // concourse remain visible and regroup there before choosing an open exit.
+      const outside = g.members.map((m) => ({ m, p: memberWorld(g, m) })).filter(({ p }) => doorCoordinates(g.door!, p).depth <= 0);
+      if (!outside.length) {
+        g.path = []; g.visible = false; g.next = "gone"; g.door = null; g.corridor = null;
+        continue;
+      }
+      if (outside.length < g.members.length) {
+        g.x = outside[0].p.x; g.z = outside[0].p.z;
+        g.members = outside.map(({ m }, i) => ({ ...m, side: 0, back: i * HUB_FILE_SPACING }));
+        initialiseTrail(g);
+      }
+      g.door = null; g.corridor = null;
+      if (g.next === "leave") leave(g, progress);
+    }
     if (g.path.length) {
       const t = g.path[0];
       const dx = t.x - g.x, dz = t.z - g.z, d = Math.hypot(dx, dz);
@@ -149,7 +184,11 @@ export function stepHubVisitors(dt: number, active: boolean) {
       const step = g.speed * dt;
       if (d <= step) { g.x = t.x; g.z = t.z; g.path.shift(); }
       else { g.x += (dx / d) * step; g.z += (dz / d) * step; }
+      recordTrail(g);
       if (d > 0.01) g.heading = turn(g.heading, Math.atan2(dx, dz), dt * 5);
+      if (g.door && g.corridor === "arrival" && doorCoordinates(g.door, g).depth < -5.1) {
+        g.door = null; g.corridor = null;
+      }
       g.phase += step * 7.5;
       if (!g.path.length) arrive(g);
       continue;
@@ -157,8 +196,8 @@ export function stepHubVisitors(dt: number, active: boolean) {
     g.speed = 0;
     if (g.face) g.heading = turn(g.heading, Math.atan2(g.face.x - g.x, g.face.z - g.z), dt * 3);
     if (clock < g.until) continue;
-    if (g.next === "view") { if (rand() < 0.4) goToPlaza(g); else leave(g); }
-    else if (g.next === "plaza") leave(g);
+    if (g.next === "view") { if (rand() < 0.4) goToPlaza(g); else leave(g, progress); }
+    else if (g.next === "plaza") leave(g, progress);
   }
 }
 
@@ -173,7 +212,72 @@ function turn(from: number, to: number, k: number) {
 export function memberWorld(g: HubGroup, m: HubMember): Vec2 {
   const s = Math.sin(g.heading), c = Math.cos(g.heading);
   // Heading h faces (sin h, cos h); its right is (cos h, -sin h).
-  return { x: g.x + c * m.side - s * m.back, z: g.z - s * m.side - c * m.back };
+  const spread = { x: g.x + c * m.side - s * m.back, z: g.z - s * m.side - c * m.back };
+  const f = fileAmount(g);
+  if (!f) return spread;
+  const file = trailPoint(g, g.members.indexOf(m) * HUB_FILE_SPACING);
+  // Establish front-to-back spacing before narrowing sideways. A direct blend
+  // would squeeze the middle and last members together halfway into the file.
+  const aligned = { x: file.x + c * m.side, z: file.z - s * m.side };
+  const a = f < 0.5 ? spread : aligned, b = f < 0.5 ? aligned : file;
+  const blend = f < 0.5 ? f * 2 : (f - 0.5) * 2;
+  return { x: a.x + (b.x - a.x) * blend, z: a.z + (b.z - a.z) * blend };
+}
+
+/** Followers face their own segment of the bend, rather than the leader's segment. */
+export function memberHeading(g: HubGroup, m: HubMember): number {
+  if (fileAmount(g) < 0.99) return g.heading;
+  const distance = g.members.indexOf(m) * HUB_FILE_SPACING;
+  const front = trailPoint(g, Math.max(0, distance - 0.08));
+  const back = trailPoint(g, distance + 0.08);
+  return Math.atan2(front.x - back.x, front.z - back.z);
+}
+
+function fileAmount(g: HubGroup): number {
+  if (!g.door || !g.corridor) return 0;
+  return Math.max(0, Math.min(1, (doorCoordinates(g.door, g).depth + 5) / 2));
+}
+
+function initialiseTrail(g: HubGroup) {
+  g.trail = [{ x: g.x, z: g.z }, { x: g.x - Math.sin(g.heading) * 8, z: g.z - Math.cos(g.heading) * 8 }];
+}
+
+function recordTrail(g: HubGroup) {
+  const last = g.trail[0];
+  if (!last || Math.hypot(g.x - last.x, g.z - last.z) >= 0.015) g.trail.unshift({ x: g.x, z: g.z });
+  let length = 0;
+  for (let i = 1; i < g.trail.length; i++) {
+    length += Math.hypot(g.trail[i].x - g.trail[i - 1].x, g.trail[i].z - g.trail[i - 1].z);
+    if (length > 8) { g.trail.length = i + 1; break; }
+  }
+}
+
+function trailPoint(g: HubGroup, distance: number): Vec2 {
+  let a: Vec2 = g;
+  for (const b of g.trail) {
+    const length = Math.hypot(b.x - a.x, b.z - a.z);
+    if (length >= distance && length > 0) return { x: a.x + (b.x - a.x) * distance / length, z: a.z + (b.z - a.z) * distance / length };
+    distance -= length;
+    a = b;
+  }
+  return { x: a.x, z: a.z };
+}
+
+/** Deterministic review fixture using the production routes, spacing and stepping. */
+export function setupHubReviewJourney(kind: HubDestination, direction: "arrival" | "departure"): string {
+  clearHubVisitors(17);
+  const from = direction === "arrival" ? hubArrivalSpawn(kind) : doorLocal(kind, 0, -0.65);
+  const g: HubGroup = {
+    id: `g${nextId++}`, members: [0, 1, 2].map((i) => ({ id: `h${nextId++}`, type: i ? "child" : "adult", variant: 0, side: 0, back: i * HUB_FILE_SPACING })),
+    x: from.x, z: from.z, heading: 0, speed: WALK, phase: 0, path: [], next: direction === "arrival" ? "view" : "leave",
+    activity: "walk", until: 0, spot: null, face: null, visible: true, door: kind, corridor: direction, trail: []
+  };
+  g.path = direction === "arrival" ? hubArrivalRoute(kind, onRing(bayOf(kind).angle, VIEW_RING)) : [doorLocal(kind, 0, 0), doorLocal(kind, 0, HUB_CORRIDOR.bendDepth), doorLocal(kind, HUB_CORRIDOR.endSide, HUB_CORRIDOR.bendDepth)];
+  g.heading = Math.atan2(g.path[0].x - g.x, g.path[0].z - g.z);
+  initialiseTrail(g);
+  hubGroups.push(g);
+  respawnAt = [Infinity, Infinity, Infinity];
+  return g.id;
 }
 
 export function clearHubVisitors(newSeed = 7) {

@@ -8,7 +8,8 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
  * profile, with foil fins and horizontal flukes. Every vertex carries `skin`
  * (s: snout 0 .. tail 1, h: belly -1 .. back +1, w: left -1 .. right +1, past
  * ±1 along a flipper) and `part` (0 body, 1 dorsal fin, 2 flipper, 3 flukes,
- * 4 eye), which cetaceanMaterial.ts uses for the vertical fluke beat, turning
+ * 4 eye, dolphin-only 5 jaw / 6 palate / 7 lower mouth), which
+ * cetaceanMaterial.ts uses for the vertical fluke beat, turning
  * and the markings (countershading, the orca's patches).
  *
  * Model space: +z is forward (the snout at +L/2), y up; metres for one adult.
@@ -16,7 +17,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 
 export type CetaceanKind = "dolphin" | "orca" | "beluga";
 export type FinStyle = "dolphin" | "tall" | "curved" | "nicked" | "small" | "none";
-export const PART = { body: 0, dorsal: 1, flipper: 2, flukes: 3, eye: 4 } as const;
+export const PART = { body: 0, dorsal: 1, flipper: 2, flukes: 3, eye: 4, jaw: 5, mouth: 6, jawMouth: 7 } as const;
 
 /** [s, centre y, radius up, radius down, half width], all as fractions of the length. */
 type Ring = readonly [number, number, number, number, number];
@@ -114,6 +115,36 @@ class Body {
     idx.forEach((v, n) => sk.set([skin[v * 3], skin[v * 3 + 1], skin[v * 3 + 2]], n * 3));
     g.dispose();
     this.finish(ni, PART.body, (_x, _y, _z, i) => [sk[i * 3], sk[i * 3 + 1], sk[i * 3 + 2]]);
+    if (this.kind === "dolphin") {
+      // The loft is already split into triangles. Keep every rest vertex and
+      // normal exactly as authored; only the lower beak triangles articulate.
+      // The sides include h=0, giving the upper and lower lips a shared seam.
+      const part = ni.getAttribute("part");
+      for (let i = 0; i < part.count; i += 3) {
+        const h = sk[i * 3 + 1] + sk[(i + 1) * 3 + 1] + sk[(i + 2) * 3 + 1];
+        const s = Math.min(sk[i * 3], sk[(i + 1) * 3], sk[(i + 2) * 3]);
+        if (h < -0.001 && s < 0.105) for (let k = 0; k < 3; k++) part.setX(i + k, PART.jaw);
+      }
+      // Two dark palate surfaces seal the new lip seam. They coincide inside
+      // the closed rostrum and are discarded by the shader until the jaw opens.
+      const stations = Array.from({ length: rings + 1 }, (_, i) => {
+        const u = i / rings;
+        return end * (u < 0.5 ? 0.5 * Math.pow(2 * u, 1.25) : 1 - 0.5 * Math.pow(2 * (1 - u), 1.15));
+      }).filter((s, i, all) => s < 0.105 || (i > 0 && all[i - 1] < 0.105));
+      for (const id of [PART.mouth, PART.jawMouth]) {
+        const mouth: number[] = [];
+        for (let i = 1; i < stations.length; i++) {
+          const a = this.ring(stations[i - 1]), b = this.ring(stations[i]);
+          const al = [-a[4] * L, a[1] * L, this.z(a[0])], ar = [a[4] * L, a[1] * L, this.z(a[0])];
+          const bl = [-b[4] * L, b[1] * L, this.z(b[0])], br = [b[4] * L, b[1] * L, this.z(b[0])];
+          mouth.push(...al, ...ar, ...bl, ...ar, ...br, ...bl);
+        }
+        const interior = new THREE.BufferGeometry();
+        interior.setAttribute("position", new THREE.Float32BufferAttribute(mouth, 3));
+        interior.computeVertexNormals();
+        this.finish(interior, id, (_x, _y, z) => [0.5 - z / L, 0, 0]);
+      }
+    }
   }
 
   /** A thin foil from a 2D outline (u along the chord, v along the span), placed by `place`. */

@@ -4,13 +4,14 @@ import { nextStep, objectivesUnlocked } from "../game/logic/guide";
 import { showGuideHint } from "../game/flow/story";
 import { canLive, goals, happiness, hasSpace, padsFor, remodelPlan, tankById, usedSpace, type Goal } from "../game/logic/model";
 import { HALL_OF, TANKS } from "../game/data/tanks";
-import { COAST_HALL, HUB_HALL, inHallRow, LAGOON_HALL, ROOMS, roomOpen, SANCTUARY_HALL, SHARKS_HALL } from "../game/data/rooms";
+import { AREA_LINKS, COAST_HALL, HUB_HALL, inHallRow, LAGOON_HALL, roomIndex, ROOMS, roomOpen, SANCTUARY_HALL, SHARKS_HALL } from "../game/data/rooms";
+import type { RoomId } from "../game/types";
 import { LagoonGoals, LagoonHud, lagoonHelp } from "./LagoonHud";
 import { SanctuaryGoals, SanctuaryHud, sanctuaryHelp } from "./SanctuaryHud";
 import { CoastCelebration, CoastGoals, CoastHud, CoastOffer, NEED_TEXT } from "./CoastHud";
 import { needMet } from "../game/logic/coast";
 import { AquariumMap, MapButton, TrophyCard } from "./AquariumMap";
-import { watchHubIntro } from "../game/flow/hub";
+import { arrowState, arrowTravel, watchHubIntro } from "../game/flow/hub";
 import { ExploreHud, TunnelGoals, WingHud } from "./TunnelHud";
 import { tunnelHelp } from "../game/tunnel/activities";
 import type { VisitorType } from "../game/types";
@@ -304,10 +305,21 @@ function HallSwitch() {
   const model = useGame((s) => s.model);
   const placing = useGame((s) => s.placing);
   const hintTarget = useGame((s) => s.nudge?.target);
-  if (!inHallRow(hall)) return null;
-  const prev = hall > 0 && inHallRow(hall - 1) && roomOpen(hall - 1, progress) ? hall - 1 : null;
-  const next = inHallRow(hall + 1) && roomOpen(hall + 1, progress) ? hall + 1 : null;
+  useGame((s) => s.previewAreas.length); // re-render when a preview starts or ends (arrow locks)
+  const links = AREA_LINKS[ROOMS[hall]?.id];
+  const linkOf = (id: RoomId | undefined) => {
+    const i = id ? roomIndex(id) : -1;
+    const state = i >= 0 ? arrowState(i, model) : null;
+    return state ? { hall: i, locked: state === "locked" } : null;
+  };
+  const prevLink = links?.prev ? linkOf(links.prev) : null;
+  const nextLink = links?.next ? linkOf(links.next) : null;
+  if (!inHallRow(hall) && !prevLink && !nextLink) return null;
+  const prev = prevLink ? prevLink.hall : inHallRow(hall) && hall > 0 && inHallRow(hall - 1) && roomOpen(hall - 1, progress) ? hall - 1 : null;
+  const next = nextLink ? nextLink.hall : inHallRow(hall) && inHallRow(hall + 1) && roomOpen(hall + 1, progress) ? hall + 1 : null;
   if (prev === null && next === null) return null;
+  const go = (to: number, link: { locked: boolean } | null) => link ? arrowTravel(to) : switchHall(to);
+  const lockMark = (link: { locked: boolean } | null) => link?.locked ? <Icon id="lock" size={18} /> : null;
   // Guide: the carried animal (or tank) only fits in rooms on one side.
   let targets: number[] = [];
   if (placing?.kind === "fish") {
@@ -325,17 +337,19 @@ function HallSwitch() {
   return (
     <>
       {prev !== null && (
-        <button className={`hall-arrow left ui ${guidePrev ? "guide" : ""}`} onClick={() => switchHall(prev)} data-testid="btn-hall-prev" aria-label={ROOMS[prev].name}>
+        <button className={`hall-arrow left ui ${guidePrev ? "guide" : ""} ${prevLink?.locked ? "locked" : ""}`} onClick={() => go(prev, prevLink)} data-testid="btn-hall-prev"
+          data-locked={prevLink?.locked ? "true" : undefined} aria-label={`${ROOMS[prev].name}${prevLink?.locked ? " (coming soon)" : ""}`}>
           <b>◀</b>
           <span>
-            {ROOMS[prev].name} <Ja>{ROOMS[prev].ja}</Ja>
+            {lockMark(prevLink)}{ROOMS[prev].name} <Ja>{prevLink?.locked ? "もうすぐ オープン" : ROOMS[prev].ja}</Ja>
           </span>
         </button>
       )}
       {next !== null && (
-        <button className={`hall-arrow right ui ${guideNext ? "guide" : ""}`} onClick={() => switchHall(next)} data-testid="btn-hall-next" aria-label={ROOMS[next].name}>
+        <button className={`hall-arrow right ui ${guideNext ? "guide" : ""} ${nextLink?.locked ? "locked" : ""}`} onClick={() => go(next, nextLink)} data-testid="btn-hall-next"
+          data-locked={nextLink?.locked ? "true" : undefined} aria-label={`${ROOMS[next].name}${nextLink?.locked ? " (coming soon)" : ""}`}>
           <span>
-            {ROOMS[next].name} <Ja>{ROOMS[next].ja}</Ja>
+            {lockMark(nextLink)}{ROOMS[next].name} <Ja>{nextLink?.locked ? "もうすぐ オープン" : ROOMS[next].ja}</Ja>
           </span>
           <b>▶</b>
         </button>

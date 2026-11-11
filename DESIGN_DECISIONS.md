@@ -1919,3 +1919,185 @@ Built / released / unlocked are separate; nothing auto-unlocks; no prices.
   tool round-trip when the original FBX already contains the rig and takes.
   Keeping the procedural model as the primary visual was rejected for this
   owner-requested asset replacement; it remains the resilient fallback.
+
+## 2026-11-11 — Penguin Coast only: preserved habitats, stable ground and visible feeding
+
+- **One content switch:** `COAST_HABITATS_SHOWN` in `game/data/release.ts` is
+  `["penguins"]`. Scenery, animals, signs, placement hits, views, questions and
+  debug milestone choices follow it. Seal/otter species, models, exhibit data
+  and full progression paths remain; widening this one list restores them.
+  Hidden habitat tanks, placed items, bag animals and unplaced items stay in
+  the existing `model.stored` mechanism, unchanged and outside care decay,
+  happiness aggregation, Rush Hour and the judge. Later saved progress is kept.
+  Release flags, ordinary unlock prerequisites/price and save version remain
+  unchanged: entry still requires the Ctrl+Alt+D preview sandbox.
+- **A coherent exhibit:** entry focuses on Penguins; `all` also frames the
+  penguin exhibit while it is the only habitat shown. The walkway ends beside
+  its existing footprint, with rock returns rather than empty neighbouring
+  bays. Visitor population scales with the shown habitats; foreground walkers
+  are omitted in the Underwater view so they do not obscure the glass.
+- **Progression ends at Penguin Paradise:** only milestones 1–2 appear.
+  Milestone 2 grants its fourth penguin without opening Seal Cove or adding a
+  seal. Completion reads “More coming soon! / つづきは もうすぐ！” instead of
+  requesting a seal action. Later milestones remain implemented and saved
+  later milestones are never reduced. The pre-existing save decoder's missing
+  habitat repair is retained; any reconstructed empty hidden tank is stored
+  immediately on preview entry.
+- **Flashing cause and source fix:** the land shelf top and the 25 mm thin
+  ground-cover box both ended at **y = 2.350 m: 0 mm separation** across almost
+  the whole shelf. Rock cylinders and their thin snow cylinders also shared
+  exact top planes on resting ledges and ice floes. These duplicated opaque
+  faces fought for depth during the arrival sweep. Removed the duplicate
+  shelf cover and made the rock/ice cylinders open at their snow-covered tops,
+  retaining one surface at each authored movement height. Cliff drapes already
+  clear rock by 18 mm vertically and 12 mm at their rims; floor relief tops
+  clear the floor by 25–61 mm. Water layers retain explicit transparent order
+  with depthWrite disabled; glass stands 170 mm ahead of the pool end. No
+  global depth offset or CameraRig change was needed. The camera retains its
+  0.1 m near / 120 m far planes throughout the reveal; exhibit surfaces remain
+  well inside that range.
+- **Feeding:** the station starts empty. A successful Feed replenishes a small
+  silver-blue fish pile, drawn in one instanced call separately from the tray.
+  Penguins notice it, use checked land routes and valid shore/ramp exits from
+  water, stand at distinct clear spots, lean and peck, consume individual fish,
+  then resume normal behaviour. The ITHappy head offsets layer over idle; the
+  procedural fallback also leans. Refeeding replenishes the pile; removing the
+  station clears the pending meal. With no station the existing feeding fallback
+  remains. Food, coin and reward rules still run once through the existing flow.
+- **Evidence:** production-preview captures at 1366×768 and 1024×768 live in
+  `.tmp/coast-review/final/`, with default/Penguins/Underwater views, a 150 ms
+  arrival sequence and 700 ms feeding sequences. The review script retains
+  `--ledges` for the previous optional natural ledge/floe review. Unit coverage
+  includes hidden-save round trips, frozen care/Rush/judge state, filtered
+  questions, widening the switch, station trips/bites and motion invariants.
+- **Measured rendering (1366×768, production SwiftShader, `__at.state().perf`):**
+  fresh baseline All 74 calls / 26,301 triangles → single-exhibit All 19 / 12,167
+  (default Penguins entry 20 / 12,179); Penguins 36 / 16,651 → 19 / 12,167;
+  Underwater 13 / 11,143 → 12 / 10,261. Pose/splash visibility affects snapshots.
+  The pile is exactly one InstancedMesh draw: review data records 0 → 12 → 11
+  → 0 fish alongside the actual eating poses. Real Chromebook fps remains
+  unmeasured; the review clock deliberately advances at 100 ms steps.
+- **Validation:** `npm run typecheck` and `npm run build` pass. Final `npm test`
+  result is 716/726 passing, including all coast rules, motion and runtime
+  tests. One existing release-preview assertion still expects every habitat
+  unstored; updating that assertion is outside the requested file allowlist.
+  Nine unchanged marine/fish simulation tests hit their 5 s timeouts. No E2E
+  suite was run; the production review script completed without browser errors
+  at both resolutions.
+- **Rejected:** deleting seal/otter data would lose existing saves; leaving
+  empty bays beside Penguin Coast would make the exhibit incoherent. Teleports
+  to the station would bypass safe shore routes; permanently modelled fish
+  would not communicate replenishment and consumption.
+
+## 2026-11-11 — Lagoon framing, articulated mouths and coordinated feeding
+
+- **Overview:** the Lagoon shot now looks down into the water from (0, 23, 30)
+  toward (0, -1, 1). The breakwater sits near the top, dolphins occupy more of
+  the screen, and the boardwalk remains visible below them. Other viewpoints
+  and counting retain their shots; the first-visit reveal smoothly ends at
+  this framing. Narrow screens retain the existing aspect compensation.
+- **Mouth:** dolphin lower-rostrum triangles have a jaw PART, rotated about
+  the mouth corner by a per-animal shader uniform (about 23 degrees open).
+  Two dark interior surfaces share the merged geometry and disappear when
+  closed. Rest vertices, normals and skin coordinates are preserved; each
+  dolphin remains one mesh and one draw call. Orca and beluga geometry stays
+  byte-identical, guarded by attribute snapshots; new shader paths are
+  dolphin-only.
+- **Feed:** idle → gathering → ready → throwing → catching → finished. The
+  keeper prepares and waits while dolphins approach separate surface slots
+  facing the keeper, including an adjacent mother/calf pair. Each ready
+  dolphin gets one fish (smaller for Mimi) on a short ballistic arc to its
+  predicted mouth. Head lift and jaw opening lead contact; contact hides the
+  fish, followed by closing, a swallow bob and a happy flipper reaction.
+  Dolphins then resume their normal swimming. Feed keeps its existing care
+  gain, cooldown and progression; repeated taps during a sequence do nothing.
+  Leaving the lagoon cancels transient fish, attractions and mouth poses.
+- **Timeout:** gathering is bounded at nine seconds. Proceed with whichever
+  dolphins are ready; if none are ready, toss one fish onto reachable water
+  beside the pontoon and attract the pod there at the surface. No arrival or
+  catch animation can leave the sequence waiting indefinitely.
+- **Rejected:** a separate skinned dolphin model adds draw calls and an asset
+  pipeline; throwing immediately sends fish to dolphins still far away.
+  Release locks, saves, questions, Look! moments, milestones, toys and rare
+  spontaneous leaps retain their existing rules.
+
+## 2026-11-11 — Navigation, hub, tricks and small fish (plan review and build)
+
+Owner's plan "Navigation, Grand Hub, Penguin Coast and Dolphin Lagoon
+improvements", reviewed by Claude; built by Codex (hub, coast, lagoon
+feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
+
+- **Side arrows of the branching areas** (`AREA_LINKS` in `data/rooms.ts`):
+  Shark Tunnel → Grand Hub; Penguin Coast ← Grand Hub / → Dolphin Lagoon;
+  Dolphin Lagoon ← Penguin Coast / → Grand Ocean Sanctuary (tour order
+  Atrium → Tunnel → Hub → Coast → Lagoon → Sanctuary). An arrow travels
+  through the same entry as the matching doorway (`arrowTravel` →
+  `travelTo` / `tapCoastDoor` / `tapOutdoorDoor`), so `canTravel`, release
+  locks, previews, first-visit reveals and the coast offer all apply. A
+  release-locked neighbour is still shown (so the tour reads) but greyed with
+  a lock and もうすぐ オープン; a tap only says "Coming soon!". An area not
+  yet open for the player (no hub yet) shows no arrow. Hidden while walking
+  the tunnel. The hub keeps its doorways and gets no arrows.
+  Placement: the Shark Tunnel's right arrow and the coast's left arrow sit
+  low (bottom 124 px) because those areas have viewpoint buttons at mid-edge.
+  Rejected: neighbours by ROOMS index (the wings branch); arrows that open
+  locked areas in a preview's neighbours (a preview opens one area only).
+- **Grand Hub window:** one continuous curved opening (no central pier) cut
+  through the rotunda wall, with a sill, head and jambs; behind it opaque
+  curved cards (sky, sea, headland, lighthouse, boats) and three alpha-tested
+  cloud layers scrolling at different speeds (UV offset in one useFrame).
+  Rejected: a painted window on the wall (reads as a picture).
+- **Grand Hub doorways:** real openings in the wall with jambs, lintel,
+  threshold and a short L-shaped corridor per destination (floor, walls,
+  ceiling trim, lights, themed colours); the corridor is drawn only through
+  its own doorway (fragment portal clip), so its bend never shows outside
+  the rotunda. Closed destinations (release-locked outside a preview, the
+  tunnel before it is bought) get door leaves plus the existing lock, rope
+  and COMING SOON ribbon (`hubDoorOpen` is the same rule as travel).
+  Visitors leave through open doorways only, file through the opening, walk
+  round the bend out of sight and are removed there; arrivals start round
+  the bend. Draw calls are unchanged in practice (the count follows the
+  number of visitors: 48–86 with the new hub, 72–92 before, same save).
+  Rejected: rendering the real destination through each door.
+- **Penguin-only coast:** with one habitat the "All" view is the same
+  picture as "Penguins", so only Penguins / Underwater are offered (the
+  "All" button returns automatically if habitats are shown again).
+- **Dolphin tricks** (`pod.ts`, only with `PodOptions.tricks`, so orcas and
+  belugas are unchanged): a run-up (`charge`: a little deeper, then a sprint
+  up through the surface) and one of five figures — high jump (≈2 m), arcing
+  leap, forward flip, back flip, twisting spin; a calf only hops beside its
+  mother; a close partner sometimes jumps in sync. Somersaults and twists
+  are whole turns finished just before a nose-first re-entry (splash). The
+  run-up heads down the most open lane; the whole flight (flukes behind the
+  take-off included) must be over open water and clear of the footbridge,
+  sea gate, pontoon and deck (`lagoonAirClear`), else the dolphin just
+  breathes. The old rare surfacing leap now passes the same air check.
+  Rhythm: one spontaneous trick every 13–22 s pod-wide (seeded), never during
+  feeding or a question about the dolphins; tests hold 4–7 leaps a minute at
+  most and no gap over 75 s. Jumps count as the existing "A jump!" Look!
+  sight, whose bubble now floats above the arc. Ball passes and ring passes
+  are not new sights (no new English); they feed the Play need.
+- **Ball play:** a dolphin's snout nudges the floating ball (only when the
+  ball is on the water and at the rostrum tip); the ball flies a ballistic
+  lob (0.7–1.25 s) to just ahead of a partner, who swims to where it comes
+  down and returns it; a quarter of passes miss, the ball lands with a small
+  bounce, drifts and is fetched. It is never carried, never hovers and stays
+  in the water (wide passes are pulled toward open water).
+- **Bubble ring:** the bubble-curtain toy is now an upright ring of 46
+  animated bubbles (one instanced draw) in front of the underwater gallery
+  window (x 9, z 3, 2.6 m deep), its opening along a clear diagonal lane.
+  Dolphins line up (far point, near point on the axis) and swim straight
+  through; a pass counts only when the body centre crosses the ring's plane
+  inside the inner radius (minus the body radius) with the nose along the
+  axis, then a burst of bubbles. A second dolphin often follows.
+- **Small fish** (`scene/marine/smallFish.ts`): five procedural shapes
+  (sardine, snapper, chromis, tang, wrasse; ~150–400 triangles) with tapered
+  bodies, forked / crescent / round tails, dorsal, anal and pectoral fins
+  and eyes with a pale ring; countershading and accent fins in the shader;
+  the tail beat is a vertex bend. One instanced draw per kind: the hub tank
+  is a small reef (tangs, chromis, wrasse, snappers, a few sardines; 5
+  draws), the lagoon/sanctuary school is silver sardines with a few grey
+  snappers (2 draws), each fish facing its real direction of travel. The
+  main aquarium's English-task fish (`models/fish.ts`) are unchanged.
+  Rejected: reusing the task fish (heavier, tied to English tasks);
+  imported fish assets (style clash).

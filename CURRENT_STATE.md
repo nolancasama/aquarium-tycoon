@@ -1,5 +1,47 @@
 # Current State
 
+## Navigation, hub, Penguin Coast and Lagoon improvements (2026-11-11, uncommitted)
+
+Branch `outdoor-polish` (from `main` 3e12fe0), **not committed or pushed**.
+Design: DESIGN_DECISIONS.md 2026-11-11 entries "Penguin Coast only…",
+"Lagoon framing, articulated mouths and coordinated feeding" and
+"Navigation, hub, tricks and small fish".
+
+- **Arrows:** Shark Tunnel → Grand Hub; Penguin Coast ← Hub / → Lagoon;
+  Lagoon ← Coast / → Sanctuary (`AREA_LINKS`, `arrowState`/`arrowTravel` in
+  `flow/hub.ts`). Locked neighbours show greyed with a lock and only say
+  "Coming soon!". Release locks unchanged; all three outdoor areas stay
+  preview-only.
+- **Grand Hub:** one panoramic window onto an animated coast; real doorway
+  openings with short corridors (`scene/hub/HubArchitecture.tsx`,
+  `HubCoastWindow.tsx`, `hubPortalClip.ts`); closed doors on unavailable
+  destinations; visitors walk in and out through open corridors only.
+  The hub's display tank is a small reef of `smallFish.ts` fish.
+- **Penguin Coast:** `COAST_HABITATS_SHOWN = ["penguins"]` (`data/release.ts`)
+  hides Seal Cove and Otter Bay (kept stored and frozen, saves unchanged);
+  views Penguins / Underwater; goals end at milestone 2 with "More coming
+  soon!". Ground flashing fixed (duplicate coplanar shelf tops). Feed puts a
+  fish pile on the station; penguins walk over, peck and eat it.
+- **Dolphin Lagoon:** closer overview; dolphin jaw (shader); feeding waits for
+  the dolphins, then fish are tossed one by one and caught in open mouths
+  (`game/lagoon/feeding.ts`); tricks (5 jumps/flips, calf hops), ball passes
+  snout to snout, a bubble ring in front of the gallery window that dolphins
+  swim through (`pod.ts` `charge`/`trick`, `lagoonRuntime.ts`). New small fish
+  school (`scene/marine/smallFish.ts`, also in the sanctuary).
+- **Verified:** typecheck; unit 763/763 (new: `flow/arrows.test.ts`,
+  `lagoon/tricks.test.ts`, `marine/smallFish.test.ts`, hub routes, coast,
+  feeding, cetacean geometry); build; new `tests/e2e/arrows.spec.ts` 1/1.
+  Known-bad checks: arrows without the lock check, hub doors all open, ring
+  passes outside the opening, and leaps crossing structures all fail their
+  tests. Frames by eye (SwiftShader) at 1366×768 and 1024×768: `.tmp/fish-review/`,
+  `.tmp/tricks-review/`, `.tmp/nav-review/`, `.tmp/worker-evidence/`
+  (hub, coast, lagoon frames from the Codex runs).
+- **Not verified / known:** motion judged from 100 ms frame strips, not
+  watched live; real Chromebook fps; at 844×390 (phone fallback) the side
+  arrows overlap the HUD cards; tricks are small on screen in the Lagoon
+  overview (the Deck view is closer); the coast's Feed/Clean buttons show
+  only Japanese (as before).
+
 ## Release locks: Coastal & Polar, Dolphin Lagoon, Grand Ocean Sanctuary (2026-11-10)
 
 Design: DESIGN_DECISIONS.md "Dolphin Lagoon + Grand Ocean Sanctuary, release
@@ -10,7 +52,7 @@ locks (plan review)" and "Lagoon and sanctuary: decided while building".
   release and the save's ownership, or a development preview (`roomOpen`);
   save validation uses ownership only (`roomOwned`), so saved coastal habitats
   are kept. The coast's purchase rule (`openCoast`) also refuses while locked.
-- **Hub and map:** the three doorways show their artwork with a lock, a rope
+- **Hub and map:** the three doorways show closed doors (since 2026-11-11) with a lock, a rope
   and a bilingual COMING SOON ribbon; plaques read DOLPHIN LAGOON / イルカの
   ラグーン and GRAND OCEAN SANCTUARY / うみの サンクチュアリ. A tap says "Coming
   soon! / もうすぐ オープン！ おたのしみに！" (doorway: toast; map card: the card
@@ -130,7 +172,7 @@ the owner-supplied penguin model.
   snowy cliffs, a sloping stony shore, a deeper-looking pool (rocky floor,
   underwater cliffs, boulders, bubbles), a climbable ice floe (an island in
   `data/coast.ts`), small floes and boulders as swim obstacles, two low resting
-  ledges, nest visits. Seal Cove and Otter Bay unchanged.
+  ledges, nest visits. Seal Cove and Otter Bay unchanged (hidden since 2026-11-11).
 - **Views:** Penguins view re-framed; an Underwater / みずのなか button appears only
   in the Penguins view (`coastUnderwater` in the store). A 7.2 s skippable
   first-visit reveal (`coastReveal` in `flow/coast.ts`), debug preview only.
@@ -236,12 +278,13 @@ and "Hub and coast: decided while building".
   the four halls, the Shark Tunnel, the coast (locked) and two future
   attractions, with a "You are here" pin and milestone counts. The hub's
   doorways travel too: indoor (back to the last indoor hall), Shark Tunnel,
-  coast, and Lagoon/Sanctuary ("Coming soon"). Hall arrows only link the hall row
-  and the Shark Tunnel (`inHallRow`). Any wing switch fades (`isWingHall`). Travel
+  coast, and Lagoon/Sanctuary ("Coming soon"). Hall arrows link the hall row
+  and the Shark Tunnel (`inHallRow`), plus the branching areas' own links
+  (`AREA_LINKS`, 2026-11-11). Any wing switch fades (`isWingHall`). Travel
   is blocked during prompts, lines, panels, placement, celebrations and the
   tunnel walk (`canTravel` in `game/flow/hub.ts`).
 - **Scene:** `scene/hub/GrandHub.tsx` (+ painted canvases in `hubArt.ts`). It
-  has a display tank (22 instanced fish and bubbles, no care), trophy shelves
+  has a display tank (22 reef fish of 5 kinds, `smallFish.ts`, and bubbles, no care), trophy shelves
   that read the existing flags (tap opens a trophy card linking to the Rush
   awards), an information desk, a directory kiosk (tap opens the map) and potted
   palms. The layout data and walking routes are in `game/data/hub.ts`; the crowd

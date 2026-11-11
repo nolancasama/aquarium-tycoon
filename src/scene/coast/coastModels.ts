@@ -114,7 +114,6 @@ export function itemGeometry(kind: CoastDecorKind): THREE.BufferGeometry {
     case "penguinFeeder":
       b.box(0.9, 0.08, 0.6, 0, 0, 0, "#9b7448");
       b.cyl(0.16, 0.13, 0.26, -0.18, 0.08, 0, "#2f7fc1", 12);
-      for (const [x, z] of [[0.12, 0.05], [0.25, -0.1], [0.3, 0.12]]) b.add(new THREE.SphereGeometry(0.05, 6, 4), "#c9d6de", [x, 0.12, z], [0, 0, 0], [0.6, 0.6, 2]);
       break;
     case "sealRock":
       rock(0, 0, 0.75, 0.32, "#8b7f72", 0.2);
@@ -148,4 +147,19 @@ export function itemGeometry(kind: CoastDecorKind): THREE.BufferGeometry {
   const g = b.build();
   itemCache.set(kind, g);
   return g;
+}
+
+let stationFish: THREE.BufferGeometry | null = null;
+/** One recognisable small fish; instances share this merged silver-blue body, forked tail and eyes. */
+export function penguinFishGeometry(): THREE.BufferGeometry {
+  if (stationFish) return stationFish;
+  const b = new PartBuilder(0);
+  b.sphere(0.045, 0, 0, 0.025, "#9ac4d5", [0.7, 0.65, 2.6], 8);
+  b.sphere(0.037, 0, 0.012, 0.025, "#578aa5", [0.75, 0.5, 2.5], 8);
+  b.add(new THREE.ConeGeometry(0.043, 0.1, 3), "#739dbb", [-0.025, 0, -0.11], [Math.PI / 2, 0.4, 0], [0.9, 1, 0.3]);
+  b.add(new THREE.ConeGeometry(0.043, 0.1, 3), "#8cbbce", [0.025, 0, -0.11], [Math.PI / 2, -0.4, 0], [0.9, 1, 0.3]);
+  b.sphere(0.008, 0.023, 0.017, 0.09, "#182c3a", [1, 1, 1], 5);
+  b.sphere(0.008, -0.023, 0.017, 0.09, "#182c3a", [1, 1, 1], 5);
+  stationFish = b.build();
+  return stationFish;
 }

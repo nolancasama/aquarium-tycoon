@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COAST_HABITATS, EXHIBITS, ISLAND_CLEAR, type CoastHabitat } from "../data/coast";
-import { landLegClear, MAX_SPEED, newMover, rampRect, SPECIES_OF, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
+import { landLegClear, MAX_SPEED, newMover, rampRect, SPECIES_OF, stationSpots, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
 
 /** The island's rock: a frustum from its waterline radius up to a flat top (the scene draws the same shape). */
 export const ISLAND_TOP_R = 0.55;
@@ -158,6 +158,43 @@ describe("semi-aquatic movement", { timeout: 60_000 }, () => {
       expect(waterLegClear(ex, { x: o.x - o.r - 0.4, z: o.z }, { x: o.x + o.r + 0.4, z: o.z }, 0.35)).toBe(false);
     }
   });
+
+  for (const slot of [0, 1, 2, 3]) {
+    it(`penguins reach station slot ${slot} from land, water, a floe and a ledge, eat apart and resume`, () => {
+      const ex = EXHIBITS.penguins, station = ex.slots[slot], dt = 0.1;
+      const landItems = ex.slots.map((s, i) => ({ x: s.x, z: s.z, r: i === slot ? 0.45 : 0.6 }));
+      const spots = stationSpots(ex, station, 4, landItems);
+      expect(spots).toHaveLength(4);
+      for (const a of spots) for (const b of spots) if (a !== b) expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThanOrEqual(0.62);
+      const movers = spots.map((_, i) => newMover(`meal-${i}`, "penguin", ex, 40 + i, 0, landItems));
+      Object.assign(movers[1], { x: 0, y: 1.05, z: 2.7, mode: "swim", area: "water", path: [], nextBreath: 100 });
+      Object.assign(movers[2], { ...ex.islands[0].rest, y: ex.islands[0].top, mode: "rest", area: "island", island: 0 });
+      Object.assign(movers[3], { ...ex.ledges![0].rest, y: ex.ledges![0].top, mode: "rest", area: "ledge", ledge: 0, ledgeRest: ex.ledges![0].rest });
+      movers.forEach((m, i) => { m.feeding = { spot: spots[i], station, stage: "approach", routed: false, bites: 0, nextBite: 0, until: 0 }; });
+      const ate = new Set<string>(), exited = new Set<string>();
+      let bites = 0;
+      for (let time = dt; time < 110; time += dt) {
+        for (const m of movers) {
+          const prev = { x: m.x, y: m.y, z: m.z, mode: m.mode, area: m.area };
+          stepMover(m, ex, dt, { time, landItems, toy: null, onEvent: (animal, kind) => {
+            if (kind === "leaveWater") exited.add(animal.id);
+            if (kind === "eatFish") { bites++; ate.add(animal.id); }
+          } });
+          check(m, "penguins", prev, dt);
+          if (m.area === "land" && (m.mode === "walk" || m.mode === "rest")) for (const item of landItems) expect(Math.hypot(m.x - item.x, m.z - item.z)).toBeGreaterThan(item.r);
+          if (m.feeding?.stage === "eating") {
+            expect(m.area).toBe("land"); expect(m.y).toBe(ex.land.y); expect(m.action).toBe("eat");
+            expect(Math.hypot(m.x - m.feeding.spot.x, m.z - m.feeding.spot.z)).toBeLessThan(1e-6);
+          }
+        }
+      }
+      expect(bites).toBe(12);
+      expect(ate.size).toBe(4);
+      expect(exited).toContain(movers[1].id);
+      expect(exited).toContain(movers[2].id);
+      expect(movers.every((m) => !m.feeding)).toBe(true);
+    });
+  }
 
   it("seals haul out onto their rock as well as the shore", () => {
     const { modes } = simulate("seals", 5, 600);

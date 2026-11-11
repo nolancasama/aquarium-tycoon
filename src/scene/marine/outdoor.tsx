@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { shaderTime } from "../materials";
 import { sceneLights } from "../GameScene";
 import type { Pt } from "../../game/marine/domain";
+import { smallFishMaterial, smallFishMesh, smallFishTime } from "./smallFish";
 
 /**
  * The outdoor areas' shared kit: the atmosphere (sky colour, haze, the far
@@ -452,46 +453,50 @@ export function LightShafts({ spots, depth, active }: { spots: { x: number; z: n
 
 // ------------------------------------------------------------------ a small fish school (under water)
 
-/** Little silver fish milling outside an underwater window (one instanced draw; only drawn from below the surface). */
+/**
+ * A school of small, naturally coloured fish outside an underwater window
+ * (smallFish.ts): mostly slim silver sardines, a few deeper-bodied grey
+ * snappers. Two instanced draws; only drawn from below the surface. The school
+ * drifts and turns as one, every fish facing the way it actually moves.
+ */
 export function FishSchool({ centre, radius, depth, n = 26, active }: { centre: { x: number; z: number }; radius: number; depth: number; n?: number; active: () => boolean }) {
-  const ref = useRef<THREE.InstancedMesh>(null);
-  const geo = useMemo(() => {
-    const body = new THREE.SphereGeometry(0.08, 6, 4).scale(0.45, 0.8, 1.7);
-    const tail = new THREE.ConeGeometry(0.07, 0.12, 4).rotateX(-Math.PI / 2).scale(0.3, 1, 1).translate(0, 0, -0.17);
-    return mergeTwo(body, tail);
-  }, []);
-  const mat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#c8d6de" }), []);
-  const fish = useMemo(() => Array.from({ length: n }, (_, i) => ({ r: radius * (0.55 + ((i * 37) % 45) / 100), y: depth + ((i * 53) % 100) / 100 * 1.6, p: i * 0.61, w: 0.32 + ((i * 17) % 10) / 60 })), [n, radius, depth]);
+  const parts = useMemo(() => {
+    const mat = smallFishMaterial(0.72);
+    const nSnap = Math.max(2, Math.round(n * 0.18)), nSard = n - nSnap;
+    const tone = (i: number, a: string, b: string) => ({ color: i % 3 === 0 ? b : a, accent: "#9fb0bb" });
+    const sard = smallFishMesh("sardine", Array.from({ length: nSard }, (_, i) => tone(i, "#5f7f96", "#6b8aa0")), mat);
+    const snap = smallFishMesh("snapper", Array.from({ length: nSnap }, (_, i) => ({ color: i % 2 ? "#7c8a86" : "#86948c", accent: "#a7a98e" })), mat);
+    const fish = Array.from({ length: n }, (_, i) => ({
+      r: radius * (0.55 + ((i * 37) % 45) / 100), y: depth + ((i * 53) % 100) / 100 * 1.6, p: i * 0.61,
+      w: 0.32 + ((i * 17) % 10) / 60, s: (i < nSard ? 0.42 : 0.58) * (0.82 + ((i * 29) % 10) / 25)
+    }));
+    return { mat, sard, snap, nSard, fish };
+  }, [n, radius, depth]);
+  useEffect(() => () => { parts.sard.dispose(); parts.snap.dispose(); parts.mat.dispose(); }, [parts]);
   const o = useMemo(() => new THREE.Object3D(), []);
   useFrame(() => {
-    const m = ref.current;
-    if (!m) return;
-    m.visible = active();
-    if (!m.visible) return;
+    const on = active();
+    parts.sard.mesh.visible = parts.snap.mesh.visible = on;
+    if (!on) return;
     const t = shaderTime.value;
+    smallFishTime.value = t;
     // The school drifts as one, each fish a little out of step.
-    const sway = Math.sin(t * 0.13) * radius * 0.5;
-    fish.forEach((f, i) => {
+    const sway = Math.sin(t * 0.13) * radius * 0.5, swayV = Math.cos(t * 0.13) * 0.13 * radius * 0.5;
+    parts.fish.forEach((f, i) => {
       const a = f.p + t * f.w;
       o.position.set(centre.x + sway + Math.sin(a) * f.r, f.y + Math.sin(t * 0.8 + f.p) * 0.2, centre.z + Math.cos(a) * f.r * 0.6);
-      o.rotation.set(0, a + Math.PI / 2 + Math.sin(t * 7 + i) * 0.12, 0);
+      // Heading from the real velocity of this path (circle + school drift).
+      const vx = Math.cos(a) * f.r * f.w + swayV, vz = -Math.sin(a) * f.r * 0.6 * f.w, vy = Math.cos(t * 0.8 + f.p) * 0.16;
+      o.rotation.set(-Math.atan2(vy, Math.hypot(vx, vz)), Math.atan2(vx, vz), 0, "YXZ");
+      o.scale.setScalar(f.s);
       o.updateMatrix();
-      m.setMatrixAt(i, o.matrix);
+      const m = i < parts.nSard ? parts.sard.mesh : parts.snap.mesh;
+      m.setMatrixAt(i < parts.nSard ? i : i - parts.nSard, o.matrix);
     });
-    m.instanceMatrix.needsUpdate = true;
+    parts.sard.mesh.instanceMatrix.needsUpdate = true;
+    parts.snap.mesh.instanceMatrix.needsUpdate = true;
   });
-  return <instancedMesh ref={ref} args={[geo, mat, n]} frustumCulled={false} raycast={() => undefined} />;
-}
-
-function mergeTwo(a: THREE.BufferGeometry, b: THREE.BufferGeometry) {
-  const g = new THREE.BufferGeometry();
-  const pa = a.toNonIndexed().getAttribute("position"), pb = b.toNonIndexed().getAttribute("position");
-  const pos = new Float32Array(pa.count * 3 + pb.count * 3);
-  pos.set(pa.array as Float32Array, 0);
-  pos.set(pb.array as Float32Array, pa.count * 3);
-  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  g.computeVertexNormals();
-  return g;
+  return <group><primitive object={parts.sard.mesh} /><primitive object={parts.snap.mesh} /></group>;
 }
 
 // ------------------------------------------------------------------ gulls

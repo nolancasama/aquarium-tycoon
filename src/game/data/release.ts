@@ -10,6 +10,12 @@
  * area later, flip `released` here and decide its unlock rule separately.
  */
 
+import type { CoastHabitat } from "./coast";
+
+/** Preview content switch. Hidden habitats and their saved records are kept. */
+export const COAST_HABITATS_SHOWN: readonly CoastHabitat[] = ["penguins"];
+export const coastHabitatShown = (h: CoastHabitat): boolean => COAST_HABITATS_SHOWN.includes(h);
+
 export type ReleaseArea = "coast" | "lagoon" | "sanctuary";
 export const RELEASE_AREAS: ReleaseArea[] = ["coast", "lagoon", "sanctuary"];
 

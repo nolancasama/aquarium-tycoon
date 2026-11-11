@@ -154,7 +154,10 @@ describe("development previews", () => {
     expect(roomOpen(COAST_HALL, getGame().model.progress)).toBe(true);
     // In the sandbox the stored habitats are back in play.
     expect(getGame().model.tanks.map((t) => t.slot)).toContain("M");
-    expect(getGame().model.stored).toBeUndefined();
+    // Penguin-only (COAST_HABITATS_SHOWN): the hidden Seal Cove / Otter Bay stay stored, frozen, and nothing else does.
+    const stored = getGame().model.stored;
+    expect((stored?.tanks ?? []).map((t) => t.type).every((t) => t === "seals" || t === "otters")).toBe(true);
+    expect((stored?.tanks ?? []).map((t) => t.slot)).not.toContain("M");
     // The lagoon too, with its state created only in memory.
     expect(startPreview("lagoon")).toBe(true);
     setGame({ model: startLagoon(getGame().model) });

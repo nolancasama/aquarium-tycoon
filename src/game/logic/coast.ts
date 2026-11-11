@@ -1,7 +1,7 @@
 import { COAST_DECOR } from "../data/decor";
-import { areaAvailable } from "../data/release";
+import { areaAvailable, COAST_HABITATS_SHOWN, coastHabitatShown } from "../data/release";
 import type { CoastHabitat } from "../data/coast";
-import type { SlotId, SpeciesId, TankType } from "../types";
+import type { DecorKind, SlotId, SpeciesId, TankType } from "../types";
 import { happiness, HAPPY, hasSpace, NEED_CAP, newTank, tankAt, type Model, type Result, type TankRec } from "./model";
 
 export { NEED_CAP };
@@ -20,6 +20,28 @@ export const COAST_PRICE = 320;
 export const HABITAT_PAD: Record<CoastHabitat, SlotId> = { penguins: "M", seals: "N", otters: "O" };
 export const HABITAT_SPECIES: Record<CoastHabitat, SpeciesId> = { penguins: "penguin", seals: "seal", otters: "otter" };
 export const isCoastHabitat = (t: TankType): t is CoastHabitat => t === "penguins" || t === "seals" || t === "otters";
+
+/** Later goals need both of the currently held-back habitats. */
+export const coastMilestoneLimit = (): number => coastHabitatShown("seals") && coastHabitatShown("otters") ? 5 : 2;
+
+/** Keep unreachable records in the existing save-compatible store, outside all care, Rush and judge rules. */
+export function storeHiddenCoast(m: Model): Model {
+  const hidden = (["penguins", "seals", "otters"] as const).filter((h) => !coastHabitatShown(h));
+  const tanks = m.tanks.filter((t) => isCoastHabitat(t.type) && hidden.includes(t.type));
+  const fish = m.inv.fish.filter((f) => hidden.some((h) => HABITAT_SPECIES[h] === f.species));
+  const decor = m.inv.decor.filter((d) => hidden.some((h) => (COAST_DECOR[h] as DecorKind[]).includes(d.kind)));
+  if (!tanks.length && !fish.length && !decor.length) return m;
+  const old = m.stored ?? { tanks: [], fish: [], decor: [] };
+  return {
+    ...m,
+    tanks: m.tanks.filter((t) => !tanks.includes(t)),
+    inv: { ...m.inv, fish: m.inv.fish.filter((f) => !fish.includes(f)), decor: m.inv.decor.filter((d) => !decor.includes(d)) },
+    stored: { tanks: [...old.tanks, ...tanks], fish: [...old.fish, ...fish], decor: [...old.decor, ...decor] }
+  };
+}
+
+/** The question scheduler uses only reachable, populated habitats. */
+export const coastQuestionHabitats = (m: Model): CoastHabitat[] => COAST_HABITATS_SHOWN.filter((h) => habitatOpen(m, h) && Boolean(tankAt(m, HABITAT_PAD[h])?.fish.length));
 
 
 export interface CoastProgress {
@@ -54,7 +76,7 @@ export function needMet(t: TankRec): boolean {
 export const habitatHappiness = (t: TankRec): number | null => happiness(t);
 
 /** The habitat a player sees as open (its tank exists). */
-export const habitatOpen = (m: Model, h: CoastHabitat) => tankAt(m, HABITAT_PAD[h])?.type === h;
+export const habitatOpen = (m: Model, h: CoastHabitat) => coastHabitatShown(h) && tankAt(m, HABITAT_PAD[h])?.type === h;
 
 function addHabitat(m: Model, h: CoastHabitat, animals: number): Model {
   if (habitatOpen(m, h)) return giveAnimals(m, h, animals);
@@ -96,6 +118,7 @@ export type CoastEvent = "penguinSwim" | "sealDive" | "otterFloat";
 /** Something the player watched happen. */
 export function recordCoastSight(m: Model, e: CoastEvent): Model {
   const p = m.progress.coast;
+  if (!coastHabitatShown(e === "penguinSwim" ? "penguins" : e === "sealDive" ? "seals" : "otters")) return m;
   if (!m.progress.coastOpen || !p) return m;
   const key = e === "penguinSwim" ? "sawPenguinSwim" : e === "sealDive" ? "sawSealDive" : "sawOtterFloat";
   if (p[key]) return m;
@@ -105,7 +128,7 @@ export function recordCoastSight(m: Model, e: CoastEvent): Model {
 /** An English activity answered at a habitat. */
 export function recordCoastActivity(m: Model, h: CoastHabitat): Model {
   const p = m.progress.coast;
-  if (!m.progress.coastOpen || !p) return m;
+  if (!m.progress.coastOpen || !p || !coastHabitatShown(h)) return m;
   const key = h === "penguins" ? "penguinActs" : h === "seals" ? "sealActs" : "otterActs";
   return checkCoastMilestones({ ...m, progress: { ...m.progress, coast: { ...p, [key]: Math.min(99, p[key] + 1) } } }).m;
 }
@@ -118,6 +141,7 @@ const has = (m: Model, h: CoastHabitat, kind: string) => Boolean(tankAt(m, HABIT
 
 /** What the next milestone still needs (for the goals card and the guide). */
 export function coastMilestoneReady(m: Model, next: number): boolean {
+  if (next > coastMilestoneLimit()) return false;
   const p = m.progress.coast ?? newCoastProgress();
   switch (next) {
     case 1: return Boolean(m.progress.coastOpen);
@@ -134,14 +158,17 @@ export function checkCoastMilestones(m: Model): { m: Model; reached: number[] } 
   if (!m.progress.coastOpen) return { m, reached: [] };
   let out = m;
   const reached: number[] = [];
-  while ((out.progress.coast?.milestone ?? 0) < 5) {
+  while ((out.progress.coast?.milestone ?? 0) < coastMilestoneLimit()) {
     const p = out.progress.coast ?? newCoastProgress();
     const next = (p.milestone + 1) as CoastProgress["milestone"];
     if (!coastMilestoneReady(out, next)) break;
     // Activity counts start again for the milestone after (each asks for its own).
-    out = { ...out, progress: { ...out.progress, coast: { ...p, milestone: next, trophy: next === 5 || p.trophy, penguinActs: 0, sealActs: 0, otterActs: 0 } } };
+    out = { ...out, progress: { ...out.progress, coast: { ...p, milestone: next, trophy: next === 5 || p.trophy, penguinActs: 0, ...(coastHabitatShown("seals") ? { sealActs: 0 } : {}), ...(coastHabitatShown("otters") ? { otterActs: 0 } : {}) } } };
     if (next === 1) out = addHabitat(out, "penguins", 3);
-    if (next === 2) out = addHabitat(giveAnimals(out, "penguins", 1), "seals", 1);
+    if (next === 2) {
+      out = giveAnimals(out, "penguins", 1);
+      if (coastHabitatShown("seals")) out = addHabitat(out, "seals", 1);
+    }
     if (next === 3) out = addHabitat(giveItem(out, "sealBall"), "otters", 2);
     if (next === 4) out = giveAnimals(giveItem(out, "otterDen"), "seals", 1);
     reached.push(next);

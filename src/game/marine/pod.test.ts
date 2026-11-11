@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import { bodyR, Pod, surfaceY, type MemberDef, type PodEvent, type PodOptions } from "./pod";
 import type { WaterDomain } from "./domain";
 import { LAGOON_DOMAIN } from "../data/lagoon";
-import { LAGOON_POD, LAGOON_POD_OPTIONS } from "../lagoon/lagoonRuntime";
+import { clearLagoonRt, feedPod, lagoonRt, LAGOON_POD, LAGOON_POD_OPTIONS, resetFeeding } from "../lagoon/lagoonRuntime";
 import { COVE_DOMAIN, SANCTUARY_DOMAIN } from "../data/sanctuary";
 import { BELUGA_POD, BELUGA_POD_OPTIONS, ORCA_POD, ORCA_POD_OPTIONS } from "../sanctuary/sanctuaryRuntime";
+import { beginFeeding, createFeeding, FEED_GATHER_SECONDS, feedingSlot, stepFeeding } from "../lagoon/feeding";
 
 /**
  * The swimming simulation against invariants, for several seeds and minutes
@@ -109,5 +110,74 @@ describe("dolphin pod in the lagoon", () => {
     for (let t = 0; t < 8; t += 1 / 30) pod.step(1 / 30);
     expect(Math.hypot(kai.x - at.x, kai.z - at.z)).toBeLessThan(3);
     expect(kai.y).toBeLessThan(-2.2);
+  });
+
+  it("gathers every dolphin from typical lagoon positions within nine seconds, holds safely, then releases", () => {
+    for (const seed of [7, 13, 29]) {
+      const pod = new Pod(LAGOON_DOMAIN, LAGOON_POD, seed, LAGOON_POD_OPTIONS);
+      const positions = [{ x: -8, z: -1 }, { x: -7.2, z: -1 }, { x: 0, z: 2 }, { x: 4, z: 4 }];
+      pod.members.forEach((m, i) => { Object.assign(m, positions[i], { y: -2, yaw: -0.6, mode: "swim", speed: 1.2 }); });
+      const feeding = createFeeding();
+      expect(beginFeeding(feeding, pod, 0)).toBe(true);
+      // Repeat Feed never changes a running sequence or its start time.
+      expect(beginFeeding(feeding, pod, 0.1)).toBe(false);
+      for (let frame = 1; frame <= 21 * 30; frame++) {
+        const time = frame / 30;
+        pod.step(1 / 30);
+        stepFeeding(feeding, pod, time);
+        for (const m of pod.members) {
+          expect(LAGOON_DOMAIN.inside(m.x, m.z)).toBeGreaterThan(m.margin * 0.45 - 0.05);
+          const snout = { x: m.x + Math.sin(m.yaw) * m.len * 0.5, z: m.z + Math.cos(m.yaw) * m.len * 0.5 };
+          expect(LAGOON_DOMAIN.inside(snout.x, snout.z)).toBeGreaterThan(-0.15);
+          expect(m.y).toBeGreaterThanOrEqual(LAGOON_DOMAIN.floor(m.x, m.z) + m.p.clearance * 0.6 + bodyR(m) * 0.5 - 0.02);
+        }
+        if (feeding.phase === "ready") {
+          expect(time).toBeLessThanOrEqual(FEED_GATHER_SECONDS + 0.05);
+          expect(feeding.ready).toHaveLength(4);
+        }
+        if (feeding.phase === "throwing" || feeding.phase === "catching") {
+          for (const [i, id] of feeding.ready.entries()) {
+            const m = pod.byId(id)!, slot = feedingSlot(m, i);
+            expect(Math.hypot(m.x - slot.x, m.z - slot.z)).toBeLessThan(1.25);
+          }
+        }
+      }
+      expect(feeding.phase).toBe("finished");
+      expect(feeding.completed).toBe(4);
+      expect(feeding.history.map((h) => h.phase)).toContain("throwing");
+      expect(pod.members.every((m) => m.attract?.kind !== "feed")).toBe(true);
+      const mother = pod.byId("sora")!, calf = pod.byId("mimi")!;
+      expect(calf.follow?.id).toBe(mother.id);
+      expect(Math.hypot(calf.x - mother.x, calf.z - mother.z)).toBeLessThan(6);
+    }
+  });
+
+  it("times out to a single surface fish when no dolphin is ready", () => {
+    const pod = new Pod(LAGOON_DOMAIN, LAGOON_POD, 3, LAGOON_POD_OPTIONS);
+    pod.members.forEach((m) => { m.x = -10; m.z = 0; });
+    const feeding = createFeeding();
+    beginFeeding(feeding, pod, 0);
+    // Frozen swimmers model an interrupted approach; the coordinator still
+    // has a bounded result and a reachable surface fallback.
+    for (let frame = 1; frame < 13 * 30; frame++) stepFeeding(feeding, pod, frame / 30);
+    expect(feeding.phase).toBe("finished");
+    expect(feeding.fallback).toBe(true);
+    expect(feeding.completed).toBe(1);
+    expect(feeding.fish?.id).toBeNull();
+    expect(feeding.fish?.to.y).toBe(0.02);
+    expect(feeding.history.find((h) => h.phase === "ready")?.at).toBeCloseTo(FEED_GATHER_SECONDS);
+    expect(pod.members.every((m) => m.attract?.kind === "point")).toBe(true);
+  });
+
+  it("cancels the transient sequence cleanly when leaving the lagoon", () => {
+    clearLagoonRt();
+    expect(feedPod()).toBe(true);
+    expect(feedPod()).toBe(false);
+    resetFeeding();
+    expect(lagoonRt.feeding.phase).toBe("idle");
+    expect(lagoonRt.feeding.fish).toBeNull();
+    expect(lagoonRt.pod!.members.every((m) => m.attract?.kind !== "feed")).toBe(true);
+    expect(feedPod()).toBe(true);
+    clearLagoonRt();
   });
 });

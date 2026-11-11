@@ -3,6 +3,7 @@ import { clearPreviewAccess, grantPreview, previewAreas, RELEASE, type ReleaseAr
 import { unstoreAvailable } from "../logic/stored";
 import { encodeSave, writeSave } from "../logic/save";
 import type { Model } from "../logic/model";
+import { storeHiddenCoast } from "../logic/coast";
 
 /**
  * Development previews of release-locked areas (Ctrl+Alt+D). A preview is a
@@ -28,7 +29,8 @@ export function startPreview(area: ReleaseArea): boolean {
   }
   grantPreview(area);
   setGame({ previewAreas: previewAreas() });
-  updateModel(unstoreAvailable);
+  updateModel((m) => storeHiddenCoast(unstoreAvailable(m)));
+  if (area === "coast") setGame({ coastView: "penguins", coastUnderwater: false });
   return true;
 }
 

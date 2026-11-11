@@ -1,8 +1,9 @@
 import type { Vec2, Vec3 } from "../types";
 import type { ReleaseArea } from "./release";
+import { ROOMS, roomOpen } from "./rooms";
 
 /**
- * The Grand Aquarium Hub: a half rotunda (eight wall bays from the far left,
+ * The Grand Aquarium Hub: a half rotunda (wall bays from the far left,
  * round the back, to the far right) with an open front plaza toward the
  * management camera. The display tank stands in the middle. Every doorway and
  * feature sits in one bay. Angles are measured from straight back (-z),
@@ -41,8 +42,7 @@ export const HUB_BAYS: HubBay[] = [
   { id: "indoor", kind: "indoor", angle: bayAngle(0), en: "Indoor Aquarium", ja: "すいぞくかんの なか" },
   { id: "trophies", kind: "trophies", angle: bayAngle(1), en: "Trophies", ja: "トロフィー" },
   { id: "lagoon", kind: "lagoon", angle: bayAngle(2), en: "Dolphin Lagoon", ja: "イルカの ラグーン" },
-  { id: "window-l", kind: "window", angle: bayAngle(3), en: "", ja: "" },
-  { id: "window-r", kind: "window", angle: bayAngle(4), en: "", ja: "" },
+  { id: "panorama", kind: "window", angle: 0, en: "", ja: "" },
   { id: "sanctuary", kind: "sanctuary", angle: bayAngle(5), en: "Grand Ocean Sanctuary", ja: "うみの サンクチュアリ" },
   { id: "sharks", kind: "sharks", angle: bayAngle(6), en: "Shark Tunnel", ja: "サメの トンネル" },
   { id: "coast", kind: "coast", angle: bayAngle(7), en: "Coastal & Polar Zone", ja: "かいがんと さむい ちいき" }
@@ -61,9 +61,43 @@ export const onRing = (a: number, r: number): Vec2 => ({ x: HUB_CENTRE.x + Math.
 
 /** Doorway opening (on the wall face) for a bay: width and height in metres. */
 export const DOOR_OPENING = { w: 2.6, h: 3.4 };
+export const HUB_WINDOW = { halfAngle: Math.PI / 8 - 0.035, bottom: 0.8, top: 4.55 };
+/** Shared dimensions for the drawn passages and the crowd's hidden turning pocket. */
+export const HUB_CORRIDOR = { depth: 4.5, wall: 0.22, clearWidth: DOOR_OPENING.w, bendDepth: 3, hiddenSide: 2.7, endSide: 4.2 };
+export type HubOpenFlags = Parameters<typeof roomOpen>[1];
+/** The visuals and the crowd use exactly the same live access rule as travel. */
+export function hubDoorOpen(kind: HubDestination, progress: HubOpenFlags): boolean {
+  return kind === "indoor" || roomOpen(ROOMS.findIndex((r) => r.id === kind), progress);
+}
+
+/** Side is along the wall tangent; positive depth is outside the rotunda. */
+export function doorLocal(kind: HubBayKind, side: number, depth: number): Vec2 {
+  const a = bayOf(kind).angle;
+  const p = onRing(a, HUB_R);
+  return { x: p.x + Math.cos(a) * side + Math.sin(a) * depth, z: p.z + Math.sin(a) * side - Math.cos(a) * depth };
+}
+
+export function doorCoordinates(kind: HubBayKind, p: Vec2): { side: number; depth: number } {
+  const a = bayOf(kind).angle, origin = onRing(a, HUB_R);
+  const dx = p.x - origin.x, dz = p.z - origin.z;
+  return { side: dx * Math.cos(a) + dz * Math.sin(a), depth: dx * Math.sin(a) - dz * Math.cos(a) };
+}
 
 /** Where people stand just inside a doorway. */
 export const doorStep = (kind: HubBayKind) => onRing(bayOf(kind).angle, HUB_R - 1.1);
+
+/** Hidden behind the side return, with room for the other two members behind it. */
+export const hubArrivalSpawn = (kind: HubDestination) => doorLocal(kind, HUB_CORRIDOR.hiddenSide, HUB_CORRIDOR.bendDepth);
+
+/** A centred approach turns into the passage before crossing the clear opening. */
+export function hubDoorRoute(from: Vec2, kind: HubDestination): Vec2[] {
+  return [...hubRoute(from, doorLocal(kind, 0, -2.8)), doorLocal(kind, 0, 0), doorLocal(kind, 0, HUB_CORRIDOR.bendDepth), doorLocal(kind, HUB_CORRIDOR.endSide, HUB_CORRIDOR.bendDepth)];
+}
+
+export function hubArrivalRoute(kind: HubDestination, to: Vec2): Vec2[] {
+  const step = doorLocal(kind, 0, -2.8);
+  return [doorLocal(kind, 0, HUB_CORRIDOR.bendDepth), doorLocal(kind, 0, 0), step, ...hubRoute(step, to)];
+}
 
 /** Fixed management camera: a slightly raised three-quarter view of the whole rotunda. */
 export const HUB_CAMERA: { pos: Vec3; target: Vec3 } = {

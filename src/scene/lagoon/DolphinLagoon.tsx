@@ -5,10 +5,10 @@ import { getGame, useGame } from "../../game/store";
 import { rt } from "../../game/runtime";
 import { LAGOON_HALL } from "../../game/data/rooms";
 import {
-  BRIDGE, BUBBLE_SPOT, DECK, DECK_SPOTS, BOARDWALK_PATH, FEED_POINT, GALLERY, GALLERY_SPOTS, LAGOON_DOMAIN, LAGOON_ORIGIN, PLATFORM, SEA_GATE
+  BRIDGE, DECK, DECK_SPOTS, BOARDWALK_PATH, GALLERY, GALLERY_SPOTS, LAGOON_DOMAIN, LAGOON_ORIGIN, PLATFORM, SEA_GATE
 } from "../../game/data/lagoon";
 import { LAND_Y, pointInPolygon } from "../../game/marine/domain";
-import { lagoonRt } from "../../game/lagoon/lagoonRuntime";
+import { feedingPose, lagoonRt, resetFeeding, RING } from "../../game/lagoon/lagoonRuntime";
 import { lagoonFocus, lagoonTick, lookText, tapDolphin, tapLook } from "../../game/flow/lagoon";
 import { DOLPHINS } from "../../game/logic/lagoon";
 import { PartBuilder } from "../partBuilder";
@@ -447,15 +447,17 @@ function Dolphin({ id, index }: { id: string; index: number }) {
     const pod = lagoonRt.pod, r = root.current;
     const m = pod?.byId(id);
     if (!m || !r) return;
+    const feeding = feedingPose(id);
     r.position.set(m.x, m.y, m.z);
-    r.rotation.set(-m.pitch, m.yaw, m.roll, "YXZ");
+    r.rotation.set(-m.pitch - feeding.pitch, m.yaw, m.roll, "YXZ");
     r.scale.setScalar(m.size);
     const u = mat.uniforms;
     u.uPhase.value = m.phase;
-    u.uAmp.value = m.amp;
+    u.uAmp.value = m.amp + feeding.happy * 0.12;
     u.uTurn.value = THREE.MathUtils.clamp(m.turn, -0.9, 0.9);
     u.uArch.value = m.arch;
-    u.uFlap.value = 0.25 + (1 - Math.min(1, m.speed / 2)) * 0.5;
+    u.uJaw.value = feeding.jaw;
+    u.uFlap.value = 0.25 + (1 - Math.min(1, m.speed / 2)) * 0.5 + feeding.happy * 0.35;
     // From above the water surface already tints them; keep them readable.
     u.uWater.value = underwaterNow() ? 0.45 : 0.55;
     if (ring.current) {
@@ -500,7 +502,7 @@ function numberMat(n: number) {
 }
 
 function Toys() {
-  const ball = useRef<THREE.Mesh>(null), kelp = useRef<THREE.Group>(null), ringRef = useRef<THREE.Mesh>(null);
+  const ball = useRef<THREE.Mesh>(null), kelp = useRef<THREE.Group>(null), ringRef = useRef<THREE.InstancedMesh>(null);
   const ballGeo = useMemo(() => {
     const b = new PartBuilder(0);
     const cols = ["#ff5c5c", "#ffffff", "#4dabf7", "#ffd43b", "#ffffff", "#4cd27a"];
@@ -512,62 +514,91 @@ function Toys() {
     for (let k = 0; k < 5; k++) b.add(new THREE.BoxGeometry(0.16, 0.025, 1.6 + k * 0.15), k % 2 ? "#4f8a3a" : "#6aa84f", [(k - 2) * 0.12, 0, Math.sin(k) * 0.2], [0, (k - 2) * 0.25, 0]);
     return b.build();
   }, []);
-  const ringMesh = useMemo(() => new THREE.MeshLambertMaterial({ color: "#8a9aa6" }), []);
   const fx = useFx();
   const acc = useRef(0);
   useFrame((_, dt) => {
     const toy = lagoonRt.toy;
     if (ball.current) {
       ball.current.visible = Boolean(toy && toy.kind === "ball");
-      if (toy && toy.kind === "ball") { ball.current.position.set(toy.x, toy.y + 0.12 + Math.sin(rt.time * 2) * 0.03, toy.z); ball.current.rotation.set(toy.x * 0.6, 0, -toy.z * 0.6); }
+      if (toy && toy.kind === "ball") {
+        // Floating: half in the water with a gentle bob; in the air: its true height, spinning with travel.
+        const bob = toy.y === 0 ? Math.sin(rt.time * 2) * 0.03 : 0;
+        ball.current.position.set(toy.x, toy.y + 0.12 + bob, toy.z);
+        ball.current.rotation.set(toy.z * 0.9, 0, -toy.x * 0.9);
+      }
     }
     if (kelp.current) {
       kelp.current.visible = Boolean(toy && toy.kind === "kelp");
       if (toy && toy.kind === "kelp") { kelp.current.position.set(toy.x, toy.y + 0.03, toy.z); kelp.current.rotation.y = Math.sin(rt.time * 0.8) * 0.3 + (toy.carriedBy ? lagoonRt.pod?.byId(toy.carriedBy)?.yaw ?? 0 : 0); }
     }
     const bubbling = lagoonRt.time < lagoonRt.bubblesUntil;
-    if (ringRef.current) ringRef.current.visible = bubbling;
+    const ring = ringRef.current;
+    if (ring) {
+      ring.visible = bubbling;
+      if (bubbling) {
+        // The ring of bubbles shimmers, turns slowly and keeps re-forming (each bubble drifts up a little and resets).
+        const t = rt.time;
+        for (let i = 0; i < RING_BUBBLES; i++) {
+          const a = (i / RING_BUBBLES) * Math.PI * 2 + t * 0.22 + Math.sin(i * 7.1) * 0.05;
+          const cycle = (t * 0.35 + i * 0.137) % 1;
+          const rr = RING.r + Math.sin(t * 3 + i * 1.7) * 0.05;
+          ringDummy.position.set(Math.cos(a) * rr, Math.sin(a) * rr + cycle * 0.12, Math.sin(t * 2.3 + i) * 0.05);
+          ringDummy.scale.setScalar((0.06 + ((i * 37) % 10) / 160) * (1 - cycle * 0.35));
+          ringDummy.updateMatrix();
+          ring.setMatrixAt(i, ringDummy.matrix);
+        }
+        ring.instanceMatrix.needsUpdate = true;
+      }
+    }
     if (bubbling && fx.current) {
       acc.current += dt;
-      if (acc.current > 0.12) { acc.current = 0; fx.current.bubbles(O.x + BUBBLE_SPOT.x, LAGOON_DOMAIN.floor(BUBBLE_SPOT.x, BUBBLE_SPOT.z) + 0.3, O.z + BUBBLE_SPOT.z, 4); }
+      // A few bubbles rise from the top of the ring.
+      if (acc.current > 0.25) { acc.current = 0; fx.current.bubbles(O.x + RING.x, RING.y + RING.r, O.z + RING.z, 2); }
     }
   });
   return (
     <group>
       <mesh ref={ball} geometry={ballGeo} material={smoothMat} visible={false} raycast={() => undefined} />
       <group ref={kelp} visible={false}><mesh geometry={kelpGeo} material={smoothMat} raycast={() => undefined} /></group>
-      <mesh ref={ringRef} position={[BUBBLE_SPOT.x, LAGOON_DOMAIN.floor(BUBBLE_SPOT.x, BUBBLE_SPOT.z) + 0.12, BUBBLE_SPOT.z]} rotation={[Math.PI / 2, 0, 0]} material={ringMesh} visible={false} raycast={() => undefined}>
-        <torusGeometry args={[0.9, 0.12, 6, 20]} />
-      </mesh>
+      {/* The ring stands upright, its opening facing along RING.yaw (local z). */}
+      <group position={[RING.x, RING.y, RING.z]} rotation={[0, RING.yaw, 0]}>
+        <instancedMesh ref={ringRef} args={[ringBubbleGeo, ringBubbleMat, RING_BUBBLES]} visible={false} frustumCulled={false} renderOrder={6} raycast={() => undefined} />
+      </group>
     </group>
   );
 }
 
-/** Fish arcing from the keeper's bucket into the water after Feed. */
+const RING_BUBBLES = 46;
+const ringBubbleGeo = new THREE.SphereGeometry(1, 8, 6);
+const ringBubbleMat = new THREE.MeshBasicMaterial({ color: "#e9fbff", transparent: true, opacity: 0.8, depthWrite: false });
+const ringDummy = new THREE.Object3D();
+
+/** Exactly one fish in flight, aimed at the waiting dolphin's mouth. */
 function FeedFish() {
-  const ref = useRef<THREE.InstancedMesh>(null);
-  const geo = useMemo(() => new THREE.ConeGeometry(0.06, 0.3, 4).rotateX(Math.PI / 2), []);
-  const mat = useMemo(() => new THREE.MeshLambertMaterial({ color: "#c9d6de" }), []);
-  const o = useMemo(() => new THREE.Object3D(), []);
+  const ref = useRef<THREE.Mesh>(null);
+  const geo = useMemo(() => {
+    const b = new PartBuilder(0);
+    b.add(new THREE.SphereGeometry(1, 8, 5), "#d2e3e8", [0, 0, 0], [0, 0, 0], [0.07, 0.055, 0.19], { vary: false });
+    b.add(new THREE.ConeGeometry(0.09, 0.12, 3), "#9aaebc", [0, 0, -0.2], [-Math.PI / 2, 0, 0], [1, 0.7, 1], { vary: false });
+    return b.build();
+  }, []);
+  const mat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), []);
+  const direction = useMemo(() => new THREE.Vector3(), []);
+  const forward = useMemo(() => new THREE.Vector3(0, 0, 1), []);
   useFrame(() => {
     const m = ref.current;
     if (!m) return;
-    const age = lagoonRt.time - lagoonRt.feedT;
-    m.visible = age >= 0 && age < 4;
-    if (!m.visible) return;
-    for (let i = 0; i < 8; i++) {
-      const t = (age - i * 0.35) / 0.9;
-      const from = { x: PLATFORM.x - 1.6, y: PLATFORM.top + 1.4, z: PLATFORM.z + 0.2 };
-      const to = { x: FEED_POINT.x - (i % 3) * 0.8, y: 0, z: FEED_POINT.z + ((i % 4) - 1.5) * 0.9 };
-      if (t < 0 || t > 1) { o.position.set(0, -50, 0); }
-      else o.position.set(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t + Math.sin(Math.PI * t) * 1.2, from.z + (to.z - from.z) * t);
-      o.rotation.set(t * 6, 0, 0);
-      o.updateMatrix();
-      m.setMatrixAt(i, o.matrix);
-    }
-    m.instanceMatrix.needsUpdate = true;
+    const feed = lagoonRt.feeding, fish = feed.fish;
+    m.visible = feed.phase === "throwing" && Boolean(fish && !fish.caught);
+    if (!m.visible || !fish) return;
+    const t = THREE.MathUtils.clamp((lagoonRt.time - fish.start) / fish.duration, 0, 1);
+    const { from, to } = fish;
+    m.position.set(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t + 4 * t * (1 - t) * fish.arc, from.z + (to.z - from.z) * t);
+    direction.set(to.x - from.x, to.y - from.y + 4 * (1 - 2 * t) * fish.arc, to.z - from.z).normalize();
+    m.quaternion.setFromUnitVectors(forward, direction);
+    m.scale.setScalar(fish.id === "mimi" ? 0.7 : 1);
   });
-  return <instancedMesh ref={ref} args={[geo, mat, 8]} frustumCulled={false} visible={false} raycast={() => undefined} />;
+  return <mesh ref={ref} geometry={geo} material={mat} frustumCulled={false} visible={false} raycast={() => undefined} name="lagoon-feed-fish" />;
 }
 
 // ------------------------------------------------------------------ "Look!"
@@ -677,8 +708,15 @@ function StandFigure({ id, type, variant, x, z, y, yaw, act, show }: { id: strin
     q.visible = show();
     if (!q.visible) return;
     q.x = x; q.z = z; q.yaw = yaw; q.moving = false;
-    const feeding = act === "keeper" && lagoonRt.time - lagoonRt.feedT < 3.6;
-    const want = act === "keeper" ? (feeding ? 0.6 + Math.abs(Math.sin(rt.time * 5)) * 0.4 : 0) : act === "point" ? 0.95 * (0.5 + 0.5 * Math.sin(rt.time * 0.4 + x)) : act === "photo" ? 0.75 : 0;
+    const feed = lagoonRt.feeding;
+    const age = lagoonRt.time - feed.phaseAt;
+    // Reach down to prepare the bucket, wait with it, then make one clear
+    // forward arm stroke per fish. The runtime owns all timing and contact.
+    const keeperArm = feed.phase === "gathering" ? 0.22 + Math.sin(Math.min(1, age / 1.4) * Math.PI) * 0.3
+      : feed.phase === "ready" ? 0.62
+      : feed.phase === "throwing" ? 0.95 * Math.max(0, 1 - age / 0.5)
+      : feed.phase === "catching" ? 0.18 : 0;
+    const want = act === "keeper" ? keeperArm : act === "point" ? 0.95 * (0.5 + 0.5 * Math.sin(rt.time * 0.4 + x)) : act === "photo" ? 0.75 : 0;
     q.arm += (want - q.arm) * Math.min(1, dt * 4);
     q.photo = act === "photo";
     q.lookUp = act === "look" ? 0.3 : 0;
@@ -715,7 +753,7 @@ const useFx = () => fxPool;
 
 function Tick() {
   useFrame((_, dt) => {
-    if (!lagoonShown()) return;
+    if (!lagoonShown()) { resetFeeding(); return; }
     lagoonTick(Math.min(dt, 0.1));
     const fx = fxPool.current;
     for (const e of lagoonRt.fx.splice(0, lagoonRt.fx.length)) {
@@ -724,6 +762,8 @@ function Tick() {
       if (e.kind === "breathe") fx.spout(O.x + e.x, 0.15, O.z + e.z, 1.1 * k);
       else if (e.kind === "splash" || e.kind === "leap") fx.splash(O.x + e.x, 0, O.z + e.z, 1.4 * k);
       else if (e.kind === "dive") fx.splash(O.x + e.x, 0, O.z + e.z, 0.6 * k);
+      // Through the bubble ring: a little burst of bubbles from the ring.
+      else if (e.kind === "ring") fx.bubbles(O.x + e.x, e.y, O.z + e.z, 18);
     }
   });
   return null;

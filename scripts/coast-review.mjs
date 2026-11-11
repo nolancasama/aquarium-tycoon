@@ -46,7 +46,9 @@ const penguinPoses = () => page.evaluate(() => {
   }
   if (!scene) return { available: false };
   const poses = [];
+  let stationFood = null;
   scene.traverse((root) => {
+    if (root.name === "coast-station-fish") stationFood = { fish: root.count, position: root.position.toArray() };
     if (!root.name.startsWith("coast-animal-")) return;
     const meshes = [];
     root.traverse((mesh) => {
@@ -65,7 +67,7 @@ const penguinPoses = () => page.evaluate(() => {
       meshes
     });
   });
-  return { available: true, poses };
+  return { available: true, poses, stationFood };
 });
 const shot = async (name) => {
   await page.screenshot({ path: path.join(out, `${name}.png`) });
@@ -126,24 +128,27 @@ try {
   await call("coastTo", ms);
   mark("coastTo done");
   const coastHall = (await call("state")).hall; // still the hall the save opened in
-  await call("set", { hall: 6, view: "room", tankId: null, panel: null, coastView: "all" });
+  await call("set", { hall: 6, view: "room", tankId: null, panel: null });
   if (label !== "before") {
-    for (let i = 0; i < 8; i++) {
-      await step(1000);
-      await shot(`00-reveal-${i + 1}s`);
+    for (let i = 0; i < 48; i++) {
+      await step(150);
+      await shot(`00-reveal-${String(i).padStart(2, "0")}`);
     }
   } else await step(2500);
   await clearLines();
   await step(3000);
+  await shot("01-default");
+  await call("set", { coastView: "all" });
+  await step(2500);
   mark("shot all");
   await shot("01-all");
-  for (const v of ["penguins", "seals", "otters"]) {
+  for (const v of (label === "before" ? ["penguins", "seals", "otters"] : ["penguins"])) {
     await call("set", { coastView: v });
     await step(2500);
     await shot(`02-${v}`);
     await step(6000);
     await shot(`03-${v}-later`);
-    if (v === "penguins" && label !== "before") {
+    if (v === "penguins") {
       await page.getByTestId("coast-view-underwater").dispatchEvent("click");
       await step(2500);
       const swimmer = await waitPenguin((a) => a.mode === "swim" && a.area === "water", 90, "swimming in the Underwater view");
@@ -153,20 +158,43 @@ try {
       await shot("06-underwater-stroke");
       await page.getByTestId("coast-view-penguins").dispatchEvent("click");
       await step(2500);
-      // Observe the real simulation; never reposition an animal for the shoreline frames.
-      let entering = null;
-      for (let t = 0; t < 180 && !entering; t++) {
-        const animals = (await call("coast")).animals;
-        entering = animals.find((a) => a.habitat === "penguins" && a.mode === "rampDown");
-        if (!entering) await step(500);
+      if (label === "before") continue;
+      // Place a real station in the preview fixture; animals remain on their
+      // ordinary paths. Use the actual Feed button so care runs exactly once.
+      const tank = (await call("state")).tanks.find((t) => t.type === "penguins");
+      if (!tank) throw new Error("Penguin tank missing");
+      if (!tank.decor.some((d) => d.kind === "penguinFeeder")) {
+        const slot = [1, 2, 3, 0].find((i) => !tank.decor.some((d) => d.slot === i));
+        if (slot === undefined) throw new Error("No free station slot");
+        await page.getByTestId("btn-coast-items").dispatchEvent("click");
+        await page.locator("[data-testid=coast-item][data-kind=penguinFeeder]").dispatchEvent("click");
+        await step(500);
+        const p = await call("where", "coast-slot", `penguins:${slot}`);
+        await page.mouse.click(p.x, p.y);
+        await step(500);
+        // Placement remains open for choosing another item; close it as a player would.
+        await call("set", { placing: null, panel: null });
       }
-      if (!entering) throw new Error("No penguin walked down the shoreline within 90 simulation seconds");
-      evidence.shorePenguin = entering.id;
-      for (let i = 0; i < 9; i++) {
-        await shot(`07-shore-${String(i).padStart(2, "0")}`);
-        await step(1000);
+      await call("setCare", tank.id, 40, 95);
+      await call("set", { coastWaiting: null });
+      await step(200);
+      await shot("10-feed-before");
+      await page.getByTestId("btn-feed").dispatchEvent("click");
+      for (let i = 0; i < 8; i++) {
+        await step(700);
+        await shot(`10-feed-${String(i).padStart(2, "0")}`);
       }
-      await reviewLedgesAndFloe();
+      // Swimmers must physically return via the shore; also capture the later
+      // meal rather than force an arrival to fit a screenshot deadline.
+      for (let i = 0; i < 16; i++) {
+        await step(700);
+        await shot(`11-meal-${String(i).padStart(2, "0")}`);
+      }
+      for (let i = 0; i < 4; i++) {
+        await step(3500);
+        await shot(`12-after-meal-${i}`);
+      }
+      if (process.argv.includes("--ledges")) await reviewLedgesAndFloe();
     }
   }
   // An activity at the penguins: the count with numbers.

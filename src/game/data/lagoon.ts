@@ -64,8 +64,8 @@ export const lagoonWorld = (p: { x: number; y?: number; z: number }): Vec3 => ({
 
 /** Curated viewpoints (area-local). Narrow screens step back along the view. */
 export const LAGOON_SHOTS: Record<LagoonView, { pos: Vec3; target: Vec3 }> = {
-  // High enough to manage the whole lagoon, low enough to keep the horizon and the sky in the frame.
-  lagoon: { pos: { x: 0, y: 18, z: 38 }, target: { x: 0, y: 3, z: -18 } },
+  // Look into the water: the breakwater tops the frame and the boardwalk stays below the pod.
+  lagoon: { pos: { x: 0, y: 23, z: 30 }, target: { x: 0, y: -1, z: 1 } },
   // Inside the gallery, behind the visitors at the window.
   gallery: { pos: { x: 9, y: -3.0, z: 16.3 }, target: { x: 9, y: -2.2, z: 0 } },
   // Standing on the deck, out across the lagoon (where the pod swims) to the sea.

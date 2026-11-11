@@ -1,22 +1,27 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { getGame, useGame } from "../../game/store";
 import { rt } from "../../game/runtime";
-import { COAST_HALL, HUB_HALL, LAGOON_HALL, roomOpen, SANCTUARY_HALL } from "../../game/data/rooms";
+import { HUB_HALL } from "../../game/data/rooms";
 import {
-  bayOf, DOOR_OPENING, HUB_BAYS, HUB_CAMERA, HUB_CENTRE, HUB_DOORS, HUB_FRONT, HUB_R, HUB_TANK, HUB_WALL_H, onRing, RELEASE_DOORS,
+  bayOf, doorLocal, DOOR_OPENING, HUB_CAMERA, HUB_CENTRE, HUB_DOORS, HUB_FRONT, HUB_R, HUB_TANK, hubDoorOpen, onRing, RELEASE_DOORS,
   type HubDestination
 } from "../../game/data/hub";
 import { areaAvailable } from "../../game/data/release";
-import { hubGroups, memberWorld, stepHubVisitors } from "../../game/hub/hubVisitors";
+import { hubGroups, memberHeading, memberWorld, stepHubVisitors } from "../../game/hub/hubVisitors";
 import { openMap, openTrophies, tapHubDoor } from "../../game/flow/hub";
 import { PartBuilder } from "../partBuilder";
 import { padIconTexture, signMaterial, smoothMat } from "../materials";
 import { useAreaGate } from "../tunnel/wing";
 import { newPose, TunnelFigure } from "../tunnel/TunnelFigure";
 import { tunnelPersonModel } from "../models/people";
-import { directoryTexture, doorArtTexture, hubFloorTexture, hubWindowTexture } from "./hubArt";
+import { directoryTexture, hubFloorTexture } from "./hubArt";
+import { smallFishMaterial, smallFishMesh, smallFishTime, type SmallFishKind, type SmallFishLook } from "../marine/smallFish";
+import { HubShell, HubDoorClosures } from "./HubArchitecture";
+import { HubCoastWindow } from "./HubCoastWindow";
+import { HubReview } from "./HubReview";
+import { clipToHubPortal } from "./hubPortalClip";
 import { wallPlaquePose, WALL_PLAQUE_DEPTH, WALL_PLAQUE_FACE_Z } from "./hubSignMount";
 
 /**
@@ -28,7 +33,6 @@ import { wallPlaquePose, WALL_PLAQUE_DEPTH, WALL_PLAQUE_FACE_Z } from "./hubSign
 export const hubShown = () => { const g = getGame(); return g.screen === "game" && g.hall === HUB_HALL; };
 
 const C = HUB_CENTRE;
-const BAY = Math.PI / 8;
 const tangent = (a: number) => ({ x: Math.cos(a), z: Math.sin(a) });
 /** Mount plaques tangent to the curved rotunda wall, never angled toward the camera.
  * The shallow backing intersects the curved plaster slightly at the outer corners
@@ -48,54 +52,6 @@ function WallPlaque({ angle, y, width, height, material, onClick }: {
       <mesh position={[0, 0, WALL_PLAQUE_FACE_Z]} material={material} onClick={onClick}>
         <planeGeometry args={[width, height]} />
       </mesh>
-    </group>
-  );
-}
-
-const wallMats = {
-  wainscot: new THREE.MeshLambertMaterial({ color: "#2f8f9d", side: THREE.DoubleSide }),
-  upper: new THREE.MeshLambertMaterial({ color: "#f4ecdc", side: THREE.DoubleSide }),
-  frieze: new THREE.MeshLambertMaterial({ color: "#164f6b", side: THREE.DoubleSide })
-};
-
-function Walls() {
-  // Cylinder theta runs from +z toward +x; the arc from the far right (a = +90°) round the back to the far left.
-  const band = (y0: number, y1: number) => new THREE.CylinderGeometry(HUB_R, HUB_R, y1 - y0, 72, 1, true, Math.PI / 2, Math.PI);
-  const geos = useMemo(() => ({ low: band(0, 1.1), up: band(1.1, 6.3), top: band(6.3, HUB_WALL_H) }), []);
-  const trim = useMemo(() => {
-    const b = new PartBuilder(0);
-    for (let k = 0; k <= 8; k++) {
-      const a = -Math.PI / 2 + k * BAY, p = onRing(a, HUB_R - 0.2);
-      b.boxAt(0.6, HUB_WALL_H + 0.2, 0.5, [p.x, (HUB_WALL_H + 0.2) / 2, p.z], [0, -a, 0], "#efe2c8");
-      b.boxAt(0.8, 0.3, 0.62, [p.x, HUB_WALL_H + 0.15, p.z], [0, -a, 0], "#d9a441");
-      b.boxAt(0.78, 0.25, 0.6, [p.x, 0.12, p.z], [0, -a, 0], "#2a7380");
-    }
-    for (const bay of HUB_BAYS) {
-      const a = bay.angle, t = tangent(a);
-      if (bay.kind === "window") {
-        // Mullions over the window picture.
-        const p = onRing(a, HUB_R - 0.12);
-        b.boxAt(3.5, 0.16, 0.14, [p.x, 0.75, p.z], [0, -a, 0], "#e8dcc4");
-        b.boxAt(3.5, 0.16, 0.14, [p.x, 3.2, p.z], [0, -a, 0], "#e8dcc4");
-        b.boxAt(3.5, 0.2, 0.14, [p.x, 5.7, p.z], [0, -a, 0], "#e8dcc4");
-        for (const s of [-1.7, 0, 1.7]) b.boxAt(0.14, 5, 0.14, [p.x + t.x * s, 3.2, p.z + t.z * s], [0, -a, 0], "#e8dcc4");
-        continue;
-      }
-      if (bay.kind === "trophies") continue;
-      // Doorway frame: two jambs, a lintel and a gold keystone.
-      const p = onRing(a, HUB_R - 0.2), half = DOOR_OPENING.w / 2 + 0.18;
-      for (const s of [-1, 1]) b.boxAt(0.36, DOOR_OPENING.h + 0.25, 0.42, [p.x + t.x * s * half, (DOOR_OPENING.h + 0.25) / 2, p.z + t.z * s * half], [0, -a, 0], "#e2d2b4");
-      b.boxAt(DOOR_OPENING.w + 0.75, 0.45, 0.46, [p.x, DOOR_OPENING.h + 0.42, p.z], [0, -a, 0], "#e2d2b4");
-      b.boxAt(0.42, 0.55, 0.5, [p.x, DOOR_OPENING.h + 0.45, p.z], [0, -a, 0], "#d9a441");
-    }
-    return b.build();
-  }, []);
-  return (
-    <group position={[C.x, 0, C.z]}>
-      <mesh geometry={geos.low} material={wallMats.wainscot} position={[0, 0.55, 0]} raycast={() => undefined} />
-      <mesh geometry={geos.up} material={wallMats.upper} position={[0, 1.1 + 2.6, 0]} raycast={() => undefined} />
-      <mesh geometry={geos.top} material={wallMats.frieze} position={[0, 6.3 + (HUB_WALL_H - 6.3) / 2, 0]} raycast={() => undefined} />
-      <mesh geometry={trim} material={smoothMat} position={[-C.x, 0, -C.z]} raycast={() => undefined} />
     </group>
   );
 }
@@ -120,26 +76,16 @@ function tap(fn: () => void) {
 
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 
-const DOOR_HALL: Partial<Record<HubDestination, number>> = { coast: COAST_HALL, lagoon: LAGOON_HALL, sanctuary: SANCTUARY_HALL };
-
-/** Can this doorway be walked through now (release locks and session previews included)? */
-function doorOpen(kind: HubDestination, progress: Parameters<typeof roomOpen>[1] & { tunnelOpen?: boolean }) {
-  if (kind === "indoor") return true;
-  if (kind === "sharks") return Boolean(progress.tunnelOpen);
-  return roomOpen(DOOR_HALL[kind]!, progress);
-}
-
 /** Held back by a release lock (not a price or a milestone): shown as Coming soon. */
 const doorSoon = (kind: HubDestination) => Boolean(RELEASE_DOORS[kind]) && !areaAvailable(RELEASE_DOORS[kind]!);
 
 function Door({ kind }: { kind: HubDestination }) {
   const bay = bayOf(kind);
   // previewAreas is read so a session preview re-renders the doorway.
-  const open = useGame((s) => (void s.previewAreas, doorOpen(kind, s.model.progress)));
+  const open = useGame((s) => (void s.previewAreas, hubDoorOpen(kind, s.model.progress)));
   const soon = useGame((s) => (void s.previewAreas, doorSoon(kind)));
   const lock = useRef<THREE.Sprite>(null);
-  const a = bay.angle, p = onRing(a, HUB_R - 0.08), lk = onRing(a, HUB_R - 0.8);
-  const art = useMemo(() => new THREE.MeshBasicMaterial({ map: doorArtTexture(kind, open, soon), toneMapped: false }), [kind, open, soon]);
+  const a = bay.angle, lk = onRing(a, HUB_R - 0.8);
   const label = `${bay.en.toUpperCase()}\n${bay.ja}`;
   const sign = signMaterial(label, soon ? "#7a6a52" : "#14506a", soon ? "#fff4d6" : "#e8fbff", 900, 280);
   const locked = !open;
@@ -149,9 +95,6 @@ function Door({ kind }: { kind: HubDestination }) {
   const onClick = tap(() => tapHubDoor(kind));
   return (
     <group>
-      <mesh position={[p.x, DOOR_OPENING.h / 2, p.z]} rotation={[0, -a, 0]} material={art} onClick={onClick} name={`hub-door-${kind}`}>
-        <planeGeometry args={[DOOR_OPENING.w, DOOR_OPENING.h]} />
-      </mesh>
       <WallPlaque angle={a} y={DOOR_OPENING.h + 1.25} width={3.0} height={0.94} material={sign} onClick={onClick} />
       {/* A generous tap zone: the whole doorway and its sign, a little proud of the wall. */}
       <mesh position={[lk.x, 2.4, lk.z]} rotation={[0, -a, 0]} material={hitMat} onClick={onClick} name={`hub-door-hit-${kind}`}>
@@ -166,9 +109,9 @@ function Door({ kind }: { kind: HubDestination }) {
   );
 }
 
-/** Rope barriers in front of the release-locked doorways. */
+/** Rope barriers in front of every currently closed doorway. */
 function Barriers() {
-  const key = useGame((s) => (void s.previewAreas, HUB_DOORS.filter(doorSoon).join(",")));
+  const key = useGame((s) => (void s.previewAreas, HUB_DOORS.filter(kind => !hubDoorOpen(kind, s.model.progress)).join(",")));
   const geo = useMemo(() => {
     const b = new PartBuilder(0.3);
     for (const kind of key.split(",").filter(Boolean) as HubDestination[]) {
@@ -181,22 +124,8 @@ function Barriers() {
     }
     return b.build();
   }, [key]);
+  useEffect(() => () => geo.dispose(), [geo]);
   return <mesh geometry={geo} material={smoothMat} raycast={() => undefined} />;
-}
-
-function Windows() {
-  const mat = useMemo(() => new THREE.MeshBasicMaterial({ map: hubWindowTexture(), toneMapped: false }), []);
-  const big = signMaterial("GRAND AQUARIUM\nグランド すいぞくかん", "#14506a", "#fff6da", 1024, 300);
-  const centre = onRing(0, HUB_R - 0.6);
-  return (
-    <group>
-      {HUB_BAYS.filter((b) => b.kind === "window").map((b) => {
-        const p = onRing(b.angle, HUB_R - 0.05);
-        return <mesh key={b.id} position={[p.x, 3.2, p.z]} rotation={[0, -b.angle, 0]} material={mat} raycast={() => undefined}><planeGeometry args={[3.5, 5]} /></mesh>;
-      })}
-      <mesh position={[centre.x, 5.45, centre.z]} material={big} raycast={() => undefined}><planeGeometry args={[5.4, 1.58]} /></mesh>
-    </group>
-  );
 }
 
 /** The trophy shelves: the existing achievements, earned ones bright, the rest as grey shapes. */
@@ -298,51 +227,65 @@ function DisplayTank() {
   );
 }
 
-const FISH_N = 22;
-const FISH_COLORS = ["#ff8a2a", "#ffd43b", "#4dabf7", "#ff6b6b", "#63e6be", "#f783ac", "#ffffff", "#845ef7"];
-function fishGeometry() {
-  const body = new THREE.SphereGeometry(0.1, 8, 6).scale(0.55, 0.8, 1.6);
-  const tail = new THREE.ConeGeometry(0.08, 0.14, 4).rotateX(-Math.PI / 2).scale(0.3, 1, 1).translate(0, 0, -0.2);
-  const b = new PartBuilder(0);
-  b.add(body, "#ffffff", [0, 0, 0], [0, 0, 0], [1, 1, 1], { vary: false });
-  b.add(tail, "#ffffff", [0, 0, 0], [0, 0, 0], [1, 1, 1], { vary: false });
-  return b.build();
-}
+/**
+ * The display tank as a miniature reef: a few of each of five small-fish kinds
+ * (smallFish.ts), one instanced draw per kind. Each kind keeps its own height
+ * band and pace; colours are reef-bright but natural.
+ */
+const REEF: { kind: SmallFishKind; size: number; band: [number, number]; pace: number; looks: SmallFishLook[] }[] = [
+  { kind: "tang", size: 0.66, band: [1.1, 2.4], pace: 0.24, looks: [
+    { color: "#2f6fd6", accent: "#ffd23f" }, { color: "#3474dc", accent: "#ffcf3a" }, { color: "#f4c430", accent: "#f7d75a" }, { color: "#f2c12e", accent: "#f5d54f" }] },
+  { kind: "chromis", size: 0.44, band: [0.7, 2.6], pace: 0.42, looks: [
+    { color: "#5fc6d8", accent: "#7fd6e2" }, { color: "#55bfd3", accent: "#7ad3df" }, { color: "#62cadb", accent: "#86dae4" },
+    { color: "#ffb21f", accent: "#ffd166" }, { color: "#f7a51b", accent: "#ffcc5c" }, { color: "#5b4bc4", accent: "#f4d03f" }] },
+  { kind: "wrasse", size: 0.6, band: [0.45, 1.3], pace: 0.36, looks: [
+    { color: "#3fa66b", accent: "#ff8fb1" }, { color: "#44a872", accent: "#f78fb3" }, { color: "#e5674d", accent: "#3fb2c9" }, { color: "#3c9e68", accent: "#ff9cba" }] },
+  { kind: "snapper", size: 0.58, band: [0.9, 2.2], pace: 0.3, looks: [
+    { color: "#e05a47", accent: "#f2a03d" }, { color: "#d9543f", accent: "#efa040" }, { color: "#f0d05a", accent: "#4f8fd6" }, { color: "#e2604a", accent: "#f0a542" }] },
+  { kind: "sardine", size: 0.4, band: [1.6, 2.9], pace: 0.5, looks: [
+    { color: "#6f8fa6", accent: "#9fb3c2" }, { color: "#6a8aa1", accent: "#9cb1c0" }, { color: "#7394aa", accent: "#a3b6c5" }, { color: "#6c8ca3", accent: "#9db2c1" }] }
+];
 
 function TankFish() {
-  const ref = useRef<THREE.InstancedMesh>(null);
-  const geo = useMemo(fishGeometry, []);
-  const mat = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), []);
-  const fish = useMemo(() => Array.from({ length: FISH_N }, (_, i) => ({
-    r: 0.55 + ((i * 37) % 100) / 100 * 1.15, y: 0.55 + ((i * 53) % 100) / 100 * 2.3,
-    w: (0.28 + ((i * 17) % 10) / 30) * (i % 3 === 0 ? -1 : 1), p: i * 1.3, s: 0.8 + ((i * 29) % 10) / 20
-  })), []);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const ready = useRef(false);
-  useFrame(() => {
-    const m = ref.current;
-    if (!m || !hubShown()) return;
-    if (!ready.current) {
-      const c = new THREE.Color();
-      fish.forEach((_, i) => m.setColorAt(i, c.set(FISH_COLORS[i % FISH_COLORS.length])));
-      if (m.instanceColor) m.instanceColor.needsUpdate = true;
-      ready.current = true;
-    }
-    const t = rt.time;
-    fish.forEach((f, i) => {
-      const a = f.p + t * f.w;
-      const r = f.r + Math.sin(t * 0.4 + f.p) * 0.12;
-      dummy.position.set(HUB_TANK.x + Math.sin(a) * r, HUB_TANK.plinth + f.y + Math.sin(t * 0.7 + f.p) * 0.12, HUB_TANK.z - Math.cos(a) * r);
-      // Heading along the circle (tangent), with a small tail-beat wiggle.
-      const dir = Math.sign(f.w);
-      dummy.rotation.set(0, Math.atan2(Math.cos(a) * dir, Math.sin(a) * dir) + Math.sin(t * 9 + f.p) * 0.12, 0);
-      dummy.scale.setScalar(f.s);
-      dummy.updateMatrix();
-      m.setMatrixAt(i, dummy.matrix);
+  const schools = useMemo(() => {
+    const mat = smallFishMaterial(0.45);
+    let seed = 0;
+    return REEF.map((r) => {
+      const m = smallFishMesh(r.kind, r.looks, mat);
+      const fish = r.looks.map(() => {
+        const i = seed++;
+        const dir = i % 3 === 0 ? -1 : 1;
+        return {
+          r: 0.6 + ((i * 37) % 100) / 100 * 1.05, y: r.band[0] + ((i * 53) % 100) / 100 * (r.band[1] - r.band[0]),
+          w: (r.pace + ((i * 17) % 10) / 60) * dir / (0.6 + ((i * 37) % 100) / 100), p: i * 1.3, s: r.size * (0.85 + ((i * 29) % 10) / 33)
+        };
+      });
+      return { ...m, fish, mat };
     });
-    m.instanceMatrix.needsUpdate = true;
+  }, []);
+  useEffect(() => () => { schools.forEach((s) => s.dispose()); schools[0]?.mat.dispose(); }, [schools]);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  useFrame(() => {
+    if (!hubShown()) return;
+    const t = rt.time;
+    smallFishTime.value = t;
+    for (const s of schools) {
+      s.fish.forEach((f, i) => {
+        const a = f.p + t * f.w;
+        const r = f.r + Math.sin(t * 0.4 + f.p) * 0.12;
+        const bob = Math.sin(t * 0.7 + f.p) * 0.12;
+        dummy.position.set(HUB_TANK.x + Math.sin(a) * r, HUB_TANK.plinth + f.y + bob, HUB_TANK.z - Math.cos(a) * r);
+        // Facing along the circle (nose +z), a slight pitch with the bob.
+        const vx = Math.cos(a) * Math.sign(f.w), vz = Math.sin(a) * Math.sign(f.w);
+        dummy.rotation.set(-Math.cos(t * 0.7 + f.p) * 0.12, Math.atan2(vx, vz), 0, "YXZ");
+        dummy.scale.setScalar(f.s);
+        dummy.updateMatrix();
+        s.mesh.setMatrixAt(i, dummy.matrix);
+      });
+      s.mesh.instanceMatrix.needsUpdate = true;
+    }
   });
-  return <instancedMesh ref={ref} args={[geo, mat, FISH_N]} raycast={() => undefined} frustumCulled={false} />;
+  return <group>{schools.map((s, i) => <primitive key={i} object={s.mesh} />)}</group>;
 }
 
 const BUBBLES = 14;
@@ -408,14 +351,38 @@ function HubPerson({ groupId, memberId }: { groupId: string; memberId: string })
   const m0 = g0.members.find((m) => m.id === memberId)!;
   const model = useMemo(() => tunnelPersonModel(m0.type, m0.variant), [m0.type, m0.variant]);
   const pose = useRef(newPose());
+  const person = useRef<THREE.Group>(null);
+  const portal = useMemo(() => ({ active: { value: 0 }, portal: { value: new THREE.Vector3() } }), []);
+  useEffect(() => {
+    const materials = new Map<THREE.Material, THREE.Material>();
+    const originals: { mesh: THREE.Mesh; material: THREE.Material | THREE.Material[] }[] = [];
+    person.current?.traverse(object => {
+      if (!(object instanceof THREE.Mesh)) return;
+      originals.push({ mesh: object, material: object.material });
+      const clone = (source: THREE.Material) => {
+        if (!materials.has(source)) materials.set(source, clipToHubPortal(source.clone(), portal));
+        return materials.get(source)!;
+      };
+      object.material = Array.isArray(object.material) ? object.material.map(clone) : clone(object.material);
+    });
+    return () => {
+      originals.forEach(({ mesh, material }) => { mesh.material = material; });
+      materials.forEach(material => material.dispose());
+    };
+  }, [portal]);
   useFrame((_, dt) => {
     const g = hubGroups.find((x) => x.id === groupId);
     const m = g?.members.find((x) => x.id === memberId);
     const q = pose.current;
     if (!g || !m || !g.visible) { q.visible = false; return; }
     const w = memberWorld(g, m);
+    portal.active.value = g.door ? 1 : 0;
+    if (g.door) {
+      const origin = doorLocal(g.door, 0, 0);
+      portal.portal.value.set(origin.x, origin.z, bayOf(g.door).angle);
+    }
     q.visible = true;
-    q.x = w.x; q.z = w.z; q.yaw = g.heading;
+    q.x = w.x; q.z = w.z; q.yaw = memberHeading(g, m);
     q.moving = g.speed > 0.12;
     q.step = g.phase;
     const arm = g.activity === "point" ? 0.95 : g.activity === "photo" ? 0.75 : 0;
@@ -424,14 +391,14 @@ function HubPerson({ groupId, memberId }: { groupId: string; memberId: string })
     q.lookUp += ((g.activity === "look" ? 0.45 : 0) - q.lookUp) * Math.min(1, dt * 3);
     q.hop = 0;
   });
-  return <TunnelFigure model={model} pose={pose} name={`hub-visitor-${memberId}`} />;
+  return <group ref={person}><TunnelFigure model={model} pose={pose} name={`hub-visitor-${memberId}`} /></group>;
 }
 
 function HubVisitors() {
   const [ids, setIds] = useState<{ g: string; m: string }[]>([]);
   const last = useRef("");
   useFrame((_, dt) => {
-    stepHubVisitors(Math.min(dt, 0.1), hubShown());
+    stepHubVisitors(Math.min(dt, 0.1), hubShown(), getGame().model.progress);
     const list = hubGroups.flatMap((g) => g.members.map((m) => ({ g: g.id, m: m.id })));
     const key = list.map((x) => x.m).join(",");
     if (key !== last.current) {
@@ -447,14 +414,16 @@ export function GrandHub() {
   return (
     <group ref={ref} name="grand-hub">
       <Floor />
-      <Walls />
-      <Windows />
+      <HubShell />
+      <HubCoastWindow />
       {(["indoor", "lagoon", "sanctuary", "sharks", "coast"] as HubDestination[]).map((k) => <Door key={k} kind={k} />)}
       <Barriers />
+      <HubDoorClosures />
       <Trophies />
       <DisplayTank />
       <Plaza />
       <HubVisitors />
+      <HubReview />
     </group>
   );
 }

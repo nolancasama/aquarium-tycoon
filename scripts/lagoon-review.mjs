@@ -1,5 +1,6 @@
 // Dolphin Lagoon visual review (not the browser suite). Start a server first
-// (npx vite --port 5340). Usage: node scripts/lagoon-review.mjs [baseUrl] [width] [height] [milestone]
+// (npx vite build, then npx vite preview --port 5344).
+// Usage: node scripts/lagoon-review.mjs [baseUrl] [width] [height] [milestone]
 // Opens the lagoon in a development preview (it is release-locked) and writes
 // .tmp/lagoon-review/<w>x<h>/ frames + evidence.json.
 import { chromium } from "@playwright/test";
@@ -7,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { hubModel } from "./review-saves.mjs";
 
-const [base = "http://localhost:5340/", W = "1366", H = "768", MS = "0"] = process.argv.slice(2);
+const [base = "http://localhost:5344/", W = "1366", H = "768", MS = "0"] = process.argv.slice(2);
 const w = Number(W), h = Number(H), ms = Number(MS);
 const out = path.resolve(`.tmp/lagoon-review/${w}x${h}`);
 fs.mkdirSync(out, { recursive: true });
@@ -29,6 +30,7 @@ const shot = async (name) => {
   await page.screenshot({ path: path.join(out, `${name}.png`) });
   const s = await call("state");
   evidence.frames[name] = await call("lagoon");
+  evidence.frames[name].feeding = await call("lagoonFeeding");
   evidence.perf[name] = s.perf;
 };
 const clearLines = async () => { for (let i = 0; i < 8; i++) { if (!(await call("state")).line) return; await page.getByTestId("next").dispatchEvent("click"); await step(400); } };
@@ -59,10 +61,21 @@ try {
     await shot(`04-${v}-later`);
   }
   await page.getByTestId("btn-lagoon-feed").dispatchEvent("click");
-  await step(1200);
-  await shot("05-feeding");
-  await step(5000);
+  await shot("05-gathering");
+  const foodBefore = evidence.frames["04-care-later"].progress;
+  for (let t = 0; t < 12000 && (await call("lagoonFeeding")).phase !== "throwing"; t += 100) await step(100);
+  if ((await call("lagoonFeeding")).phase !== "throwing") throw new Error("No fish throw within 12 seconds");
+  for (let i = 0; i < 10; i++) {
+    await shot(`05-catch-${String(i).padStart(2, "0")}`);
+    await step(200);
+  }
+  for (let t = 0; t < 16000 && (await call("lagoonFeeding")).phase !== "finished"; t += 100) await step(100);
   await shot("06-fed");
+  const fed = evidence.frames["06-fed"];
+  if (fed.feeding.phase !== "finished") throw new Error("Feeding did not finish within bound");
+  if (fed.progress.fed !== foodBefore.fed + 1) throw new Error("Feed care effect was not applied exactly once");
+  const phases = fed.feeding.history.map((entry) => entry.phase);
+  if (!["gathering", "ready", "throwing", "catching", "finished"].every((phase) => phases.includes(phase))) throw new Error(`Missing feeding phase: ${phases}`);
   await page.getByTestId("btn-lagoon-toys").dispatchEvent("click");
   await step(600);
   await shot("07-toys");
@@ -74,10 +87,8 @@ try {
   await call("lagoonLook", "pair", "kai");
   await step(400);
   await shot("09-look");
-  await call("lagoonVisitor");
-  await step(300);
-  await page.getByTestId("lagoon-visitor").dispatchEvent("click");
-  await step(2600);
+  await call("lagoonAsk", "count");
+  await step(4200);
   await shot("10-question");
   evidence.prompt = (await call("state")).prompt;
 } catch (e) {
@@ -87,3 +98,4 @@ try {
 fs.writeFileSync(path.join(out, "evidence.json"), JSON.stringify(evidence, null, 2));
 await browser.close();
 console.log(JSON.stringify({ errors: evidence.errors, prompt: evidence.prompt?.question ?? null, perf: evidence.perf }, null, 1));
+if (evidence.errors.length) process.exitCode = 1;

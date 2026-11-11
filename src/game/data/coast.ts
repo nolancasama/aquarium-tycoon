@@ -1,4 +1,5 @@
 import type { CoastDecorKind, DecorKind, TankType, Vec2, Vec3 } from "../types";
+import { coastHabitatShown } from "./release";
 
 /**
  * The Coastal & Polar Zone: three separate exhibits side by side behind a
@@ -139,6 +140,11 @@ export const exWorld = (ex: ExhibitDef, p: { x: number; z: number }, y = 0): Vec
 /** Viewpoints: the whole wing, or one exhibit. Narrow screens step back along the view. */
 export type CoastView = "all" | CoastHabitat;
 export function coastCamera(view: CoastView, counting = false, underwater = false): { pos: Vec3; target: Vec3 } {
+  const shown = COAST_HABITATS.filter(coastHabitatShown);
+  if (view !== "all" && !coastHabitatShown(view)) view = shown[0] ?? "penguins";
+  // The single-exhibit preview keeps the existing authored centre and footprint.
+  // Its overview is the exhibit view, so no abandoned bays enter the frame.
+  if (view === "all" && shown.length === 1) view = shown[0];
   // Counting: higher and further back, so every animal (shelf and pool) stays clear of the HUD while the question panel lifts the view.
   if (counting && view !== "all") {
     const ex = EXHIBITS[view];

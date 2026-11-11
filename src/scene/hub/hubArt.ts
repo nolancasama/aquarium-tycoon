@@ -321,6 +321,41 @@ export function hubWindowTexture() {
   });
 }
 
+/** Static distant coast on a broad card, several metres beyond the real opening. */
+export function hubCoastalExteriorTexture() {
+  return tex("hub-coastal-exterior", 1536, 1024, g => {
+    sky(g, 1536, 1024, "#459ed6", "#d9f3fa");
+    const horizon = 563;
+    const water = g.createLinearGradient(0, horizon, 0, 1024);
+    water.addColorStop(0, "#4aafc9"); water.addColorStop(1, "#147e9f");
+    g.fillStyle = water; g.fillRect(0, horizon, 1536, 1024 - horizon);
+    g.fillStyle = "#92bcc2";
+    g.beginPath(); g.moveTo(450, horizon); g.quadraticCurveTo(510, 520, 600, 550); g.quadraticCurveTo(650, 533, 720, horizon); g.closePath(); g.fill();
+    g.fillStyle = "#537f83";
+    g.beginPath(); g.moveTo(850, horizon + 30); g.lineTo(920, 535); g.lineTo(980, 500); g.lineTo(1040, 490); g.lineTo(1140, 470); g.lineTo(1536, 477); g.lineTo(1536, 640); g.closePath(); g.fill();
+    g.fillStyle = "#6e9a82";
+    g.beginPath(); g.moveTo(940, 540); g.lineTo(1000, 505); g.lineTo(1120, 482); g.lineTo(1536, 490); g.lineTo(1536, 550); g.closePath(); g.fill();
+    g.fillStyle = "#f8f1d9"; g.fillRect(1033, 431, 17, 61);
+    g.fillStyle = "#cc694a"; g.fillRect(1030, 424, 23, 10);
+    g.fillStyle = "#345b6d"; g.fillRect(1036, 415, 11, 10);
+    g.beginPath(); g.moveTo(1028, 415); g.lineTo(1041, 404); g.lineTo(1055, 415); g.closePath(); g.fill();
+    for (const [x, y, s] of [[670, 593, 1], [1000, 626, 0.7]]) {
+      g.fillStyle = "#395e70"; g.beginPath(); g.moveTo(x - 16 * s, y); g.lineTo(x + 17 * s, y); g.lineTo(x + 10 * s, y + 7 * s); g.lineTo(x - 10 * s, y + 7 * s); g.closePath(); g.fill();
+      g.strokeStyle = "#496b78"; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - 35 * s); g.stroke();
+      g.fillStyle = "#fff7e6"; g.beginPath(); g.moveTo(x - 3 * s, y - 31 * s); g.lineTo(x - 3 * s, y - 4 * s); g.lineTo(x - 22 * s, y - 4 * s); g.closePath(); g.fill();
+    }
+    g.strokeStyle = "#90d7e2"; g.lineWidth = 3;
+    for (let i = 0; i < 28; i++) { const x = (i * 197) % 1500, y = horizon + 35 + (i * 47) % 400; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 35 + i % 4 * 8, y); g.stroke(); }
+  });
+}
+
+/** Transparent gaps at both tile edges, repeated continuously by each cloud card. */
+export function hubCloudTexture(layer: number) {
+  return tex(`hub-cloud-${layer}`, 1024, 160, g => {
+    for (let i = 0; i < 4; i++) cloud(g, 110 + i * 255 + (layer % 2) * 30, 75 + (i % 2) * 20, 20 + (i * 13 + layer * 9) % 16);
+  });
+}
+
 /** The directory kiosk's board: a little picture map of the wings. */
 export function directoryTexture() {
   return tex("hub-directory", 512, 384, (g) => {

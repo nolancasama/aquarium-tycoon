@@ -19,7 +19,8 @@ import { sanctFocus, startSanctActivity, type SanctQuestionKind } from "./flow/s
 import { startLagoonActivity, type LagoonQuestion } from "./flow/lagoon";
 import { SANCTUARY_ORIGIN } from "./data/sanctuary";
 import { enterOutdoor } from "./flow/outdoor";
-import { lagoonRt } from "./lagoon/lagoonRuntime";
+import { dropToy, forceRing, forceTrick, lagoonRt } from "./lagoon/lagoonRuntime";
+import type { TrickKind } from "./marine/pod";
 import { LAGOON_ORIGIN } from "./data/lagoon";
 import type { OutdoorArea } from "./store";
 import type * as THREE from "three";
@@ -377,6 +378,22 @@ export function installE2eHook(seed: number) {
       if (!m) return false;
       lagoonRt.look = { kind, ids: [id], x: m.x, y: 1, z: m.z, until: lagoonRt.time + 30 };
       return true;
+    },
+    /** Review: start a dolphin trick now (returns the dolphin, or null if none has room), a bubble-ring pass, or a toy. */
+    lagoonTrick(kind: TrickKind) {
+      return forceTrick(kind);
+    },
+    lagoonRing(side = 1) {
+      return forceRing(side);
+    },
+    lagoonToy(kind: "ball" | "kelp" | "bubbles") {
+      dropToy(kind);
+      return true;
+    },
+    /** Review: where a dolphin and the toy are now (area-local). */
+    lagoonBody(id: string) {
+      const m = lagoonRt.pod?.byId(id);
+      return m ? { x: m.x, y: m.y, z: m.z, mode: m.mode, trick: m.trick?.kind ?? null, toy: lagoonRt.toy ? { x: lagoonRt.toy.x, y: lagoonRt.toy.y, z: lagoonRt.toy.z } : null, rings: lagoonRt.ringPasses, passes: lagoonRt.passes } : null;
     },
     /** A visitor with a question at the lagoon now. */
     lagoonVisitor() {

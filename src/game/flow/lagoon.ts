@@ -7,7 +7,7 @@ import {
 } from "../logic/lagoon";
 import { award } from "../logic/model";
 import { DOLPHIN_NUMBER_PHRASE, type PhraseId } from "../logic/english";
-import { dropToy, feedPod, lagoonPod, lagoonRt, stepLagoonRt, WATCH_SPOTS } from "../lagoon/lagoonRuntime";
+import { dropToy, feedPod, isFeeding, lagoonPod, lagoonRt, stepLagoonRt, WATCH_SPOTS } from "../lagoon/lagoonRuntime";
 import { surfaceY, type PodEvent } from "../marine/pod";
 import { GALLERY, LAGOON_ORIGIN } from "../data/lagoon";
 import type { VisitorType } from "../types";
@@ -67,15 +67,15 @@ function noteVisit(v: LagoonView) {
 let fedAt = -100;
 export function feedDolphins() {
   if (!calm()) return;
-  if (lagoonRt.time - fedAt < 12) {
+  if (isFeeding() || (lagoonRt.time >= fedAt && lagoonRt.time - fedAt < 12)) {
     toast({ en: "They are still eating!", ja: "まだ たべているよ。すこし まってね", tone: "info" });
     return;
   }
+  if (!feedPod()) return;
   fedAt = lagoonRt.time;
   audio.play("sprinkle");
   const before = model().progress.lagoon?.milestone ?? 0;
   updateModel(feedLagoon);
-  feedPod();
   toast({ en: "Fish for the dolphins!", ja: "イルカに さかなを あげたよ！", tone: "good" }, 2200);
   celebrate(before);
 }
@@ -137,7 +137,8 @@ function offerLook(e: PodEvent) {
   const seen = p.seen.includes(kind);
   if (seen && lagoonRt.time - lastShown[kind] < 45) return;
   // From the underwater gallery a breath at the surface is out of sight; a pair or a dive under water is not.
-  const y = e.kind === "pair" ? e.y : e.kind === "dive" ? 0.4 : 0.6;
+  // A jump's bubble floats above the arc, so it never hides the dolphin in the air.
+  const y = e.kind === "pair" ? e.y : e.kind === "dive" ? 0.4 : e.kind === "leap" ? 3.6 : 0.6;
   if (!onScreen(e.x, y, e.z)) return;
   lastShown[kind] = lagoonRt.time;
   lagoonRt.look = { kind, ids: e.ids, x: e.x, y, z: e.z, until: lagoonRt.time + 6 };
@@ -167,6 +168,8 @@ export function lagoonTick(dt: number) {
   if (!inLagoon() || !lagoonActive(model())) return;
   const view = getGame().lagoonView;
   lagoonRt.watch = view === "lagoon" ? null : WATCH_SPOTS[view];
+  // No spontaneous tricks while a visitor's question is about the dolphins (counting, where, which one).
+  lagoonRt.tricksPaused = lagoonFocus.count || lagoonFocus.id !== null || Boolean(getGame().areaActivity);
   const events = stepLagoonRt(dt);
   const before = model().progress.lagoon?.milestone ?? 0;
   for (const e of events) {

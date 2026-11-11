@@ -1,7 +1,8 @@
 import { COAST_HABITATS, EXHIBITS, type CoastHabitat } from "../data/coast";
 import { tankAt, type Model } from "../logic/model";
 import { HABITAT_PAD, recordCoastSight } from "../logic/coast";
-import { newMover, RAMP_STEP, SPECIES_OF, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
+import { coastHabitatShown } from "../data/release";
+import { newMover, RAMP_STEP, SPECIES_OF, stationSpots, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
 
 /**
  * Live animals of the coastal habitats (runtime only, never saved). One mover
@@ -20,6 +21,8 @@ export const coastRt = {
   time: 0,
   /** rt-free feeding marks per habitat (sim seconds). */
   fedAt: { penguins: -100, seals: -100, otters: -100 } as Record<CoastHabitat, number>,
+  /** A fresh tray is runtime presentation only; feeding care/cost is still applied once by the flow. */
+  stationFood: null as { slot: number; fish: number; fedAt: number } | null,
   /** Animals held still for a question (id -> until). */
   hold: new Map<string, number>(),
   /** Sights waiting to be committed to the model (the flow drains this). */
@@ -32,8 +35,16 @@ let seed = 1;
 
 /** Match the movers to the saved animals (new ones appear on land or floating; gone ones leave). */
 export function syncCoast(model: Model) {
+  if (coastRt.stationFood && !tankAt(model, HABITAT_PAD.penguins)?.decor.some((d) => d.kind === "penguinFeeder" && d.slot === coastRt.stationFood!.slot)) {
+    coastRt.stationFood = null;
+    for (const a of coastRt.animals.values()) if (a.m.feeding) {
+      a.m.feeding = undefined;
+      if (a.m.action === "eat") a.m.action = null;
+    }
+  }
   const live = new Set<string>();
   for (const h of COAST_HABITATS) {
+    if (!coastHabitatShown(h)) continue;
     const t = tankAt(model, HABITAT_PAD[h]);
     if (!t || t.type !== h) continue;
     for (const f of t.fish) {
@@ -97,6 +108,7 @@ export function stepCoast(model: Model, dt: number, shown: boolean) {
     stepMover(a.m, EXHIBITS[a.habitat], dt, {
       time: coastRt.time, ...ctx,
       onEvent: (m, kind) => {
+        if (kind === "eatFish" && coastRt.stationFood) coastRt.stationFood.fish = Math.max(0, coastRt.stationFood.fish - 1);
         if (kind === "enterWater") coastRt.entries[a.habitat]++;
         if (a.habitat === "penguins" && kind === "enterWater") coastRt.sights.push("penguinSwim");
         if (a.habitat === "seals" && (kind === "dive" || kind === "enterWater")) coastRt.sights.push("sealDive");
@@ -119,11 +131,28 @@ export function drainSights(m: Model): Model {
 
 /** Feeding: everyone heads for the food (the feeding station on land if there is one, else the water by the window). */
 export function feedCoast(model: Model, h: CoastHabitat) {
+  if (!coastHabitatShown(h)) return;
+  syncCoast(model);
   coastRt.fedAt[h] = coastRt.time;
   const ex = EXHIBITS[h];
   const t = tankAt(model, HABITAT_PAD[h]);
   const feeder = t?.decor.find((d) => d.kind === "penguinFeeder");
   const fs = feeder ? ex.slots[feeder.slot] : null;
+  if (h === "penguins" && fs && feeder) {
+    const animals = [...coastRt.animals.values()].filter((a) => a.habitat === h);
+    const spots = stationSpots(ex, fs, animals.length, habitatCtx(model, h).landItems);
+    coastRt.stationFood = { slot: feeder.slot, fish: Math.min(spots.length, animals.length) * 3, fedAt: coastRt.time };
+    animals.forEach((a, i) => {
+      a.m.feeding = undefined;
+      const spot = spots[i];
+      if (!spot) return;
+      a.m.attract = null;
+      a.m.feeding = { spot, station: { x: fs.x, z: fs.z }, stage: "approach", routed: false, bites: 0, nextBite: 0, until: 0 };
+      // A swimming bird turns toward a ramp from its present position; transitions already on a ramp/ledge finish normally.
+      if (a.m.mode === "swim" || a.m.mode === "breathe") a.m.exit = null;
+    });
+    return;
+  }
   let k = 0;
   for (const a of coastRt.animals.values()) {
     if (a.habitat !== h) continue;
@@ -142,6 +171,7 @@ export function clearCoast() {
   coastRt.hold.clear();
   coastRt.sights = [];
   coastRt.time = 0;
+  coastRt.stationFood = null;
   coastRt.entries = { penguins: 0, seals: 0, otters: 0 };
   seed = 1;
 }

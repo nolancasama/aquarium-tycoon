@@ -3,9 +3,10 @@ import { setGame, useGame } from "../game/store";
 import { COAST_HALL } from "../game/data/rooms";
 import { DECOR, COAST_DECOR } from "../game/data/decor";
 import { TANKS } from "../game/data/tanks";
-import { COAST_PRICE, HABITAT_PAD, habitatOpen, needMet } from "../game/logic/coast";
+import { COAST_PRICE, coastMilestoneLimit, HABITAT_PAD, habitatOpen, needMet } from "../game/logic/coast";
 import { happiness, tankAt, usedSpace } from "../game/logic/model";
-import { buyCoast, buyCoastItem, COAST_MILESTONES, setCoastUnderwater, setCoastView, skipCoastReveal, startCoastActivity, watchCoastIntro } from "../game/flow/coast";
+import { buyCoast, buyCoastItem, COAST_MILESTONES, coastMilestoneReward, setCoastUnderwater, setCoastView, skipCoastReveal, startCoastActivity, watchCoastIntro } from "../game/flow/coast";
+import { COAST_HABITATS_SHOWN, coastHabitatShown } from "../game/data/release";
 import { cleanTank, feedTank, openDecorate } from "../game/flow/actions";
 import type { CoastHabitat } from "../game/data/coast";
 import type { CoastDecorKind } from "../game/types";
@@ -44,12 +45,15 @@ export function CoastGoals({ before }: { before?: ReactNode } = {}) {
   const c = useGame((s) => s.model.progress.coast);
   const [open, setOpen] = useState(false);
   const done = c?.milestone ?? 0;
-  const cur = COAST_MILESTONES[Math.min(4, done)];
+  const limit = coastMilestoneLimit();
+  const cur = COAST_MILESTONES[Math.min(limit - 1, done)];
   return (
     <div className={`panel goals tunnel-goals coast-goals ui ${open ? "expanded" : ""}`} data-testid="coast-goals" data-milestone={done}>
       {before}
       <header><PenguinGlyph /> Coastal &amp; Polar <Ja>かいがんと さむい ちいき</Ja></header>
-      {done >= 5 ? (
+      {done >= limit && limit < 5 ? (
+        <div className="guide-next" data-testid="coast-complete"><b>All done! More coming soon!</b><Ja>つづきは もうすぐ！</Ja></div>
+      ) : done >= 5 ? (
         <div className="guide-next"><b>All done! Enjoy the animals.</b> <Ja>ぜんぶ できた！ どうぶつと あそぼう</Ja></div>
       ) : (
         <div className="guide-next" data-testid="coast-next">
@@ -62,10 +66,10 @@ export function CoastGoals({ before }: { before?: ReactNode } = {}) {
       </button>
       {open && (
         <ol className="tunnel-milestones">
-          {COAST_MILESTONES.map((m, i) => (
+          {COAST_MILESTONES.slice(0, limit).map((m, i) => (
             <li key={m.en} className={i < done ? "done" : i === done ? "current" : ""} data-testid={`coast-milestone-${i + 1}`}>
               <span className="tick">{i < done ? <Icon id="check" size={16} /> : i + 1}</span>
-              <span>{m.en}<Ja>{m.ja}</Ja><small>🎁 {m.reward.en}</small></span>
+              <span>{m.en}<Ja>{m.ja}</Ja><small>🎁 {coastMilestoneReward(i + 1).en}</small></span>
             </li>
           ))}
         </ol>
@@ -78,7 +82,9 @@ function Views() {
   const view = useGame((s) => s.coastView);
   const underwater = useGame((s) => s.coastView === "penguins" && s.coastUnderwater);
   const model = useGame((s) => s.model);
-  const views: Array<{ id: "all" | CoastHabitat; en: string; ja: string }> = [{ id: "all", en: "All", ja: "ぜんたい" }, ...(["penguins", "seals", "otters"] as CoastHabitat[]).map((h) => ({ id: h, ...NAMES[h] }))];
+  // "All" only when there is more than one habitat to see (penguin-only: Penguins and Underwater).
+  const all = COAST_HABITATS_SHOWN.length > 1 ? [{ id: "all" as const, en: "All", ja: "ぜんたい" }] : [];
+  const views: Array<{ id: "all" | CoastHabitat; en: string; ja: string }> = [...all, ...COAST_HABITATS_SHOWN.map((h) => ({ id: h, ...NAMES[h] }))];
   return (
     <div className="wing-views coast-views ui" role="group" aria-label="Habitats" data-testid="coast-views">
       {views.map((v) => {
@@ -100,7 +106,7 @@ function Views() {
 
 function HabitatCard({ h }: { h: CoastHabitat }) {
   const tank = useGame((s) => tankAt(s.model, HABITAT_PAD[h]));
-  if (!tank || tank.type !== h) return null;
+  if (!tank || tank.type !== h || !coastHabitatShown(h)) return null;
   const used = usedSpace(tank), cap = TANKS[h].capacity, happy = happiness(tank);
   const bar = (v: number, icon: "food" | "sponge" | "happy", id: string) => (
     <div className={`bar ${v >= 70 ? "good" : v >= 40 ? "ok" : "low"}`} data-testid={id} data-value={Math.round(v)}>
@@ -156,7 +162,7 @@ function ItemShop({ h }: { h: CoastHabitat }) {
 
 function WaitingVisitor() {
   const w = useGame((s) => s.coastWaiting);
-  if (!w) return null;
+  if (!w || !coastHabitatShown(w.habitat)) return null;
   return (
     <button className="chip-btn visitor ui coast-visitor" onClick={() => void startCoastActivity()} data-testid="coast-visitor" aria-label={`A visitor at the ${NAMES[w.habitat].en.toLowerCase()} has a question`}>
       <PersonFace type={w.type} size={48} />
@@ -173,7 +179,7 @@ export function CoastHud() {
   const panel = useGame((s) => s.panel);
   const decorating = panel === "decorate";
   useEffect(() => watchCoastIntro(), []);
-  const h = view === "all" ? null : view;
+  const h = view === "all" || !coastHabitatShown(view) ? null : view;
   return (
     <>
       {revealing && (
@@ -212,12 +218,14 @@ export function CoastHud() {
 export function CoastCelebration() {
   const c = useGame((s) => s.coastCelebration);
   if (!c) return null;
+  if (c.milestone > coastMilestoneLimit()) return null;
   const ms = COAST_MILESTONES[c.milestone - 1];
+  const reward = coastMilestoneReward(c.milestone);
   return (
     <div className="coast-celebration ui" data-testid="coast-celebration" role="status">
       <Icon id={c.milestone === 5 ? "trophy" : "star"} size={44} />
       <b>{ms.en}!</b><Ja>{ms.ja}</Ja>
-      <small>🎁 {ms.reward.en}<Ja>{ms.reward.ja}</Ja></small>
+      <small>🎁 {reward.en}<Ja>{reward.ja}</Ja></small>
     </div>
   );
 }
@@ -232,7 +240,7 @@ export function CoastOffer() {
     <div className="map-backdrop ui" onPointerDown={(e) => { if (e.target === e.currentTarget) setGame({ coastOffer: false }); }}>
       <div className="panel map-panel coast-offer" role="dialog" aria-label="Open the Coastal & Polar Zone" data-testid="coast-offer">
         <header><b>Coastal &amp; Polar Zone <Ja>かいがんと さむい ちいき</Ja></b></header>
-        <p>Penguins, seals and sea otters! <Ja>ペンギン・アザラシ・ラッコ！</Ja></p>
+        <p>{COAST_HABITATS_SHOWN.map((h) => NAMES[h].en).join(", ")}! <Ja>{COAST_HABITATS_SHOWN.map((h) => NAMES[h].ja).join("・")}！</Ja></p>
         <p className="coast-offer-gift"><PenguinGlyph size={30} /><PenguinGlyph size={30} /><PenguinGlyph size={30} /> Three penguins come with it. <Ja>ペンギンが 3わ ついてくるよ</Ja></p>
         <footer>
           <button className="primary" disabled={short} onClick={buyCoast} data-testid="btn-buy-coast"><Icon id="coin" size={24} /> {COAST_PRICE} Open! <Ja>ひらく</Ja></button>

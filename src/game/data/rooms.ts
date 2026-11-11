@@ -100,6 +100,19 @@ export function roomOpen(i: RoomIndex, progress: OpenFlags): boolean {
   return roomOwned(i, progress);
 }
 
+/**
+ * Side arrows of the branching areas, which are not neighbours by index. The
+ * tour runs Coral Reef Atrium → Shark Tunnel → Grand Hub → Penguin Coast →
+ * Dolphin Lagoon → Grand Ocean Sanctuary; the Atrium ↔ Shark Tunnel link is the
+ * hall row's own. An arrow only ever travels through the doorway rules
+ * (flow/hub.ts arrowTravel), so it can never open a locked area.
+ */
+export const AREA_LINKS: Partial<Record<RoomId, { prev?: RoomId; next?: RoomId }>> = {
+  sharks: { next: "hub" },
+  coast: { prev: "hub", next: "lagoon" },
+  lagoon: { prev: "coast", next: "sanctuary" }
+};
+
 /** Rooms on the hall row plus the Shark Tunnel (which branches from the Atrium): the hall arrows link only these. */
 export const inHallRow = (i: RoomIndex): boolean => Boolean(ROOMS[i]) && (!ROOMS[i].wing || ROOMS[i].wing === "atrium");
 

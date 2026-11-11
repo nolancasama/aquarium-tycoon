@@ -78,6 +78,8 @@ export interface Mover {
   ledge?: number;
   ledgeNext?: number;
   ledgeRest?: Vec2;
+  /** Runtime-only station meal. Other species keep their original decisions. */
+  feeding?: { spot: Vec3; station: Vec2; stage: "approach" | "eating"; routed: boolean; bites: number; nextBite: number; until: number };
 }
 
 export interface MoveCtx {
@@ -89,7 +91,7 @@ export interface MoveCtx {
   /** Optional quiet resting destinations beside placed habitat items. */
   restSpots?: Vec2[];
   /** Events: entered or left the water (for milestones and activities). */
-  onEvent?: (m: Mover, kind: "enterWater" | "leaveWater" | "breathe" | "dive" | "play") => void;
+  onEvent?: (m: Mover, kind: "enterWater" | "leaveWater" | "breathe" | "dive" | "play" | "eatFish") => void;
 }
 
 interface Params {
@@ -256,11 +258,11 @@ function nextSwimLeg(m: Mover, ex: ExhibitDef, _ctx: MoveCtx, deep: boolean) {
 }
 
 /** The way out of the water: the nearest ramp bottom or island climb point, reached by a clear leg. */
-function leaveWater(m: Mover, ex: ExhibitDef, ctx: MoveCtx): boolean {
+function leaveWater(m: Mover, ex: ExhibitDef, ctx: MoveCtx, rampsOnly = false): boolean {
   const body = PARAMS[m.species].body;
   const exits: { at: Vec3; kind: "ramp" | "island"; i: number }[] = [
     ...ex.ramps.map((r, i) => ({ at: { x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z + RAMP_STEP }, kind: "ramp" as const, i })),
-    ...(m.species === "otter" ? [] : ex.islands.map((isl, i) => ({ at: { x: isl.climb.x, y: ex.pool.surface - 0.06, z: isl.climb.z }, kind: "island" as const, i })))
+    ...(m.species === "otter" || rampsOnly ? [] : ex.islands.map((isl, i) => ({ at: { x: isl.climb.x, y: ex.pool.surface - 0.06, z: isl.climb.z }, kind: "island" as const, i })))
   ].sort(() => rand(m) - 0.5);
   for (const e of exits) {
     if (waterLegClear(ex, m, e.at, body)) {
@@ -365,6 +367,28 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
   const p = PARAMS[m.species];
   m.phase += dt * (m.speed > 0.05 ? (m.area === "water" ? 6 : 9) : 1.2);
   if (m.action && ctx.time > m.actionUntil) m.action = null;
+  if (m.feeding) {
+    const meal = m.feeding;
+    if (meal.stage === "eating") {
+      m.mode = "rest"; m.speed = 0; m.pitch = 0; m.action = "eat";
+      m.heading = turnToward(m.heading, Math.atan2(meal.station.x - m.x, meal.station.z - m.z), dt * 5);
+      if (meal.bites < 3 && ctx.time >= meal.nextBite) {
+        meal.bites++; meal.nextBite += 1.05;
+        ctx.onEvent?.(m, "eatFish");
+      }
+      if (ctx.time >= meal.until) { m.feeding = undefined; startRest(m, ctx); }
+      return;
+    }
+    if (m.area === "land" && (m.mode === "rest" || m.mode === "walk") && !meal.routed) {
+      const route = stationLandRoute(ex, m, meal.spot, ctx.landItems);
+      if (route) {
+        m.mode = "walk"; m.path = route; m.rampNext = -1; m.ledgeNext = -1; m.action = null; meal.routed = true;
+      }
+    } else if ((m.area === "island" || m.area === "ledge") && m.mode === "rest") m.until = ctx.time;
+    else if (m.area === "water" && (m.mode === "swim" || m.mode === "breathe") && !m.exit) {
+      if (leaveWater(m, ex, ctx, true)) { m.mode = "swim"; m.until = 0; }
+    }
+  }
   switch (m.mode) {
     case "rest": {
       m.speed = 0;
@@ -390,6 +414,12 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
           m.path = [{ x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z }, { x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z + RAMP_STEP }];
           m.rampNext = -1;
         } else {
+          if (m.feeding?.routed) {
+            const meal = m.feeding;
+            meal.stage = "eating"; meal.nextBite = ctx.time + 0.6; meal.until = ctx.time + 3.9;
+            m.mode = "rest"; m.speed = 0; m.action = "eat"; m.actionUntil = meal.until;
+            break;
+          }
           if (m.attract) { m.attract = null; m.action = "eat"; m.actionUntil = ctx.time + 3; }
           startRest(m, ctx);
         }
@@ -422,6 +452,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
         } else {
           m.area = "land";
           ctx.onEvent?.(m, "leaveWater");
+          if (m.feeding) { startRest(m, ctx); break; }
           // Step off the ramp top onto the shelf.
           const q = landPoint(m, ex, ctx.landItems);
           if (q && landLegClear(ex, m, q, ctx.landItems, p.body)) { m.mode = "walk"; m.path = [{ x: q.x, y: ex.land.y, z: q.z }]; m.rampNext = -1; }
@@ -528,6 +559,53 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
       break;
     }
   }
+}
+
+/** A small visibility graph around solid footprints, used only for station trips. */
+export function stationLandRoute(ex: ExhibitDef, from: Vec2, to: Vec2, items: MoveCtx["landItems"]): Vec3[] | null {
+  const body = PARAMS.penguin.body;
+  const clear = (a: Vec2, b: Vec2) => landLegClear(ex, a, b, items, body);
+  if (!clear(to, to)) return null;
+  if (clear(from, to)) return [{ ...to, y: ex.land.y }];
+  const points: Vec2[] = [from, to];
+  for (const o of [...ex.boulders, ...(ex.ledges ?? []), ...items]) {
+    // Extra clearance keeps the chords between ring points outside the solid.
+    const radius = o.r + body * 0.45 + 0.12;
+    for (let i = 0; i < 16; i++) {
+      const a = i * Math.PI / 8, q = { x: o.x + Math.cos(a) * radius, z: o.z + Math.sin(a) * radius };
+      if (clear(q, q)) points.push(q);
+    }
+  }
+  const dist = points.map(() => Infinity), previous = points.map(() => -1), visited = new Set<number>();
+  dist[0] = 0;
+  while (visited.size < points.length) {
+    let at = -1;
+    for (let i = 0; i < points.length; i++) if (!visited.has(i) && (at < 0 || dist[i] < dist[at])) at = i;
+    if (at < 0 || !Number.isFinite(dist[at])) return null;
+    if (at === 1) {
+      const route: Vec3[] = [];
+      for (let i = 1; i !== 0; i = previous[i]) route.unshift({ ...points[i], y: ex.land.y });
+      return route;
+    }
+    visited.add(at);
+    for (let i = 1; i < points.length; i++) {
+      if (visited.has(i) || !clear(points[at], points[i])) continue;
+      const d = dist[at] + Math.hypot(points[at].x - points[i].x, points[at].z - points[i].z);
+      if (d < dist[i]) { dist[i] = d; previous[i] = at; }
+    }
+  }
+  return null;
+}
+
+/** Distinct safe standing places around the tray; occupied slots stay solid. */
+export function stationSpots(ex: ExhibitDef, station: Vec2, count: number, items: MoveCtx["landItems"]): Vec3[] {
+  const spots: Vec3[] = [];
+  for (const radius of [0.82, 1.12, 1.42, 1.72]) for (let i = 0; i < 24 && spots.length < count; i++) {
+    const a = i * Math.PI / 12;
+    const q = { x: station.x + Math.sin(a) * radius, z: station.z + Math.cos(a) * radius, y: ex.land.y };
+    if (landLegClear(ex, q, q, items, PARAMS.penguin.body) && spots.every((p) => Math.hypot(p.x - q.x, p.z - q.z) >= 0.62)) spots.push(q);
+  }
+  return spots;
 }
 
 /** Move along the path at `speed`; returns true when the last point is reached. Turns the heading toward the leg. */

@@ -24,6 +24,7 @@ export interface CetaceanUniforms {
   uArch: { value: number };
   uFlap: { value: number };
   uHead: { value: THREE.Vector2 };
+  uJaw: { value: number };
   uWater: { value: number };
   uWaterColor: { value: THREE.Color };
   uShade: { value: number };
@@ -43,6 +44,7 @@ uniform float uTurn;
 uniform float uArch;
 uniform float uFlap;
 uniform vec2 uHead;
+uniform float uJaw;
 uniform float uSpecies;
 varying vec3 vSkin;
 varying float vPart;
@@ -60,6 +62,12 @@ vec2 bendAt(float s) {
 }
 
 vec3 cetaceanPos(vec3 p, float s) {
+  if (uSpecies < 0.5 && uJaw > 0.0 && (part > 6.5 || (part > 4.5 && part < 5.5))) {
+    float angle = uJaw * (1.0 - smoothstep(0.075, 0.125, s));
+    vec2 q = p.yz - vec2(0.0, uLen * 0.395);
+    float c = cos(angle), sn = sin(angle);
+    p.yz = vec2(c * q.x - sn * q.y, sn * q.x + c * q.y) + vec2(0.0, uLen * 0.395);
+  }
   // A beluga turns and nods its head on its flexible neck.
   if (uSpecies > 1.5) {
     float k = 1.0 - smoothstep(0.08, 0.24, s);
@@ -83,19 +91,22 @@ uniform float uSpecies;
 uniform float uWater;
 uniform vec3 uWaterColor;
 uniform float uShade;
+uniform float uJaw;
 varying vec3 vSkin;
 varying float vPart;
 varying float vWorldY;
 
 vec3 cetaceanColor() {
   float s = vSkin.x, h = vSkin.y, w = vSkin.z;
-  if (vPart > 3.5) return vec3(1.0);
+  if (vPart > 3.5 && (uSpecies > 0.5 || vPart < 4.5)) return vec3(1.0);
   if (uSpecies < 0.5) {
+    if (vPart > 5.5) return vec3(0.075, 0.025, 0.035);
+    float p = vPart > 4.5 ? 0.0 : vPart;
     // Bottlenose: a dark grey cape, paler flanks, a white belly.
     vec3 cape = vec3(0.33, 0.39, 0.45), flank = vec3(0.55, 0.62, 0.68), belly = vec3(0.93, 0.95, 0.96);
-    if (vPart > 2.5) return h > 0.0 ? cape : mix(flank, belly, 0.4);
-    if (vPart > 1.5) return flank * 0.92;
-    if (vPart > 0.5) return cape;
+    if (p > 2.5) return h > 0.0 ? cape : mix(flank, belly, 0.4);
+    if (p > 1.5) return flank * 0.92;
+    if (p > 0.5) return cape;
     vec3 c = mix(belly, flank, smoothstep(-0.5, -0.1, h + 0.06 * sin(s * 11.0)));
     c = mix(c, cape, smoothstep(0.2, 0.6, h + 0.14 * sin(s * 7.0 + 1.0) - 0.18 * smoothstep(0.7, 0.95, s)));
     // A slightly darker beak top, pale throat.
@@ -133,7 +144,7 @@ export function createCetaceanMaterial(kind: CetaceanKind, length: number): Ceta
   uniforms.shininess.value = kind === "orca" ? 42 : 30;
   Object.assign(uniforms, {
     uLen: { value: length }, uPhase: { value: 0 }, uAmp: { value: 0.4 }, uTurn: { value: 0 }, uArch: { value: 0 },
-    uFlap: { value: 0.3 }, uHead: { value: new THREE.Vector2() }, uSpecies: { value: SPECIES_ID[kind] },
+    uFlap: { value: 0.3 }, uHead: { value: new THREE.Vector2() }, uJaw: { value: 0 }, uSpecies: { value: SPECIES_ID[kind] },
     uWater: { value: 1 }, uWaterColor: { value: new THREE.Color("#1f7f9f") }, uShade: { value: 1 }
   });
   const vertexShader = THREE.ShaderLib.phong.vertexShader
@@ -142,6 +153,11 @@ export function createCetaceanMaterial(kind: CetaceanKind, length: number): Ceta
 // The bend moves stations along y and x as a function of s only, so the normal is
 // corrected with the slope of that displacement along z (ds/dz = -1/L).
 float eps = 0.004;
+if (uSpecies < 0.5 && uJaw > 0.0 && (part > 6.5 || (part > 4.5 && part < 5.5))) {
+  float jawAngle = uJaw * (1.0 - smoothstep(0.075, 0.125, skin.x));
+  float jc = cos(jawAngle), js = sin(jawAngle);
+  objectNormal.yz = vec2(jc * objectNormal.y - js * objectNormal.z, js * objectNormal.y + jc * objectNormal.z);
+}
 vec2 b0 = bendAt(skin.x - eps), b1 = bendAt(skin.x + eps);
 vec2 slope = (b1 - b0) / (2.0 * eps) * (-1.0 / uLen);
 objectNormal = normalize(vec3(objectNormal.x, objectNormal.y, objectNormal.z - slope.x * objectNormal.x - slope.y * objectNormal.y));`)
@@ -152,7 +168,7 @@ transformed = cetaceanPos(position, skin.x);
 vWorldY = (modelMatrix * vec4(transformed, 1.0)).y;`);
   const fragmentShader = THREE.ShaderLib.phong.fragmentShader
     .replace("#include <common>", `#include <common>\n${FRAG_HEAD}`)
-    .replace("#include <color_fragment>", `#include <color_fragment>\ndiffuseColor.rgb *= cetaceanColor() * uShade;`)
+    .replace("#include <color_fragment>", `#include <color_fragment>\nif (uSpecies < 0.5 && vPart > 5.5 && uJaw < 0.002) discard;\ndiffuseColor.rgb *= cetaceanColor() * uShade;`)
     .replace("#include <fog_fragment>", /* glsl */ `// Under the surface the body takes the water's colour with depth.
 float under = clamp(-vWorldY * 0.1, 0.0, 0.62) * uWater;
 gl_FragColor.rgb = mix(gl_FragColor.rgb, uWaterColor, under);
