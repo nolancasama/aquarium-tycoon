@@ -1,8 +1,8 @@
 # Current State
 
-## Navigation, hub, Penguin Coast and Lagoon improvements (2026-11-11, uncommitted)
+## Navigation, hub, Penguin Coast and Lagoon improvements (2026-11-11)
 
-Branch `outdoor-polish` (from `main` 3e12fe0), **not committed or pushed**.
+Branch `outdoor-polish` (d82ecc5, pushed to origin), **not yet merged into `main`** (a push to main deploys).
 Design: DESIGN_DECISIONS.md 2026-11-11 entries "Penguin Coast only…",
 "Lagoon framing, articulated mouths and coordinated feeding" and
 "Navigation, hub, tricks and small fish".
