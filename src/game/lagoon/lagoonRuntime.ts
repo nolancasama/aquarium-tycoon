@@ -351,6 +351,8 @@ const ringRuns = new Map<string, { side: number; stage: number; prev: number }>(
 
 function startRing(m: Swimmer, side: number) {
   ringRuns.set(m.id, { side, stage: 0, prev: -1 });
+  // A fresh breath first, so it does not have to surface half way through the run.
+  m.breathAt = Math.max(m.breathAt, lagoonRt.time + 22);
   lagoonRt.pod!.attract(m.id, ringPoints(side)[0], 14, "point");
 }
 
@@ -358,7 +360,9 @@ function startRing(m: Swimmer, side: number) {
 export function forceRing(side = 1): string | null {
   const pod = lagoonPod();
   if (lagoonRt.time >= lagoonRt.bubblesUntil) dropToy("bubbles");
-  const m = pod.members.find((x) => !x.mother && x.mode === "swim" && !ringRuns.has(x.id));
+  // Any adult not in the air (breathing, diving or resting is fine: the run takes over), a swimmer first.
+  const can = pod.members.filter((x) => !x.mother && x.mode !== "leap" && x.mode !== "charge" && !ringRuns.has(x.id));
+  const m = can.find((x) => x.mode === "swim") ?? can[0];
   if (m) startRing(m, side);
   return m?.id ?? null;
 }
