@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { getGame, useGame } from "../../game/store";
 import { rt } from "../../game/runtime";
 import { HUB_HALL } from "../../game/data/rooms";
@@ -23,6 +24,8 @@ import { HubCoastWindow } from "./HubCoastWindow";
 import { HubReview } from "./HubReview";
 import { clipToHubPortal } from "./hubPortalClip";
 import { wallPlaquePose, WALL_PLAQUE_DEPTH, WALL_PLAQUE_FACE_Z } from "./hubSignMount";
+import { createHubReef, REEF_FLOOR } from "./hubReef";
+import { createReefFishPath, sampleReefFishPath } from "./reefFishPaths";
 
 /**
  * The Grand Aquarium Hub: a sunlit half rotunda with the wing doorways round
@@ -187,35 +190,30 @@ function Trophies() {
 /** The display tank: a glass cylinder of reef fish over a stone plinth. No care, no purchase. */
 function DisplayTank() {
   const T = HUB_TANK, base = T.plinth;
+  const reef = useMemo(() => createHubReef(), []);
   const statics = useMemo(() => {
     const b = new PartBuilder(0.5);
     b.cyl(T.plinthR, T.plinthR + 0.1, base, T.x, 0, T.z, "#d8c8a8", 40);
     b.cyl(T.plinthR + 0.05, T.plinthR + 0.05, 0.08, T.x, base - 0.08, T.z, "#d9a441", 40);
     b.cyl(T.r - 0.02, T.r - 0.02, 0.14, T.x, base, T.z, "#f0dfb5", 36);
-    // Rocks, corals and kelp inside.
-    const rock = (dx: number, dz: number, r: number, c: string) => b.add(new THREE.DodecahedronGeometry(r, 0), c, [T.x + dx, base + 0.1 + r * 0.5, T.z + dz], [dx, dz, 0], [1, 0.75, 1]);
-    rock(-0.6, -0.4, 0.55, "#8b8178");
-    rock(0.5, 0.55, 0.42, "#9a8e80");
-    rock(0.75, -0.6, 0.35, "#7d746b");
-    const coral = (dx: number, dz: number, c: string, h: number) => {
-      for (let k = 0; k < 4; k++) b.cone(0.07, h * (0.7 + k * 0.12), T.x + dx + Math.cos(k * 1.7) * 0.12, base + 0.12, T.z + dz + Math.sin(k * 1.7) * 0.12, c, 6);
-    };
-    coral(-0.15, 0.8, "#ff6b8a", 0.5);
-    coral(-1.0, 0.35, "#ffa94d", 0.45);
-    coral(1.1, 0.0, "#b197fc", 0.55);
-    coral(0.1, -0.95, "#ff8787", 0.4);
-    for (const [dx, dz, h] of [[-1.25, -0.55, 2.1], [1.2, 0.8, 1.8], [0.3, 1.25, 1.6], [-0.4, -1.3, 2.3]]) b.cyl(0.04, 0.06, h, T.x + dx, base + 0.1, T.z + dz, "#3c9a52", 5);
     // Open rim (the camera looks down into the water), and a bottom band.
     b.add(new THREE.TorusGeometry(T.r + 0.04, 0.09, 6, 48), "#1d5c74", [T.x, base + T.h, T.z], [Math.PI / 2, 0, 0], [1, 1, 1], { vary: false });
     b.add(new THREE.TorusGeometry(T.r + 0.04, 0.07, 6, 48), "#d9a441", [T.x, base + 0.16, T.z], [Math.PI / 2, 0, 0], [1, 1, 1], { vary: false });
-    return b.build();
-  }, [T.x, T.z, T.r, T.h, T.plinthR, base]);
-  const water = useMemo(() => new THREE.MeshLambertMaterial({ color: "#5cc8e6", transparent: true, opacity: 0.26, depthWrite: false, side: THREE.DoubleSide }), []);
-  const surface = useMemo(() => new THREE.MeshBasicMaterial({ color: "#a8ecff", transparent: true, opacity: 0.4, depthWrite: false }), []);
+    const frame = b.build();
+    const decor = reef.geometry.clone().translate(T.x, base + REEF_FLOOR, T.z);
+    const merged = mergeGeometries([frame, decor], false);
+    frame.dispose(); decor.dispose();
+    return merged;
+  }, [T.x, T.z, T.r, T.h, T.plinthR, base, reef]);
+  useEffect(() => () => {
+    statics.dispose(); reef.geometry.dispose(); reef.elements.forEach(e => e.geometry.dispose());
+  }, [statics, reef]);
+  const water = useMemo(() => new THREE.MeshLambertMaterial({ color: "#8fe0ee", transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide }), []);
+  const surface = useMemo(() => new THREE.MeshBasicMaterial({ color: "#b8f0f8", transparent: true, opacity: 0.2, depthWrite: false }), []);
   return (
     <group>
       <mesh geometry={statics} material={smoothMat} raycast={() => undefined} />
-      <TankFish />
+      <TankFish obstacles={reef.obstacles} />
       <Bubbles />
       <mesh position={[T.x, base + T.h / 2, T.z]} material={water} raycast={() => undefined} renderOrder={2}>
         <cylinderGeometry args={[T.r, T.r, T.h - 0.02, 40, 1, true]} />
@@ -233,20 +231,20 @@ function DisplayTank() {
  * band and pace; colours are reef-bright but natural.
  */
 const REEF: { kind: SmallFishKind; size: number; band: [number, number]; pace: number; looks: SmallFishLook[] }[] = [
-  { kind: "tang", size: 0.66, band: [1.1, 2.4], pace: 0.24, looks: [
+  { kind: "tang", size: 0.43, band: [0.6, 2.5], pace: 0.24, looks: [
     { color: "#2f6fd6", accent: "#ffd23f" }, { color: "#3474dc", accent: "#ffcf3a" }, { color: "#f4c430", accent: "#f7d75a" }, { color: "#f2c12e", accent: "#f5d54f" }] },
-  { kind: "chromis", size: 0.44, band: [0.7, 2.6], pace: 0.42, looks: [
+  { kind: "chromis", size: 0.28, band: [0.65, 2.6], pace: 0.32, looks: [
     { color: "#5fc6d8", accent: "#7fd6e2" }, { color: "#55bfd3", accent: "#7ad3df" }, { color: "#62cadb", accent: "#86dae4" },
     { color: "#ffb21f", accent: "#ffd166" }, { color: "#f7a51b", accent: "#ffcc5c" }, { color: "#5b4bc4", accent: "#f4d03f" }] },
-  { kind: "wrasse", size: 0.6, band: [0.45, 1.3], pace: 0.36, looks: [
+  { kind: "wrasse", size: 0.36, band: [0.35, 1.5], pace: 0.28, looks: [
     { color: "#3fa66b", accent: "#ff8fb1" }, { color: "#44a872", accent: "#f78fb3" }, { color: "#e5674d", accent: "#3fb2c9" }, { color: "#3c9e68", accent: "#ff9cba" }] },
-  { kind: "snapper", size: 0.58, band: [0.9, 2.2], pace: 0.3, looks: [
+  { kind: "snapper", size: 0.38, band: [0.7, 2.35], pace: 0.26, looks: [
     { color: "#e05a47", accent: "#f2a03d" }, { color: "#d9543f", accent: "#efa040" }, { color: "#f0d05a", accent: "#4f8fd6" }, { color: "#e2604a", accent: "#f0a542" }] },
-  { kind: "sardine", size: 0.4, band: [1.6, 2.9], pace: 0.5, looks: [
+  { kind: "sardine", size: 0.29, band: [1.6, 2.75], pace: 0.4, looks: [
     { color: "#6f8fa6", accent: "#9fb3c2" }, { color: "#6a8aa1", accent: "#9cb1c0" }, { color: "#7394aa", accent: "#a3b6c5" }, { color: "#6c8ca3", accent: "#9db2c1" }] }
 ];
 
-function TankFish() {
+function TankFish({ obstacles }: { obstacles: readonly THREE.Box3[] }) {
   const schools = useMemo(() => {
     const mat = smallFishMaterial(0.45);
     let seed = 0;
@@ -254,15 +252,12 @@ function TankFish() {
       const m = smallFishMesh(r.kind, r.looks, mat);
       const fish = r.looks.map(() => {
         const i = seed++;
-        const dir = i % 3 === 0 ? -1 : 1;
-        return {
-          r: 0.6 + ((i * 37) % 100) / 100 * 1.05, y: r.band[0] + ((i * 53) % 100) / 100 * (r.band[1] - r.band[0]),
-          w: (r.pace + ((i * 17) % 10) / 60) * dir / (0.6 + ((i * 37) % 100) / 100), p: i * 1.3, s: r.size * (0.85 + ((i * 29) % 10) / 33)
-        };
+        const size = r.size * (0.88 + ((i * 29) % 10) / 60);
+        return { path: createReefFishPath(i + 1, r.band, size, obstacles), pace: r.pace, phase: i * 7.13, s: size };
       });
       return { ...m, fish, mat };
     });
-  }, []);
+  }, [obstacles]);
   useEffect(() => () => { schools.forEach((s) => s.dispose()); schools[0]?.mat.dispose(); }, [schools]);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   useFrame(() => {
@@ -271,13 +266,10 @@ function TankFish() {
     smallFishTime.value = t;
     for (const s of schools) {
       s.fish.forEach((f, i) => {
-        const a = f.p + t * f.w;
-        const r = f.r + Math.sin(t * 0.4 + f.p) * 0.12;
-        const bob = Math.sin(t * 0.7 + f.p) * 0.12;
-        dummy.position.set(HUB_TANK.x + Math.sin(a) * r, HUB_TANK.plinth + f.y + bob, HUB_TANK.z - Math.cos(a) * r);
-        // Facing along the circle (nose +z), a slight pitch with the bob.
-        const vx = Math.cos(a) * Math.sign(f.w), vz = Math.sin(a) * Math.sign(f.w);
-        dummy.rotation.set(-Math.cos(t * 0.7 + f.p) * 0.12, Math.atan2(vx, vz), 0, "YXZ");
+        const { position, velocity } = sampleReefFishPath(f.path, t + f.phase, f.pace);
+        dummy.position.set(HUB_TANK.x + position.x, HUB_TANK.plinth + REEF_FLOOR + position.y, HUB_TANK.z + position.z);
+        // The existing fish models point +z; pitch and yaw both follow velocity.
+        dummy.rotation.set(-Math.atan2(velocity.y, Math.hypot(velocity.x, velocity.z)), Math.atan2(velocity.x, velocity.z), 0, "YXZ");
         dummy.scale.setScalar(f.s);
         dummy.updateMatrix();
         s.mesh.setMatrixAt(i, dummy.matrix);
