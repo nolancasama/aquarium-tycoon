@@ -49,6 +49,33 @@ export interface Ramp {
   width?: number;
 }
 
+/** Cross sections of the penguin shore: a level walking deck and flared rock sides. */
+export function rampSections(ex: ExhibitDef, i: number) {
+  const r = ex.ramps[i], half = (r.width ?? 1.5) / 2;
+  return [0, 0.23, 0.51, 0.77, 1].map((t, k) => {
+    const left = half + [0.12, 0.27, 0.08, 0.22, 0][k];
+    const right = half + [0, 0.16, 0.3, 0.07, 0.1][k];
+    const flare = [0.65, 0.75, 0.62, 0.43, 0.24][k];
+    const y = ex.land.y + (ex.pool.surface - 0.06 - ex.land.y) * t;
+    return { z: r.top.z + (r.bottom.z - r.top.z) * t, y,
+      left: r.top.x - left, right: r.top.x + right,
+      baseLeft: r.top.x - left - flare, baseRight: r.top.x + right + flare,
+      baseY: y - (1.6 - t * 0.95) };
+  });
+}
+
+/** Conservative horizontal solid footprint, shared by scenery and swimming clearance. */
+export function rampFootprint(ex: ExhibitDef, i: number): Vec2[] {
+  if (ex.id !== "penguins") {
+    const r = ex.ramps[i], half = (r.width ?? 1.5) / 2;
+    return [{ x: r.top.x - half, z: r.top.z }, { x: r.top.x - half, z: r.bottom.z },
+      { x: r.top.x + half, z: r.bottom.z }, { x: r.top.x + half, z: r.top.z }];
+  }
+  const sections = rampSections(ex, i);
+  return [...sections.map((s) => ({ x: s.baseLeft, z: s.z })),
+    ...sections.slice().reverse().map((s) => ({ x: s.baseRight, z: s.z }))];
+}
+
 /** A low shelf rock with a flat snowy resting top and a single safe step route. */
 export interface RestLedge {
   x: number;
@@ -89,25 +116,27 @@ const SURFACE = 1.95;
 export const EXHIBITS: Record<CoastHabitat, ExhibitDef> = {
   penguins: {
     id: "penguins", name: "Penguin Coast", ja: "ペンギンの かいがん",
-    x: COAST_ORIGIN.x - 15, z: COAST_ORIGIN.z,
-    land: { minX: -6.1, maxX: 6.1, minZ: -4.6, maxZ: -0.7, y: 2.35 },
-    pool: { minX: -6.3, maxX: 6.3, minZ: -0.6, maxZ: 4.85, floor: 0.15, surface: SURFACE },
-    ramps: [{ top: { x: -1.6, z: -1.0 }, bottom: { x: -1.6, z: 1.15 }, width: 3.5 }],
-    islands: [{ x: 3.75, z: 1.65, r: 1.15, top: 2.18, topRadius: 1.0, climb: { x: 2.08, z: 1.65 }, rest: { x: 3.75, z: 1.6 } }],
+    x: COAST_ORIGIN.x - 19, z: COAST_ORIGIN.z,
+    land: { minX: -9.8, maxX: 9.8, minZ: -9.2, maxZ: -1.2, y: 2.35 },
+    pool: { minX: -10, maxX: 10, minZ: -1.1, maxZ: 10.8, floor: -3.2, surface: SURFACE },
+    ramps: [{ top: { x: -3, z: -1.5 }, bottom: { x: -3, z: 1.9 }, width: 3.6 }],
+    islands: [{ x: 6.2, z: 3.1, r: 1.35, top: 2.18, topRadius: 1.15, climb: { x: 4.28, z: 3.1 }, rest: { x: 6.2, z: 3.05 } }],
     ledges: [
-      { x: -4.25, z: -2.5, r: 0.85, top: 2.68, approach: { x: -4.25, z: -1.15 }, rest: { x: -4.25, z: -2.5 } },
-      { x: 3.95, z: -2.8, r: 0.8, top: 2.78, approach: { x: 3.95, z: -1.5 }, rest: { x: 3.95, z: -2.8 } }
+      { x: -6.7, z: -3.9, r: 1, top: 2.72, approach: { x: -6.7, z: -2.3 }, rest: { x: -6.7, z: -3.9 } },
+      { x: 6.45, z: -4.25, r: 1, top: 2.82, approach: { x: 6.45, z: -2.6 }, rest: { x: 6.45, z: -4.25 } }
     ],
     swimObstacles: [
-      { x: -5.25, z: 0.75, r: 0.65, top: 2.12, kind: "ice" },
-      { x: 5.35, z: 3.55, r: 0.5, top: 2.08, kind: "ice" },
-      { x: 5.45, z: -0.05, r: 0.5, top: 2.02, kind: "ice" },
-      { x: -4.55, z: 3.6, r: 0.6, top: 1.12, kind: "rock" },
-      { x: 0.75, z: 3.8, r: 0.55, top: 0.95, kind: "rock" },
-      { x: 0.65, z: 0.45, r: 0.5, top: 1.05, kind: "rock" }
+      { x: -9.3, z: 0.1, r: 1.05, top: 0.7, kind: "ice" },
+      { x: 9.45, z: 8.5, r: 0.85, top: -0.3, kind: "ice" },
+      { x: 8.9, z: -0.5, r: 1.2, top: 0.5, kind: "ice" },
+      { x: -8.5, z: 8.8, r: 1.1, top: -2.05, kind: "rock" },
+      { x: 0.9, z: 9.6, r: 1.25, top: -2.35, kind: "rock" },
+      { x: 1.6, z: -0.2, r: 1.4, top: -1.65, kind: "rock" },
+      { x: 9.5, z: 5.1, r: 0.85, top: -2.25, kind: "rock" },
+      { x: -9.5, z: 4.3, r: 0.75, top: -2.4, kind: "rock" }
     ],
-    boulders: [{ x: -5.2, z: -4.0, r: 0.7, h: 1.0 }, { x: 5.3, z: -3.9, r: 0.65, h: 0.9 }, { x: 0.6, z: -4.3, r: 0.5, h: 0.6 }],
-    slots: [{ x: -2.7, z: -3.2, on: "land" }, { x: 0.65, z: -2.5, on: "land" }, { x: 2.5, z: -1.8, on: "land" }, { x: -1.0, z: -3.85, on: "land" }],
+    boulders: [{ x: -8.4, z: -6.1, r: 0.9, h: 1.2 }, { x: 8.5, z: -6.05, r: 0.85, h: 1.05 }, { x: 0.8, z: -6.5, r: 0.65, h: 0.7 }],
+    slots: [{ x: -4.3, z: -4.8, on: "land" }, { x: 1.1, z: -4.1, on: "land" }, { x: 4.1, z: -2.8, on: "land" }, { x: -1.6, z: -5.7, on: "land" }],
     colors: { rock: "#697f8e", top: "#bacbd0", water: "#68bdc9", accent: "#eff7f6" }
   },
   seals: {
@@ -148,15 +177,17 @@ export function coastCamera(view: CoastView, counting = false, underwater = fals
   // Counting: higher and further back, so every animal (shelf and pool) stays clear of the HUD while the question panel lifts the view.
   if (counting && view !== "all") {
     const ex = EXHIBITS[view];
-    return { pos: { x: ex.x, y: 15, z: ex.z + 11 }, target: { x: ex.x, y: 0.4, z: ex.z - 1.2 } };
+    return view === "penguins"
+      ? { pos: { x: ex.x, y: 23, z: ex.z + 22 }, target: { x: ex.x, y: 0.1, z: ex.z + 1.1 } }
+      : { pos: { x: ex.x, y: 15, z: ex.z + 11 }, target: { x: ex.x, y: 0.4, z: ex.z - 1.2 } };
   }
   if (view === "all") {
     return { pos: { x: COAST_ORIGIN.x, y: 21, z: COAST_ORIGIN.z + 38 }, target: { x: COAST_ORIGIN.x, y: 0.9, z: COAST_ORIGIN.z + 0.5 } };
   }
   const ex = EXHIBITS[view];
   if (view === "penguins") {
-    if (underwater) return { pos: { x: ex.x, y: 1.05, z: ex.z + 13.1 }, target: { x: ex.x, y: 1.15, z: ex.z + 0.4 } };
-    return { pos: { x: ex.x + 0.7, y: 7.4, z: ex.z + 17.6 }, target: { x: ex.x, y: 1.85, z: ex.z - 0.3 } };
+    if (underwater) return { pos: { x: ex.x, y: -0.5, z: ex.z + 25.5 }, target: { x: ex.x, y: -0.65, z: ex.z + 3.8 } };
+    return { pos: { x: ex.x + 0.9, y: 11.9, z: ex.z + 29.7 }, target: { x: ex.x, y: 1.25, z: ex.z + 1.1 } };
   }
   return { pos: { x: ex.x, y: 8.8, z: ex.z + 13.6 }, target: { x: ex.x, y: 1.45, z: ex.z + 0.2 } };
 }

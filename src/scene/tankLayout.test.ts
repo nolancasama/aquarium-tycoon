@@ -4,11 +4,23 @@ import { SAND_H, STAND_H, TANKS } from "../game/data/tanks";
 import { hall2Geometry, roomGeometry } from "./models/room";
 import { tankShellGeometry } from "./models/tankShell";
 import { slotMarkerY, SLOT_MARKER_LIFT, SLOT_MARKER_MAX_SCALE, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
+import { EXHIBITS, type CoastHabitat } from "../game/data/coast";
+import { landLegClear } from "../game/coast/motion";
 
 describe("decoration circles rest on the sand", () => {
   // The Shark Tunnel habitat draws its own zone rings on the seabed (scene/tunnel), not a tank shell.
   for (const tank of Object.values(TANKS).filter((t) => t.type !== "sharks")) {
     it(`${tank.type}: every draped, pulsing circle sits just above the rendered sand`, () => {
+      if (tank.type === "penguins") {
+        const ex = EXHIBITS[tank.type as CoastHabitat];
+        for (const slot of ex.slots) for (let a = 0; a < Math.PI * 2; a += Math.PI / 32) {
+          const radius = SLOT_MARKER_RADIUS * SLOT_MARKER_MAX_SCALE;
+          const point = { x: slot.x + Math.cos(a) * radius, z: slot.z + Math.sin(a) * radius };
+          expect(landLegClear(ex, point, point, [], 0.35)).toBe(true);
+          expect(ex.land.y + 0.035).toBeGreaterThan(ex.land.y);
+        }
+        return;
+      }
       const geometry = tankShellGeometry(tank.type);
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
       mesh.updateMatrixWorld();

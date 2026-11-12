@@ -1,5 +1,5 @@
 import type { Vec2, Vec3 } from "../types";
-import { ISLAND_CLEAR, SWIM_MARGIN, type CoastHabitat, type ExhibitDef } from "../data/coast";
+import { ISLAND_CLEAR, rampFootprint, SWIM_MARGIN, type CoastHabitat, type ExhibitDef } from "../data/coast";
 
 /**
  * Semi-aquatic movement (penguins, seals, sea otters). Deterministic and
@@ -80,6 +80,8 @@ export interface Mover {
   ledgeRest?: Vec2;
   /** Runtime-only station meal. Other species keep their original decisions. */
   feeding?: { spot: Vec3; station: Vec2; stage: "approach" | "eating"; routed: boolean; bites: number; nextBite: number; until: number };
+  /** Time yielding on an obstructed walking leg, used to choose another valid destination. */
+  blockedFor?: number;
 }
 
 export interface MoveCtx {
@@ -90,6 +92,8 @@ export interface MoveCtx {
   toy: Vec2 | null;
   /** Optional quiet resting destinations beside placed habitat items. */
   restSpots?: Vec2[];
+  /** Same-exhibit peers; reused by the runtime, never constructed during steering. */
+  movers?: readonly Mover[];
   /** Events: entered or left the water (for milestones and activities). */
   onEvent?: (m: Mover, kind: "enterWater" | "leaveWater" | "breathe" | "dive" | "play" | "eatFish") => void;
 }
@@ -117,6 +121,9 @@ export const PARAMS: Record<CoastSpecies, Params> = {
 
 /** Fastest any leg can move (m/s): tests use it to prove there is no teleporting. */
 export const MAX_SPEED = 1.9;
+/** Conservative visible GLB envelopes, including beak and trailing feet. */
+export const PENGUIN_LAND_SEPARATION = 0.9;
+export const PENGUIN_SWIM_SEPARATION = 1.3;
 
 function rand(m: Mover) {
   m.rng = (m.rng + 0x6d2b79f5) | 0;
@@ -126,7 +133,7 @@ function rand(m: Mover) {
 }
 const between = (m: Mover, [a, b]: [number, number]) => a + (b - a) * rand(m);
 
-export function newMover(id: string, species: CoastSpecies, ex: ExhibitDef, seed: number, time = 0, landItems: MoveCtx["landItems"] = []): Mover {
+export function newMover(id: string, species: CoastSpecies, ex: ExhibitDef, seed: number, time = 0, landItems: MoveCtx["landItems"] = [], peers: readonly Mover[] = []): Mover {
   const m: Mover = {
     id, species, x: 0, y: ex.land.y, z: 0, heading: 0, pitch: 0, mode: "rest", area: "land", island: -1,
     path: [], from: { x: 0, y: 0, z: 0 }, speed: 0, until: time, boutEnd: 0, nextBreath: 0,
@@ -137,7 +144,9 @@ export function newMover(id: string, species: CoastSpecies, ex: ExhibitDef, seed
     const p = waterPoint(m, ex, true);
     Object.assign(m, { x: p.x, y: p.y, z: p.z, mode: "float", area: "water", until: time + between(m, PARAMS.otter.float) });
   } else {
-    const p = landPoint(m, ex, landItems) ?? { x: (ex.land.minX + ex.land.maxX) / 2, z: (ex.land.minZ + ex.land.maxZ) / 2 };
+    let p = landPoint(m, ex, landItems);
+    for (let i = 0; p && i < 120 && peers.some((q) => Math.hypot(p!.x - q.x, p!.z - q.z) < PENGUIN_LAND_SEPARATION + 0.1); i++) p = landPoint(m, ex, landItems);
+    p ??= { x: (ex.land.minX + ex.land.maxX) / 2, z: (ex.land.minZ + ex.land.maxZ) / 2 };
     Object.assign(m, { x: p.x, z: p.z, until: time + between(m, [0.5, PARAMS[species].rest[1]]) });
   }
   m.heading = rand(m) * Math.PI * 2;
@@ -156,17 +165,38 @@ const segDist = (a: Vec2, b: Vec2, c: Vec2) => {
 /** Animals slide off a ramp's end into open water this far beyond it (and climb back on from there). */
 export const RAMP_STEP = 0.45;
 
-/** The solid under a ramp, as a rectangle (it slopes from the land edge to the waterline). */
-export function rampRect(ex: ExhibitDef, i: number) {
-  const r = ex.ramps[i];
-  const half = (r.width ?? 1.5) / 2;
-  return { minX: r.top.x - half, maxX: r.top.x + half, minZ: Math.min(r.top.z, r.bottom.z), maxZ: Math.max(r.top.z, r.bottom.z) };
+const rampFootprints = new WeakMap<ExhibitDef, Vec2[][]>();
+function footprints(ex: ExhibitDef) {
+  let polygons = rampFootprints.get(ex);
+  if (!polygons) { polygons = ex.ramps.map((_, i) => rampFootprint(ex, i)); rampFootprints.set(ex, polygons); }
+  return polygons;
 }
 
-function segHitsRect(a: Vec2, b: Vec2, r: { minX: number; maxX: number; minZ: number; maxZ: number }, pad: number) {
-  for (let i = 0; i <= 16; i++) {
-    const t = i / 16, x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t;
-    if (x > r.minX - pad && x < r.maxX + pad && z > r.minZ - pad && z < r.maxZ + pad) return true;
+/** Bounds of the sloping rock base; the actual swimming footprint follows its irregular edges. */
+export function rampRect(ex: ExhibitDef, i: number) {
+  const points = footprints(ex)[i];
+  return { minX: Math.min(...points.map((p) => p.x)), maxX: Math.max(...points.map((p) => p.x)), minZ: Math.min(...points.map((p) => p.z)), maxZ: Math.max(...points.map((p) => p.z)) };
+}
+
+function pointInPolygon(p: Vec2, polygon: readonly Vec2[]) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i], b = polygon[j];
+    if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+function segHitsPolygon(a: Vec2, b: Vec2, polygon: readonly Vec2[], pad: number) {
+  if (pointInPolygon(a, polygon) || pointInPolygon(b, polygon)) return true;
+  for (let i = 0; i < polygon.length; i++) {
+    const c = polygon[i], d = polygon[(i + 1) % polygon.length];
+    const crossA = (b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x);
+    const crossB = (b.x - a.x) * (d.z - a.z) - (b.z - a.z) * (d.x - a.x);
+    const crossC = (d.x - c.x) * (a.z - c.z) - (d.z - c.z) * (a.x - c.x);
+    const crossD = (d.x - c.x) * (b.z - c.z) - (d.z - c.z) * (b.x - c.x);
+    if (crossA * crossB < 0 && crossC * crossD < 0) return true;
+    if (Math.min(segDist(a, b, c), segDist(a, b, d), segDist(c, d, a), segDist(c, d, b)) <= pad + 1e-10) return true;
   }
   return false;
 }
@@ -174,7 +204,7 @@ function segHitsRect(a: Vec2, b: Vec2, r: { minX: number; maxX: number; minZ: nu
 /** A straight swim leg stays inside the pool and clear of islands and ramp bases. */
 export function waterLegClear(ex: ExhibitDef, a: Vec2, b: Vec2, body: number): boolean {
   const p = ex.pool, mg = SWIM_MARGIN + body * 0.4;
-  for (const q of [a, b]) if (q.x < p.minX + mg || q.x > p.maxX - mg || q.z < p.minZ + mg || q.z > p.maxZ - mg) return false;
+  if (a.x < p.minX + mg || a.x > p.maxX - mg || a.z < p.minZ + mg || a.z > p.maxZ - mg || b.x < p.minX + mg || b.x > p.maxX - mg || b.z < p.minZ + mg || b.z > p.maxZ - mg) return false;
   for (const isl of ex.islands) {
     // A leg that starts or ends at the island's climb point (closer than the usual clearance)
     // may not come any closer than that end, and never nearer than its rock plus a hand's width.
@@ -183,15 +213,17 @@ export function waterLegClear(ex: ExhibitDef, a: Vec2, b: Vec2, body: number): b
     if (segDist(a, b, isl) < Math.max(isl.r + 0.3, Math.min(want, ends))) return false;
   }
   for (const o of ex.swimObstacles ?? []) if (segDist(a, b, o) < o.r + body * 0.45 + 0.12) return false;
-  for (let i = 0; i < ex.ramps.length; i++) if (segHitsRect(a, b, rampRect(ex, i), body * 0.35)) return false;
+  for (const polygon of footprints(ex)) if (segHitsPolygon(a, b, polygon, body * 0.35)) return false;
   return true;
 }
 
 /** A straight land leg stays on the shelf and clear of boulders and items. */
 export function landLegClear(ex: ExhibitDef, a: Vec2, b: Vec2, items: { x: number; z: number; r: number }[], body: number): boolean {
   const l = ex.land, mg = 0.3;
-  for (const q of [a, b]) if (q.x < l.minX + mg || q.x > l.maxX - mg || q.z < l.minZ + mg || q.z > l.maxZ - 0.1) return false;
-  for (const o of [...ex.boulders, ...(ex.ledges ?? []), ...items]) if (segDist(a, b, o) < o.r + body * 0.45) return false;
+  if (a.x < l.minX + mg || a.x > l.maxX - mg || a.z < l.minZ + mg || a.z > l.maxZ - 0.1 || b.x < l.minX + mg || b.x > l.maxX - mg || b.z < l.minZ + mg || b.z > l.maxZ - 0.1) return false;
+  for (const o of ex.boulders) if (segDist(a, b, o) < o.r + body * 0.45) return false;
+  for (const o of ex.ledges ?? []) if (segDist(a, b, o) < o.r + body * 0.45) return false;
+  for (const o of items) if (segDist(a, b, o) < o.r + body * 0.45) return false;
   return true;
 }
 
@@ -210,7 +242,7 @@ function waterPoint(m: Mover, ex: ExhibitDef, surface: boolean, deepOnly = false
     const q = { x: p.minX + mg + rand(m) * (p.maxX - p.minX - 2 * mg), z: p.minZ + mg + rand(m) * (p.maxZ - p.minZ - 2 * mg) };
     if (ex.islands.some((isl) => Math.hypot(q.x - isl.x, q.z - isl.z) < isl.r + ISLAND_CLEAR + 0.4)) continue;
     if (ex.swimObstacles?.some((o) => Math.hypot(q.x - o.x, q.z - o.z) < o.r + PARAMS[m.species].body * 0.45 + 0.2)) continue;
-    if (ex.ramps.some((_, k) => segHitsRect(q, q, rampRect(ex, k), 0.4))) continue;
+    if (footprints(ex).some((polygon) => segHitsPolygon(q, q, polygon, 0.4))) continue;
     const top = p.surface - SWIM_MARGIN, bottom = p.floor + SWIM_MARGIN + 0.1;
     const y = surface ? p.surface - 0.06 : deepOnly ? bottom + rand(m) * 0.35 : bottom + rand(m) * (top - bottom);
     return { x: q.x, y, z: q.z };
@@ -228,6 +260,8 @@ function startRest(m: Mover, ctx: MoveCtx) {
   m.path = [];
   m.speed = 0;
   m.pitch = 0;
+  m.blockedFor = 0;
+  m.ledgeNext = -1;
   m.until = ctx.time + between(m, PARAMS[m.species].rest);
   const r = rand(m);
   m.action = r < 0.35 ? "groom" : r < 0.7 ? "look" : null;
@@ -257,14 +291,56 @@ function nextSwimLeg(m: Mover, ex: ExhibitDef, _ctx: MoveCtx, deep: boolean) {
   m.path = [];
 }
 
+/** A crowded landing is a temporary destination: retreat through clear water and retry.
+ * Breathing birds keep their ascent, with the vertical part outside the crowd.
+ */
+function clearCrowdedSwimLeg(m: Mover, ex: ExhibitDef, ctx: MoveCtx) {
+  for (let i = 0; i < 60; i++) {
+    const q = waterPoint(m, ex, false);
+    if (m.mode === "breathe") q.y = m.y;
+    if (!waterLegClear(ex, m, q, PARAMS.penguin.body) || !peerStepClear(m, q.x, q.y, q.z, ctx.movers ?? [])) continue;
+    const top = { x: q.x, y: ex.pool.surface - 0.06, z: q.z };
+    if (m.mode === "breathe" && !peerStepClear(m, top.x, top.y, top.z, ctx.movers ?? [], q)) continue;
+    m.path = m.mode === "breathe" ? [q, top] : [q];
+    m.exit = null;
+    m.blockedFor = 0;
+    return;
+  }
+}
+
+/** Directional lanes continue through both land and water approaches. */
+function rampLane(m: Mover, ex: ExhibitDef, i: number, up = false) {
+  const r = ex.ramps[i];
+  if (m.species !== "penguin" || !r.width) return r.top.x;
+  return r.top.x + (up ? 1 : -1) * Math.min(1.05, (r.width - 1.1) / 2);
+}
+
+function destinationFree(m: Mover, q: Vec2, ctx: MoveCtx, clearance = PENGUIN_LAND_SEPARATION + 0.12) {
+  if (m.species !== "penguin") return true;
+  for (const peer of ctx.movers ?? []) {
+    if (peer === m) continue;
+    if (Math.hypot(peer.x - q.x, peer.z - q.z) < clearance) return false;
+    const end = peer.path[peer.path.length - 1];
+    if (end && Math.hypot(end.x - q.x, end.z - q.z) < clearance) return false;
+  }
+  return true;
+}
+
 /** The way out of the water: the nearest ramp bottom or island climb point, reached by a clear leg. */
 function leaveWater(m: Mover, ex: ExhibitDef, ctx: MoveCtx, rampsOnly = false): boolean {
   const body = PARAMS[m.species].body;
   const exits: { at: Vec3; kind: "ramp" | "island"; i: number }[] = [
-    ...ex.ramps.map((r, i) => ({ at: { x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z + RAMP_STEP }, kind: "ramp" as const, i })),
+    ...ex.ramps.map((r, i) => ({ at: { x: rampLane(m, ex, i, true), y: ex.pool.surface - 0.06, z: r.bottom.z + RAMP_STEP }, kind: "ramp" as const, i })),
     ...(m.species === "otter" || rampsOnly ? [] : ex.islands.map((isl, i) => ({ at: { x: isl.climb.x, y: ex.pool.surface - 0.06, z: isl.climb.z }, kind: "island" as const, i })))
   ].sort(() => rand(m) - 0.5);
   for (const e of exits) {
+    // One incoming bird owns the landing until it has climbed clear. Others
+    // continue swimming rather than forming a stationary crowd at the toe.
+    if (m.species === "penguin" && e.kind === "ramp" && ctx.movers?.some((q) => q !== m &&
+      ((q.exit?.kind === "ramp" && q.exit.i === e.i) || (q.mode === "rampUp" && Math.abs(q.x - e.at.x) < 0.2)))) continue;
+    // Reserve the whole single-file climb until its occupant is back in open water.
+    if (m.species === "penguin" && e.kind === "island" && ctx.movers?.some((q) => q !== m && ((q.exit?.kind === "island" && q.exit.i === e.i) || (q.island === e.i && (q.area === "island" || q.mode === "climb" || q.mode === "hop"))))) continue;
+    if (e.kind === "island" && !destinationFree(m, ex.islands[e.i].rest, ctx)) continue;
     if (waterLegClear(ex, m, e.at, body)) {
       m.path = [e.at];
       m.exit = e;
@@ -304,7 +380,8 @@ function afterRest(m: Mover, ex: ExhibitDef, ctx: MoveCtx) {
   if (ex.ledges?.length) {
     if (rand(m) < 0.45) {
       const i = Math.floor(rand(m) * ex.ledges.length), ledge = ex.ledges[i];
-      if (landLegClear(ex, m, ledge.approach, ctx.landItems, p.body)) {
+      const reserved = ctx.movers?.some((q) => q !== m && (q.ledgeNext === i || (q.ledge === i && (q.area === "ledge" || q.mode === "stepUp" || q.mode === "stepDown"))));
+      if (!reserved && destinationFree(m, ledge.rest, ctx, ledge.r + 0.8) && destinationFree(m, ledge.approach, ctx) && landLegClear(ex, m, ledge.approach, ctx.landItems, p.body)) {
         m.mode = "walk";
         m.path = [{ ...ledge.approach, y: ex.land.y }];
         m.rampNext = -1;
@@ -314,7 +391,7 @@ function afterRest(m: Mover, ex: ExhibitDef, ctx: MoveCtx) {
     }
     if (ctx.restSpots?.length && rand(m) < 0.6) {
       const q = ctx.restSpots[Math.floor(rand(m) * ctx.restSpots.length)];
-      if (landLegClear(ex, m, q, ctx.landItems, p.body)) {
+      if (destinationFree(m, q, ctx) && landLegClear(ex, m, q, ctx.landItems, p.body)) {
         m.mode = "walk";
         m.path = [{ ...q, y: ex.land.y }];
         m.rampNext = -1;
@@ -325,8 +402,9 @@ function afterRest(m: Mover, ex: ExhibitDef, ctx: MoveCtx) {
   if (rand(m) < p.toWater && ex.ramps.length) {
     // Walk to a ramp top (clear leg, or via a point straight behind it), then down.
     const r = ex.ramps[Math.floor(rand(m) * ex.ramps.length)];
-    const top = { x: r.top.x, y: ex.land.y, z: r.top.z };
-    const behind = { x: r.top.x, y: ex.land.y, z: Math.max(ex.land.minZ + 0.6, r.top.z - 1.2) };
+    const lane = rampLane(m, ex, ex.ramps.indexOf(r));
+    const top = { x: lane, y: ex.land.y, z: r.top.z };
+    const behind = { x: lane, y: ex.land.y, z: Math.max(ex.land.minZ + 0.6, r.top.z - 1.2) };
     if (landLegClear(ex, m, top, ctx.landItems, p.body)) m.path = [top];
     else if (landLegClear(ex, m, behind, ctx.landItems, p.body) && landLegClear(ex, behind, top, ctx.landItems, p.body)) m.path = [behind, top];
     else { startRest(m, ctx); return; }
@@ -336,7 +414,7 @@ function afterRest(m: Mover, ex: ExhibitDef, ctx: MoveCtx) {
   }
   for (let i = 0; i < 12; i++) {
     const q = landPoint(m, ex, ctx.landItems);
-    if (q && landLegClear(ex, m, q, ctx.landItems, p.body)) {
+    if (q && destinationFree(m, q, ctx) && landLegClear(ex, m, q, ctx.landItems, p.body)) {
       m.mode = "walk";
       m.path = [{ x: q.x, y: ex.land.y, z: q.z }];
       m.rampNext = -1;
@@ -367,6 +445,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
   const p = PARAMS[m.species];
   m.phase += dt * (m.speed > 0.05 ? (m.area === "water" ? 6 : 9) : 1.2);
   if (m.action && ctx.time > m.actionUntil) m.action = null;
+  if (m.species === "penguin" && !m.feeding && (m.mode === "swim" || m.mode === "breathe") && (m.blockedFor ?? 0) > 1.5) clearCrowdedSwimLeg(m, ex, ctx);
   if (m.feeding) {
     const meal = m.feeding;
     if (meal.stage === "eating") {
@@ -397,7 +476,8 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
       break;
     }
     case "walk": {
-      if (travel(m, dt, p.walk, true)) {
+      if ((m.blockedFor ?? 0) > 1.5 && !m.feeding) { m.rampNext = -1; startRest(m, ctx); break; }
+      if (travel(m, ex, dt, p.walk, true, ctx)) {
         if ((m.ledgeNext ?? -1) >= 0) {
           m.ledge = m.ledgeNext;
           m.ledgeNext = -1;
@@ -411,7 +491,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
           const r = ex.ramps[m.rampNext!];
           m.mode = "rampDown";
           m.from = { x: m.x, y: m.y, z: m.z };
-          m.path = [{ x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z }, { x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z + RAMP_STEP }];
+          m.path = [{ x: m.x, y: ex.pool.surface - 0.06, z: r.bottom.z }, { x: m.x, y: ex.pool.surface - 0.06, z: r.bottom.z + RAMP_STEP }];
           m.rampNext = -1;
         } else {
           if (m.feeding?.routed) {
@@ -429,7 +509,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
     case "stepUp":
     case "stepDown": {
       const up = m.mode === "stepUp";
-      if (travel(m, dt, p.walk * 1.4, true)) {
+      if (travel(m, ex, dt, p.walk * 1.4, true, ctx)) {
         m.area = up ? "ledge" : "land";
         if (!up) m.ledge = -1;
         startRest(m, ctx);
@@ -443,8 +523,9 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
     case "rampDown":
     case "rampUp": {
       const down = m.mode === "rampDown";
-      if (travel(m, dt, p.walk * (down ? 1.3 : 0.9), false)) {
+      if (travel(m, ex, dt, p.walk * (down ? 1.3 : 0.9), false, ctx)) {
         if (down) {
+          if (m.species === "penguin" && !canStreamline(m, ctx)) { m.speed = 0; break; }
           m.splashT = ctx.time;
           ctx.onEvent?.(m, "enterWater");
           if (m.species === "otter") { m.mode = "float"; m.area = "water"; m.until = ctx.time + between(m, p.float); }
@@ -468,9 +549,12 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
     case "hop": {
       const isl = ex.islands[m.island];
       const up = m.mode === "climb";
-      if (travel(m, dt, p.walk * 1.4, false)) {
+      if (travel(m, ex, dt, p.walk * 1.4, false, ctx)) {
         if (up) { m.area = "island"; m.y = isl.top; ctx.onEvent?.(m, "leaveWater"); startRest(m, ctx); }
-        else { m.splashT = ctx.time; ctx.onEvent?.(m, "enterWater"); m.island = -1; startSwim(m, ex, ctx); }
+        else {
+          if (m.species === "penguin" && !canStreamline(m, ctx)) { m.speed = 0; break; }
+          m.splashT = ctx.time; ctx.onEvent?.(m, "enterWater"); m.island = -1; startSwim(m, ex, ctx);
+        }
       } else {
         // An arc between the waterline and the island top, a little above both.
         const total = Math.hypot((isl.rest.x - isl.climb.x), (isl.rest.z - isl.climb.z)) || 1;
@@ -490,7 +574,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
         ctx.onEvent?.(m, "breathe");
         break;
       }
-      if (travel(m, dt, p.swim * (m.exit ? 0.8 : 1), true)) {
+      if (travel(m, ex, dt, p.swim * (m.exit ? 0.8 : 1), true, ctx)) {
         if (m.exit) {
           const e = m.exit;
           m.exit = null;
@@ -498,7 +582,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
             const r = ex.ramps[e.i];
             m.mode = "rampUp";
             m.from = { x: m.x, y: m.y, z: m.z };
-            m.path = [{ x: r.bottom.x, y: ex.pool.surface - 0.06, z: r.bottom.z }, { x: r.top.x, y: ex.land.y, z: r.top.z }];
+            m.path = [{ x: m.x, y: ex.pool.surface - 0.06, z: r.bottom.z }, { x: m.x, y: ex.land.y, z: r.top.z }];
           } else {
             const isl = ex.islands[e.i];
             m.mode = "climb";
@@ -517,7 +601,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
       break;
     }
     case "breathe": {
-      if (m.path.length) { travel(m, dt, p.swim * 0.7, true); break; }
+      if (m.path.length) { travel(m, ex, dt, p.swim * 0.7, true, ctx); break; }
       if (!m.until) m.until = ctx.time + 1.2 + rand(m);
       m.speed = 0;
       if (ctx.time >= m.until) {
@@ -536,7 +620,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
       if (m.y < top - 0.02) {
         // Still coming up from a dive: rise to the surface first, then roll onto the back.
         m.path = [{ x: m.x, y: top, z: m.z }];
-        travel(m, dt, p.swim * 0.8, false);
+        travel(m, ex, dt, p.swim * 0.8, false, ctx);
         break;
       }
       m.pitch = 0;
@@ -547,7 +631,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
         if (ctx.toy && Math.hypot(m.x - ctx.toy.x, m.z - ctx.toy.z) < 1.2) { m.action = "play"; m.actionUntil = ctx.time + 3; ctx.onEvent?.(m, "play"); }
         else if (!m.action && rand(m) < 0.4) { m.action = "groom"; m.actionUntil = ctx.time + 3 + rand(m) * 2; }
       }
-      travel(m, dt, 0.18, false);
+      travel(m, ex, dt, 0.18, false, ctx);
       m.y = top;
       if (ctx.time >= m.until) {
         if (rand(m) < 0.3 && leaveWater(m, ex, ctx)) { m.mode = "swim"; m.boutEnd = ctx.time; break; }
@@ -603,18 +687,111 @@ export function stationSpots(ex: ExhibitDef, station: Vec2, count: number, items
   for (const radius of [0.82, 1.12, 1.42, 1.72]) for (let i = 0; i < 24 && spots.length < count; i++) {
     const a = i * Math.PI / 12;
     const q = { x: station.x + Math.sin(a) * radius, z: station.z + Math.cos(a) * radius, y: ex.land.y };
-    if (landLegClear(ex, q, q, items, PARAMS.penguin.body) && spots.every((p) => Math.hypot(p.x - q.x, p.z - q.z) >= 0.62)) spots.push(q);
+    if (landLegClear(ex, q, q, items, PARAMS.penguin.body) && spots.every((p) => Math.hypot(p.x - q.x, p.z - q.z) >= PENGUIN_LAND_SEPARATION + 0.04)) spots.push(q);
   }
   return spots;
 }
 
 /** Move along the path at `speed`; returns true when the last point is reached. Turns the heading toward the leg. */
-function travel(m: Mover, dt: number, speed: number, steer: boolean): boolean {
+// Shared scratch points: stepMover is synchronous; steering never allocates per frame.
+const proposed = { x: 0, y: 0, z: 0 };
+
+function canStreamline(m: Mover, ctx: MoveCtx) {
+  for (const q of ctx.movers ?? []) if (q !== m && (q.mode === "swim" || q.mode === "breathe") && Math.hypot(m.x - q.x, m.y - q.y, m.z - q.z) < PENGUIN_SWIM_SEPARATION) return false;
+  return true;
+}
+
+/** Segment against every peer's visible envelope, including the space between samples. */
+function peerStepClear(m: Mover, x: number, y: number, z: number, peers: readonly Mover[], from: Vec3 = m) {
+  for (const q of peers) {
+    if (q === m || q.species !== "penguin") continue;
+    const water = m.mode === "swim" || m.mode === "breathe" || q.mode === "swim" || q.mode === "breathe";
+    if (!water && Math.abs(m.y - q.y) > 0.8) continue;
+    const gap = water ? PENGUIN_SWIM_SEPARATION : PENGUIN_LAND_SEPARATION;
+    const dx = x - from.x, dy = water ? y - from.y : 0, dz = z - from.z;
+    const ax = from.x - q.x, ay = water ? from.y - q.y : 0, az = from.z - q.z;
+    const along = Math.max(0, Math.min(1, -(ax * dx + ay * dy + az * dz) / (dx * dx + dy * dy + dz * dz || 1)));
+    const closest = Math.hypot(ax + dx * along, ay + dy * along, az + dz * along);
+    // Existing intersections (e.g. an external harness placing birds) may only separate.
+    if (closest < gap - 1e-7 && closest < Math.min(gap, Math.hypot(ax, ay, az)) - 1e-9) return false;
+  }
+  return true;
+}
+
+function travel(m: Mover, ex: ExhibitDef, dt: number, speed: number, steer: boolean, ctx: MoveCtx): boolean {
   if (!m.path.length) { m.speed = 0; return true; }
   const t = m.path[0];
   const dx = t.x - m.x, dy = t.y - m.y, dz = t.z - m.z;
   const d = Math.hypot(dx, dy, dz);
   const flat = Math.hypot(dx, dz);
+  if (m.species === "penguin") {
+    const swimming = m.mode === "swim" || m.mode === "breathe";
+    const freeSteer = swimming || m.mode === "walk";
+    const peers = ctx.movers;
+    let vx = dx / (d || 1), vy = dy / (d || 1), vz = dz / (d || 1);
+    let pace = 1;
+    // If the remaining leg already clears bodies, keep it. This is essential around
+    // occupied trays: a safe destination must not orbit inside a soft avoidance halo.
+    const peerClearLeg = peers ? peerStepClear(m, t.x, t.y, t.z, peers) : true;
+    if (freeSteer && peers && !peerClearLeg) for (const q of peers) {
+      if (q === m || q.species !== "penguin") continue;
+      const water = swimming || q.mode === "swim" || q.mode === "breathe";
+      if (!water && Math.abs(q.y - m.y) > 0.8) continue;
+      const ax = m.x - q.x, ay = water ? m.y - q.y : 0, az = m.z - q.z;
+      const distance = Math.hypot(ax, ay, az), gap = water ? PENGUIN_SWIM_SEPARATION : PENGUIN_LAND_SEPARATION;
+      const ahead = -(ax * vx + ay * vy + az * vz);
+      if (distance < gap + 1.5 && ahead > -0.1) {
+        const strength = Math.max(0, (gap + 1.5 - distance) / 1.5);
+        // All birds pass on their right; the convention is stable through head-on approaches.
+        const horizontal = Math.hypot(vx, vz) || 1;
+        vx += (vz / horizontal * 1.4 + ax / (distance || 1)) * strength;
+        vz += (-dx / (d || 1) / horizontal * 1.4 + az / (distance || 1)) * strength;
+        if (water) vy += ay / (distance || 1) * strength;
+        pace = Math.min(pace, 0.35 + Math.max(0, Math.min(0.65, (distance - gap) / 1.8)));
+      }
+    }
+    const heading = Math.hypot(vx, vz) > 1e-7 ? Math.atan2(vx, vz) : m.heading;
+    const pitch = swimming ? Math.atan2(vy, Math.hypot(vx, vz)) : 0;
+    if (freeSteer) {
+      m.heading += Math.max(-dt * 2.4, Math.min(dt * 2.4, angleDiff(m.heading, heading)));
+      m.pitch += Math.max(-dt * 2, Math.min(dt * 2, pitch - m.pitch));
+      // Walking also follows its smoothed heading, rather than sliding sideways during turns.
+      const cp = Math.cos(m.pitch);
+      vx = Math.sin(m.heading) * cp; vy = swimming ? Math.sin(m.pitch) : 0; vz = Math.cos(m.heading) * cp;
+      if (Math.abs(angleDiff(m.heading, heading)) > 1 || Math.abs(m.pitch - pitch) > 0.8) pace = 0;
+    } else {
+      if (flat > 0.02) m.heading = turnToward(m.heading, Math.atan2(dx, dz), dt * 5);
+      m.pitch += (0 - m.pitch) * Math.min(1, dt * 5);
+    }
+    m.speed += (Math.min(speed * pace, d * 2) - m.speed) * Math.min(1, dt * 4);
+    let step = Math.min(m.speed * dt, MAX_SPEED * dt, d);
+    // An aligned endpoint is reached exactly, without overshooting or orbiting it.
+    const end = d < 1e-5 || (d <= step + 1e-6 && (!freeSteer || (Math.abs(angleDiff(m.heading, Math.atan2(dx, dz))) < 0.14 && (!swimming || Math.abs(m.pitch - Math.atan2(dy, flat)) < 0.14))));
+    if (end) { vx = dx / (d || 1); vy = dy / (d || 1); vz = dz / (d || 1); step = d; }
+    proposed.x = m.x + vx * step; proposed.y = m.y + vy * step; proposed.z = m.z + vz * step;
+    let valid = true;
+    if (swimming) valid = waterLegClear(ex, m, proposed, PARAMS.penguin.body) && waterLegClear(ex, proposed, t, PARAMS.penguin.body) && proposed.y >= ex.pool.floor + SWIM_MARGIN && proposed.y <= ex.pool.surface - 0.04;
+    else if (m.mode === "walk") valid = landLegClear(ex, m, proposed, ctx.landItems, PARAMS.penguin.body) && landLegClear(ex, proposed, t, ctx.landItems, PARAMS.penguin.body);
+    if (!valid || (peers && !peerStepClear(m, proposed.x, proposed.y, proposed.z, peers))) {
+      // Yield in place; never project a body out of a wall or teleport it away from a peer.
+      m.speed = 0;
+      m.blockedFor = (m.blockedFor ?? 0) + dt;
+      if (!valid && freeSteer) {
+        const wantHeading = flat > 1e-7 ? Math.atan2(dx, dz) : m.heading;
+        m.heading += Math.max(-dt * 2.4, Math.min(dt * 2.4, angleDiff(m.heading, wantHeading)));
+        if (swimming) m.pitch += Math.max(-dt * 2, Math.min(dt * 2, Math.atan2(dy, flat) - m.pitch));
+      }
+      return false;
+    }
+    if (step > 1e-9 && swimming) {
+      if (Math.hypot(vx, vz) > 1e-7) m.heading = Math.atan2(vx, vz);
+      m.pitch = Math.atan2(vy, Math.hypot(vx, vz));
+    }
+    m.x = proposed.x; m.y = proposed.y; m.z = proposed.z;
+    m.blockedFor = 0;
+    if (end || d < 1e-5) { m.path.shift(); return m.path.length === 0; }
+    return false;
+  }
   // Ease in: a body accelerates rather than jumping to full speed.
   m.speed += (speed - m.speed) * Math.min(1, dt * 2.5);
   const step = Math.min(m.speed * dt, MAX_SPEED * dt);
