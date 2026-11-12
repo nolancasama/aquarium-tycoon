@@ -31,7 +31,8 @@ import { nextStep, type Step } from "../logic/guide";
 import { tutorialGuide } from "../logic/tutorialGuide";
 import { countableTanks, presentColors, type Request } from "../logic/requests";
 import { NUMBER_IDS, NUMBER_PHRASE } from "../logic/english";
-import { clearSave, encodeSave, rawSaveExists, readSave, writeSave } from "../logic/save";
+import { clearSave, decodeSaveReport, encodeSave, rawSaveExists, readSave, writeSave } from "../logic/save";
+import { backupRawSave, pinPreRepair, readRawSave, readSaveStorage, replaceRawSave, updateLastGood } from "../logic/backup";
 import { ask, say, wait } from "./ask";
 import { backToRoom, openTank, startPlacingFish } from "./actions";
 import { celebrate, leave, numberSlots, numbersAround, requestGuidanceTick, resetVisitors, runRequest, scripted, spawnVisitor, walkTo } from "./visitors";
@@ -55,15 +56,24 @@ import { dropPreview, previewActive } from "./preview";
 
 let lastSaved = "";
 let saveTimer = 0;
+// If preservation fails (for example a full managed device), play stays available
+// while autosave leaves the original in place until a teacher can export it.
+let preserveOriginal = false;
 
-export function saveNow() {
+export function saveNow(): boolean {
   const g = getGame();
   // A development preview is a sandbox: nothing of it is written (flow/preview.ts).
-  if (g.screen === "title" || previewActive()) return;
+  if (g.screen === "title") return true;
+  if (previewActive() || preserveOriginal) return false;
   const text = encodeSave(g.model);
-  if (text === lastSaved) return;
-  lastSaved = text;
-  writeSave(text);
+  if (text === lastSaved) return true;
+  if (writeSave(text)) {
+    // Last known good changes only at session start (continueGame), from a cleanly
+    // decoded original: an in-session loss must never reach it through autosave.
+    lastSaved = text;
+    return true;
+  }
+  return false;
 }
 
 export function installAutosave(): () => void {
@@ -198,6 +208,8 @@ function enter(m: Model) {
     settingsOpen: false,
     confirmNew: false,
     saveLost: false,
+    saveRecoveryOpen: false,
+    saveIssues: m.quarantine?.length ?? 0,
     atriumArrival: false,
     tunnelArrival: false,
     exploring: false,
@@ -220,6 +232,11 @@ function enter(m: Model) {
 }
 
 export async function newGame() {
+  // End the sandbox first; New Game must never write during a preview.
+  if (previewActive()) {
+    toast({ en: "End preview before starting a new game.", ja: "プレビューを おわってから はじめてください。", tone: "info" });
+    return;
+  }
   const setup = !getGame().settings.audioSetupDone;
   if (setup) {
     setGame({ audioCheck: "setup", confirmNew: false });
@@ -229,6 +246,13 @@ export async function newGame() {
       });
     });
   }
+  const existing = readSaveStorage();
+  const raw = existing.raw;
+  if (!existing.ok || (raw !== null && !backupRawSave(raw, "before-new-game"))) {
+    toast({ en: "Save backup failed. Export it in Save Recovery first.", ja: "バックアップできません。セーブの復元で 保存してください。", tone: "warn" });
+    return;
+  }
+  preserveOriginal = false;
   clearSave();
   void beginAudio(!setup);
   enter(newModel());
@@ -237,14 +261,54 @@ export async function newGame() {
 }
 
 export async function continueGame() {
-  const data = readSave();
+  if (previewActive()) {
+    toast({ en: "End preview before continuing a save.", ja: "プレビューを おわってから つづけてください。", tone: "info" });
+    return;
+  }
+  const raw = readRawSave();
+  const { data, report } = decodeSaveReport(raw);
   if (!data) {
     setGame({ hasSave: false, saveLost: saveIsLost() });
     return;
   }
+  // Pin the untouched damaged original before any rotating copy or autosave.
+  const pinned = !report.rejected.length || pinPreRepair(raw!);
+  const backedUp = backupRawSave(raw!, "session-start");
+  preserveOriginal = !pinned || !backedUp;
+  if (!report.rejected.length && !report.synthesizedTanks.length) updateLastGood(raw!);
   void beginAudio();
   enter(data.model);
+  setGame({ saveIssues: Math.max(report.rejected.length + report.synthesizedTanks.length, data.model.quarantine?.length ?? 0) });
+  if (preserveOriginal) toast({ en: "Autosave paused. Export your save in Save Recovery.", ja: "セーブの復元で データを 保存してください。", tone: "warn" });
   if (data.model.progress.tutorial !== "done") void flow(tutorial);
+}
+
+/** Restore/import one complete original; the next Continue starts its own session. */
+export function restoreSaveSnapshot(raw: string, reason: "before-restore" | "before-import"): { ok: boolean; message: string } {
+  if (previewActive()) return { ok: false, message: "End preview before restoring or importing. / プレビューを おわってください。" };
+  if (!decodeSaveReport(raw).data) return { ok: false, message: "This snapshot cannot be loaded. / このデータは よめません。" };
+  // Flush current play before preserving it. toTitle's saveNow must never run
+  // after the replacement, or it would overwrite the selected snapshot.
+  if (!saveNow()) return { ok: false, message: "Current play could not be saved. Return to title and export before restoring. / いまのデータを 保存できません。" };
+  const existing = readSaveStorage();
+  if (!existing.ok) return { ok: false, message: "Cannot read current storage. Export before replacing it. / 保存データを よめません。" };
+  const current = existing.raw;
+  if (current !== null && !backupRawSave(current, reason)) return { ok: false, message: "Backup failed. Export the current save first. / いまのセーブを 保存してください。" };
+  if (!replaceRawSave(raw)) return { ok: false, message: "Storage is unavailable or full. Save was not restored. / 保存できませんでした。" };
+  window.clearTimeout(saveTimer);
+  preserveOriginal = false;
+  lastSaved = raw;
+  // Enter title without any save call after the atomic replacement.
+  gen++;
+  busyFlow = false;
+  scripted.busy = false;
+  resetCelebrations();
+  clearVisitorTapQueue();
+  tts.cancel();
+  rt.visitors = [];
+  setGame({ screen: "title", mode: "busy", hasSave: true, saveLost: false, saveRecoveryOpen: false, settingsOpen: false,
+    prompt: null, line: null, request: null, stageCard: null, panel: null, placing: null, view: "room", tankId: null, rushAnnouncement: null });
+  return { ok: true, message: "Save restored. Choose Continue. / つづきから はじめてください。" };
 }
 
 export function toTitle() {
@@ -261,6 +325,8 @@ export function toTitle() {
     screen: "title",
     mode: "busy",
     hasSave: hasSaved(),
+    saveLost: saveIsLost(),
+    saveRecoveryOpen: false,
     settingsOpen: false,
     prompt: null,
     line: null,

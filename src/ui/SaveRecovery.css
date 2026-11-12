@@ -1,0 +1,70 @@
+.save-recovery-back {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: #073345b8;
+  pointer-events: auto;
+}
+.save-recovery {
+  box-sizing: border-box;
+  width: min(1180px, 100%);
+  height: min(720px, calc(100dvh - 40px));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px;
+  border: 3px solid #a3d8df;
+  border-radius: 24px;
+  color: #123b4c;
+  background: #f5fcfb;
+  box-shadow: 0 12px 50px #002a4560;
+  font-size: 16px;
+}
+.save-recovery h2, .save-recovery h3, .save-recovery h4, .save-recovery p { margin: 0; }
+.save-recovery h2 { font-size: 25px; }
+.save-recovery h3 { font-size: 19px; }
+.save-recovery h4 { font-size: 16px; }
+.save-recovery .ja { font-size: 12px; }
+.save-recovery-header, .save-recovery-tools, .save-snapshot-actions { display: flex; align-items: center; gap: 12px; }
+.save-recovery-header { justify-content: space-between; }
+.save-recovery-header p { margin-top: 5px; }
+.save-recovery button, .save-import { min-height: 46px; padding: 9px 16px; border-radius: 12px; font-size: 15px; cursor: pointer; }
+.save-recovery button:focus-visible, .save-import:focus-within { outline: 3px solid #175ed1; outline-offset: 3px; }
+.save-recovery button:disabled { opacity: .45; cursor: default; }
+.save-import { position: relative; display: inline-block; overflow: hidden; border: 2px solid #237b8b; background: #e0f6f4; font-weight: 700; }
+.save-import input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.save-export-note { font-size: 12px; line-height: 1.4; }
+.save-recovery-message { padding: 10px 14px; border-radius: 10px; background: #fff1c7; font-size: 14px; }
+.save-recovery-body { display: grid; grid-template-columns: minmax(290px, .8fr) minmax(0, 1.2fr); flex: 1; min-height: 0; gap: 18px; }
+.save-snapshot-list, .save-inspector { overflow-y: auto; overscroll-behavior: contain; min-height: 0; padding: 4px 8px 8px 4px; }
+.save-snapshot { padding: 14px; border: 1px solid #b4d9dd; border-radius: 14px; margin-bottom: 12px; background: white; }
+.save-snapshot time { display: block; margin-top: 4px; font-size: 12px; color: #476875; }
+.save-recovery .save-summary { display: flex; gap: 6px 12px; flex-wrap: wrap; margin: 10px 0; font-size: 14px; }
+.save-summary span { white-space: nowrap; }
+.save-room { margin-top: 16px; }
+.save-room table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; table-layout: fixed; }
+.save-room th, .save-room td { padding: 8px 6px; border-bottom: 1px solid #cbe0e4; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.save-room th:first-child { width: 12%; }
+.save-room th:nth-child(2) { width: 20%; }
+.save-room th:nth-child(4) { width: 24%; }
+.save-diagnostics { margin-top: 18px; padding-bottom: 12px; }
+.save-diagnostics ul { padding-left: 20px; }
+.save-diagnostics li { margin: 10px 0; overflow-wrap: anywhere; font-size: 14px; }
+.save-diagnostics details { margin-top: 6px; }
+.save-diagnostics summary { cursor: pointer; min-height: 30px; }
+.save-diagnostics pre { max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 12px; }
+.save-confirm { border: 2px solid #c49130; background: #fff6dd; border-radius: 14px; padding: 14px; margin-bottom: 20px; }
+.save-confirm p { margin: 8px 0 12px; line-height: 1.5; font-size: 14px; }
+.save-issues-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; background: #ffe1a1; color: #673d00; font-weight: bold; margin-left: 8px; }
+@media (max-width: 760px) {
+  .save-recovery-back { padding: 8px; }
+  .save-recovery { height: calc(100dvh - 16px); padding: 14px; gap: 10px; }
+  .save-recovery-body { grid-template-columns: 1fr; overflow-y: auto; }
+  .save-snapshot-list, .save-inspector { overflow: visible; }
+  .save-recovery-tools { flex-wrap: wrap; }
+  .save-recovery h2 { font-size: 21px; }
+}

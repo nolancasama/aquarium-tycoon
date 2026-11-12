@@ -12,8 +12,8 @@ const hitGeo = new THREE.CylinderGeometry(0.45, 0.45, 1.8, 8).translate(0, 0.9, 
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
 
 function Person({ id }: { id: string }) {
-  const p0 = tunnelPeople.find((p) => p.id === id)!;
-  const model = useMemo(() => tunnelPersonModel(p0.type, p0.variant), [p0.type, p0.variant]);
+  const p0 = tunnelPeople.find((p) => p.id === id);
+  const model = useMemo(() => p0 ? tunnelPersonModel(p0.type, p0.variant) : null, [p0?.type, p0?.variant]);
   const pose = useRef(newPose());
   const hit = useRef<THREE.Mesh>(null);
   useFrame((_, dt) => {
@@ -36,6 +36,8 @@ function Person({ id }: { id: string }) {
     q.hop = p.request ? Math.abs(Math.sin(rt.time * 4)) * 0.05 : 0;
     if (hit.current) hit.current.position.set(w.x, 0, w.z);
   });
+  // Continue can clear the runtime crowd before the cached ID list updates.
+  if (!model) return null;
   return (
     <>
       <TunnelFigure model={model} pose={pose} name={`tunnel-visitor-${id}`} />

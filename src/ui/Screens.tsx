@@ -71,6 +71,9 @@ export function TitleScreen() {
         <button className="link" onClick={() => setGame({ settingsOpen: true })} data-testid="btn-title-settings">
           <Icon id="gear" size={22} /> Settings <Ja>せってい</Ja>
         </button>
+        <button className="link" onClick={() => setGame({ saveRecoveryOpen: true })} data-testid="title-save-recovery">
+          Save Recovery <Ja>セーブの ふくげん</Ja>
+        </button>
       </div>
     </div>
   );

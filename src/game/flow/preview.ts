@@ -1,7 +1,7 @@
 import { getGame, setGame, updateModel } from "../store";
 import { clearPreviewAccess, grantPreview, previewAreas, RELEASE, type ReleaseArea } from "../data/release";
 import { unstoreAvailable } from "../logic/stored";
-import { encodeSave, writeSave } from "../logic/save";
+import { saveNow } from "./story";
 import type { Model } from "../logic/model";
 import { storeHiddenCoast } from "../logic/coast";
 
@@ -24,7 +24,7 @@ export function startPreview(area: ReleaseArea): boolean {
   if (!RELEASE[area].built || g.screen !== "game") return false;
   if (!snapshot) {
     // Whatever was played before the preview is kept, exactly as it was.
-    writeSave(encodeSave(g.model));
+    saveNow();
     snapshot = g.model;
   }
   grantPreview(area);

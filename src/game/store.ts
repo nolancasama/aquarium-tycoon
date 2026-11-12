@@ -169,6 +169,9 @@ export interface GameState {
   confirmNew: boolean;
   /** A save existed but could not be read. */
   saveLost: boolean;
+  /** Teacher recovery UI; runtime only, observable through the dialog and issue badge. */
+  saveRecoveryOpen: boolean;
+  saveIssues: number;
   fade: number;
   atriumArrival: boolean;
   tunnelArrival: boolean;
@@ -300,6 +303,8 @@ export const useGame = create<GameState>(() => ({
   hasSave: false,
   confirmNew: false,
   saveLost: false,
+  saveRecoveryOpen: false,
+  saveIssues: 0,
   fade: 0,
   atriumArrival: false,
   tunnelArrival: false,

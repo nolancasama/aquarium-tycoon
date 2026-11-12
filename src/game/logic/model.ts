@@ -172,6 +172,8 @@ export interface Model {
    * sees what the player cannot reach, and saved back unchanged. See logic/stored.ts.
    */
   stored?: StoredArea;
+  /** Rejected save records, retained for teacher recovery and never used in play. */
+  quarantine?: { reason: string; raw: unknown }[];
 }
 
 export interface StoredArea {

@@ -4,6 +4,7 @@ import { audio } from "../audio/audio";
 import { tts } from "../audio/tts";
 import { Icon } from "./icons";
 import { Ja } from "./Talk";
+import { SaveRecovery } from "./SaveRecovery";
 
 function apply(next: Settings) {
   saveSettings(next);
@@ -36,7 +37,7 @@ function Slider({ label, ja, value, onChange, id }: { label: string; ja: string;
   );
 }
 
-export function SettingsModal() {
+function SettingsPanel() {
   const open = useGame((s) => s.settingsOpen);
   const s = useGame((st) => st.settings);
   const screen = useGame((st) => st.screen);
@@ -44,6 +45,7 @@ export function SettingsModal() {
   const check = useGame((st) => st.audioCheck);
   const listening = useGame((st) => st.prompt?.status === "listening");
   const promptOpen = useGame((st) => Boolean(st.prompt));
+  const saveIssues = useGame((st) => st.saveIssues);
   if (!open || check) return null;
   const mode = answerMode(s);
   const set = (patch: Partial<Settings>) => apply({ ...s, ...patch });
@@ -86,6 +88,10 @@ export function SettingsModal() {
           <button className="secondary" disabled={listening} data-testid="settings-mic-check" onClick={() => setGame({ audioCheck: "mic" })}>Mic check<Ja>マイクの チェック</Ja></button>
           <button className="secondary" disabled={listening} data-testid="settings-how-to-speak" onClick={() => setGame({ audioCheck: "tip" })}>How to speak<Ja>はなしかた</Ja></button>
         </div>
+        <button className="secondary" data-testid="settings-save-recovery" onClick={() => setGame({ saveRecoveryOpen: true })}>
+          Save Recovery <Ja>セーブの ふくげん</Ja>
+          {saveIssues > 0 && <span className="save-issues-badge" data-testid="save-issues-badge" aria-label={`${saveIssues} save issues`}>{saveIssues}</span>}
+        </button>
         {screen !== "title" && (
           <button
             className="secondary"
@@ -101,4 +107,8 @@ export function SettingsModal() {
       </div>
     </div>
   );
+}
+
+export function SettingsModal() {
+  return <><SettingsPanel /><SaveRecovery /></>;
 }
