@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { getGame, updateModel, useGame } from "../../game/store";
 import { effect, rt } from "../../game/runtime";
 import { COAST_HALL } from "../../game/data/rooms";
-import { COAST_HABITATS, COAST_ORIGIN, EX_D, EX_W, EXHIBITS, GLASS_TOP, WALKWAY_D, WINDOW_Z, type CoastHabitat, type ExhibitDef } from "../../game/data/coast";
+import { COAST_HABITATS, EX_D, EX_W, EXHIBITS, GLASS_TOP, WALKWAY_D, WINDOW_Z, type CoastHabitat, type ExhibitDef } from "../../game/data/coast";
 import { coastHabitatShown } from "../../game/data/release";
 import { HABITAT_PAD, habitatOpen } from "../../game/logic/coast";
 import { coastRt, drainSights, stepCoast } from "../../game/coast/coastRuntime";
@@ -18,7 +18,7 @@ import { signMaterial, smoothMat, surfaceMaterial } from "../materials";
 import { useAreaGate } from "../tunnel/wing";
 import { newPose, TunnelFigure } from "../tunnel/TunnelFigure";
 import { tunnelPersonModel } from "../models/people";
-import { itemGeometry, otterParts, penguinFishGeometry, penguinParts, sealParts } from "./coastModels";
+import { itemGeometry, otterParts, penguinBodyPitch, penguinFishGeometry, penguinParts, penguinRampGeometry, sealParts } from "./coastModels";
 import type { Mover } from "../../game/coast/motion";
 import { createPenguin, loadPenguin, type PenguinInstance } from "./penguinAsset";
 
@@ -39,6 +39,13 @@ function tap(fn: () => void) {
   };
 }
 const hitMat = new THREE.MeshBasicMaterial({ visible: false });
+
+/** The expanded coast owns its frame; the neighbouring authored bays retain theirs. */
+function exhibitFrame(ex: ExhibitDef) {
+  return ex.id === "penguins"
+    ? { width: ex.pool.maxX - ex.pool.minX + 0.4, back: ex.land.minZ - 0.4, front: ex.pool.maxZ + 0.15, bottom: ex.pool.floor }
+    : { width: EX_W, back: -EX_D / 2, front: WINDOW_Z, bottom: 0 };
+}
 
 /** A solid ramp: its top follows the slope from the land edge down to the waterline; under it is rock. */
 function rampGeometry(ex: ExhibitDef, i: number): THREE.BufferGeometry {
@@ -118,41 +125,17 @@ function iceKeel(radius: number, depth: number, phase: number): THREE.BufferGeom
   return geometry;
 }
 
-/** The centre follows the authored ramp; its broken margins slope into the pool. */
-function penguinShore(ex: ExhibitDef, i: number): THREE.BufferGeometry {
-  const r = ex.ramps[i], half = (r.width ?? 1.5) / 2;
-  const drop = ex.land.y - (ex.pool.surface - 0.05), dz = r.bottom.z - r.top.z;
-  const vertices: number[] = [];
-  const tri = (a: number[], b: number[], c: number[]) => vertices.push(...a, ...b, ...c);
-  const rows = [0, 0.22, 0.48, 0.73, 1];
-  const edge = (t: number, side: number, index: number) => [r.top.x + side * half * (0.88 + 0.1 * Math.sin(index * 2.4 + side)), ex.land.y - drop * t, r.top.z + dz * t];
-  for (let j = 0; j < rows.length - 1; j++) {
-    const t = rows[j], next = rows[j + 1];
-    const a = edge(t, -1, j), b = edge(t, 1, j), c = edge(next, -1, j + 1), d = edge(next, 1, j + 1);
-    tri(a, c, b); tri(b, c, d);
-    for (const [u, v] of [[a, c], [d, b]]) {
-      const lower = (p: number[]) => [r.top.x + (p[0] - r.top.x) * 0.72, ex.pool.floor, p[2] - 0.18];
-      tri(u, lower(u), v); tri(v, lower(u), lower(v));
-    }
-  }
-  const left = edge(1, -1, 4), right = edge(1, 1, 4);
-  tri(left, [r.top.x, ex.pool.floor, r.bottom.z - 0.3], right);
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
 /** Penguin-only Antarctic scenery, merged into the exhibit's one static draw. */
 function penguinScenery(ex: ExhibitDef): THREE.BufferGeometry {
   const b = new PartBuilder(0.45), { land: l, pool: p } = ex;
+  const frame = exhibitFrame(ex), depth = frame.front - frame.back;
   const rock = "#667d89", dark = "#425d68", snow = "#e7f0f1", ice = "#a1d3df";
   // Exposed shelf remains continuous and level; snow is thin, irregular ground cover.
-  b.box(EX_W, l.y, l.maxZ + EX_D / 2, 0, 0, (l.maxZ - EX_D / 2) / 2, rock);
+  b.box(frame.width, l.y - p.floor, l.maxZ - frame.back, 0, p.floor, (l.maxZ + frame.back) / 2, rock);
   // The old 25 mm cover ended at exactly l.y, coplanar with the shelf's
   // entire top. Keep one ground surface; the separated snow patches supply relief.
   for (const [x, z, rx, rz] of [[-4.6, -3.85, 1.55, 0.52], [-2.5, -4.25, 2, 0.4], [0.4, -3.55, 1.25, 0.38], [4.75, -3.85, 1.35, 0.6], [1.7, -1.05, 1.35, 0.22]]) {
-    b.add(coastStratum(rx, rz, 0.018, x), snow, [x, l.y, z]);
+    b.add(coastStratum(rx * 1.55, rz * 1.4, 0.018, x), snow, [x * 1.55, l.y, z * 1.5]);
   }
   // Layered cliffs sit wholly behind the walkable shelf. Lower toward Seal Cove.
   const cliffs = [
@@ -169,33 +152,33 @@ function penguinScenery(ex: ExhibitDef): THREE.BufferGeometry {
       const y = l.y + (cliff.h - l.y) * cliff.cuts[k] - (k ? 0.12 : 0);
       const height = (cliff.h - l.y) * (cliff.cuts[k + 1] - cliff.cuts[k]) + (k ? 0.12 : 0);
       const phase = i * 1.34 + k * 2.1;
-      const x = cliff.x + Math.sin(phase) * 0.14;
-      const rx = cliff.rx * (1 - k * 0.055), rz = 0.43 - (i + k) % 3 * 0.035;
-      const z = -5.13 + (k % 2) * 0.025;
+      const x = cliff.x * 1.55 + Math.sin(phase) * 0.14;
+      const rx = cliff.rx * 1.55 * (1 - k * 0.055), rz = 0.43 - (i + k) % 3 * 0.035;
+      const z = frame.back - 0.13 + (k % 2) * 0.025;
       b.add(cliffSlab(rx, rz, height, phase), (i + k) % 3 === 1 ? "#7d939f" : rock, [x, y, z]);
       if (k === cliff.cuts.length - 2 || (i + k) % 3 === 0) {
         // A slight overhang keeps snow drapes clear of the rock's coplanar faces.
         b.add(cliffSlab(rx + 0.012, rz + 0.012, height + 0.018, phase, 0.15 + (i + k) % 3 * 0.065), snow, [x, y, z]);
       }
-      if (k === 1 && i % 2 === 0) b.add(new THREE.ConeGeometry(0.045, 0.32, 4), ice, [x + 0.4, y + height - 0.23, -4.72], [0, 0, Math.PI]);
+      if (k === 1 && i % 2 === 0) b.add(new THREE.ConeGeometry(0.045, 0.32, 4), ice, [x + 0.4, y + height - 0.23, frame.back + 0.28], [0, 0, Math.PI]);
     }
   }
   // Back and side faces continue below the water. Their relief stays outside the swim bounds.
   for (const side of [-1, 1]) {
-    b.box(0.4, GLASS_TOP, EX_D, side * (EX_W / 2 + 0.15), 0, 0, rock);
+    b.box(0.4, GLASS_TOP - p.floor, depth, side * (frame.width / 2 + 0.15), p.floor, (frame.back + frame.front) / 2, rock);
     for (let i = 0; i < 5; i++) {
-      const z = p.minZ + 0.55 + i * 1.1;
-      b.add(new THREE.DodecahedronGeometry(0.6, 0), i % 2 ? "#587781" : dark, [side * 6.3, 0.85, z], [0.1, i * 0.7, 0], [0.28, 1.1 + i % 2 * 0.25, 1.1]);
+      const z = p.minZ + 0.8 + i * 2.4;
+      b.add(new THREE.SphereGeometry(0.6, 10, 7), i % 2 ? "#587781" : dark, [side * (p.maxX + 0.03), p.floor + 0.35 + i % 3 * 0.55, z], [0, i * 0.7, 0], [0.45, 0.65 + i % 2 * 0.25, 1.5]);
     }
   }
   for (let i = 0; i < 10; i++) {
-    b.add(new THREE.DodecahedronGeometry(0.65, 0), i % 2 ? rock : dark, [-5.8 + i * 1.28, 1.1, p.minZ - 0.2], [0, i * 0.65, 0], [1, 1.5, 0.32]);
+    b.add(new THREE.SphereGeometry(0.65, 10, 7), i % 2 ? rock : dark, [-9.1 + i * 2.02, p.floor + 0.4 + i % 3 * 0.6, p.minZ - 0.35], [0, i * 0.65, 0], [1.6, 0.7, 0.5]);
   }
   // A low, uneven rocky floor and broad colour changes suggest depth without fog.
-  b.box(EX_W, p.floor, p.maxZ - p.minZ + 0.2, 0, 0, (p.minZ + p.maxZ) / 2, "#60848a");
+  b.box(frame.width, 0.2, p.maxZ - p.minZ + 0.2, 0, p.floor - 0.2, (p.minZ + p.maxZ) / 2, "#60848a");
   for (let i = 0; i < 15; i++) {
-    const x = -5.15 + i % 5 * 2.55, z = p.minZ + 0.75 + Math.floor(i / 5) * 1.8;
-    b.add(coastStratum(1.5, 1.15, 0.025 + i % 3 * 0.018, i), i % 3 === 0 ? "#779a9c" : i % 3 === 1 ? "#527780" : "#67888a", [x, p.floor, z]);
+    const x = -8.3 + i % 5 * 4.15, z = p.minZ + 1.5 + Math.floor(i / 5) * 4.2;
+    b.add(coastStratum(1.7, 1.35, 0.025 + i % 3 * 0.018, i), i % 3 === 0 ? "#779a9c" : i % 3 === 1 ? "#527780" : "#67888a", [x, p.floor, z]);
   }
   // Shelf rocks are the same footprints avoided by land movement.
   for (const o of ex.boulders) b.add(new THREE.DodecahedronGeometry(o.r, 0), rock, [o.x, l.y + o.h * 0.35, o.z], [o.x, o.z, 0], [1, o.h / o.r * 0.7, 1]);
@@ -206,27 +189,29 @@ function penguinScenery(ex: ExhibitDef): THREE.BufferGeometry {
     b.add(new THREE.CylinderGeometry(ledge.r * 0.55, ledge.r, h, 8, 1, true), rock, [ledge.x, l.y + h / 2, ledge.z]);
     b.add(new THREE.CylinderGeometry(ledge.r * 0.55, ledge.r * 0.55, 0.035, 8), snow, [ledge.x, ledge.top - 0.0175, ledge.z]);
   }
-  // The broad flat floe is a usable island, with an ice keel visible through the glass.
+  // A rocky undercut tapers below the island, leaving open water above the floor.
   for (const isl of ex.islands) {
     const topRadius = isl.topRadius ?? isl.r * 0.55;
-    b.add(iceKeel(isl.r, 0.85, isl.x), "#83bdce", [isl.x, p.surface, isl.z]);
+    b.add(iceKeel(isl.r, 2.15, isl.x), rock, [isl.x, p.surface, isl.z]);
     b.add(new THREE.CylinderGeometry(topRadius, isl.r, isl.top - p.surface, 8, 1, true), ice, [isl.x, (isl.top + p.surface) / 2, isl.z]);
     b.add(new THREE.CylinderGeometry(topRadius, topRadius, 0.035, 8), snow, [isl.x, isl.top - 0.0175, isl.z]);
   }
-  // Small floes and submerged boulders use the exact circles reserved for swimmer obstacles.
+  // Low rounded boulders and submerged ledges are bounded by the swim footprints.
   for (const o of ex.swimObstacles ?? []) {
     if (o.kind === "ice") {
-      b.add(iceKeel(o.r, 0.5, o.x), "#83bdce", [o.x, p.surface, o.z]);
-      b.add(new THREE.CylinderGeometry(o.r * 0.75, o.r * 0.96, o.top - p.surface, 7, 1, true), ice, [o.x, (o.top + p.surface) / 2, o.z], [0, o.x, 0]);
-      b.add(new THREE.CylinderGeometry(o.r * 0.75, o.r * 0.75, 0.025, 7), snow, [o.x, o.top - 0.0125, o.z], [0, o.x, 0]);
+      b.add(iceKeel(o.r, 0.5, o.x), "#83bdce", [o.x, o.top, o.z]);
+      b.add(coastStratum(o.r * 0.93, o.r * 0.9, 0.08, o.x), ice, [o.x, o.top - 0.08, o.z]);
     } else {
-      b.add(new THREE.DodecahedronGeometry(1, 0), dark, [o.x, (p.floor + o.top) / 2, o.z], [0.25, o.x, 0.18], [o.r * 0.9, (o.top - p.floor) * 0.48, o.r * 0.85]);
+      const shelf = o.z - o.r < l.maxZ + 0.2;
+      b.add(new THREE.SphereGeometry(1, 12, 8), dark, [o.x, p.floor + (o.top - p.floor) * (shelf ? 0.28 : 0.35), o.z], [0, o.x, 0], [o.r * 0.94, (o.top - p.floor) * (shelf ? 0.55 : 0.65), o.r * 0.88]);
+      if (shelf) b.add(coastStratum(o.r * 0.96, o.r * 0.94, 0.32, o.x), rock, [o.x, o.top - 0.32, o.z]);
     }
   }
   // The shore is the centrepiece: one broad, shallow continuous slope, with gravel and upper snow.
   for (let i = 0; i < ex.ramps.length; i++) {
     const r = ex.ramps[i], width = r.width ?? 1.5;
-    b.add(penguinShore(ex, i), "#75878b", [0, 0, 0]);
+    b.add(penguinRampGeometry(ex, i), rock, [0, 0, 0]);
+    b.add(penguinRampGeometry(ex, i, true), "#cbdfe2", [0, 0, 0]);
     const drop = l.y - (p.surface - 0.05), dz = r.bottom.z - r.top.z;
     for (let j = 0; j < 80; j++) {
       const t = 0.14 + (j % 7) / 7 * 0.77, x = r.top.x + (Math.sin(j * 7.1) * 0.43) * width;
@@ -235,19 +220,19 @@ function penguinScenery(ex: ExhibitDef): THREE.BufferGeometry {
     }
     for (let j = 0; j < 9; j++) {
       const x = r.top.x - width * 0.44 + j * width * 0.11;
-      b.add(new THREE.DodecahedronGeometry(0.22 + j % 3 * 0.06, 0), j % 2 ? rock : "#899a99", [x, p.surface - 0.07, r.bottom.z - 0.12 - (j % 3) * 0.09], [0.2, j, 0.1], [1, 0.65, 0.85]);
+      b.add(new THREE.DodecahedronGeometry(0.16 + j % 3 * 0.035, 0), j % 2 ? rock : "#899a99", [x, p.surface - 0.13, r.bottom.z - 0.25 - (j % 3) * 0.09], [0, j, 0], [1, 0.4, 0.7]);
     }
     b.add(coastStratum(width * 0.25, 0.14, 0.035, i), snow, [r.top.x - width * 0.24, l.y, r.top.z - 0.08]);
   }
   // Small relief along the shelf face, outside the shore and walking surface.
-  for (const [x, scale] of [[-5.2, 0.55], [-4.2, 0.4], [1.1, 0.45], [2.5, 0.55], [4.7, 0.5]]) {
+  for (const [x, scale] of [[-8.3, 0.65], [-6.7, 0.5], [1.75, 0.55], [4, 0.65], [7.5, 0.6]]) {
     b.add(new THREE.DodecahedronGeometry(scale, 0), rock, [x, l.y - 0.27, l.maxZ - 0.08], [0.2, x, 0], [1, 0.55, 0.45]);
     b.add(coastStratum(scale * 0.85, 0.16, 0.025, x), snow, [x, l.y + 0.005, l.maxZ - 0.12]);
   }
-  // Keep the established viewing-window frame and sightline.
-  b.box(EX_W + 0.6, 0.18, 0.3, 0, GLASS_TOP, WINDOW_Z + 0.05, "#3d5566");
-  b.box(EX_W + 0.6, 0.22, 0.32, 0, -0.02, WINDOW_Z + 0.05, "#3d5566");
-  for (const s of [-1, 0, 1]) b.box(0.16, GLASS_TOP, 0.2, s * (EX_W / 2 + 0.05), 0, WINDOW_Z + 0.05, "#3d5566");
+  // The full-depth window exposes every dive level below the visitor terrace.
+  b.box(frame.width + 0.6, 0.18, 0.3, 0, GLASS_TOP, frame.front + 0.05, "#3d5566");
+  b.box(frame.width + 0.6, 0.22, 0.32, 0, p.floor - 0.12, frame.front + 0.05, "#3d5566");
+  for (const s of [-1, 1]) b.box(0.16, GLASS_TOP - p.floor, 0.2, s * (frame.width / 2 + 0.05), p.floor, frame.front + 0.05, "#3d5566");
   return b.build();
 }
 
@@ -303,6 +288,7 @@ function ExhibitStatic({ ex }: { ex: ExhibitDef }) {
 
 function Water({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
   const p = ex.pool;
+  const frame = exhibitFrame(ex);
   const surf = useMemo(() => surfaceMaterial(), []);
   const vol = useMemo(() => new THREE.MeshLambertMaterial({ color: ex.colors.water, transparent: true, opacity: ex.id === "penguins" ? 0.13 : 0.32, depthWrite: false }), [ex]);
   const glass = useMemo(() => new THREE.MeshBasicMaterial({ color: "#dff6ff", transparent: true, opacity: 0.08, depthWrite: false }), []);
@@ -324,8 +310,8 @@ function Water({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
       <mesh position={[(p.minX + p.maxX) / 2, p.surface, (p.minZ + p.maxZ) / 2]} rotation={[-Math.PI / 2, 0, 0]} material={surf} raycast={() => undefined} renderOrder={3}>
         <planeGeometry args={[w, d]} />
       </mesh>
-      <mesh position={[0, GLASS_TOP / 2, WINDOW_Z + 0.02]} material={glass} raycast={() => undefined} renderOrder={4}>
-        <planeGeometry args={[EX_W, GLASS_TOP]} />
+      <mesh position={[0, (GLASS_TOP + frame.bottom) / 2, frame.front + 0.02]} material={glass} raycast={() => undefined} renderOrder={4}>
+        <planeGeometry args={[frame.width, GLASS_TOP - frame.bottom]} />
       </mesh>
     </group>
   );
@@ -340,7 +326,7 @@ function PenguinBubbles() {
     if (!coastShown() || !ref.current) return;
     for (let i = 0; i < 12; i++) {
       const trail = Math.floor(i / 4), phase = (coastRt.time * 0.13 + i * 0.247) % 1;
-      const x = [-5.7, 5.75, 1.8][trail], z = [2.1, 1.2, -0.15][trail];
+      const x = [-8.8, 8.7, 2.3][trail], z = [5.6, 5.3, 8.6][trail];
       dummy.position.set(x + Math.sin(phase * 8 + i) * 0.055, ex.pool.floor + 0.2 + phase * (ex.pool.surface - ex.pool.floor - 0.3), z);
       dummy.scale.setScalar(0.65 + i % 3 * 0.22);
       dummy.updateMatrix();
@@ -441,11 +427,12 @@ function SlotRings({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
 
 function Signs({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
   const open = useGame((s) => habitatOpen(s.model, h));
+  const frame = exhibitFrame(ex);
   const word = h === "penguins" ? "PENGUINS\nペンギン" : h === "seals" ? "SEALS\nアザラシ" : "SEA OTTERS\nラッコ";
   const sign = signMaterial(open ? word : `${word.split("\n")[0]}\nCOMING SOON`, open ? "#14506a" : "#7a6a52", open ? "#e8fbff" : "#fff4d6", 640, 220);
   return (
     <group position={[ex.x, 0, ex.z]}>
-      <mesh position={[EX_W / 2 - 1.35, GLASS_TOP + 0.5, WINDOW_Z + 0.2]} material={sign} onClick={tap(() => { if (open) tapCoastSign(h); })} name={`coast-sign-${h}`}>
+      <mesh position={[frame.width / 2 - 1.35, GLASS_TOP + 0.5, frame.front + 0.2]} material={sign} onClick={tap(() => { if (open) tapCoastSign(h); })} name={`coast-sign-${h}`}>
         <planeGeometry args={[2.1, 0.73]} />
       </mesh>
     </group>
@@ -455,10 +442,11 @@ function Signs({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
 /** The overview: tap anywhere on an exhibit to manage it. */
 function ExhibitHit({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
   const all = useGame((s) => s.coastView === "all");
+  const frame = exhibitFrame(ex);
   if (!all) return null;
   return (
-    <mesh position={[ex.x, 1.4, ex.z + 0.5]} material={hitMat} onClick={tap(() => setCoastView(h))} name={`coast-exhibit-${h}`}>
-      <boxGeometry args={[EX_W - 0.4, 3, EX_D - 1]} />
+    <mesh position={[ex.x, 1.4, ex.z + (ex.id === "penguins" ? (frame.front + frame.back) / 2 : 0.5)]} material={hitMat} onClick={tap(() => setCoastView(h))} name={`coast-exhibit-${h}`}>
+      <boxGeometry args={[frame.width - 0.4, 3, frame.front - frame.back - 1]} />
     </mesh>
   );
 }
@@ -504,16 +492,14 @@ function Penguin({ id, index }: { id: string; index: number }) {
     let live = true;
     let instance: PenguinInstance | null = null;
     // Match the procedural silhouette's measured height, including its 1.3 scale.
-    parts.body.computeBoundingBox();
-    const box = parts.body.boundingBox!;
     void loadPenguin().then((source) => {
       if (!live || !source) return;
-      instance = createPenguin(source, (box.max.y - box.min.y) * PENGUIN_SCALE);
+      instance = createPenguin(source, parts.height * PENGUIN_SCALE);
       setAsset(instance);
     }).catch(() => { /* Keep the procedural fallback if decoding/instantiation fails. */ });
     return () => { live = false; instance?.dispose(); };
   }, [parts]);
-  const root = useRef<THREE.Group>(null), body = useRef<THREE.Group>(null), fl = useRef<THREE.Group>(null), fr = useRef<THREE.Group>(null);
+  const root = useRef<THREE.Group>(null), body = useRef<THREE.Group>(null), fl = useRef<THREE.Group>(null), fr = useRef<THREE.Group>(null), head = useRef<THREE.Group>(null);
   const tag = useRef<THREE.Sprite>(null), ring = useRef<THREE.Mesh>(null);
   const blend = useRef<Blend>({ swim: 0, float: 0, splashSeen: -100 });
   const posed = useRef(false);
@@ -523,20 +509,24 @@ function Penguin({ id, index }: { id: string; index: number }) {
     const r = root.current, b = body.current;
     if (!a || !r || !b) return;
     const m = a.m, ex = EXHIBITS.penguins;
-    const swimming = m.area === "water";
+    const swimming = m.area === "water" && m.mode !== "rampUp" && m.mode !== "rampDown";
+    const restingAtSurface = m.mode === "breathe" && m.speed < 0.05 && m.y > ex.pool.surface - 0.18;
+    const swimTarget = swimming && !restingAtSurface ? 1 : 0;
     const k = blend.current;
-    if (!posed.current) { k.swim = swimming ? 1 : 0; posed.current = true; }
-    k.swim += ((swimming ? 1 : 0) - k.swim) * Math.min(1, dt * 6);
+    if (!posed.current) { k.swim = swimTarget; posed.current = true; }
+    k.swim += (swimTarget - k.swim) * Math.min(1, dt * 6);
+    if (!swimming && (m.mode === "rampUp" || m.mode === "rampDown") && m.y >= ex.pool.surface) k.swim = 0;
     r.position.set(ex.x + m.x, m.y, ex.z + m.z);
     r.rotation.y = m.heading;
     // Upright on land (feet at the root), lying along +z in the water (body centre at the root).
     const centre = asset?.centre ?? parts.centre * PENGUIN_SCALE;
-    b.position.set(0, centre * (1 - k.swim), 0);
+    const support = swimming ? 0 : 1 - k.swim;
+    b.position.set(0, centre * support, 0);
     const walking = !swimming && m.speed > 0.05;
     const eating = !swimming && m.feeding?.stage === "eating";
     const eatLean = eating ? 0.4 + Math.sin(coastRt.time * 8 + index) * 0.1 : 0;
     const waddle = walking ? Math.sin(m.phase) * 0.14 : m.action === "look" ? Math.sin(rt.time * 1.3 + index) * 0.05 : 0;
-    b.rotation.set((Math.PI / 2 - m.pitch) * k.swim + eatLean, 0, waddle * (1 - k.swim));
+    b.rotation.set(penguinBodyPitch(m.pitch, k.swim) + eatLean, 0, waddle * (1 - k.swim));
     if (eating) b.position.set(0, centre, 0).applyQuaternion(b.quaternion);
     if (asset) {
       // The shore's support plane tilts the feet, about the mover's ground contact.
@@ -545,13 +535,14 @@ function Penguin({ id, index }: { id: string; index: number }) {
       const onSlope = !swimming && (m.mode === "rampDown" || m.mode === "rampUp") && m.z >= ramp.top.z && m.z <= ramp.bottom.z;
       const gradient = onSlope ? (ex.pool.surface - 0.05 - ex.land.y) / (ramp.bottom.z - ramp.top.z) : 0;
       b.rotation.set(
-        (Math.PI / 2 - m.pitch) * k.swim - Math.atan(gradient * Math.cos(m.heading)) * (1 - k.swim) + eatLean,
+        penguinBodyPitch(m.pitch, k.swim) - Math.atan(gradient * Math.cos(m.heading)) * (1 - k.swim) + eatLean,
         0,
         Math.atan(-gradient * Math.sin(m.heading)) * (1 - k.swim)
       );
-      b.position.set(0, centre, 0).applyQuaternion(b.quaternion).multiplyScalar(1 - k.swim);
+      b.position.set(0, centre, 0).applyQuaternion(b.quaternion).multiplyScalar(support);
       asset.update(m, Math.min(dt, 0.1), k.swim, coastRt.time);
     }
+    if (head.current) head.current.rotation.x = -Math.PI / 2 * k.swim;
     const flap = swimming ? Math.sin(m.phase * 1.6) * 0.9 : walking ? 0.35 + Math.sin(m.phase) * 0.15 : m.action === "groom" ? 0.2 + Math.abs(Math.sin(rt.time * 6)) * 0.3 : 0.12;
     if (fl.current) fl.current.rotation.z = -flap;
     if (fr.current) fr.current.rotation.z = flap;
@@ -567,6 +558,7 @@ function Penguin({ id, index }: { id: string; index: number }) {
       <group ref={body}>
         {asset ? <primitive object={asset.scene} dispose={null} /> : <group position={[0, -parts.centre * PENGUIN_SCALE, 0]} scale={PENGUIN_SCALE}>
           <mesh geometry={parts.body} material={smoothMat} raycast={() => undefined} />
+          <group ref={head} position={[0, 0.6, 0.01]}><mesh geometry={parts.head} material={smoothMat} raycast={() => undefined} /></group>
           <group ref={fl} position={[0.19, 0.48, 0]}><mesh geometry={parts.flipper} material={smoothMat} raycast={() => undefined} /></group>
           <group ref={fr} position={[-0.19, 0.48, 0]}><mesh geometry={parts.flipper} material={smoothMat} raycast={() => undefined} /></group>
         </group>}
@@ -693,18 +685,31 @@ function Animals() {
 // ------------------------------------------------------------------ walkway and visitors
 
 function Walkway() {
+  const underwater = useGame((s) => s.coastUnderwater && s.coastView === "penguins");
   const geo = useMemo(() => {
     const b = new PartBuilder(0.3);
     const shown = COAST_HABITATS.filter(coastHabitatShown).map((h) => EXHIBITS[h]);
-    const x0 = Math.min(...shown.map((ex) => ex.x)) - 8, x1 = Math.max(...shown.map((ex) => ex.x)) + 8, z0 = COAST_ORIGIN.z + WINDOW_Z + 0.2;
-    b.box(x1 - x0, 0.06, WALKWAY_D, (x0 + x1) / 2, -0.06, z0 + WALKWAY_D / 2, "#cdbfa6");
-    b.box(x1 - x0, 0.03, 0.4, (x0 + x1) / 2, 0, z0 + WALKWAY_D - 0.3, "#2f8f9d");
+    const x0 = Math.min(...shown.map((ex) => ex.x - exhibitFrame(ex).width / 2)) - 1.5;
+    const x1 = Math.max(...shown.map((ex) => ex.x + exhibitFrame(ex).width / 2)) + 1.5;
+    const z0 = Math.max(...shown.map((ex) => ex.z + exhibitFrame(ex).front)) + 0.2;
+    // The Underwater cutaway looks through the terrace; keep its returns at the edges.
+    if (!underwater) {
+      b.box(x1 - x0, 0.06, WALKWAY_D, (x0 + x1) / 2, -0.06, z0 + WALKWAY_D / 2, "#cdbfa6");
+      b.box(x1 - x0, 0.03, 0.4, (x0 + x1) / 2, 0, z0 + WALKWAY_D - 0.3, "#2f8f9d");
+    }
     // Rock dividers between exhibits and at the ends.
-    const edges = [...new Set(shown.flatMap((ex) => [ex.x - 7.5, ex.x + 7.5]))];
-    for (const x of edges) b.box(2, 3.6, EX_D + 0.6, x, 0, COAST_ORIGIN.z - 0.3, "#6e7b80");
-    for (const x of edges.filter((x) => x > x0 + 1 && x < x1 - 1)) {
-      b.add(new THREE.DodecahedronGeometry(0.9, 0), "#7c8a8f", [x, 3.7, COAST_ORIGIN.z - 1], [x - COAST_ORIGIN.x, 1, 0], [1, 0.6, 1]);
-      b.cone(0.35, 1.0, x, 0, z0 + 0.7, "#3e8f5a", 6);
+    const edges = new Set<number>();
+    for (const ex of shown) {
+      const frame = exhibitFrame(ex);
+      for (const side of [-1, 1]) {
+        const expanded = ex.id === "penguins";
+        const x = ex.x + side * (frame.width / 2 + (expanded ? 0.65 : 1));
+        if (edges.has(x)) continue;
+        edges.add(x);
+        b.box(expanded ? 1 : 2, 3.6 - frame.bottom, frame.front - frame.back + 0.6, x, frame.bottom, ex.z + (expanded ? (frame.front + frame.back) / 2 : -0.3), "#6e7b80");
+        b.add(new THREE.DodecahedronGeometry(0.9, 0), "#7c8a8f", [x, 3.7, ex.z + (expanded ? frame.back + 3 : -1)], [side, 1, 0], [1, 0.6, 1]);
+        if (!expanded && x > x0 + 1 && x < x1 - 1) b.cone(0.35, 1, x, 0, z0 + 0.7, "#3e8f5a", 6);
+      }
     }
     if (shown.length < COAST_HABITATS.length) {
       // End the visitor terrace beside the last shown exhibit, with solid rock
@@ -715,7 +720,8 @@ function Walkway() {
       }
     }
     return b.build();
-  }, []);
+  }, [underwater]);
+  useEffect(() => () => geo.dispose(), [geo]);
   return <mesh geometry={geo} material={smoothMat} raycast={() => undefined} />;
 }
 
@@ -738,8 +744,9 @@ function StrollerFigure({ s }: { s: Stroller }) {
   const model = useMemo(() => tunnelPersonModel(s.type, s.variant), [s.type, s.variant]);
   const [minX, maxX] = useMemo(() => {
     const shown = COAST_HABITATS.filter(coastHabitatShown).map((h) => EXHIBITS[h]);
-    return [Math.min(...shown.map((ex) => ex.x)) - 6, Math.max(...shown.map((ex) => ex.x)) + 6];
+    return [Math.min(...shown.map((ex) => ex.x - exhibitFrame(ex).width / 2)) + 0.5, Math.max(...shown.map((ex) => ex.x + exhibitFrame(ex).width / 2)) - 0.5];
   }, []);
+  const terraceZ = useMemo(() => Math.max(...COAST_HABITATS.filter(coastHabitatShown).map((h) => EXHIBITS[h].z + exhibitFrame(EXHIBITS[h]).front)), []);
   const pose = useRef(newPose());
   const step = useRef(0);
   useFrame((_, dt) => {
@@ -750,7 +757,7 @@ function StrollerFigure({ s }: { s: Stroller }) {
       s.x = minX + (Number(s.id.slice(1)) - 1) * (maxX - minX) / 4;
       s.nextStop = s.x + s.dir * 3;
     }
-    const z = COAST_ORIGIN.z + WINDOW_Z + 1.4 + (s.id === "c2" ? 0.6 : s.id === "c4" ? 0.9 : 0);
+    const z = terraceZ + 1.4 + (s.id === "c2" ? 0.6 : s.id === "c4" ? 0.9 : 0);
     if (rt.time < s.stopUntil) {
       q.moving = false;
       q.yaw = Math.PI; // facing the window (-z)

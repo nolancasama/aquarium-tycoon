@@ -32,6 +32,28 @@ export const coastRt = {
 };
 
 let seed = 1;
+const peerLists: Record<CoastHabitat, Mover[]> = { penguins: [], seals: [], otters: [] };
+const liveIds = new Set<string>();
+function makeContext(h: CoastHabitat): MoveCtx { return {
+  time: 0, landItems: [], toy: null, restSpots: [], movers: peerLists[h],
+  onEvent: (_m: Mover, kind: Parameters<NonNullable<MoveCtx["onEvent"]>>[1]) => {
+    if (kind === "eatFish" && coastRt.stationFood) coastRt.stationFood.fish = Math.max(0, coastRt.stationFood.fish - 1);
+    if (kind === "enterWater") coastRt.entries[h]++;
+    if (h === "penguins" && kind === "enterWater") coastRt.sights.push("penguinSwim");
+    if (h === "seals" && (kind === "dive" || kind === "enterWater")) coastRt.sights.push("sealDive");
+  }
+}; }
+const contexts: Record<CoastHabitat, MoveCtx> = { penguins: makeContext("penguins"), seals: makeContext("seals"), otters: makeContext("otters") };
+const decorRefs = new Map<CoastHabitat, unknown>();
+
+function cachedCtx(model: Model, h: CoastHabitat) {
+  const decor = tankAt(model, HABITAT_PAD[h])?.decor;
+  if (!decorRefs.has(h) || decorRefs.get(h) !== decor) {
+    Object.assign(contexts[h], habitatCtx(model, h));
+    decorRefs.set(h, decor);
+  }
+  return contexts[h];
+}
 
 /** Match the movers to the saved animals (new ones appear on land or floating; gone ones leave). */
 export function syncCoast(model: Model) {
@@ -42,7 +64,8 @@ export function syncCoast(model: Model) {
       if (a.m.action === "eat") a.m.action = null;
     }
   }
-  const live = new Set<string>();
+  const live = liveIds;
+  live.clear();
   for (const h of COAST_HABITATS) {
     if (!coastHabitatShown(h)) continue;
     const t = tankAt(model, HABITAT_PAD[h]);
@@ -50,7 +73,7 @@ export function syncCoast(model: Model) {
     for (const f of t.fish) {
       live.add(f.id);
       if (!coastRt.animals.has(f.id)) {
-        const m = newMover(f.id, SPECIES_OF[h], EXHIBITS[h], seed++ * 31 + f.id.length, coastRt.time, h === "penguins" ? habitatCtx(model, h).landItems : []);
+        const m = newMover(f.id, SPECIES_OF[h], EXHIBITS[h], seed++ * 31 + f.id.length, coastRt.time, cachedCtx(model, h).landItems, h === "penguins" ? peerLists[h] : undefined);
         // Initial positions only: the arrival camera watches real, continuously moving animals.
         if (h === "penguins" && !model.progress.coastIntroSeen) {
           const n = [...coastRt.animals.values()].filter((a) => a.habitat === h).length;
@@ -68,10 +91,15 @@ export function syncCoast(model: Model) {
           }
         }
         coastRt.animals.set(f.id, { habitat: h, m });
+        peerLists[h].push(m);
       }
     }
   }
-  for (const id of [...coastRt.animals.keys()]) if (!live.has(id)) coastRt.animals.delete(id);
+  for (const [id, a] of coastRt.animals) if (!live.has(id)) {
+    const peers = peerLists[a.habitat], at = peers.indexOf(a.m);
+    if (at >= 0) peers.splice(at, 1);
+    coastRt.animals.delete(id);
+  }
 }
 
 /** Item footprints on the land shelf (obstacles and rest spots), and a floating toy, from the habitat's placed items. */
@@ -96,25 +124,15 @@ export function stepCoast(model: Model, dt: number, shown: boolean) {
   if (!shown) return;
   coastRt.time += dt;
   syncCoast(model);
-  const ctxBy = new Map<CoastHabitat, Pick<MoveCtx, "landItems" | "toy" | "restSpots">>();
   for (const a of coastRt.animals.values()) {
     const until = coastRt.hold.get(a.m.id);
     if (until !== undefined) {
       if (coastRt.time < until) { a.m.speed = 0; continue; }
       coastRt.hold.delete(a.m.id);
     }
-    let ctx = ctxBy.get(a.habitat);
-    if (!ctx) { ctx = habitatCtx(model, a.habitat); ctxBy.set(a.habitat, ctx); }
-    stepMover(a.m, EXHIBITS[a.habitat], dt, {
-      time: coastRt.time, ...ctx,
-      onEvent: (m, kind) => {
-        if (kind === "eatFish" && coastRt.stationFood) coastRt.stationFood.fish = Math.max(0, coastRt.stationFood.fish - 1);
-        if (kind === "enterWater") coastRt.entries[a.habitat]++;
-        if (a.habitat === "penguins" && kind === "enterWater") coastRt.sights.push("penguinSwim");
-        if (a.habitat === "seals" && (kind === "dive" || kind === "enterWater")) coastRt.sights.push("sealDive");
-        void m;
-      }
-    });
+    const ctx = cachedCtx(model, a.habitat);
+    ctx.time = coastRt.time;
+    stepMover(a.m, EXHIBITS[a.habitat], dt, ctx);
     if (a.habitat === "otters" && a.m.mode === "float" && a.m.y > EXHIBITS.otters.pool.surface - 0.1) coastRt.sights.push("otterFloat");
   }
 }
@@ -174,4 +192,6 @@ export function clearCoast() {
   coastRt.stationFood = null;
   coastRt.entries = { penguins: 0, seals: 0, otters: 0 };
   seed = 1;
+  for (const h of COAST_HABITATS) peerLists[h].length = 0;
+  decorRefs.clear();
 }

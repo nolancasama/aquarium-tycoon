@@ -8,11 +8,55 @@ import { decorRadius } from "../game/world";
 import { decorModel } from "./models/decor";
 import { SPECIES } from "../game/data/fish";
 import { tankFishBounds } from "../game/logic/swim";
+import { EXHIBITS, rampFootprint, type CoastHabitat } from "../game/data/coast";
+import { landLegClear, stationLandRoute } from "../game/coast/motion";
+import { penguinRampGeometry } from "./coast/coastModels";
 import { glassGeometry, surfaceGeometry, tankShellGeometry, waterGeometry } from "./models/tankShell";
 
 const special = Object.values(TANKS).filter((tank) => tank.group === "special");
 const newDecor: DecorKind[] = ["kelp", "arch", "cave", "driftwood", "staghorn", "brain", "fan", "table"];
 const EPS = 0.00001;
+
+describe("Penguin Coast shore geometry", () => {
+  it("the snowy traffic lanes follow the rendered slope and the rock sides flare outward", () => {
+    const ex = EXHIBITS.penguins, r = ex.ramps[0];
+    const deck = penguinRampGeometry(ex, 0, true), rock = penguinRampGeometry(ex, 0);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(deck, material);
+    mesh.updateMatrixWorld();
+    for (const dx of [-1.05, 0, 1.05]) for (const t of [0.05, 0.3, 0.6, 0.95]) {
+      const z = r.top.z + (r.bottom.z - r.top.z) * t;
+      const ray = new THREE.Raycaster(new THREE.Vector3(r.top.x + dx, 5, z), new THREE.Vector3(0, -1, 0));
+      const hit = ray.intersectObject(mesh)[0];
+      expect(hit, "snow deck supports both traffic lanes").toBeDefined();
+      expect(hit.point.y).toBeCloseTo(ex.land.y + (ex.pool.surface - 0.06 - ex.land.y) * t, 5);
+    }
+    const sides = rock.getAttribute("normal");
+    expect(Array.from({ length: sides.count }, (_, i) => Math.abs(sides.getX(i))).some((x) => x > 0.3 && x < 0.99), "sloping rock sides").toBe(true);
+    rock.computeBoundingBox();
+    expect(rock.boundingBox!.min.y, "shore buttress does not become a floor-deep rectangular column").toBeGreaterThan(ex.pool.floor + 2);
+    const footprint = rampFootprint(ex, 0);
+    expect(new Set(footprint.map((p) => p.x)).size, "irregular edges").toBeGreaterThan(4);
+    expect(Math.min(...footprint.map((p) => p.x))).toBeCloseTo(rock.boundingBox!.min.x, 5);
+    expect(Math.max(...footprint.map((p) => p.x))).toBeCloseTo(rock.boundingBox!.max.x, 5);
+    deck.dispose(); rock.dispose(); material.dispose();
+  });
+
+  it("the deeper shore leaves a route from the back cliff to every occupied station", () => {
+    const ex = EXHIBITS.penguins, items = ex.slots.map((slot) => ({ ...slot, r: 0.6 }));
+    expect(ex.land.maxZ - ex.land.minZ).toBeGreaterThanOrEqual(8 - EPS);
+    const doorApproach = { x: -1.6, z: ex.land.minZ + 0.7 };
+    for (const station of ex.slots) {
+      const route = stationLandRoute(ex, doorApproach, { x: station.x, z: station.z + 0.9 }, items);
+      expect(route, "back-cliff access to the feeding-station standing space").not.toBeNull();
+    }
+    for (const ice of ex.swimObstacles!.filter((o) => o.kind === "ice")) {
+      expect(ice.top).toBeLessThan(ex.pool.surface);
+      expect(Math.min(ice.x - ex.pool.minX, ex.pool.maxX - ice.x, ice.z - ex.pool.minZ)).toBeLessThan(ice.r);
+    }
+    for (const rock of ex.swimObstacles!.filter((o) => o.kind === "rock")) expect(rock.top - ex.pool.floor).toBeLessThan(rock.r * 1.2);
+  });
+});
 
 // Deliberately independent of the production footprint helper: a wrong shared
 // footprint must not make the same wrong glass pass its containment test.
@@ -87,6 +131,17 @@ describe("special tank footprints", () => {
     });
 
     it(`${tank.type}: the sand supports slots and built-in rocks, and its dune stays inside`, () => {
+      if (tank.type === "penguins") {
+        // Coastal slots stand on the authored shore, whose dimensions need not
+        // match the legacy generic tank shell or its decorative sand dune.
+        const ex = EXHIBITS[tank.type as CoastHabitat];
+        for (const slot of ex.slots) {
+          expect(slot.on).toBe("land");
+          expect(landLegClear(ex, slot, slot, [], 0.35)).toBe(true);
+          expect(ex.land.y).toBeGreaterThan(ex.pool.surface);
+        }
+        return;
+      }
       const geometry = tankShellGeometry(tank.type);
       const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
       const mesh = new THREE.Mesh(geometry, material);

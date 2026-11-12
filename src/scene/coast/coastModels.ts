@@ -1,6 +1,31 @@
 import * as THREE from "three";
 import { PartBuilder } from "../partBuilder";
 import type { CoastDecorKind } from "../../game/types";
+import { rampSections, type ExhibitDef } from "../../game/data/coast";
+
+/** The shore's snow deck and sloped, irregular rock sides use the same sections as navigation. */
+export function penguinRampGeometry(ex: ExhibitDef, i: number, snow = false): THREE.BufferGeometry {
+  const sections = rampSections(ex, i), vertices: number[] = [];
+  const quad = (a: number[], b: number[], c: number[], d: number[]) => vertices.push(...a, ...b, ...c, ...a, ...c, ...d);
+  for (let k = 1; k < sections.length; k++) {
+    const a = sections[k - 1], b = sections[k];
+    if (snow) quad([a.left, a.y, a.z], [b.left, b.y, b.z], [b.right, b.y, b.z], [a.right, a.y, a.z]);
+    else {
+      quad([a.baseLeft, a.baseY, a.z], [b.baseLeft, b.baseY, b.z], [b.left, b.y, b.z], [a.left, a.y, a.z]);
+      quad([a.right, a.y, a.z], [b.right, b.y, b.z], [b.baseRight, b.baseY, b.z], [a.baseRight, a.baseY, a.z]);
+      quad([a.baseRight, a.baseY, a.z], [b.baseRight, b.baseY, b.z], [b.baseLeft, b.baseY, b.z], [a.baseLeft, a.baseY, a.z]);
+    }
+  }
+  if (!snow) {
+    const a = sections[0], b = sections[sections.length - 1];
+    quad([a.left, a.y, a.z], [a.right, a.y, a.z], [a.baseRight, a.baseY, a.z], [a.baseLeft, a.baseY, a.z]);
+    quad([b.right, b.y, b.z], [b.left, b.y, b.z], [b.baseLeft, b.baseY, b.z], [b.baseRight, b.baseY, b.z]);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
 
 /**
  * Low-poly coastal animals and habitat items. Each animal is a few merged
@@ -10,11 +35,13 @@ import type { CoastDecorKind } from "../../game/types";
  * body (the scene lifts them onto the ground when they are out of the water).
  */
 
-export interface PenguinParts { body: THREE.BufferGeometry; flipper: THREE.BufferGeometry; centre: number }
+export interface PenguinParts { body: THREE.BufferGeometry; head: THREE.BufferGeometry; flipper: THREE.BufferGeometry; centre: number; height: number }
 export interface SealParts { front: THREE.BufferGeometry; rear: THREE.BufferGeometry; head: THREE.BufferGeometry; foreFlipper: THREE.BufferGeometry; lift: number }
 export interface OtterParts { body: THREE.BufferGeometry; head: THREE.BufferGeometry; paw: THREE.BufferGeometry; tail: THREE.BufferGeometry; lift: number }
 
 let penguin: PenguinParts | null = null;
+/** Upright source +Y becomes swim-forward +Z; mover pitch is positive nose-up. */
+export const penguinBodyPitch = (pitch: number, swim: number) => (Math.PI / 2 - pitch) * swim;
 /** Procedural penguin fallback: black back, white front, chest band and pink face patch. */
 export function penguinParts(): PenguinParts {
   if (penguin) return penguin;
@@ -24,19 +51,24 @@ export function penguinParts(): PenguinParts {
   b.sphere(0.165, 0, 0.29, 0.05, white, [0.88, 1.38, 0.62], 12);
   // Chest band: a black ring across the white front.
   b.add(new THREE.TorusGeometry(0.15, 0.018, 4, 18, Math.PI), black, [0, 0.42, 0.04], [0, 0, Math.PI], [1, 0.55, 1.1]);
-  b.sphere(0.115, 0, 0.6, 0.01, black, [1, 1, 1], 12);
-  b.sphere(0.07, 0, 0.585, 0.085, white, [1.2, 0.9, 0.55], 8);
-  b.sphere(0.035, 0.05, 0.625, 0.08, "#f2a5a5", [1, 0.8, 0.5], 6);
-  b.sphere(0.035, -0.05, 0.625, 0.08, "#f2a5a5", [1, 0.8, 0.5], 6);
-  b.add(new THREE.ConeGeometry(0.03, 0.11, 6), "#2b2b2b", [0, 0.6, 0.155], [Math.PI / 2, 0, 0]);
-  b.sphere(0.014, 0.045, 0.635, 0.1, "#111111", [1, 1, 1], 6);
-  b.sphere(0.014, -0.045, 0.635, 0.1, "#111111", [1, 1, 1], 6);
+  // A separate neck pivot lets the beak extend along the body while swimming.
+  const h = new PartBuilder(0);
+  h.sphere(0.115, 0, 0, 0, black, [1, 1, 1], 12);
+  h.sphere(0.07, 0, -0.015, 0.075, white, [1.2, 0.9, 0.55], 8);
+  h.sphere(0.035, 0.05, 0.025, 0.07, "#f2a5a5", [1, 0.8, 0.5], 6);
+  h.sphere(0.035, -0.05, 0.025, 0.07, "#f2a5a5", [1, 0.8, 0.5], 6);
+  h.add(new THREE.ConeGeometry(0.03, 0.11, 6), "#2b2b2b", [0, 0, 0.145], [Math.PI / 2, 0, 0]);
+  h.sphere(0.014, 0.045, 0.035, 0.09, "#111111", [1, 1, 1], 6);
+  h.sphere(0.014, -0.045, 0.035, 0.09, "#111111", [1, 1, 1], 6);
   b.box(0.07, 0.025, 0.11, 0.07, 0, 0.04, "#d98a8a");
   b.box(0.07, 0.025, 0.11, -0.07, 0, 0.04, "#d98a8a");
   const f = new PartBuilder(0);
   // A flipper hangs from the shoulder (pivot at y = 0).
   f.add(new THREE.BoxGeometry(0.035, 0.24, 0.085), black, [0, -0.12, 0], [0, 0, 0], [1, 1, 1], { vary: false });
-  penguin = { body: b.build(), flipper: f.build(), centre: 0.32 };
+  const body = b.build(), head = h.build();
+  body.computeBoundingBox(); head.computeBoundingBox();
+  const height = Math.max(body.boundingBox!.max.y, head.boundingBox!.max.y + 0.6) - body.boundingBox!.min.y;
+  penguin = { body, head, flipper: f.build(), centre: 0.32, height };
   return penguin;
 }
 

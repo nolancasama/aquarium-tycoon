@@ -56,18 +56,37 @@ export function createPenguin(asset: GLTF, targetHeight: number): PenguinInstanc
     return [name, {
       bone,
       world: bone.getWorldQuaternion(new THREE.Quaternion()),
-      parentInverse: bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert(),
       animated: bone.quaternion.clone()
     }];
   }));
-  const delta = new THREE.Quaternion(), target = new THREE.Quaternion();
+  const delta = new THREE.Quaternion(), target = new THREE.Quaternion(), parentInverse = new THREE.Quaternion(), sourceWorld = new THREE.Quaternion();
   const xAxis = new THREE.Vector3(1, 0, 0), yAxis = new THREE.Vector3(0, 1, 0), zAxis = new THREE.Vector3(0, 0, 1);
-  const pose = (name: string, axis: THREE.Vector3, angle: number, weight: number) => {
+  const poseRotation = (name: string, rotation: THREE.Quaternion, weight: number) => {
     const state = bones.get(name)!;
-    delta.setFromAxisAngle(axis, angle);
-    target.copy(state.parentInverse).multiply(delta).multiply(state.world);
+    // Parent bones may themselves have a swim overlay. Convert through their
+    // current orientation, so feet and head retain the intended source axes.
+    state.bone.parent!.updateWorldMatrix(true, false);
+    state.bone.parent!.getWorldQuaternion(parentInverse).invert();
+    target.copy(parentInverse).multiply(sourceWorld).multiply(rotation).multiply(state.world);
     state.bone.quaternion.slerp(target, weight);
   };
+  const pose = (name: string, axis: THREE.Vector3, angle: number, weight: number) => {
+    delta.setFromAxisAngle(axis, angle);
+    poseRotation(name, delta, weight);
+  };
+  // The shipped mesh has +Z beak-forward, +Y upright and a rotated armature
+  // root. Recover its beak axis through the skin's actual inverse bind matrix;
+  // extending the neck toward +Y makes the beak follow the streamlined body
+  // after the one outer +PI/2 body rotation. Land keeps its authored idle/gait.
+  const headSwim = new THREE.Quaternion();
+  model.traverse((node) => {
+    if (!(node instanceof THREE.SkinnedMesh)) return;
+    const joint = node.skeleton.bones.indexOf(bones.get("scull")!.bone);
+    if (joint < 0) return;
+    const inverseBindRotation = new THREE.Quaternion().setFromRotationMatrix(node.skeleton.boneInverses[joint]);
+    const beak = zAxis.clone().applyQuaternion(inverseBindRotation).applyQuaternion(bones.get("scull")!.world).normalize();
+    headSwim.setFromUnitVectors(beak, yAxis);
+  });
   const feet: { mesh: THREE.SkinnedMesh; vertices: number[] }[] = [];
   model.traverse((node) => {
     if (!(node instanceof THREE.SkinnedMesh)) return;
@@ -98,7 +117,7 @@ export function createPenguin(asset: GLTF, targetHeight: number): PenguinInstanc
       // Remove last frame's overlays before the mixer evaluates the next pose.
       for (const state of bones.values()) state.bone.quaternion.copy(state.animated);
       // Rest actions can outlive a rest in the mover; speed still selects the gait.
-      const moving = m.area !== "water" && m.speed > 0.05;
+      const moving = (m.area !== "water" || m.mode === "rampUp" || m.mode === "rampDown") && m.speed > 0.05;
       // Ordinary walking is 0.42 m/s; the authored hops/steps reach 0.588.
       const fast = moving && m.speed > 0.55;
       const fade = 1 - Math.exp(-dt * 10);
@@ -112,13 +131,16 @@ export function createPenguin(asset: GLTF, targetHeight: number): PenguinInstanc
       run.timeScale = Math.max(0.05, m.speed / (1.43 * scale));
       mixer.update(dt);
       for (const state of bones.values()) state.animated.copy(state.bone.quaternion);
+      model.updateWorldMatrix(true, false);
+      model.getWorldQuaternion(sourceWorld);
       const stroke = 0.8 + Math.sin(m.phase * 1.6) * 0.55;
       pose("finL", zAxis, stroke, swim);
       pose("finR", zAxis, -stroke, swim);
-      pose("thighL", xAxis, 0.7, swim);
-      pose("thighR", xAxis, 0.7, swim);
-      pose("footL", xAxis, -0.35, swim);
-      pose("footR", xAxis, -0.35, swim);
+      pose("thighL", xAxis, 0.15, swim);
+      pose("thighR", xAxis, 0.15, swim);
+      pose("footL", xAxis, Math.PI / 2, swim);
+      pose("footR", xAxis, Math.PI / 2, swim);
+      poseRotation("scull", headSwim, swim);
       if (!moving && m.action === "eat" && m.area === "land") {
         // A short repeated beak dip, layered on the owner's idle animation.
         // Body lean is applied around the visual feet by the scene group.

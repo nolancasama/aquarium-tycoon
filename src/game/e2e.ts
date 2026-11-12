@@ -423,6 +423,15 @@ export function installE2eHook(seed: number) {
         waiting: g.coastWaiting,
         activity: g.coastActivity,
         entries: { ...coastRt.entries },
+        time: coastRt.time,
+        motion: [...coastRt.animals.values()].map(({ habitat, m }) => ({
+          id: m.id, habitat, heading: m.heading, pitch: m.pitch, speed: m.speed,
+          target: m.path[0] ? { ...m.path[0] } : null,
+          exit: m.exit ? { kind: m.exit.kind, ramp: m.exit.i } : null,
+          feeding: m.feeding?.stage ?? null
+          , rampNext: m.rampNext ?? -1, ledgeNext: m.ledgeNext ?? -1,
+          island: m.island, ledge: m.ledge ?? -1, yieldingFor: m.blockedFor ?? 0
+        })),
         animals: [...coastRt.animals.values()].map((a) => ({ id: a.m.id, habitat: a.habitat, mode: a.m.mode, area: a.m.area, x: a.m.x, y: a.m.y, z: a.m.z }))
       };
     },
