@@ -194,18 +194,38 @@ for (const size of [
       await page.waitForTimeout(900);
       await checkLayout(page, ["coins", "goals", "btn-settings", "status", "btn-back", "btn-feed", "btn-clean", "btn-decorate"], "tank");
       // The status panel stands just right of the glass, its top level with the tank's.
-      // The camera eases its lens shift in; measure once the glass has stopped moving.
-      let glass = (await hook<{ left: number; right: number; top: number }>(page, "glass", "t1"))!;
-      await expect
-        .poll(async () => {
-          const now = (await hook<{ left: number; right: number; top: number }>(page, "glass", "t1"))!;
-          const still = Math.abs(now.right - glass.right) < 0.5 && Math.abs(now.top - glass.top) < 0.5;
-          glass = now;
-          return still;
-        }, { intervals: [250], timeout: 10_000 })
-        .toBe(true);
-      await page.waitForTimeout(500);
-      const status = (await page.getByTestId("status").boundingBox())!;
+      // Sample both surfaces in the same rendered frame. A first poll attempt
+      // can otherwise compare the same frame twice while the camera is easing.
+      const geometry = () => page.evaluate(async () => {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const api = (window as unknown as { __at: {
+          glass(id: string): { left: number; right: number; top: number } | null;
+        } }).__at;
+        const glass = api.glass("t1");
+        const el = document.querySelector('[data-testid="status"]');
+        if (!glass || !el) throw new Error("close-up geometry unavailable");
+        const box = el.getBoundingClientRect();
+        return { glass, status: { x: box.x, y: box.y, width: box.width } };
+      });
+      let settled: Awaited<ReturnType<typeof geometry>>;
+      try {
+        let previous: Awaited<ReturnType<typeof geometry>> | undefined;
+        let stableFrames = 0;
+        await expect.poll(async () => {
+          const now = await geometry();
+          const still = previous && Math.abs(now.glass.right - previous.glass.right) < 0.5
+            && Math.abs(now.glass.top - previous.glass.top) < 0.5
+            && Math.abs(now.status.x - previous.status.x) < 0.5
+            && Math.abs(now.status.y - previous.status.y) < 0.5;
+          stableFrames = still ? stableFrames + 1 : 0;
+          previous = now;
+          settled = now;
+          return stableFrames;
+        }, { intervals: [250], timeout: 10_000 }).toBeGreaterThanOrEqual(3);
+      } catch (cause) {
+        throw new Error("HARNESS_PRECONDITION_FAILED: close-up camera and status settled", { cause });
+      }
+      const { glass, status } = settled!;
       expect(status.x - glass.right, "gap right of glass").toBeGreaterThan(8);
       expect(status.x - glass.right, "gap right of glass").toBeLessThan(48);
       expect(Math.abs(status.y - glass.top), "top aligned with tank").toBeLessThan(20);

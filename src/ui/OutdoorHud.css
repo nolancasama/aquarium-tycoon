@@ -1,12 +1,11 @@
 /* The outdoor areas' HUD (Dolphin Lagoon, Grand Ocean Sanctuary). Built on the wing and coast styles. */
 
-/* Viewpoints on the left, anchored above the bottom bar (the goals card above them grows
-   with its wrapped text on narrower screens); the status card holds the right side. */
-.wing-views.outdoor-views { right: auto; left: 14px; top: auto; bottom: 118px; }
+/* Two-column viewpoint group above Feed/Toys; both sides leave the edge arrows clear.
+   Status stays inboard even when a need hint grows; the centre remains for questions. */
+.wing-views.outdoor-views { right: auto; left: calc(var(--room-nav-width) + 12px); bottom: 118px; }
 .wing-views.outdoor-views button { min-width: 112px; min-height: 48px; }
 .wing-views.outdoor-views button.guide { border-color: #ffb100; box-shadow: 0 0 0 4px rgba(255, 177, 0, 0.35), var(--shadow); }
-@media (max-height: 740px) { .wing-views.outdoor-views { gap: 6px; } .wing-views.outdoor-views button { min-height: 44px; } }
-@media (max-height: 620px) { .wing-views.outdoor-views { bottom: 104px; } .wing-views.outdoor-views button { min-height: 40px; } }
+@media (max-height: 740px) { .wing-views.outdoor-views { gap: 6px; } }
 
 .outdoor-status { width: 232px; }
 .outdoor-status header span { display: inline-flex; align-items: center; gap: 6px; }
@@ -15,6 +14,7 @@
 .outdoor-status .coast-need { pointer-events: auto; }
 .bar.need { display: flex; align-items: center; gap: 6px; }
 .bar.need .need-icon { display: inline-flex; width: 26px; justify-content: center; }
+.bar.need .need-label { flex: 0 0 60px; font-size: 12px; font-weight: 800; }
 .need-legend { display: grid; grid-template-columns: repeat(3, 1fr); font-size: 11px; color: var(--ink-soft); text-align: center; margin-top: -3px; }
 
 .outdoor-goals .outdoor-tour {

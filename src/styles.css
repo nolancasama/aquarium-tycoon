@@ -16,6 +16,7 @@
   --panel: rgba(255, 255, 255, 0.95);
   --shadow: 0 6px 18px rgba(11, 58, 92, 0.25);
   --radius: 22px;
+  --room-nav-width: 216px;
   font-family: system-ui, "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Meiryo", "Noto Sans JP", sans-serif;
   color: var(--ink);
 }
@@ -240,6 +241,11 @@ kbd {
   width: clamp(160px, 18vw, 240px);
   padding: 8px 12px 4px;
   pointer-events: auto;
+  /* Objectives scroll above the fixed midpoint navigation lane. */
+  max-height: calc(50dvh - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .goals header {
@@ -645,6 +651,14 @@ button:focus-visible { outline: 4px solid var(--sea); outline-offset: 3px; }
   justify-items: center;
   pointer-events: none;
   z-index: 30;
+}
+
+/* Care cards sit inboard of navigation: keep notifications in the free column
+   between objectives and care instead of covering the animal's needs. */
+.app:has(.wing-status) .toasts {
+  left: calc(clamp(160px, 18vw, 240px) + 28px);
+  right: calc(var(--room-nav-width) + 256px);
+  transform: none;
 }
 
 .toast {
@@ -1844,20 +1858,25 @@ mark.key {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 72px;
-  padding: 8px 14px;
+  width: var(--room-nav-width);
+  height: 72px;
+  padding: 3px 10px;
   background: var(--panel);
   border: 3px solid var(--aqua-soft);
   box-shadow: var(--shadow);
   font-weight: 900;
-  font-size: 18px;
+  font-size: 16px;
+  line-height: 1.1;
   color: var(--sea-dark);
   z-index: 10;
 }
 
 .hall-arrow b {
   font-size: 30px;
+  flex: none;
 }
+
+.hall-arrow > span { flex: 1; min-width: 0; }
 
 .hall-arrow.right {
   right: 0;
@@ -1873,20 +1892,23 @@ mark.key {
 
 .hall-arrow .ja {
   display: block;
+  font-size: 11px;
+  line-height: 1.1;
 }
 
-/* The coast's viewpoint buttons sit at mid-left: its left arrow goes below them. */
-.app:has(.coast-views) .hall-arrow.left {
-  top: auto;
-  bottom: 124px;
-  transform: none;
-}
-
-/* The Shark Tunnel's viewpoint buttons sit at mid-right: its right arrow (Grand Hub) goes below them, above Explore. */
-.app:has([data-testid="wing-views"]) .hall-arrow.right {
-  top: auto;
-  bottom: 124px;
-  transform: none;
+/* Compact edge navigation keeps its accessible destination name on narrow screens. */
+@media (width < 1024px) {
+  :root { --room-nav-width: 56px; }
+  .hall-arrow { justify-content: center; padding: 8px; gap: 0; }
+  .hall-arrow > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 /* A release-locked neighbour: still shown (so the tour reads), but plainly closed. */
@@ -1899,13 +1921,6 @@ mark.key {
 .hall-arrow.locked svg {
   vertical-align: -3px;
   margin-right: 4px;
-}
-
-.app:has(.goals.expanded) .hall-arrow.left,
-.app:has(.request) .hall-arrow.left {
-  top: auto;
-  bottom: 124px;
-  transform: none;
 }
 
 .offers {
@@ -2115,6 +2130,10 @@ mark.key {
   left: 14px;
   width: clamp(160px, 18vw, 240px);
   transform: none;
+  max-height: calc(50dvh - 124px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 .view-room .request {
   display: grid;
@@ -2140,7 +2159,7 @@ mark.key {
 }
 
 @media (max-width: 900px) {
-  .goals { top: 72px; }
+  .goals { top: 72px; max-height: calc(50dvh - 144px); }
   .player-status { gap: 5px; }
   .player-status .chip { padding: 0 10px 0 7px; font-size: 21px; }
   .top-right { gap: 8px; }
@@ -2171,14 +2190,6 @@ mark.key {
   .goals header .lv { font-size: 12px; padding: 1px 5px; }
   .guide-next { font-size: 14px; }
   .objective-details { max-height: 60px; }
-  .hall-arrow.left {
-    top: auto;
-    bottom: 110px;
-    left: calc(clamp(160px, 18vw, 240px) + 28px);
-    transform: none;
-    border-left: 3px solid var(--aqua-soft);
-    border-radius: 24px;
-  }
   .goals li {
     font-size: 14px;
   }
