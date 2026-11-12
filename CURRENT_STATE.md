@@ -1,5 +1,71 @@
 # Current State
 
+## Save safety, one arrow layout, hub reef, Lagoon deck, bigger Penguin Coast (2026-11-13)
+
+Merged into `main` and pushed to GitHub Pages on 2026-11-13. Design:
+DESIGN_DECISIONS.md "2026-11-12 — Save safety, one arrow layout, hub reef,
+Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
+(`../aq-save`, `../aq-visual`, `../aq-nav`, `../aq-penguin`, branches
+`fix/*`), reviewed and accepted by Claude.
+
+- **Save safety:** rejected records are quarantined in the save, not deleted;
+  backup ring + last-known-good + pinned pre-repair copies; Save Recovery
+  screen (Settings and title) with export/import of the exact raw save. The
+  owner's real save is the regression fixture
+  `src/game/logic/realSave.fixture.json` (byte-exact copy also in
+  `../aquarium-tycoon-save-backup/`).
+- **Arrows:** one layout in every room (midpoint of each edge, fixed size);
+  icon-only below 1024 px wide **or 700 px tall**; on short screens the
+  room-view request card stands right of the arrow lane at full height.
+  Controls and goal panels move out of the arrow lane.
+- **Grand Hub reef tank:** live-rock ridge, attached corals, anemones,
+  seagrass; fish on collision-checked paths (`scene/hub/hubReef.ts`,
+  `reefFishPaths.ts`). **Lagoon deck:** overlaps removed, supported stairs,
+  signs removed (`scene/lagoon/deckGeometry.ts`).
+- **Penguin Coast:** bigger, deeper pool; swim orientation from the GLB's
+  axes; separation; natural ramps with yielding opposing traffic (soak test);
+  rocky underwater terrain; no bar across the Underwater view.
+- **Verified on merged main:** typecheck; unit 832/832; build; full
+  Playwright 91/94 on the production preview (31 min). The 3 failures:
+  `requests.spec` 1024×600 was a real regression (fixed by the short-screen
+  rule above, then requests + nav-layout + layout + arrows 16/16 and frames
+  checked by eye); `outdoor.spec` Lagoon/Sanctuary previews time out
+  "waiting for in lagoon/sanctuary" (or an extra 2-coin tip) **on 290ada1
+  too**, a pre-existing flake in the debug-only preview areas.
+- **Known / not verified:** shore ramps are hard to see from the Penguins
+  camera and the shore edge still reads straight; real Chromebook fps; the
+  other PC's lost tanks (once this release loads there, Settings → Save
+  Recovery shows its save, backups and quarantined records; backups exist
+  only from this release on). Open question for the owner: keep arrows
+  icon-only on small screens, or a short label / name on tap.
+
+## Next steps
+
+1. **Items 7–8** as a new order on a branch from `main` (they touch the
+   penguin scene and `CoastHud`): **keeper feeding**: a real staff door built
+   into the back rocks (opening/closing, short dark interior); on Feed a
+   keeper with a bucket walks out, goes to the feeding station, bends and tips
+   fish in (pile grows), watches, walks back, closes the door; penguins gather
+   and eat without passing through the keeper/door/station; Feed disabled with
+   "Feeding... / えさやりちゅう", the action itself guarded (one sequence, one
+   benefit), a runtime state machine, safe when leaving the area, a fallback
+   when no station is placed. **Cleaning montage**: a short stop-motion /
+   time-lapse of several keepers in distinct cleaning poses at plausible spots
+   (glass, shore, debris bucket, near the station, wash-down), tools in hands,
+   light sound/sparkle, exhibit refreshed and workers gone at the end; Clean
+   disabled and guarded the same way; existing cleanliness maths unchanged.
+   Reuse the visitor character models; no new dependencies.
+2. Stabilise `outdoor.spec` (preview entry wait) when convenient.
+3. The four `fix/*` worktrees are merged and can be removed (each has its own
+   `npm ci` install; never `--force` with a junctioned node_modules).
+
+**Environment notes:**
+- Vitest fails in Git Bash here; run tests from **PowerShell**.
+- Unit tests time out (5 s) only while other runs load the CPU; judge the
+  suite on an idle machine.
+- Playwright reuses any server on port 4177: serve a fresh build on its own
+  port and set `BASE_URL`.
+
 ## Navigation, hub, Penguin Coast and Lagoon improvements (2026-11-11)
 
 Merged into `main` and deployed to GitHub Pages (f1f11b1, 2026-11-11; CI tests + deploy passed).
@@ -850,7 +916,11 @@ approach frames, the trophy from front/side/rear.
    names).
 
 ## Codex / Delegated Work
-None pending. The Shark Tunnel's two Codex slices (worktrees aq-st1 and aq-st2) stopped
+**Pending (2026-11-12):** four worktrees (aq-save accepted; aq-nav, aq-visual,
+aq-penguin PARTIAL after a Codex usage limit) — see **CONTINUE HERE** at the top.
+Never re-delegate from scratch or overwrite them; continue their `.ai/work-order.json`.
+
+Earlier work: none pending. The Shark Tunnel's two Codex slices (worktrees aq-st1 and aq-st2) stopped
 on a usage limit on 2026-11-06; Claude finished and integrated all of it on branch
 st1-habitat. The 2026-10-24 guidance pass was split into four Codex runs
 (guide + shop + level cards; visitors + bench; wall + trophy; request card),

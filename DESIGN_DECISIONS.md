@@ -2101,3 +2101,63 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
   main aquarium's English-task fish (`models/fish.ts`) are unchanged.
   Rejected: reusing the task fish (heavier, tied to English tasks);
   imported fish assets (style clash).
+
+## 2026-11-12 — Save safety, one arrow layout, hub reef, Lagoon deck, bigger Penguin Coast
+
+- **Save: quarantine, never delete.** Records the decoder rejects go into
+  `model.quarantine` (≤200 entries / 512 KiB) inside the save instead of
+  being dropped, so an autosave can never shrink a save. A rejected record
+  that other records depend on blocks loading with a recovery prompt instead.
+  Why: a player lost bought optional tanks on another PC; one real
+  silent-loss path was found (bought-but-unplaced tanks dropped when every
+  pad was full). Rejected: silent repair on load.
+- **Save backups.** A 5-entry ring (`at.save.backups.v1`); a last-known-good
+  copy (`at.save.lastgood.v1`) updated only at session start from a cleanly
+  decoded save, never by autosave; up to 3 pinned pre-repair copies
+  (`at.save.prerepair.v1`). Rotation never evicts last-known-good or pinned
+  copies. New Game backs up first. Previews never write.
+- **Save Recovery** is a teacher-facing screen (Settings and the title
+  screen, small issue badge). Export is `{exportedAt, key, raw}` with the
+  exact raw text; restore and import replace one complete snapshot, never
+  merge.
+- **Navigation: one arrow layout everywhere.** Arrows sit at the midpoint of
+  each side edge at one fixed size (`--room-nav-width`) in every room; the
+  per-room arrow overrides are removed. Other controls (viewpoints, care
+  buttons, Explore Tunnel) move instead of the arrows. Goal and request
+  panels cap their height and scroll above the arrow lane. Why: arrows
+  jumped between rooms and overlapped HUD cards. Rejected: per-room tuning.
+- **Arrows are icon-only below 1024 px.** The destination name stays in the
+  markup (visually hidden) for screen readers. Why: the labelled arrow is
+  about 210 px wide; below 1024 px it covers the scene and collides with the
+  goals card, and a slim fixed width is what lets every room share one
+  layout. The classroom target (1366×768 Chromebooks) keeps the names.
+  Accepted cost: on narrow fallback screens children lose the English room
+  name on the arrow. Alternatives offered and not chosen yet: a short label
+  under the icon, the name on tap, a 900 px cut-off.
+- **Short screens (height < 700 px) also get icon-only arrows**, and the
+  room-view visitor request card stands just right of the arrow lane at its
+  full height. Why: at 1024×600 the card was squeezed into a 176 px scroll
+  box above the arrow, so its speaker and close buttons needed scrolling
+  (`requests.spec` 1024×600 caught it). Rejected: moving the arrow down when
+  a request shows (the old per-state override the one-layout rule removed).
+- **Grand Hub reef tank.** Layered live-rock ridge with caves, corals grown
+  from the rock (staghorn, plates, brain, solid fans), anemones, soft corals,
+  gravel, shells and seagrass on the sand, merged into one geometry. Fish
+  roam collision-checked curves around the rock volumes. Water is a light
+  aqua tint (#8fe0ee at 0.13, surface #b8f0f8 at 0.2): the previous strong
+  blue hid the colours and a near-invisible tint made the tank read as an
+  empty glass case. Rejected: circular fish orbits; floating standalone
+  decor.
+- **Lagoon deck.** Overlapping surfaces are removed geometrically (no depth
+  offsets); the stairs are rebuilt with stringers, posts and railings; the
+  DOLPHIN LAGOON / UNDERWATER GALLERY signs are removed.
+- **Penguin Coast enlarged.** The extra space goes into deep open water
+  (rejected: uniform scaling); swim orientation comes from the GLB's real
+  axes (rejected: per-direction offsets); lightweight steering keeps
+  penguins apart (no physics engine). Ramps are natural sloped rock-and-ice
+  ramps whose footprints match the visible geometry; opposing ramp traffic
+  yields at a clear spot. The underwater terrain is rounded boulders,
+  shelves and wall ledges (no floor-standing crystal shards); the island has
+  a tapering rocky base. The Underwater view has no structural bar across
+  the middle. The shore is deeper, with a clear route from the back cliff
+  (future staff door) to the feeding station.

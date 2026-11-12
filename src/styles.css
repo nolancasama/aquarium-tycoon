@@ -1896,8 +1896,9 @@ mark.key {
   line-height: 1.1;
 }
 
-/* Compact edge navigation keeps its accessible destination name on narrow screens. */
-@media (width < 1024px) {
+/* Compact edge navigation keeps its accessible destination name on narrow or
+   short screens. */
+@media (width < 1024px), (height < 700px) {
   :root { --room-nav-width: 56px; }
   .hall-arrow { justify-content: center; padding: 8px; gap: 0; }
   .hall-arrow > span {
@@ -2134,6 +2135,15 @@ mark.key {
   overflow-y: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
+}
+/* Short screens: there is no room for the whole card above the arrow, so the
+   card stands just right of the (compact) arrow lane at its full height and
+   its buttons never need scrolling. */
+@media (height < 700px) {
+  .view-room .top-panels:has(.request) {
+    left: calc(var(--room-nav-width) + 8px);
+    max-height: calc(100dvh - 196px);
+  }
 }
 .view-room .request {
   display: grid;
