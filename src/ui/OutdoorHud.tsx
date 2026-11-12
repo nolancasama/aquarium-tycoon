@@ -48,6 +48,7 @@ export function NeedBar({ value, icon, label, id }: { value: number; icon: React
   return (
     <div className={`bar need ${v >= 70 ? "good" : v >= 40 ? "ok" : "low"}`} data-testid={id} data-value={v} aria-label={`${label} ${v}`}>
       <span className="need-icon" aria-hidden="true">{icon}</span>
+      <span className="need-label">{label}</span>
       <div className="track"><div className="fill" style={{ width: `${Math.max(4, v)}%` }} /></div>
     </div>
   );

@@ -51,7 +51,7 @@
 /* Habitat status: upper right, under Help / Settings, never over the water's centre. */
 .wing-status {
   position: absolute;
-  right: 14px;
+  right: calc(var(--room-nav-width) + 12px);
   top: 78px;
   width: 222px;
   padding: 10px 14px 12px;
@@ -75,9 +75,10 @@
 
 .wing-views {
   position: absolute;
-  right: 14px;
-  top: 262px;
+  right: calc(var(--room-nav-width) + 12px);
+  bottom: 118px;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   z-index: 9;
 }
@@ -398,8 +399,5 @@
 @media (max-width: 1100px) {
   .tunnel-activity {
     width: min(440px, calc(100vw - 300px));
-  }
-  .wing-views {
-    top: 250px;
   }
 }
