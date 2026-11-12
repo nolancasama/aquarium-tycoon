@@ -12,6 +12,7 @@ import { feedingPose, lagoonRt, resetFeeding, RING } from "../../game/lagoon/lag
 import { lagoonFocus, lagoonTick, lookText, tapDolphin, tapLook } from "../../game/flow/lagoon";
 import { DOLPHINS } from "../../game/logic/lagoon";
 import { PartBuilder } from "../partBuilder";
+import { addObservationDeck } from "./deckGeometry";
 import { shaderTime, signMaterial, smoothMat } from "../materials";
 import { useAreaGate } from "../tunnel/wing";
 import { newPose, TunnelFigure } from "../tunnel/TunnelFigure";
@@ -210,16 +211,9 @@ function Structures() {
     b.box(7, 0.3, 4.4, 9, LAND_Y + 2.6, 17.4, "#2f8f9d");
     b.box(3.2, 2.2, 0.1, 9, LAND_Y, 15.65, "#14394d");
     for (const s of [-1, 1]) b.cyl(0.13, 0.13, 2.6, 9 + s * 2.9, LAND_Y, 15.75, "#e9e3d6", 10);
-    // The observation deck over the beach: posts, platform, rails, stairs, a sun sail.
+    // The observation deck: individual boards on joists, supported stairs and timber rails.
     const D = DECK;
-    for (const [x, z] of [[D.minX, D.minZ], [D.maxX, D.minZ], [D.minX, D.maxZ], [D.maxX, D.maxZ], [(D.minX + D.maxX) / 2, D.minZ], [(D.minX + D.maxX) / 2, D.maxZ]]) b.box(0.3, D.top - LAND_Y, 0.3, x, LAND_Y, z, "#7a5636");
-    b.box(D.maxX - D.minX + 0.4, 0.2, D.maxZ - D.minZ + 0.4, (D.minX + D.maxX) / 2, D.top - 0.2, (D.minZ + D.maxZ) / 2, "#b88a5a");
-    for (const [x0, z0, x1, z1] of [[D.minX, D.minZ, D.maxX, D.minZ], [D.minX, D.minZ, D.minX, D.maxZ], [D.minX, D.maxZ, D.maxX - 2.2, D.maxZ]]) {
-      const l = Math.hypot(x1 - x0, z1 - z0), ang = Math.atan2(x1 - x0, z1 - z0) + Math.PI / 2;
-      b.boxAt(l, 0.08, 0.08, [(x0 + x1) / 2, D.top + 1.05, (z0 + z1) / 2], [0, ang, 0], "#f2f6f7");
-      for (let p = 0; p <= Math.ceil(l / 1.5); p++) { const t = p / Math.ceil(l / 1.5); b.box(0.06, 1.05, 0.06, x0 + (x1 - x0) * t, D.top, z0 + (z1 - z0) * t, "#f2f6f7"); }
-    }
-    for (let k = 0; k < 9; k++) b.box(2, 0.12, 0.38, D.maxX + 0.9, LAND_Y + (k + 0.5) * (D.top - LAND_Y) / 9 - 0.06, D.maxZ - 0.5 - k * 0.42, "#a87c50");
+    addObservationDeck(b, lagoonGround);
     // Flags on the deck's back corners (nothing over the viewers' heads).
     for (const [x, z, c] of [[D.minX + 0.3, D.maxZ - 0.3, "#ff8a5b"], [D.maxX - 0.3, D.maxZ - 0.3, "#4dabf7"]] as const) {
       b.cyl(0.05, 0.05, 3.4, x, D.top, z, "#e8e1d2", 6);
@@ -347,20 +341,14 @@ function Boats() {
 // ------------------------------------------------------------------ signs and rewards
 
 function Signs() {
-  const main = signMaterial("DOLPHIN LAGOON\nイルカの ラグーン", "#14506a", "#e8fbff", 900, 280);
-  const gal = signMaterial("UNDERWATER GALLERY\nすいちゅう ギャラリー", "#2f8f9d", "#ffffff", 900, 260);
   const deck = signMaterial("OBSERVATION DECK\nてんぼう デッキ", "#7a5636", "#fff4d6", 800, 240);
   const care = signMaterial("CARE TEAM\nケア チーム", "#e8590c", "#ffffff", 640, 220);
   const inside = signMaterial("BOTTLENOSE DOLPHINS\nハンドウイルカ", "#10324a", "#bff0ff", 900, 240);
   return (
     <group>
-      <mesh position={[-2.5, 3.1, 16.2]} material={main} raycast={() => undefined}><planeGeometry args={[4.4, 1.37]} /></mesh>
-      <mesh position={[9, LAND_Y + 3.25, 15.15]} material={gal} raycast={() => undefined}><planeGeometry args={[5.2, 1.5]} /></mesh>
       <mesh position={[-18.5, DECK.top + 1.55, DECK.minZ - 0.05]} rotation={[0, Math.PI, 0]} material={deck} raycast={() => undefined}><planeGeometry args={[3.4, 1.02]} /></mesh>
       <mesh position={[PLATFORM.x + PLATFORM.w / 2 + 0.05, PLATFORM.top + 1.3, PLATFORM.z]} rotation={[0, Math.PI / 2, 0]} material={care} raycast={() => undefined}><planeGeometry args={[1.9, 0.65]} /></mesh>
       <mesh position={[9, GALLERY.ceiling - 0.35, GALLERY.back - 0.02]} rotation={[0, Math.PI, 0]} material={inside} raycast={() => undefined}><planeGeometry args={[4.2, 1.12]} /></mesh>
-      {/* The main sign's posts. */}
-      <mesh position={[-2.5, 1.6, 16.25]} raycast={() => undefined}><boxGeometry args={[4.6, 0.12, 0.12]} /><meshLambertMaterial color="#14506a" /></mesh>
     </group>
   );
 }
