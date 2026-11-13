@@ -1,0 +1,29 @@
+.animal-name-panel {
+  position: absolute;
+  top: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 29;
+  width: min(350px, calc(100vw - 640px));
+  min-width: 260px;
+  padding: 10px 12px;
+}
+.animal-name-panel small { display: block; margin-bottom: 4px; }
+.animal-name-panel > div { display: flex; align-items: center; gap: 8px; }
+.animal-name-panel strong { overflow-wrap: anywhere; flex: 1; font-size: 20px; }
+.animal-name-panel button, .animal-name-dialog button { min-height: 44px; min-width: 44px; padding: 8px 10px; font: inherit; }
+.animal-name-panel .animal-name-close { padding: 4px; font-size: 24px; }
+.animal-name-dialog { width: min(430px, calc(100vw - 40px)); color: var(--ink); padding: 22px; }
+.animal-name-dialog::backdrop { background: rgb(13 40 55 / 55%); }
+.animal-name-dialog h2 { margin: 0 0 16px; font-size: 24px; }
+.animal-name-dialog label { display: block; margin-bottom: 8px; }
+.animal-name-dialog input { box-sizing: border-box; width: 100%; min-height: 52px; border: 2px solid #347a8b; border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 24px; }
+.animal-name-dialog input:focus-visible, .animal-name-dialog button:focus-visible, .animal-name-panel button:focus-visible { outline: 3px solid #e9ac24; outline-offset: 3px; }
+.animal-name-dialog p { font-size: 14px; line-height: 1.5; }
+.animal-name-actions { display: flex; gap: 10px; }
+.animal-name-actions button { flex: 1; }
+.animal-name-default { width: 100%; margin-top: 12px; }
+@media (max-width: 1100px) {
+  /* Left of the right-hand status card, right of the goals card. */
+  .animal-name-panel { top: 92px; left: 224px; transform: none; width: 290px; }
+}

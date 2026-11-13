@@ -2411,3 +2411,34 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
 - Rejected: visibly gliding/teleporting between work spots, alternating two
   poses, moving the camera, freezing/repositioning animals, or postponing
   care/rewards. The montage is presentation on the existing generic action.
+
+## 2026-11-13 — Individual penguin and dolphin names
+
+- **Identity and storage:** penguins already have persistent `FishRec.id` values,
+  used by the coast runtime. Their optional `name` stays on that record, including
+  inventory and release-locked stored habitats. Dolphins have a fixed authored
+  roster with stable IDs (`sora`, `mimi`, `kai`, `nami`), rather than persistent
+  individual records. Optional `model.dolphinNames` maps those IDs to names.
+  It is independent of lagoon progress, so loading while the lagoon is locked
+  retains names without retaining or unlocking its gameplay state. Penguin
+  friendly defaults derive deterministically from the ID; dolphin defaults stay.
+- **Validation:** one sanitizer for UI and save decoding normalizes Unicode to
+  NFC, removes controls (including newlines), collapses whitespace, admits
+  Japanese and Latin letters, digits, spaces, hyphens and apostrophes, trims,
+  and limits to 12 Unicode code points. Empty means default. Missing or malformed
+  names affect only the optional name, never record validity or quarantine.
+  Names render as React text. No save-version bump or library is needed.
+- **Save safety:** immutable naming updates preserve the preview snapshot.
+  Existing preview save guards apply to names too; reload or End preview
+  discards preview edits. Existing exact-raw backup ring, last-known-good,
+  pinned pre-repair copies, Save Recovery and export/import carry the optional
+  fields without a separate persistence path. Release locks remain unchanged.
+- **UI:** selecting one animal briefly announces its name and opens an
+  individual info panel. Naming is optional, with a short accessible input,
+  Enter/OK, Cancel and Default name actions; no permanent all-animal labels
+  and no goal or economy changes.
+- **Rejected:** simulation indices, positions or animation state as identity;
+  duplicate penguin name maps instead of their existing records; embedding
+  dolphin names in discarded locked-area progress; rejecting/quarantining an
+  animal for a malformed name; mutating the pre-preview model; writing preview
+  names to a separate browser-storage key.

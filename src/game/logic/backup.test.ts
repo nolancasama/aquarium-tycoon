@@ -6,6 +6,7 @@ import { newModel } from "./model";
 import { continueGame, installAutosave, newGame, restoreSaveSnapshot, saveNow } from "../flow/story";
 import { dropPreview, endPreview, startPreview } from "../flow/preview";
 import { getGame, setGame } from "../store";
+import { animalName, renameAnimal } from "./animalNames";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn(), unlock: vi.fn(), setVolumes: vi.fn(), startAmbience: vi.fn(), startMusic: vi.fn() } }));
 vi.mock("../../audio/tts", () => ({ tts: { setRate: vi.fn(), cancel: vi.fn() } }));
@@ -43,6 +44,62 @@ function damaged(): string {
 }
 
 describe("save preservation", () => {
+  it("carries individual names through rotating, last-good and pinned raw backups", () => {
+    const model = renameAnimal(renameAnimal(decodeSave(original)!.model, "coast", "f91", "ゆき"), "lagoon", "sora", "青空");
+    const raw = encodeSave(model);
+    expect(backupRawSave(raw, "session-start")).toBe(true);
+    expect(updateLastGood(raw)).toBe(true);
+    expect(pinPreRepair(raw)).toBe(true);
+    for (const copy of [readBackups()[0], readLastGood()!, readPreRepair()[0]]) {
+      expect(copy.raw).toBe(raw);
+      const restored = decodeSave(copy.raw)!.model;
+      expect(animalName(restored, "coast", "f91")).toBe("ゆき");
+      expect(animalName(restored, "lagoon", "sora")).toBe("青空");
+    }
+  });
+
+  it.each(["before-import", "before-restore"] as const)("Save Recovery %s retains exported individual names", async (reason) => {
+    disk.set(SAVE_KEY, original);
+    await continueGame();
+    const named = renameAnimal(renameAnimal(getGame().model, "coast", "f91", "ゆき"), "lagoon", "sora", "青空");
+    const raw = encodeSave(named);
+    // Save Recovery exports this exact envelope and imports its raw snapshot.
+    const exported = JSON.stringify({ exportedAt: new Date().toISOString(), key: SAVE_KEY, raw });
+    const imported = JSON.parse(exported) as { raw: string };
+    expect(restoreSaveSnapshot(imported.raw, reason).ok).toBe(true);
+    expect(readRawSave()).toBe(raw);
+    await continueGame();
+    expect(animalName(getGame().model, "coast", "f91")).toBe("ゆき");
+    expect(animalName(getGame().model, "lagoon", "sora")).toBe("青空");
+    expect(getGame().model.coins).toBe(fixture.model.coins);
+  });
+
+  it("discards preview names on exit and reload without modifying any persisted snapshot", async () => {
+    const normal = renameAnimal(renameAnimal(decodeSave(original)!.model, "coast", "f91", "ゆき"), "lagoon", "sora", "青空");
+    disk.set(SAVE_KEY, encodeSave(normal));
+    await continueGame();
+    const before = getGame().model;
+    uninstall = installAutosave();
+    expect(startPreview("coast")).toBe(true);
+    expect(startPreview("lagoon")).toBe(true);
+    const persisted = new Map(disk);
+    storage.setItem.mockClear();
+    setGame({ model: renameAnimal(renameAnimal(getGame().model, "coast", "f91", "一時的"), "lagoon", "sora", "プレビュー") });
+    expect(animalName(getGame().model, "coast", "f91")).toBe("一時的");
+    expect(animalName(getGame().model, "lagoon", "sora")).toBe("プレビュー");
+    expect(saveNow()).toBe(false);
+    await vi.advanceTimersByTimeAsync(800);
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(disk).toEqual(persisted);
+    expect(endPreview()).toBe(true);
+    expect(getGame().model).toBe(before);
+    expect(saveNow()).toBe(true);
+    expect(disk).toEqual(persisted);
+    const reloaded = decodeSave(readRawSave())!.model;
+    expect(animalName(reloaded, "coast", "f91")).toBe("ゆき");
+    expect(animalName(reloaded, "lagoon", "sora")).toBe("青空");
+  });
+
   it("keeps five distinct exact raw copies and independent good and pinned snapshots", () => {
     const exact = ` \n${original}\n `;
     expect(updateLastGood(exact)).toBe(true);
