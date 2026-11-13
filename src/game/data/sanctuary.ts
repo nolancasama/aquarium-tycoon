@@ -9,8 +9,7 @@ import type { SanctuaryView } from "../logic/sanctuary";
  * sheltered, colder cove behind a rock breakwater (never mixed). Along the
  * shore: the research station with its dock, a pier out to the underwater
  * observation station, a care platform; the observation point stands high on
- * the west headland. An island and the research boat are the landmarks for
- * "Where is the orca?".
+ * the west headland. An island and the research boat are scenery and landmarks.
  *
  * Area-local metres around SANCTUARY_ORIGIN: x east, z toward the shore (+z),
  * y up; the sea surface is y = 0.
@@ -88,7 +87,7 @@ export const SANCTUARY_REVEAL_FROM = { pos: { x: -20, y: 150, z: -360 }, target:
 
 /** Where curious orcas cruise past the station's windows (a line across its view, out of reach of the walls). */
 export const STATION_PASS: Vec3[] = [{ x: 65.6, y: -3.6, z: 4.8 }, { x: 49.6, y: -3.2, z: 16.8 }, { x: 60, y: -4, z: 8 }];
-/** Where an orca is brought to answer "Where is it?": beside the island, or beside the boat. */
+/** Scenic orca positions beside the island or research boat. */
 export const BY_ISLAND: Vec3 = { x: ISLAND.x + 20, y: -1.2, z: ISLAND.z + 6 };
 export const BY_BOAT: Vec3 = { x: BOAT.x - 4, y: -1.2, z: BOAT.z - 14 };
 

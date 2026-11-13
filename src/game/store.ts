@@ -389,7 +389,7 @@ export function nudge(n: Omit<Nudge, "id">, ms = 6000) {
 /** The Shark Tunnel activity card (see game/tunnel/activities.ts). */
 export interface TunnelActivityUi {
   id: number;
-  kind: "find" | "show" | "where" | "can" | "count";
+  kind: "find" | "show" | "identify" | "like" | "count";
   /** Who asks: a tunnel visitor's type, or Pico on a tour / at a viewing spot. */
   by: VisitorType | "pico";
   question: { en: string; ja: string };

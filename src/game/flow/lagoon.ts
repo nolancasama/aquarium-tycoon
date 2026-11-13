@@ -6,10 +6,10 @@ import {
   recordLagoonActivity, recordLagoonSight, tickLagoon, visitLagoonView, type LagoonSight, type LagoonToy, type LagoonView
 } from "../logic/lagoon";
 import { award } from "../logic/model";
-import { DOLPHIN_NUMBER_PHRASE, type PhraseId } from "../logic/english";
+import { DOLPHIN_NUMBER_PHRASE } from "../logic/english";
 import { dropToy, feedPod, holdBall, throwBall, isFeeding, lagoonPod, lagoonRt, stepLagoonRt, WATCH_SPOTS } from "../lagoon/lagoonRuntime";
-import { surfaceY, type PodEvent } from "../marine/pod";
-import { GALLERY, LAGOON_ORIGIN } from "../data/lagoon";
+import { type PodEvent } from "../marine/pod";
+import { LAGOON_ORIGIN } from "../data/lagoon";
 import type { VisitorType } from "../types";
 import { ask, say, speak } from "./ask";
 import { project } from "../../scene/CameraRig";
@@ -130,7 +130,7 @@ const LOOK_TEXT: Record<LagoonSight, { label: string; ja: string; line: string }
   pair: { label: "Swimming together!", ja: "いっしょに およいでいる！", line: "Two dolphins are swimming together!" },
   breath: { label: "Breathing!", ja: "いきを している！", line: "The dolphin is breathing!" },
   dive: { label: "A deep dive!", ja: "ふかく もぐった！", line: "The dolphin is diving!" },
-  leap: { label: "A jump!", ja: "ジャンプした！", line: "The dolphin can jump!" }
+  leap: { label: "A jump!", ja: "ジャンプした！", line: "Look! A dolphin!" }
 };
 export const lookText = (k: LagoonSight) => LOOK_TEXT[k];
 
@@ -183,7 +183,7 @@ export function lagoonTick(dt: number) {
   if (!inLagoon() || !lagoonActive(model())) return;
   const view = getGame().lagoonView;
   lagoonRt.watch = view === "lagoon" ? null : WATCH_SPOTS[view];
-  // No spontaneous tricks while a visitor's question is about the dolphins (counting, where, which one).
+  // No spontaneous tricks while a visitor's question focuses on the dolphins.
   lagoonRt.tricksPaused = lagoonFocus.count || lagoonFocus.id !== null || Boolean(getGame().areaActivity);
   lagoonRt.catchInputPaused = !calm() || Boolean(getGame().areaPanel) || view === "gallery";
   const events = stepLagoonRt(dt);
@@ -223,18 +223,19 @@ function visitorTick() {
 /** Which dolphin a question is about (the scene rings it), and whether numbers are shown. */
 export const lagoonFocus = { id: null as string | null, numbers: false, count: false };
 
-export type LagoonQuestion = "count" | "where" | "can" | "what" | "like";
+export type LagoonQuestion = "count" | "big" | "what" | "like";
+const LAGOON_QUESTIONS: readonly LagoonQuestion[] = ["count", "big", "what", "like"];
 
 function pickQuestion(): LagoonQuestion {
   const ms = model().progress.lagoon?.milestone ?? 0;
-  if (ms <= 1) return Math.random() < 0.5 ? "count" : Math.random() < 0.5 ? "what" : "can";
-  if (ms === 2) return Math.random() < 0.65 ? "where" : "count";
-  const all: LagoonQuestion[] = ["count", "where", "can", "what", "like"];
-  return all[Math.floor(Math.random() * all.length)];
+  if (ms <= 1) return Math.random() < 0.5 ? "count" : Math.random() < 0.5 ? "what" : "like";
+  if (ms === 2) return Math.random() < 0.65 ? "big" : "count";
+  return LAGOON_QUESTIONS[Math.floor(Math.random() * LAGOON_QUESTIONS.length)];
 }
 
 /** The waiting visitor's chip was tapped. */
 export async function startLagoonActivity(kind?: LagoonQuestion) {
+  if (kind && !LAGOON_QUESTIONS.includes(kind)) return;
   const g = getGame();
   const w = g.areaWaiting;
   if ((!w && !kind) || !calm()) return;
@@ -279,36 +280,19 @@ async function askLagoon(kind: LagoonQuestion, by: VisitorType | "pico"): Promis
       });
       return Boolean(id);
     }
-    if (kind === "where") {
-      const g = getGame();
-      // In the gallery the answer is under the water; elsewhere, a dolphin at the surface or one down deep.
-      const under = g.lagoonView === "gallery" ? true : g.lagoonView === "care" ? false : Math.random() < 0.5;
-      const m = chooseDolphin(under);
-      if (under) {
-        if (g.lagoonView === "gallery") pod.attract(m.id, { x: 9 + (Math.random() - 0.5) * 3, y: -2.6, z: GALLERY.z - 4.2 }, 30, "point");
-        pod.hold(m.id, 30, -2.8);
-      } else pod.hold(m.id, 30, surfaceY(m));
+    if (kind === "big") {
+      if (getGame().lagoonView === "gallery") { setLagoonView("lagoon", true); await wait(700); }
+      const small = Math.random() < 0.5;
+      const m = pod.byId(small ? "mimi" : "sora")!;
+      lagoonFocus.count = true;
       lagoonFocus.id = m.id;
+      pod.hold(m.id, 30, -0.7);
+      pod.hold("sora", 30, -0.7);
       await wait(1200);
-      const correct: PhraseId = under ? "underWater" : "onWater";
       const id = await ask({
-        pattern: "whereDolphin", kind: "command", options: [correct], judge: ["onWater", "underWater"], choices: ["onWater", "underWater"], shuffle: false,
-        question: { en: "Where is the dolphin?", ja: "イルカは どこに いる？", by: speaker }, readQuestion: true, cancellable: true,
-        help: "みずの うえ？ それとも みずの なか？ ひかっている イルカを みてね"
-      });
-      return Boolean(id);
-    }
-    if (kind === "can") {
-      const m = chooseDolphin(false);
-      lagoonFocus.id = m.id;
-      // "Can it jump?" only right after a jump everyone could see.
-      const jumped = lagoonRt.time - lagoonRt.lastLeap < 25;
-      const q = jumped && Math.random() < 0.6 ? "jump" : Math.random() < 0.7 ? "swim" : "fly";
-      const yes = q !== "fly";
-      const id = await ask({
-        pattern: "canIt", kind: "command", options: [yes ? "yesItCan" : "noItCant"], judge: ["yesItCan", "noItCant"], choices: ["yesItCan", "noItCant"], shuffle: false,
-        question: { en: `Can it ${q}?`, ja: q === "swim" ? "イルカは およげる？" : q === "jump" ? "イルカは ジャンプできる？" : "イルカは そらを とべる？", by: speaker }, readQuestion: true, cancellable: true,
-        help: yes ? "できる？ はい / いいえ" : "そらを とべる？ はい / いいえ"
+        pattern: "bigSmall", kind: "command", options: [small ? "itsSmall" : "itsBig"], judge: ["itsBig", "itsSmall"], choices: ["itsBig", "itsSmall"], shuffle: false,
+        question: { en: "Is it big or small?", ja: "この イルカは おおきい？ ちいさい？", by: speaker }, readQuestion: true, cancellable: true,
+        help: "ひかっている イルカの おおきさを くらべてみよう"
       });
       return Boolean(id);
     }
@@ -355,7 +339,7 @@ export async function startLagoonTour() {
   let ok = true;
   try {
     await say("pico", "Let's do the Dolphin Discovery tour!", "イルカ はっけん ツアーを しよう！ 4つの しつもんに こたえてね");
-    for (const k of ["what", "count", "where", "like"] as LagoonQuestion[]) {
+    for (const k of ["what", "count", "big", "like"] as LagoonQuestion[]) {
       if (!(await askLagoon(k, "pico"))) { ok = false; break; }
       audio.play("correct");
     }

@@ -3,8 +3,8 @@ import { SPECIES } from "../data/fish";
 import { DECOR, decorFits } from "../data/decor";
 import { BUILT_IN_PADS, HALL_OF, isWingHabitat, PAD_TYPES, SLOT_ORDER, TANKS } from "../data/tanks";
 import { roomOpen, roomOwned } from "../data/rooms";
-import { PHRASES, type PhraseId } from "./english";
-import { isSentencePattern } from "./sentenceTeaching";
+import { isSavedPhrase } from "./english";
+import { isSavedSentencePattern } from "./sentenceTeaching";
 import { decodeRush } from "../rush/decode";
 import type { CoastProgress } from "./coast";
 import { coastSlotFits } from "../data/coast";
@@ -213,7 +213,7 @@ function readProgress(raw: unknown, version: number): Progress {
   p.superStar = src.superStar === true && p.stage === 8;
   p.tipsTaught = src.tipsTaught === true;
   p.handShown = [...new Set(arr(src.handShown).filter((id): id is string => typeof id === "string" && ["fish-shop", "place-animal", "visitor", "decor-ring", "room-navigation"].includes(id)))];
-  p.seenPatterns = [...new Set(arr(src.seenPatterns).filter(isSentencePattern))];
+  p.seenPatterns = [...new Set(arr(src.seenPatterns).filter(isSavedSentencePattern))];
   p.galleryOpen = src.galleryOpen === true && p.stage >= 8 && p.hallOpen;
   p.atriumOpen = src.atriumOpen === true && p.galleryOpen;
   p.atriumIntroSeen = src.atriumIntroSeen === true && p.atriumOpen;
@@ -259,7 +259,7 @@ function readProgress(raw: unknown, version: number): Progress {
     p.sanctuaryIntroSeen = src.sanctuaryIntroSeen === true;
     p.sanctuary = readSanctuaryProgress(src.sanctuary);
   }
-  p.said = [...new Set(arr(src.said).filter((s): s is PhraseId => typeof s === "string" && s in PHRASES))];
+  p.said = [...new Set(arr(src.said).filter(isSavedPhrase))];
   return p;
 }
 

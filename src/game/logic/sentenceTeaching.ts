@@ -18,19 +18,17 @@ export const SENTENCE_PATTERNS = {
   feed: { en: "___ the fish!", ja: "さかなに ＿＿してね。" },
   clean: { en: "___, please!", ja: "＿＿を おねがいします。" },
   yesNo: { en: "___, I do / don't.", ja: "＿＿、そうです／そうでは ありません。" },
-  where: { en: "Where is it? — It's ___ me!", ja: "どこに いる？ わたしの ＿＿に いるよ。" },
-  canIt: { en: "Can it ___? — ___, it can / can't.", ja: "＿＿できる？ できる／できない。" },
   countSharks: { en: "How many sharks? — ___ sharks!", ja: "サメは なんびき？ ＿＿ひきです。" },
   countPenguins: { en: "How many penguins? — ___ penguins!", ja: "ペンギンは なんわ？ ＿＿わです。" },
-  whereSeal: { en: "Where is the seal? — ___!", ja: "アザラシは どこ？ ＿＿だよ。" },
   countDolphins: { en: "How many dolphins? — ___ dolphins!", ja: "イルカは なんとう？ ＿＿とうです。" },
-  whereDolphin: { en: "Where is the dolphin? — It's ___ the water!", ja: "イルカは どこ？ みずの ＿＿だよ。" },
   countOrcas: { en: "How many orcas? — ___ orcas!", ja: "シャチは なんとう？ ＿＿とうです。" },
-  whereOrca: { en: "Where is the orca? — It's by the ___!", ja: "シャチは どこ？ ＿＿の そばだよ。" },
   bigSmall: { en: "Is it big or small? — It's ___!", ja: "おおきい？ ちいさい？ ＿＿だよ。" }
 } as const;
 export type SentencePatternId = keyof typeof SENTENCE_PATTERNS;
 export const isSentencePattern = (id: unknown): id is SentencePatternId => typeof id === "string" && Object.prototype.hasOwnProperty.call(SENTENCE_PATTERNS, id);
+/** Kept as history in old saves, never offered as instructional frames. */
+export const RETIRED_SENTENCE_PATTERN_IDS = ["where", "canIt", "whereSeal", "whereDolphin", "whereOrca"] as const;
+export const isSavedSentencePattern = (id: unknown): id is SentencePatternId | typeof RETIRED_SENTENCE_PATTERN_IDS[number] => isSentencePattern(id) || RETIRED_SENTENCE_PATTERN_IDS.some((retired) => retired === id);
 
 export function requestPattern(req: Request): SentencePatternId {
   switch (req.kind) {
@@ -48,8 +46,10 @@ export function requestPattern(req: Request): SentencePatternId {
 export function phrasePattern(id: PhraseId): SentencePatternId {
   if (NUMBER_IDS.includes(id)) return "countFish";
   if (SHARK_NUMBER_IDS.includes(id)) return "countSharks";
-  if (id === "aboveMe" || id === "byMe") return "where";
-  if (id === "yesItCan" || id === "noItCant") return "canIt";
+  if (/^pg[1-6]$/.test(id)) return "countPenguins";
+  if (/^dl[1-6]$/.test(id)) return "countDolphins";
+  if (/^oc[1-6]$/.test(id)) return "countOrcas";
+  if (id === "itsBig" || id === "itsSmall") return "bigSmall";
   if (id === "archPlease" || id === "rockPlease" || id === "reefPlease" || id === "ledgePlease") return "animalPlease";
   if (id === "sandPlease") return "please";
   if (speciesOfPhrase(id)) return "animalPlease";

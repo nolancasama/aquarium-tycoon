@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { canLive, homeReason, isSpeciesUnlocked, newModel, newTank, placeDecor, buyDecor, buyFish, placeFish, remodelPlan, usedSpace, hasSpace, type Model, type Result } from "./model";
-import { checkTunnelMilestones, openSharkTunnel, recordTunnelActivity, SHARK_TUNNEL_PRICE, tunnelUnlocked } from "./tunnel";
+import { checkTunnelMilestones, chooseTunnelActivity, openSharkTunnel, recordTunnelActivity, RETIRED_TUNNEL_ACTIVITIES, SHARK_TUNNEL_PRICE, tunnelAnswers, tunnelQuestion, tunnelUnlocked } from "./tunnel";
 import { decodeSave, encodeSave } from "./save";
 import { HUB_HALL, roomOpen } from "../data/rooms";
 import { decorFits } from "../data/decor";
 import { SPECIES } from "../data/fish";
 import { TANKS } from "../data/tanks";
 import type { SpeciesId } from "../types";
+import type { TunnelSpecies } from "../tunnel/contract";
+import { PHRASES } from "./english";
+import { makeRng } from "./rng";
+import { judgeSpeech } from "./speechMatch";
 
 function ok(r: Result): Model {
   if (!r.ok) throw new Error(r.reason);
@@ -94,9 +98,9 @@ describe("Shark Tunnel rules", () => {
     let m = ok(openSharkTunnel(atrium(4, 3000)));
     // Help counts only from the end of the First Tunnel Tour: no double completion.
     m = recordTunnelActivity(m, "find", true);
-    m = recordTunnelActivity(m, "where", true);
+    m = recordTunnelActivity(m, "identify", true);
     expect(m.progress.tunnel?.helped).toBe(0);
-    m = recordTunnelActivity(m, "can", false);
+    m = recordTunnelActivity(m, "like", false);
     expect(m.progress.tunnel?.milestone).toBe(2);
     // Reward 2: the big arch in the tray.
     expect(m.inv.decor.some((d) => d.kind === "tunnelArch")).toBe(true);
@@ -120,14 +124,14 @@ describe("Shark Tunnel rules", () => {
     m = r.m;
     expect(isSpeciesUnlocked(m, "zebrashark")).toBe(true);
     expect(habitat(m).fish.map((f) => f.species)).toContain("zebrashark");
-    // Milestone 5: find, where, count in a row on the guided tour (not a visitor's question).
+    // Milestone 5: find, identify, count in a row on the guided tour (not a visitor's question).
     m = recordTunnelActivity(m, "find", false);
-    m = recordTunnelActivity(m, "can", false); // breaks the sequence
-    m = recordTunnelActivity(m, "where", false);
+    m = recordTunnelActivity(m, "like", false); // breaks the sequence
+    m = recordTunnelActivity(m, "identify", false);
     m = recordTunnelActivity(m, "count", false);
     expect(m.progress.tunnel?.milestone).toBe(4);
     m = recordTunnelActivity(m, "find", false);
-    m = recordTunnelActivity(m, "where", false);
+    m = recordTunnelActivity(m, "identify", false);
     m = recordTunnelActivity(m, "count", false);
     expect(m.progress.tunnel?.milestone).toBe(5);
     expect(m.progress.tunnel?.trophy).toBe(true);
@@ -143,6 +147,40 @@ describe("Shark Tunnel rules", () => {
     m = checkTunnelMilestones(m).m;
     expect(m.progress.tunnel?.milestone).toBe(3);
     expect(m.inv.fish.map((f) => f.species)).toContain("eagleray");
+  });
+
+  it("never schedules retired grammar across habitat rosters and many seeds", () => {
+    const seen = new Set<string>();
+    const rosters: TunnelSpecies[][] = [[], ["blacktip"], ["eagleray"], ["zebrashark"], ["blacktip", "zebrashark", "eagleray"]];
+    for (const roster of rosters) for (let seed = 1; seed <= 500; seed++) {
+      const activity = chooseTunnelActivity(roster, makeRng(seed));
+      if (!roster.length) { expect(activity).toBeNull(); continue; }
+      expect(activity).not.toBeNull();
+      const { kind, target } = activity!;
+      seen.add(kind);
+      expect(RETIRED_TUNNEL_ACTIVITIES).not.toContain(kind);
+      expect(tunnelQuestion(kind, target).en).not.toMatch(/Can it|Where is/i);
+      for (let count = 1; count <= 6; count++) {
+        const answers = tunnelAnswers(kind, target, count);
+        for (const id of [...answers.options, ...answers.choices, ...answers.judge]) {
+          expect(PHRASES[id].key).not.toMatch(/^(in|on|under|by|above)$/i);
+        }
+        for (const id of answers.options) {
+          expect(answers.choices).toContain(id);
+          expect(judgeSpeech([PHRASES[id].en], answers.judge.map((choice) => PHRASES[choice]))).toMatchObject({ kind: "match", id });
+        }
+      }
+    }
+    expect([...seen].sort()).toEqual(["count", "find", "identify", "like", "show"]);
+  });
+
+  it("treats retired completion IDs as no-ops and preserves saved final-tour credit", () => {
+    const opened = ok(openSharkTunnel(atrium(4)));
+    const m: Model = { ...opened, progress: { ...opened.progress, tunnel: { ...opened.progress.tunnel!, milestone: 4, findDone: true, whereDone: true } } };
+    for (const retired of RETIRED_TUNNEL_ACTIVITIES) expect(recordTunnelActivity(m, retired, false)).toBe(m);
+    const loaded = decodeSave(encodeSave(m))!.model;
+    expect(loaded.progress.tunnel).toEqual(m.progress.tunnel);
+    expect(recordTunnelActivity(loaded, "count", false).progress.tunnel?.milestone).toBe(5);
   });
 
   it("saves and loads the wing; old saves load with it closed", () => {

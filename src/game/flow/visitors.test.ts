@@ -4,9 +4,12 @@ import { requestReward, type Request } from "../logic/requests";
 import { resetRuntime, rt } from "../runtime";
 import { getGame, model, setGame } from "../store";
 import { BENCH_FACING, BENCH_FRONT, BENCH_SEAT, ENTRY, SEATS, seatApproach, seatExit } from "../world";
-import { answerShow, cancelShow, helped, openRequest, leave, resetVisitors, sampleVisitorCrowdFrame, scripted, seedVisitors, spawnVisitor, stepVisitors, visitorCrowdStats, visitorsTick, walkTo } from "./visitors";
+import { answerShow, cancelShow, helped, openRequest, leave, numbersAround, numberSlots, resetVisitors, sampleVisitorCrowdFrame, scripted, seedVisitors, spawnVisitor, stepVisitors, visitorCrowdStats, visitorsTick, walkTo, whatColorChoices } from "./visitors";
 import { CROWD_CAP, CROWD_EXTRA, RUSH_QUESTIONS, RUSH_SECONDS } from "../rush/config";
 import { newRushState } from "../rush/types";
+import { IT_COLOR_PHRASE, NUMBER_PHRASE, PHRASES, type PhraseId } from "../logic/english";
+import { makeRng } from "../logic/rng";
+import type { ColorId } from "../types";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn() } }));
 vi.mock("./actions", () => ({ openTank: vi.fn() }));
@@ -56,6 +59,33 @@ afterEach(() => {
   resetRuntime();
   resetVisitors();
   vi.unstubAllGlobals();
+});
+
+describe("visitor and judge answer choices", () => {
+  it("offers active colour answers across seeds and active counting answers in both input modes", () => {
+    const choices: PhraseId[] = [];
+    for (let seed = 1; seed <= 48; seed++) {
+      for (const color of Object.keys(IT_COLOR_PHRASE) as ColorId[]) {
+        const three = whatColorChoices(color, makeRng(seed));
+        expect(three).toHaveLength(3);
+        expect(new Set(three).size).toBe(3);
+        expect(three).toContain(IT_COLOR_PHRASE[color]);
+        choices.push(...three);
+      }
+    }
+    for (let n = 1; n <= 10; n++) {
+      const tap = numbersAround(n);
+      const speech = numberSlots(n);
+      expect(tap).toContain(NUMBER_PHRASE[n]);
+      expect(speech).toContain(NUMBER_PHRASE[n]);
+      choices.push(...tap, ...speech);
+    }
+    for (const id of choices) {
+      expect(PHRASES[id]).toBeDefined();
+      expect(PHRASES[id].key).not.toMatch(/^(in|on|under|by|above)$/i);
+      expect(PHRASES[id].en).not.toMatch(/\b(?:Can it|Where is)\b/i);
+    }
+  });
 });
 
 describe("Rush Hour visitors", () => {

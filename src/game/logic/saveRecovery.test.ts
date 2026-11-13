@@ -13,6 +13,41 @@ function result(r: Result): Model {
 }
 
 describe("save recovery diagnostics", () => {
+  it.each(["real aquarium", "retired language history"])("keeps %s assets, achievements and level when loading retired targets", (name) => {
+    const raw = JSON.parse(JSON.stringify(fixture));
+    if (name === "retired language history") {
+      raw.model.progress.said.push(
+        "aboveMe", "byMe", "yesItCan", "noItCant", "onRock", "inWater",
+        "onWater", "underWater", "byIsland", "byBoat"
+      );
+      raw.model.progress.said = [...new Set(raw.model.progress.said)];
+      raw.model.progress.seenPatterns.push("where", "canIt", "whereSeal", "whereDolphin", "whereOrca");
+      raw.model.progress.seenPatterns = [...new Set(raw.model.progress.seenPatterns)];
+      // Archived records are opaque: even old question / Look! ids survive intact.
+      raw.model.quarantine = [
+        { reason: "retired-language", raw: { kind: "where", answer: "aboveMe", pattern: "where", look: "underWater" } },
+        { reason: "retired-language", raw: { kind: "can", answer: "noItCant", pattern: "canIt", look: "jump" } },
+        { reason: "retired-language", raw: { kind: "where", answer: "byIsland", pattern: "whereOrca", asked: ["where"], look: "byBoat" } }
+      ];
+    }
+    const loaded = decodeSaveReport(JSON.stringify(raw));
+    expect(loaded.report.rejected).toEqual([]);
+    expect(loaded.report.synthesizedTanks).toEqual([]);
+    expect(loaded.report.counts.decoded).toEqual(loaded.report.counts.raw);
+    const model = loaded.data!.model;
+    // Tank equality includes every placed fish and decoration, their ids and care.
+    expect(model.tanks).toEqual(raw.model.tanks);
+    expect(model.inv).toEqual(raw.model.inv);
+    expect(model.stored).toEqual(raw.model.stored);
+    expect(model.coins).toBe(raw.model.coins);
+    expect(model.stats).toEqual(raw.model.stats);
+    // Includes the eight-level stage, stars, photo, trophies and historical answers.
+    expect(model.progress).toEqual(raw.model.progress);
+    expect(model.rush).toEqual(raw.model.rush);
+    expect(model.quarantine).toEqual(raw.model.quarantine);
+    expect(decodeSave(encodeSave(model))!.model).toEqual(model);
+  });
+
   it("preserves every real tank, animal and decoration across repeated loads and twenty save cycles", () => {
     const text = JSON.stringify(fixture);
     const first = decodeSaveReport(text);

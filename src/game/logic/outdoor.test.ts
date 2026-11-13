@@ -99,7 +99,7 @@ describe("Grand Ocean Sanctuary rules", () => {
     expect(sanct(m)).toMatchObject({ milestone: 2, decor: ["flags", "sizeBoard"] });
     // Family and Friends: no beluga sticker before their cove opens.
     expect(sanct(addSticker(m, "beluga")).stickers).not.toContain("beluga");
-    m = recordSanctuaryAnswer(addSticker(addSticker(m, "together"), "family"), "where");
+    m = recordSanctuaryAnswer(addSticker(addSticker(m, "together"), "family"), "like");
     expect(sanct(m)).toMatchObject({ milestone: 3, belugas: true });
     expect(sanct(addSticker(m, "beluga")).stickers).toContain("beluga");
     // Ocean Guardians: five pieces of litter and a habitat improvement.
@@ -124,5 +124,17 @@ describe("Grand Ocean Sanctuary rules", () => {
   it("reads a saved sanctuary without trusting what its milestone has not given", () => {
     const p = readSanctuaryProgress({ milestone: 2, belugas: true, stickers: ["breath", "beluga", "fake"], decor: ["guardianFlag"], improvement: "music", litter: 99, trophy: true });
     expect(p).toMatchObject({ milestone: 2, belugas: false, stickers: ["breath"], decor: ["flags", "sizeBoard"], improvement: null, litter: CLEANUP_PIECES - 1, trophy: false });
+  });
+
+  it("keeps historical location answers and observation stickers as completed progress", () => {
+    const saved = { milestone: 2, asked: ["big", "count", "where"], acts: 7, stickers: ["breath", "dive", "big", "together", "family", "spyhop"], litter: 2 };
+    const p = readSanctuaryProgress(saved);
+    expect(p.asked).toEqual(saved.asked);
+    expect(p.stickers).toEqual(saved.stickers);
+    expect(p).toMatchObject({ milestone: 2, acts: 7, litter: 2 });
+    const m = newModel();
+    m.progress.sanctuary = p;
+    expect(recordSanctuaryAnswer(m, "where")).toBe(m);
+    expect(sanct(checkSanctuaryMilestones(m).m)).toMatchObject({ milestone: 3, belugas: true, asked: saved.asked, acts: 7 });
   });
 });
