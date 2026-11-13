@@ -68,6 +68,25 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
 
 ## Next steps
 
+0. **12-item improvement plan.** Wave 1 DONE, merged and pushed live 2026-11-14
+   (e9adffe): hub corridor + Lagoon boardwalk z-fighting and a
+   solid chest lid; Penguin Coast time-lapse Clean montage, connected lower
+   gallery with stairs, closer land camera; Lagoon re-entry splashes and
+   player ball catch (held ball floats with two hands at a fixed waterside
+   spot, no player body); Shark Tunnel diver cleaning montage. Verified on
+   merged main: typecheck, unit 897/897, build, Playwright coast + outdoor +
+   tunnel + hub 17/17 on a production preview; frames judged by eye.
+   Wave 2 naming DONE and merged (65a893c): penguins/dolphins can be renamed
+   from a small panel (stable ids, one sanitizer, preview-safe); unit 913/913,
+   frames + reload checked at 1366/1024 (`.tmp/naming/review.mjs`). Claude
+   dropped the selection toast (it covered the panel) and moved the panel
+   left of the status card below 1100 px.
+   **PARTIAL: wave 2 curriculum** in `../aq-curriculum` (`feat/curriculum`),
+   Codex usage limit until 2026-11-14 04:07 JST. Done: activities rewritten
+   across 24 files, unit tests pass. Left: typecheck errors in
+   `visitors.test.ts` / `requests.test.ts` (test typings), docs/CURRICULUM.md,
+   the DESIGN_DECISIONS entry, then requests/tunnel/outdoor/coast specs.
+   Resume with a `partialWork` block in its `.ai/work-order.json`.
 1. Keeper feeding and the cleaning montage are done (see the top section);
    the `../aq-keeper` worktree / `feat/keeper` branch is merged and can be
    removed. Optional polish: move the montage's glass keeper clear of the
@@ -943,9 +962,9 @@ approach frames, the trophy from front/side/rear.
    names).
 
 ## Codex / Delegated Work
-**Pending (2026-11-12):** four worktrees (aq-save accepted; aq-nav, aq-visual,
-aq-penguin PARTIAL after a Codex usage limit) — see **CONTINUE HERE** at the top.
-Never re-delegate from scratch or overwrite them; continue their `.ai/work-order.json`.
+**Pending (2026-11-13):** wave 2 in `../aq-curriculum` and `../aq-naming` (see
+Next steps item 0). If a run stops PARTIAL, add a `partialWork` block to its
+`.ai/work-order.json` and re-run `delegate.js`; never start it over.
 
 Earlier work: none pending. The Shark Tunnel's two Codex slices (worktrees aq-st1 and aq-st2) stopped
 on a usage limit on 2026-11-06; Claude finished and integrated all of it on branch
