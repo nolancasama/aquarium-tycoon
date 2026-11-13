@@ -12,6 +12,7 @@ import { openSharkTunnel, tunnelUnlocked } from "../logic/tunnel";
 import { startExplore, stopExplore } from "../tunnel/explore";
 import { tunnelRuntime } from "../tunnel/contract";
 import { cancelTunnelActivity } from "../tunnel/activities";
+import { diversBusy, startDivers } from "../tunnel/divers";
 import {
   buyDecor,
   buyFish,
@@ -856,6 +857,7 @@ export function tasteFood(food: FoodId) {
 export async function cleanTank() {
   if (!allowed("clean")) return;
   const g = getGame();
+  if (g.hall === SHARKS_HALL && diversBusy()) return;
   const t = g.hall === SHARKS_HALL ? tankAt(model(), "L") : g.hall === COAST_HALL ? coastTank() : g.tankId ? tankById(model(), g.tankId) : null;
   if (!t) return;
   if (g.hall === COAST_HALL && t.type === "penguins") { startPenguinCare("clean"); return; }
@@ -871,6 +873,7 @@ export async function cleanTank() {
   }
   const r = commit(clean(model(), t.id));
   if (!r.ok) return;
+  if (t.type === "sharks") startDivers();
   latchRushCare();
   rt.cleaning.set(t.id, rt.time);
   if (isCoastTank(t.type)) {

@@ -39,6 +39,8 @@ import { tunnelRuntime } from "./tunnel/contract";
 import { cameraTubeCheck, playerWorld, snapCamera } from "./tunnel/explore";
 import { findTargetId, locate, runActivity } from "./tunnel/activities";
 import { personWorld, tunnelCrowd, tunnelPeople } from "./tunnel/tunnelVisitors";
+import { diverRt, diverShotAt } from "./tunnel/divers";
+import { cleanTank } from "./flow/actions";
 
 /**
  * Test hook (only with ?e2e=1): read game state, find where things are on
@@ -452,6 +454,8 @@ export function installE2eHook(seed: number) {
 
 /** Shark Tunnel test hook: exploration state, teleport along the walkway, activities. */
 const tunnelApi = {
+  clean: () => cleanTank(),
+  divers: () => ({ active: diverRt.active, visible: diverRt.visible, elapsed: diverRt.elapsed, shot: diverRt.active ? diverShotAt(diverRt.elapsed)?.name : null }),
   state() {
     const e = rt.explore;
     const swim = tunnelRuntime.swim;

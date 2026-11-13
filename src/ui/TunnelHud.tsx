@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { diversBusy, subscribeDivers } from "../game/tunnel/divers";
 import * as THREE from "three";
 import { getGame, setGame, updateModel, useGame } from "../game/store";
 import { rt } from "../game/runtime";
@@ -132,6 +133,7 @@ function ViewButtons() {
 
 /** The wing's management bar: animals, structures, care, and the big Explore button. */
 export function WingHud() {
+  const cleaning = useSyncExternalStore(subscribeDivers, diversBusy);
   const free = useGame((s) => s.mode === "play" && !s.prompt && !s.line && !s.stageCard && !s.panel && !s.placing);
   const decorating = useGame((s) => s.panel === "decorate");
   const tunnelArrival = useGame((s) => s.tunnelArrival);
@@ -148,7 +150,10 @@ export function WingHud() {
             <Big id="btn-decor-shop" icon="decor" label="Rocks" ja="いわ" onClick={openDecorShop} />
             <Big id="btn-decorate" icon="hand" label="Place" ja="おく" onClick={openDecorate} />
             <Big id="btn-feed" icon="food" label="" ja="えさ" onClick={() => void feedTank()} />
-            <Big id="btn-clean" icon="sponge" label="" ja="そうじ" onClick={() => void cleanTank()} />
+            {cleaning ? <button className="big-btn ui locked" data-testid="btn-clean" disabled aria-disabled="true">
+              <span className="big-icon"><Icon id="sponge" size={40} /></span>
+              <span className="big-label">Cleaning...<Ja>そうじちゅう</Ja></span>
+            </button> : <Big id="btn-clean" icon="sponge" label="" ja="そうじ" onClick={() => void cleanTank()} />}
           </div>
           <div className="chips-right">
             <button className="explore-btn ui" data-testid="btn-explore" onClick={enterExplore}>

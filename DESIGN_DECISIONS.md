@@ -2204,3 +2204,33 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
   run fine on the classroom Chromebooks; no performance pass planned.
 - **Coastal & Polar Zone, Dolphin Lagoon and Grand Ocean Sanctuary stay
   release-locked.** No unlock rule or price is to be designed for now.
+
+## 2026-11-13 — Shark Tunnel diver maintenance montage
+
+- Shark habitat Clean keeps its existing immediate care/reward calculation.
+  A runtime guard at the shared Clean action refuses a second activation for
+  the five-second presentation. The HUD shows a disabled Cleaning... /
+  そうじちゅう button. Leaving the wing clears presentation immediately; care
+  has already been applied once, so departure never delivers it again.
+- Five one-second hard-cut snapshots: left glass squeegee wipe; upper glass
+  algae brush; curved section torch inspection; lower tunnel debris collection
+  in a mesh bag; right glass polishing pad. Each has a different body pitch,
+  arm angle and leg bend. No interpolated travel, repeated two-pose loop or
+  camera takeover. The same sequence renders during exploration.
+- One pooled articulated amber wetsuit diver, built from simple low-poly
+  primitives: mask, regulator, silver air tank, straps, arms, legs and fins.
+  Geometry/materials are shared within the rig; bubbles/work flecks use one
+  instanced pool; a faint reusable torch cone points toward the curved glass.
+  Only start/end notify React. Existing bubble/scrub audio
+  supplies quiet underwater care cues. All montage resources are disposed
+  at completion or departure, with no saved state or new dependencies.
+- Shot centres clear the shared habitat/tube collision outline, including
+  every possible structure in every zone, by at least 1.49 m for a 1.18 m rig
+  envelope. Short extension handles bring the squeegee, brush and pad to
+  12 cm outside the conservative glass outline; sampled wrist-to-head
+  clearance also covers all possible structures. A passing animal entering
+  the conservative body/handle safety envelope ends
+  that snapshot early until the next cut; sharks and rays swim unchanged.
+- Rejected: visibly gliding/teleporting between work spots, alternating two
+  poses, moving the camera, freezing/repositioning animals, or postponing
+  care/rewards. The montage is presentation on the existing generic action.
