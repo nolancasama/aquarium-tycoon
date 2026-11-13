@@ -40,7 +40,7 @@ import { ROOMS } from "./data/rooms";
 import { SHARK_DOOR, TUNNEL_SECTIONS, TUNNEL_VIEWING_SPOTS, TUNNEL_ZONES, sectionAt, walkwayFrame, walkwayLength, type TunnelSection } from "./data/sharkTunnel";
 import { tunnelRuntime } from "./tunnel/contract";
 import { cameraTubeCheck, playerWorld, snapCamera } from "./tunnel/explore";
-import { findTargetId, locate, runActivity } from "./tunnel/activities";
+import { findTargetId, runActivity } from "./tunnel/activities";
 import { personWorld, tunnelCrowd, tunnelPeople } from "./tunnel/tunnelVisitors";
 import { diverRt, diverShotAt } from "./tunnel/divers";
 import { cleanTank } from "./flow/actions";
@@ -358,7 +358,7 @@ export function installE2eHook(seed: number) {
     lagoonAsk(kind: LagoonQuestion) {
       void startLagoonActivity(kind);
     },
-    /** What a sanctuary question is about: the ringed animal and what the camera frames (island / boat for "where"). */
+    /** What a sanctuary question is about: the ringed animal and the question camera frame. */
     sanctuaryFocus() {
       return { ...sanctFocus };
     },
@@ -507,7 +507,7 @@ const tunnelApi = {
     return {
       active: e.active, s: e.s, lateral: e.lateral, section: sectionAt(e.s), spot: e.spot, speed: e.speed,
       player: p, cam: { ...e.cam }, tube: e.active ? cameraTubeCheck() : null, length: walkwayLength,
-      animals: swim ? swim.poses().map((a) => ({ id: a.id, species: a.species, x: a.x, y: a.y - (a.restDrop ?? 0), z: a.z, resting: a.resting, where: e.active ? locate(a) : null })) : [],
+      animals: swim ? swim.poses().map((a) => ({ id: a.id, species: a.species, x: a.x, y: a.y - (a.restDrop ?? 0), z: a.z, resting: a.resting })) : [],
       visitors: tunnelPeople.map((v) => ({ id: v.id, type: v.type, s: v.s, lateral: v.lateral, state: v.state, activity: v.activity, request: v.request, ...personWorld(v) })),
       activity: getGame().tunnelActivity, waiting: getGame().tunnelWaiting, tilt: e.tilt, findTarget: findTargetId()
     };
@@ -527,7 +527,7 @@ const tunnelApi = {
   },
   spots: () => TUNNEL_VIEWING_SPOTS.map((v) => ({ id: v.id, s: v.s, side: v.side })),
   /** Start an activity as a visitor's (visitor: true) or Pico's question. */
-  activity(kind: "find" | "show" | "where" | "can" | "count", target: "shark" | "ray" | "bigshark", visitor = true) {
+  activity(kind: "find" | "show" | "identify" | "like" | "count", target: "shark" | "ray" | "bigshark", visitor = true) {
     const v = visitor ? tunnelPeople[0] : null;
     void runActivity(kind, target, v?.id ?? null, false);
   },

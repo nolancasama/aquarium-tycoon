@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { makeRng } from "./rng";
 import { buyDecor, buyFish, newModel, openHall, placeDecor, placeFish, type Model, type Result } from "./model";
 import { countableTanks, makeRequest, matchesShow, presentColors, requestLine, requestReward, stillValid, tankSatisfies, type Request } from "./requests";
-import type { SpeciesId } from "../types";
+import { IT_COLOR_PHRASE, ITS_PHRASE, LIKE_COLOR_PHRASE, NUMBER_PHRASE, PHRASES, type PhraseId } from "./english";
+import { SPECIES } from "../data/fish";
+import { decodeSave } from "./save";
+import realAquarium from "./realSave.fixture.json";
+import type { SpeciesId, StageId } from "../types";
 
 type M = Model & { lastId?: string };
 
@@ -25,6 +29,43 @@ function aquarium(stage: 1 | 2 | 3 | 4 | 5, fish: SpeciesId[], coral = false): M
 }
 
 describe("visitor requests", () => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8] as const)("keeps Level %i visitor and shared judge questions within the active curriculum across seeds", (stage) => {
+    const m: Model = stage <= 5
+      ? aquarium(stage as 1 | 2 | 3 | 4 | 5, ["clownfish", "bluetang"], stage >= 2)
+      : stage < 8 ? oceanAquarium(stage as 6 | 7) : decodeSave(JSON.stringify(realAquarium))!.model;
+    m.progress.stage = stage as StageId;
+    const seen = new Set<Request["kind"]>();
+    for (let seed = 1; seed <= 24; seed++) {
+      const rand = makeRng(seed);
+      let last: Request["kind"] | null = null;
+      for (let n = 0; n < 40; n++) {
+        const req: Request = makeRequest(m, rand, { last })!;
+        expect(req).not.toBeNull();
+        expect(stillValid(m, req)).toBe(true);
+        expect(requestLine(req)).not.toMatch(/\b(?:Can it|Where is)\b/i);
+        seen.add(req.kind);
+        last = req.kind;
+        // runRequest is also the judge's question handler. These are its answer maps.
+        let answers: PhraseId[] = [];
+        if (req.kind === "count") answers = [NUMBER_PHRASE[m.tanks.find((t) => t.id === req.tankId)!.fish.length]];
+        if (req.kind === "whatsThis" || req.kind === "whatColor") {
+          const f = m.tanks.find((t) => t.id === req.tankId)!.fish.find((f) => f.id === req.fishId)!;
+          answers = [req.kind === "whatsThis" ? ITS_PHRASE[f.species] : IT_COLOR_PHRASE[SPECIES[f.species].color]];
+        }
+        if (req.kind === "chatLike") answers = ["yesIDo", "noIDont"];
+        if (req.kind === "chatColor") answers = Object.values(LIKE_COLOR_PHRASE);
+        if (req.kind === "show") expect(req.color).not.toMatch(/^(in|on|under|by|above)$/i);
+        if (req.kind === "showAnimal") expect(SPECIES[req.species].word).not.toMatch(/^(in|on|under|by|above)$/i);
+        for (const answer of answers) {
+          expect(PHRASES[answer]).toBeDefined();
+          expect(PHRASES[answer].key).not.toMatch(/^(in|on|under|by|above)$/i);
+          expect(PHRASES[answer].en).not.toMatch(/\b(?:Can it|Where is)\b/i);
+        }
+      }
+    }
+    if (stage === 8) expect([...seen].sort()).toEqual(["chatColor", "chatLike", "count", "show", "showAnimal", "whatColor", "whatsThis"]);
+  });
+
   it("only asks for colours that are in the aquarium", () => {
     const m = aquarium(3, ["clownfish", "bluetang"]);
     expect(presentColors(m, true).sort()).toEqual(["blue", "orange"]);

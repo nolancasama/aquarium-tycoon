@@ -118,7 +118,8 @@ test("locked at the hub and on the map; a preview sandbox opens it; penguins nee
   await page.waitForTimeout(1000);
   await hook(page, "coastVisitor", "penguins");
   await page.getByTestId("coast-visitor").click();
-  await waitFor(page, (s) => s.prompt?.question === "How many penguins?", 10_000, "the question");
+  const countQuestion = await waitFor(page, (s) => s.prompt?.question === "How many penguins?", 10_000, "the question");
+  expect(countQuestion.prompt!.choices).toEqual(["pg2", "pg3", "pg4"]);
   expect((await coast(page)).underwater).toBe(true);
   expect((await state(page) as unknown as { camera: { pos: { y: number } } }).camera.pos.y).toBeGreaterThan(5);
   await answer(page, "pg3");

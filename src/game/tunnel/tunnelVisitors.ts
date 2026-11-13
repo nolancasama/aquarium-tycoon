@@ -133,7 +133,7 @@ export function personWorld(p: TunnelPerson) {
 
 const REACTIONS = [
   { en: "Wow! A shark!", ja: "わあ！ サメだ！" },
-  { en: "Look! It's above us!", ja: "みて！ うえに いるよ！" },
+  { en: "Look! It's a shark!", ja: "みて！ サメだよ！" },
   { en: "It's so big!", ja: "とても おおきい！" }
 ];
 const RAY_REACTIONS = [{ en: "Look! A ray!", ja: "みて！ エイだ！" }];

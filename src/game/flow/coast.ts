@@ -2,12 +2,11 @@ import { commit, getGame, model, setGame, toast, updateModel, useGame, type Game
 import { COAST_HALL } from "../data/rooms";
 import { EXHIBITS, type CoastHabitat } from "../data/coast";
 import { COAST_DECOR } from "../data/decor";
-import { PENGUIN_NUMBER_PHRASE, type PhraseId } from "../logic/english";
+import { PENGUIN_NUMBER_PHRASE } from "../logic/english";
 import { award, buyDecor, clean, feed, tankAt } from "../logic/model";
 import { checkCoastMilestones, COAST_PRICE, coastUnlocked, coastQuestionHabitats, HABITAT_PAD, habitatOpen, openCoast, recordCoastActivity, storeHiddenCoast } from "../logic/coast";
 import { clearCoastMeal, coastRt, feedCoast, holdAnimal, syncCoast } from "../coast/coastRuntime";
 import { consumeKeeperBenefit, finishKeepers, keeperBusy, keeperRt, resetKeepers, startKeeperClean, startKeeperFeed, type KeeperCare } from "../coast/keeper";
-import { isOnRock } from "../coast/motion";
 import type { CoastDecorKind, VisitorType } from "../types";
 import { ask, speak } from "./ask";
 import { canTravel, comingSoon, travelTo } from "./hub";
@@ -295,22 +294,20 @@ async function askPenguins(by: VisitorType): Promise<boolean> {
 async function askSeal(by: VisitorType): Promise<boolean> {
   const seals = animalsIn("seals");
   if (!seals.length) return false;
-  // A seal clearly in one place: resting on a rock, or swimming (not halfway up a ramp).
+  // Ring a steady animal so identification is about one visible seal.
   const steady = seals.find((a) => a.m.mode === "rest" || a.m.mode === "swim" || a.m.mode === "breathe") ?? seals[0];
   holdAnimal(steady.m.id, 30);
   coastFocus.id = steady.m.id;
-  const correct: PhraseId = isOnRock(steady.m) ? "onRock" : "inWater";
   const id = await ask({
-    pattern: "whereSeal",
+    pattern: "identify",
     kind: "command",
-    options: [correct],
-    judge: ["onRock", "inWater"],
-    choices: ["onRock", "inWater"],
-    shuffle: false,
-    question: { en: "Where is the seal?", ja: "アザラシは どこに いる？", by },
+    options: ["itsSeal"],
+    judge: ["itsSeal", "itsPenguin", "itsOtter"],
+    choices: ["itsSeal", "itsPenguin", "itsOtter"],
+    question: { en: "What's this?", ja: "これは なに？", by },
     readQuestion: true,
     cancellable: true,
-    help: "いわの うえ？ それとも みずの なか？"
+    help: "ひかっている いきものは なに？"
   });
   coastRt.hold.delete(steady.m.id);
   return Boolean(id);
@@ -322,18 +319,16 @@ async function askOtter(by: VisitorType): Promise<boolean> {
   const a = otters[Math.floor(Math.random() * otters.length)];
   holdAnimal(a.m.id, 30);
   coastFocus.id = a.m.id;
-  const swim = Math.random() < 0.7;
   const id = await ask({
-    pattern: "canIt",
+    pattern: "identify",
     kind: "command",
-    options: [swim ? "yesItCan" : "noItCant"],
-    judge: ["yesItCan", "noItCant"],
-    choices: ["yesItCan", "noItCant"],
-    shuffle: false,
-    question: { en: swim ? "Can it swim?" : "Can it fly?", ja: swim ? "ラッコは およげる？" : "ラッコは とべる？", by },
+    options: ["itsOtter"],
+    judge: ["itsOtter", "itsSeal", "itsPenguin"],
+    choices: ["itsOtter", "itsSeal", "itsPenguin"],
+    question: { en: "What's this?", ja: "これは なに？", by },
     readQuestion: true,
     cancellable: true,
-    help: swim ? "およげる？ はい / いいえ" : "そらを とべる？ はい / いいえ"
+    help: "ひかっている いきものは なに？"
   });
   coastRt.hold.delete(a.m.id);
   return Boolean(id);

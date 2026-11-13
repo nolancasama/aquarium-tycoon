@@ -76,10 +76,6 @@ export type PhraseId =
   | "itsShark"
   | "itsRay"
   // Shark Tunnel activities.
-  | "aboveMe"
-  | "byMe"
-  | "yesItCan"
-  | "noItCant"
   | "sk1"
   | "sk2"
   | "sk3"
@@ -100,7 +96,7 @@ export type PhraseId =
   | "itPink"
   | "itPurple"
   | "itWhite"
-  // Coastal & Polar Zone: names, counting penguins, where an animal is.
+  // Coastal & Polar Zone: names and counting penguins.
   | "itsPenguin"
   | "itsSeal"
   | "itsOtter"
@@ -110,9 +106,7 @@ export type PhraseId =
   | "pg4"
   | "pg5"
   | "pg6"
-  | "onRock"
-  | "inWater"
-  // Dolphin Lagoon and Grand Ocean Sanctuary: names, counting, where, size.
+  // Dolphin Lagoon and Grand Ocean Sanctuary: names, counting and size.
   | "itsDolphin"
   | "itsOrca"
   | "itsBeluga"
@@ -128,12 +122,15 @@ export type PhraseId =
   | "oc4"
   | "oc5"
   | "oc6"
-  | "onWater"
-  | "underWater"
-  | "byIsland"
-  | "byBoat"
   | "itsBig"
   | "itsSmall";
+
+/** Historical save records only: these ids have no prompt or speech mapping. */
+export const RETIRED_PHRASE_IDS = ["aboveMe", "byMe", "yesItCan", "noItCant", "onRock", "inWater", "onWater", "underWater", "byIsland", "byBoat"] as const;
+export type RetiredPhraseId = typeof RETIRED_PHRASE_IDS[number];
+export type SavedPhraseId = PhraseId | RetiredPhraseId;
+export const isActivePhrase = (id: unknown): id is PhraseId => typeof id === "string" && Object.prototype.hasOwnProperty.call(PHRASES, id);
+export const isSavedPhrase = (id: unknown): id is SavedPhraseId => isActivePhrase(id) || RETIRED_PHRASE_IDS.some((retired) => retired === id);
 
 const YES = ["yes", "yeah", "yep", "yup", "yea", "yas", "yess", "yesh", "jess", "ies", "guess", "okay", "ok", "sure"];
 const NO = ["no", "nope", "nah", "know", "noh", "nou", "nor", "not", "don't", "dont"];
@@ -319,8 +316,6 @@ const orcas = counted(ORCA_NUMBER_PHRASE, "orca", "orcas");
 const DOLPHIN = ["dolphin", "dolphins", "dorufin", "dolfin", "dolphine", "doruhin", "dolphin's", "dolphi"];
 const ORCA = ["orca", "orcas", "oruka", "olca", "orka", "orcah", "killer whale", "aruka"];
 const BELUGA = ["beluga", "belugas", "beruga", "berluga", "belga", "bluga"];
-const ISLAND = ["island", "islands", "airando", "ireland", "eyeland", "i land", "aisland"];
-const BOAT = ["boat", "boats", "booto", "bought", "boot", "vote", "bote"];
 const PENGUIN = ["penguin", "penguins", "pengin", "pengwin", "pengin", "pen gin"];
 const SEAL = ["seal", "seals", "shiru", "sea l", "seel", "ceil"];
 const OTTER = ["otter", "otters", "sea otter", "auto", "otta", "oter", "rakko"];
@@ -383,11 +378,6 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   sandPlease: animal("sandPlease", "Sand, please!", ["sand", "sando"], "sand"),
   itsShark: animal("itsShark", "It's a shark.", ["shark", "sharks", "shaaku"], "shark"),
   itsRay: animal("itsRay", "It's a ray.", RAY, "ray"),
-  // Shark Tunnel: location (judged on the location word), abilities (yes / no), counting sharks.
-  aboveMe: { id: "aboveMe", en: "It's above me!", keys: [["above", "abub", "a bob", "abov", "of"]], forbid: ["by", "bye", "buy"], key: "above" },
-  byMe: { id: "byMe", en: "It's by me!", keys: [["by", "bye", "buy", "bai"]], forbid: ["above", "abub"], key: "by" },
-  yesItCan: { id: "yesItCan", en: "Yes, it can!", keys: [YES], forbid: NO, key: "Yes" },
-  noItCant: { id: "noItCant", en: "No, it can't!", keys: [NO], forbid: ["yes", "yeah", "yep"], key: "No" },
   sk1: sharks(1),
   sk2: sharks(2),
   sk3: sharks(3),
@@ -403,18 +393,11 @@ export const PHRASES: Record<PhraseId, Phrase> = {
   pg4: penguins(4),
   pg5: penguins(5),
   pg6: penguins(6),
-  onRock: { id: "onRock", en: "On the rock!", keys: [["rock", "rocks", "rokku", "lock", "rok", "luck"]], forbid: ["water", "wota", "warter"], key: "rock" },
-  inWater: { id: "inWater", en: "In the water!", keys: [["water", "wota", "warter", "wata", "woter", "waiter"]], forbid: ["rock", "rokku"], key: "water" },
   itsDolphin: animal("itsDolphin", "It's a dolphin.", DOLPHIN, "dolphin"),
   itsOrca: animal("itsOrca", "It's an orca.", ORCA, "orca"),
   itsBeluga: animal("itsBeluga", "It's a beluga.", BELUGA, "beluga"),
   dl1: dolphins(1), dl2: dolphins(2), dl3: dolphins(3), dl4: dolphins(4), dl5: dolphins(5), dl6: dolphins(6),
   oc1: orcas(1), oc2: orcas(2), oc3: orcas(3), oc4: orcas(4), oc5: orcas(5), oc6: orcas(6),
-  // Where is it: judged on the place word ("on" is short, so its common mishearings count too).
-  onWater: { id: "onWater", en: "It's on the water!", keys: [["on", "own", "an", "upon", "top", "onn"]], forbid: ["under", "anda", "onder", "unda", "andar"], key: "on" },
-  underWater: { id: "underWater", en: "It's under the water!", keys: [["under", "anda", "onder", "unda", "andar", "undah"]], key: "under" },
-  byIsland: { id: "byIsland", en: "It's by the island!", keys: [ISLAND], forbid: BOAT, key: "island" },
-  byBoat: { id: "byBoat", en: "It's by the boat!", keys: [BOAT], forbid: ISLAND, key: "boat" },
   itsBig: { id: "itsBig", en: "It's big!", keys: [["big", "bigu", "bick", "pig", "beeg"]], forbid: ["small", "smaru", "smol"], key: "big" },
   itsSmall: { id: "itsSmall", en: "It's small!", keys: [["small", "smaru", "smol", "smoll", "sumaru"]], forbid: ["big", "bigu"], key: "small" },
   itsEel: animal("itsEel", "It's an eel.", EEL, "eel"),

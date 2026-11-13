@@ -15,9 +15,11 @@ export const SANCTUARY_VIEWS: SanctuaryView[] = ["overview", "orcas", "underwate
 /** The Research Notebook: one sticker per kind of observation. */
 export type Sticker = "breath" | "dive" | "big" | "together" | "family" | "spyhop" | "beluga" | "clean";
 export const STICKERS: Sticker[] = ["breath", "dive", "big", "together", "family", "spyhop", "beluga", "clean"];
-/** Question kinds answered (visitor education and Pico's tour). */
-export type SanctuaryQuestion = "what" | "big" | "count" | "where" | "like" | "beluga";
-const QUESTIONS: SanctuaryQuestion[] = ["what", "big", "count", "where", "like", "beluga"];
+/** Historical answer ids are retained when loading, but never scheduled. */
+export const RETIRED_SANCTUARY_QUESTIONS = ["where"] as const;
+export type ActiveSanctuaryQuestion = "what" | "big" | "count" | "like" | "beluga";
+export type SanctuaryQuestion = ActiveSanctuaryQuestion | (typeof RETIRED_SANCTUARY_QUESTIONS)[number];
+const QUESTIONS: SanctuaryQuestion[] = ["what", "big", "count", "like", "beluga", ...RETIRED_SANCTUARY_QUESTIONS];
 /** Habitat improvements: the good choices (the choice card also shows unsuitable ones). */
 export type Improvement = "kelp" | "quiet" | "ice";
 export const IMPROVEMENTS: Improvement[] = ["kelp", "quiet", "ice"];
@@ -80,7 +82,7 @@ export const addSticker = (m: Model, s: Sticker) =>
   patch(m, (p) => (p.stickers.includes(s) || (s === "beluga" && !p.belugas) ? p : { ...p, stickers: [...p.stickers, s] }));
 
 export const recordSanctuaryAnswer = (m: Model, q: SanctuaryQuestion) =>
-  patch(m, (p) => ({ ...p, asked: add(p.asked, q), acts: Math.min(999, p.acts + 1), stickers: q === "big" ? add(p.stickers, "big") : q === "beluga" && p.belugas ? add(p.stickers, "beluga") : p.stickers }));
+  q === "where" ? m : patch(m, (p) => ({ ...p, asked: add(p.asked, q), acts: Math.min(999, p.acts + 1), stickers: q === "big" ? add(p.stickers, "big") : q === "beluga" && p.belugas ? add(p.stickers, "beluga") : p.stickers }));
 
 /** One piece of floating litter picked up; the fifth finishes the cleanup. */
 export const pickLitter = (m: Model) => patch(m, (p) => {
@@ -101,7 +103,7 @@ export function sanctuaryMilestoneReady(p: SanctuaryProgress, next: number): boo
   switch (next) {
     case 1: return has("breath");
     case 2: return has("big") && has("dive") && p.asked.includes("count");
-    case 3: return has("together") && has("family") && p.asked.includes("where");
+    case 3: return has("together") && has("family") && (p.asked.includes("like") || p.asked.includes("where"));
     case 4: return p.cleanupDone && p.improvement !== null;
     case 5: return p.tourDone;
     default: return false;

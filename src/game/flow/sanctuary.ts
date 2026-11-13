@@ -3,13 +3,13 @@ import { rt } from "../runtime";
 import { SANCTUARY_HALL } from "../data/rooms";
 import {
   addSticker, BELUGAS, checkSanctuaryMilestones, chooseImprovement, finishSanctuaryTour, ORCAS, pickLitter, recordSanctuaryAnswer, sanctuaryActive,
-  type Improvement, type SanctuaryQuestion, type SanctuaryView, type Sticker
+  type ActiveSanctuaryQuestion, type Improvement, type SanctuaryView, type Sticker
 } from "../logic/sanctuary";
 import { award } from "../logic/model";
 import { ORCA_NUMBER_PHRASE } from "../logic/english";
 import { belugaPod, orcaPod, passDistance, pickLitterAt, sanctRt, startLitter, stepSanctRt } from "../sanctuary/sanctuaryRuntime";
-import { surfaceY, type PodEvent } from "../marine/pod";
-import { BY_BOAT, BY_ISLAND, SANCTUARY_ORIGIN } from "../data/sanctuary";
+import { type PodEvent } from "../marine/pod";
+import { SANCTUARY_ORIGIN } from "../data/sanctuary";
 import type { VisitorType } from "../types";
 import { ask, say, speak } from "./ask";
 import { project } from "../../scene/CameraRig";
@@ -221,7 +221,8 @@ function visitorTick() {
 /** What a question is about: the ringed animal, numbers, and what the camera frames. */
 export const sanctFocus = { id: null as string | null, numbers: false, frame: null as null | "pod" | "orca" | "island" | "boat" | "beluga" };
 
-export type SanctQuestionKind = "what" | "big" | "count" | "where" | "like" | "beluga" | "color";
+export type SanctQuestionKind = ActiveSanctuaryQuestion | "color";
+const SANCTUARY_QUESTIONS: readonly SanctQuestionKind[] = ["what", "big", "count", "like", "beluga", "color"];
 
 function pickQuestion(): SanctQuestionKind {
   const p = model().progress.sanctuary;
@@ -229,13 +230,14 @@ function pickQuestion(): SanctQuestionKind {
   if (getGame().sanctuaryView === "belugas" && p?.belugas) return Math.random() < 0.5 ? "beluga" : "color";
   if (ms === 0) return Math.random() < 0.6 ? "what" : "like";
   if (ms === 1) return !p?.asked.includes("big") ? "big" : !p?.asked.includes("count") ? "count" : Math.random() < 0.5 ? "big" : "count";
-  if (ms === 2) return Math.random() < 0.7 ? "where" : "count";
-  const all: SanctQuestionKind[] = ["what", "big", "count", "where", "like"];
+  if (ms === 2) return Math.random() < 0.7 ? "like" : "count";
+  const all: SanctQuestionKind[] = ["what", "big", "count", "like"];
   if (p?.belugas) all.push("beluga");
   return all[Math.floor(Math.random() * all.length)];
 }
 
 export async function startSanctActivity(kind?: SanctQuestionKind) {
+  if (kind && !SANCTUARY_QUESTIONS.includes(kind)) return;
   const g = getGame();
   const w = g.areaWaiting;
   if ((!w && !kind) || !calm()) return;
@@ -252,7 +254,7 @@ export async function startSanctActivity(kind?: SanctQuestionKind) {
   celebrate(before);
 }
 
-const ANSWER_OF: Record<SanctQuestionKind, SanctuaryQuestion> = { what: "what", big: "big", count: "count", where: "where", like: "like", beluga: "beluga", color: "beluga" };
+const ANSWER_OF: Record<SanctQuestionKind, ActiveSanctuaryQuestion> = { what: "what", big: "big", count: "count", like: "like", beluga: "beluga", color: "beluga" };
 
 const wait = (ms: number) => new Promise((r) => window.setTimeout(r, rt.time > 0 ? ms : 0));
 
@@ -272,21 +274,6 @@ async function askSanct(kind: SanctQuestionKind, by: VisitorType | "pico"): Prom
         frame: { before: "", after: n === 1 ? " orca!" : " orcas!", slots: ids },
         choices: [lo, lo + 1, lo + 2].filter((k) => k <= 6).map((k) => ORCA_NUMBER_PHRASE[k]), shuffle: false,
         question: { en: "How many orcas?", ja: "シャチは なんとう？", by: speaker }, readQuestion: true, cancellable: true, help: "シャチを かぞえよう！ ばんごうを みてね"
-      });
-      return Boolean(id);
-    }
-    if (kind === "where") {
-      // Bring an orca beside the island or beside the research boat, then ask where it is.
-      const m = adult();
-      const at = Math.random() < 0.5 ? "island" : "boat";
-      pod.attract(m.id, at === "island" ? BY_ISLAND : BY_BOAT, 40, "point");
-      sanctFocus.frame = at;
-      sanctFocus.id = m.id;
-      for (let k = 0; k < 40 && Math.hypot(m.x - (at === "island" ? BY_ISLAND.x : BY_BOAT.x), m.z - (at === "island" ? BY_ISLAND.z : BY_BOAT.z)) > 6; k++) await wait(250);
-      pod.hold(m.id, 30, surfaceY(m) - 0.6);
-      const id = await ask({
-        pattern: "whereOrca", kind: "command", options: [at === "island" ? "byIsland" : "byBoat"], judge: ["byIsland", "byBoat"], choices: ["byIsland", "byBoat"], shuffle: false,
-        question: { en: "Where is the orca?", ja: "シャチは どこに いる？", by: speaker }, readQuestion: true, cancellable: true, help: "しまの そば？ ボートの そば？ ひかっている シャチを みてね"
       });
       return Boolean(id);
     }
@@ -362,7 +349,7 @@ export async function startSanctuaryTour() {
   let ok = true;
   try {
     await say("pico", "Let's do the Grand Sanctuary tour!", "サンクチュアリの さいごの ツアー！ 5つの しつもんに こたえてね");
-    for (const k of ["what", "count", "where", "beluga", "like"] as SanctQuestionKind[]) {
+    for (const k of ["what", "count", "big", "beluga", "like"] as SanctQuestionKind[]) {
       if (k === "beluga" && getGame().sanctuaryView === "belugas") { /* already there */ }
       if (k !== "beluga" && getGame().sanctuaryView === "belugas") { setSanctuaryView("orcas", true); await wait(1500); }
       if (!(await askSanct(k, "pico"))) { ok = false; break; }
@@ -385,7 +372,7 @@ export async function startSanctuaryTour() {
 export const SANCTUARY_MILESTONES = [
   { en: "Welcome to the Sanctuary", ja: "サンクチュアリへ ようこそ", todo: { en: "Watch an orca breathe (tap Look!)", ja: "シャチの いきつぎを みよう（Look! を タップ）" }, reward: { en: "Welcome flags", ja: "ようこその はた" } },
   { en: "Ocean Giants", ja: "うみの きょじん", todo: { en: "Big or small? How many? See a deep dive", ja: "おおきさ・かず の しつもん・ふかい もぐり" }, reward: { en: "A size board", ja: "おおきさ くらべの かんばん" } },
-  { en: "Family and Friends", ja: "かぞくと ともだち", todo: { en: "See friends and a mother and baby; where is it?", ja: "ともだち・おやこを みる・どこ？の しつもん" }, reward: { en: "Beluga Cove opens", ja: "シロイルカの いりえ オープン" } },
+  { en: "Family and Friends", ja: "かぞくと ともだち", todo: { en: "See friends and a mother and baby; do you like orcas?", ja: "ともだち・おやこを みる・シャチは すき？の しつもん" }, reward: { en: "Beluga Cove opens", ja: "シロイルカの いりえ オープン" } },
   { en: "Ocean Guardians", ja: "うみの まもりびと", todo: { en: "Clean up the ocean and help the habitat", ja: "うみの ごみひろい・すみかを よくしよう" }, reward: { en: "The guardian flag", ja: "まもりびとの はた" } },
   { en: "Grand Sanctuary Celebration", ja: "サンクチュアリの おいわい", todo: { en: "Pico's tour: 5 questions in a row", ja: "ピコの ツアー：しつもん 5つ" }, reward: { en: "The Grand Ocean Sanctuary trophy", ja: "うみの サンクチュアリの トロフィー" } }
 ] as const;

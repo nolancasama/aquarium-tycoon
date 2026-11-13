@@ -7,7 +7,7 @@ import type { SanctuaryProgress } from "./sanctuary";
 import { coastSlotFits } from "../data/coast";
 import { ATRIUM_PRICE, BUILT_IN_PADS, GALLERY_PRICE, HALL_OF, HALL_PRICE, isWingHabitat, PAD_TYPES, SLOT_ORDER, TANKS, TICKETS_PRICE } from "../data/tanks";
 import { roomOpen } from "../data/rooms";
-import type { PhraseId } from "./english";
+import type { PhraseId, SavedPhraseId } from "./english";
 import { newRushState, type RushState } from "../rush/types";
 
 /**
@@ -131,7 +131,7 @@ export interface Progress {
   sanctuaryIntroSeen?: boolean;
   sanctuary?: SanctuaryProgress;
   /** Distinct sentences said or chosen (results card). */
-  said: PhraseId[];
+  said: SavedPhraseId[];
 }
 
 export interface TunnelProgress {

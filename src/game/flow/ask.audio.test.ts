@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { recognition } from "../../audio/recognition";
 import { DEFAULT_SETTINGS, getGame, setGame, updateSettings } from "../store";
-import { ask, blockMic, cancelAsk, micPress, micUsable } from "./ask";
+import { ask, blockMic, cancelAsk, choose, micPress, micUsable } from "./ask";
+import { PHRASES, type PhraseId } from "../logic/english";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn(), setListening: vi.fn() } }));
 vi.mock("../../audio/tts", () => ({ tts: { cancel: vi.fn(), speak: vi.fn(async () => {}) } }));
@@ -52,5 +53,37 @@ describe("audio modes and shared permission fallback", () => {
     expect(recognition.listen).not.toHaveBeenCalled();
     cancelAsk();
     await answer;
+  });
+});
+
+describe("replacement curriculum input", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.stubGlobal("window", { setTimeout });
+    setGame({ prompt: null, mode: "play", micState: "ready", settings: { ...DEFAULT_SETTINGS } });
+  });
+  afterEach(() => { cancelAsk(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  const targets: PhraseId[] = ["itsShark", "itsRay", "itsSeal", "itsOtter", "itsDolphin", "itsOrca", "itsBeluga", "yesIDo", "noIDont", "itsBig", "itsSmall", "pg4", "dl4", "oc4", "sk3"];
+  const countDistractors: Partial<Record<PhraseId, PhraseId>> = { pg4: "pg3", dl4: "dl3", oc4: "oc3", sk3: "sk2" };
+  it.each(["speak", "tap"] as const)("completes replacement answers through the real %s input handler", async (mode) => {
+    updateSettings({ mic: mode === "speak", sayAloud: false });
+    for (const id of targets) {
+      const distractor = countDistractors[id] ?? (id === "itsShark" ? "itsRay" : "itsShark");
+      const pending = ask({ kind: "command", options: [id], choices: [id, distractor], judge: [id, distractor] });
+      expect(getGame().prompt!.choices.map((c) => c.id)).toContain(id);
+      if (mode === "tap") choose(id);
+      else {
+        micPress();
+        const handlers = vi.mocked(recognition.listen).mock.calls.at(-1)![0];
+        handlers.onResult([PHRASES[id].en], true);
+        handlers.onEnd();
+      }
+      expect(getGame().prompt).toMatchObject({ status: "correct", matched: id });
+      await vi.advanceTimersByTimeAsync(650);
+      await expect(pending).resolves.toBe(id);
+    }
+    if (mode === "tap") expect(recognition.listen).not.toHaveBeenCalled();
   });
 });

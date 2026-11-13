@@ -2442,3 +2442,60 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
   dolphin names in discarded locked-area progress; rejecting/quarantining an
   animal for a malformed name; mutating the pre-preview model; writing preview
   names to a separate browser-storage key.
+
+## 2026-11-13 — Retire animal abilities and assessed prepositions
+
+- **Curriculum:** remove animal-ability `Can it swim/walk/fly/jump?` questions
+  and `Yes, it can.` / `No, it can't.` answers, plus location `Where is…?`
+  questions and answers assessed on in/on/under/by/above. This applies to
+  visitor selection, speech judging, mic-free tap choices, instructional
+  sentence frames, tours, hints and activity-facing text. These targets must
+  never be scheduled, including in built but release-locked outdoor previews.
+  Replacements reuse existing beginner targets; no new grammar is introduced.
+- **Shark Tunnel:** replace location questions with `What's this?` (shark/ray),
+  and ability questions with `Do you like sharks/rays?` (`Yes, I do.` / `No,
+  I don't.`). Finding, showing the big shark and counting remain. Final Tour
+  keeps three tasks, now find → identify → count. Milestone observation and
+  visitor counts stay the same.
+- **Coastal & Polar:** Penguin Coast keeps `How many penguins?` and uses the
+  exported temporary water-framing helper, restoring the selected view after
+  the question. Seal Cove's location slot becomes `What's this?` → `It's a
+  seal.`; Otter Bay's ability slot becomes `What's this?` → `It's a sea
+  otter.`. Each question still holds/rings its animal and credits its existing
+  habitat counter. The current penguin-only preview and hidden habitats stay
+  as configured.
+- **Dolphin Lagoon:** the old location slot becomes the existing adult/calf
+  size comparison (`Is it big or small?`); the ability slot reuses dolphin
+  likes. Identification and counting stay. Dolphin Discovery still has four
+  questions: identify, count, size, likes. A leap's Look! narration becomes
+  `Look! A dolphin!`, without an ability sentence.
+- **Grand Ocean Sanctuary:** the location slot becomes existing orca likes;
+  Family and Friends asks that question instead of assessing island/boat
+  location. Its five-question tour becomes orca identification, count, size,
+  beluga identification, likes. Beluga colour questions stay. Island and boat
+  remain scenic landmarks, never required answer nouns. Notebook observations,
+  cleanup and habitat improvements keep their existing purposes.
+- **Other areas:** Hall 1, Jellyfish Gallery, Ocean Hall and Coral Reef Atrium
+  retain their existing colour/name requests, care, listening taps, counts,
+  identification and likes. The Grand Hub remains navigation and scenery with
+  no assessed questions. Exactly eight main levels, all unlocks, release locks,
+  care rules, rewards/coins and scene geometry remain unchanged.
+- **Save compatibility:** retired phrase and sentence-pattern IDs are accepted
+  as historical records but have no active phrase/judging/teaching mapping.
+  Historical tunnel `where`/`can` completions are safe no-ops. Keep the saved
+  `whereDone` field and its earned credit; it now tracks the Final Tour's
+  identification step, avoiding a save-schema change. Sanctuary retains old
+  `asked: ["where"]` history and accepts that earned credit wherever the new
+  likes completion is required; new calls with that retired question ID are
+  safe no-ops. Opaque quarantined records are preserved,
+  including retired question and Look! IDs. Regression coverage loads the
+  owner's `realSave.fixture.json` and a copy carrying the retired history,
+  checking tanks/fish/decorations, inventory/stored records, coins, stats,
+  achievements and level, plus a save/load round trip.
+- **Inventory:** `docs/CURRICULUM.md` derives the remaining assessed grammar
+  and vocabulary from active generators, answer maps and area compatibility;
+  it separates menu labels, ambient narration, answer-bank distractors and
+  release-locked/hidden content from currently scheduled targets.
+- **Rejected:** keeping abilities or prepositions as optional practice. An
+  optional visitor/tour question would still expose and assess the retired
+  targets, contradicting their removal from the beginner curriculum.

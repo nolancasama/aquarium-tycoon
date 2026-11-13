@@ -1,6 +1,6 @@
 import { setGame, useGame } from "../game/store";
 import { closeStageCard, continueGame, keepPlaying, newGame } from "../game/flow/story";
-import { PHRASES } from "../game/logic/english";
+import { isActivePhrase, PHRASES } from "../game/logic/english";
 import { fishCount } from "../game/logic/model";
 import { audio } from "../audio/audio";
 import { Icon } from "./icons";
@@ -140,7 +140,7 @@ export function ResultsScreen() {
   const screen = useGame((s) => s.screen);
   const model = useGame((s) => s.model);
   if (screen !== "results") return null;
-  const said = model.progress.said.map((id) => PHRASES[id].en);
+  const said = model.progress.said.filter(isActivePhrase).map((id) => PHRASES[id].en);
   const superStar = model.progress.superStar;
   return (
     <div className="results-screen ui" data-testid="results" data-super={superStar}>

@@ -97,7 +97,7 @@ export function sanctuaryTo(m: Model, n: number): Model {
   const steps: Record<number, (x: Model) => Model> = {
     1: (x) => addSticker(x, "breath"),
     2: (x) => addSticker(recordSanctuaryAnswer(recordSanctuaryAnswer(x, "big"), "count"), "dive"),
-    3: (x) => recordSanctuaryAnswer(addSticker(addSticker(x, "together"), "family"), "where"),
+    3: (x) => recordSanctuaryAnswer(addSticker(addSticker(x, "together"), "family"), "like"),
     4: (x) => {
       let y = x;
       for (let i = 0; i < CLEANUP_PIECES; i++) y = pickLitter(y);

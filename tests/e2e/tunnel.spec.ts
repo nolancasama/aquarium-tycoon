@@ -152,12 +152,12 @@ test("walk the tunnel, stay on the walkway, help a visitor, come back; progress 
     expect(Math.abs(c.tube.lateral), `${sec} camera inside`).toBeLessThanOrEqual(c.tube.maxLateral + 0.05);
     expect(c.tube.y, `${sec} camera under the glass`).toBeLessThanOrEqual(c.tube.maxY + 0.05);
   }
-  // A visitor asks "Can it swim?": answered by tapping (no microphone).
-  await tun(page, "activity", "can", "shark", true);
-  const prompt = await waitFor(page, (x) => Boolean(x.prompt), 15_000, "can question");
-  expect(prompt.prompt!.choices.sort()).toEqual(["noItCant", "yesItCan"]);
-  const q = prompt.prompt!.question ?? "";
-  await answer(page, q.includes("swim") ? "yesItCan" : "noItCant");
+  // A visitor asks about likes: both personal answers work without a microphone.
+  await tun(page, "activity", "like", "shark", true);
+  const prompt = await waitFor(page, (x) => Boolean(x.prompt), 15_000, "likes question");
+  expect(prompt.prompt!.choices.sort()).toEqual(["noIDont", "yesIDo"]);
+  expect(prompt.prompt!.question).toBe("Do you like sharks?");
+  await answer(page, "yesIDo");
   for (let i = 0; i < 4 && (await page.getByTestId("next").count()); i++) await page.getByTestId("next").click();
   await page.waitForFunction(() => !(window as never as { __tunnel: { state(): { activity: unknown } } }).__tunnel.state().activity, null, { timeout: 10_000 });
   expect((await tstate(page)).tunnelObserved).toBe(1);

@@ -238,9 +238,10 @@ test("Grand Ocean Sanctuary preview: a research sticker, the cleanup by tapping 
   await page.getByTestId("btn-sanctuary-tour").click();
   await answer(page, "itsOrca");
   await answer(page, "oc4");
-  await waitFor(page, (s) => Boolean(s.prompt), 40_000, "the where question");
-  const focus = await hook<{ frame: string }>(page, "sanctuaryFocus");
-  await answer(page, focus.frame === "island" ? "byIsland" : "byBoat");
+  const sizeQuestion = await waitFor(page, (s) => s.prompt?.question === "Is it big or small?", 40_000, "the size question");
+  expect(sizeQuestion.prompt!.choices.sort()).toEqual(["itsBig", "itsSmall"]);
+  const focus = await hook<{ id: string }>(page, "sanctuaryFocus");
+  await answer(page, focus.id === "chibi" ? "itsSmall" : "itsBig");
   await answer(page, "itsBeluga");
   await answer(page, "yesIDo");
   await expect.poll(async () => (await sanct(page)).progress?.trophy, { timeout: 10_000 }).toBe(true);
