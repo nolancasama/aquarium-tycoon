@@ -31,6 +31,7 @@ const cameraShot: CameraShot = { pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0
 const cameraFrom: CameraShot = { pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 } };
 let cameraKey = "", cameraElapsed = COAST_VIEW_SECONDS;
 let questionFrame: { token: symbol; kind: CoastQuestionFrame } | null = null;
+let cleanCameraToken: symbol | null = null;
 let reviewShot: CameraShot | null = null;
 
 /** A question borrows the framing, never changes the player's selected view. */
@@ -40,6 +41,13 @@ export function frameCoastWaterForQuestion(includeLand = false): () => void {
   return () => { if (questionFrame?.token === token) questionFrame = null; };
 }
 
+/** Care borrows a land/window composition without changing the selected view. */
+export function frameCoastForClean(): () => void {
+  const token = Symbol("coast-clean-camera");
+  cleanCameraToken = token;
+  return () => { if (cleanCameraToken === token) cleanCameraToken = null; };
+}
+
 /** Coast-only diagnostic hook; production UI never calls this. */
 export function reviewCoastCamera(shot: CameraShot | null) { reviewShot = shot; }
 
@@ -47,22 +55,25 @@ export function releaseCoastCamera() {
   if (rt.camera.shot === cameraShot) rt.camera.shot = null;
   cameraKey = "";
   questionFrame = null;
+  cleanCameraToken = null;
   reviewShot = null;
 }
 
-/** A bounded move around the rear edge of the upper floor, not through it. */
+/** A bounded move outside the window coping and above the lower floor. */
 export function coastCameraTick(aspect: number, dt: number) {
   const g = getGame();
   const penguinView = g.coastView === "penguins" || (g.coastView === "all" && COAST_HABITATS_SHOWN.length === 1 && COAST_HABITATS_SHOWN[0] === "penguins");
   if (!inCoast(g) || g.coastRevealing || !penguinView) { releaseCoastCamera(); return; }
   // Other flow-owned shots retain ownership.
   if (rt.camera.shot && rt.camera.shot !== cameraShot) return;
-  const key = `${g.coastView}:${g.coastUnderwater}:${questionFrame?.kind ?? ""}:${aspect}:${reviewShot ? JSON.stringify(reviewShot) : ""}`;
+  const frame = questionFrame?.kind ?? (cleanCameraToken ? "clean" : undefined);
+  const key = `${g.coastView}:${g.coastUnderwater}:${frame ?? ""}:${aspect}:${reviewShot ? JSON.stringify(reviewShot) : ""}`;
   const points = questionFrame ? [...coastRt.animals.values()].filter((a) => a.habitat === "penguins" && (questionFrame?.kind === "count" || a.m.area === "water")).map((a) => ({ x: EXHIBITS.penguins.x + a.m.x, y: a.m.y, z: EXHIBITS.penguins.z + a.m.z })) : [];
-  const target = reviewShot ?? coastExhibitShot(g.coastView, aspect, g.coastUnderwater, questionFrame?.kind, points);
+  const target = reviewShot ?? coastExhibitShot(g.coastView, aspect, g.coastUnderwater, frame, points);
   if (cameraKey !== key) {
     Object.assign(cameraFrom.pos, rt.camera.pos); Object.assign(cameraFrom.target, rt.camera.target);
-    cameraElapsed = 0;
+    // A held photograph needs its complete composition from its first frame.
+    cameraElapsed = frame === "clean" ? COAST_VIEW_SECONDS : 0;
     cameraKey = key;
   }
   cameraElapsed = Math.min(COAST_VIEW_SECONDS, cameraElapsed + dt);
@@ -164,6 +175,8 @@ export const coastFocus = { id: null as string | null, numbers: false };
 let careTankId: string | null = null;
 let stopCareWatch: (() => void) | null = null;
 let cleanFrame = -1;
+let restoreCleanCamera: (() => void) | null = null;
+function endCleanCamera() { restoreCleanCamera?.(); restoreCleanCamera = null; }
 function stopCareSubscription() { const stop = stopCareWatch; stopCareWatch = null; stop?.(); }
 
 /** Penguin branch of the shared actions: guard before applying any care maths. */
@@ -174,11 +187,13 @@ export function startPenguinCare(kind: KeeperCare): boolean {
   syncCoast(g.model);
   if (!(kind === "feed" ? startKeeperFeed(g.model) : startKeeperClean(g.model))) return false;
   careTankId = tank.id; cleanFrame = -1;
+  if (kind === "clean") restoreCleanCamera = frameCoastForClean();
   const preview = g.previewAreas.includes("coast");
   stopCareWatch = useGame.subscribe((now) => {
     const previewEnded = preview && !now.previewAreas.includes("coast");
     if (!inCoast(now) || previewEnded || !now.model.tanks.some((t) => t.id === careTankId && t.type === "penguins")) {
       stopCareSubscription();
+      endCleanCamera();
       if (!previewEnded) { finishKeepers(); applyKeeperBenefits(); }
       // Ending preview restores its entire original model, discarding temporary care too.
       careTankId = null; resetKeepers(); clearCoastMeal();
@@ -214,7 +229,7 @@ export function coastKeeperTick() {
     cleanFrame = c.frame;
     audio.play("tick");
   }
-  if (!keeperBusy()) { stopCareSubscription(); careTankId = null; }
+  if (!keeperBusy()) { endCleanCamera(); stopCareSubscription(); careTankId = null; }
 }
 
 const VISITORS: VisitorType[] = ["child", "adult", "fan", "grandma", "explorer"];

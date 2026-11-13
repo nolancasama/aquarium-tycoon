@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearCoast, stepCoast } from "../coast/coastRuntime";
-import { keeperRt } from "../coast/keeper";
+import { CLEAN_SHOTS, cleanShotAt, keeperRt } from "../coast/keeper";
 import { COAST_HALL } from "../data/rooms";
 import { clean, feed, newModel, newTank } from "../logic/model";
 import { resetRuntime, rt } from "../runtime";
@@ -115,6 +115,39 @@ describe("penguin keeper care actions", () => {
     setGame({ model: { ...model(), tanks: model().tanks.map((t) => ({ ...t, clean: 70 })) } });
     coastKeeperTick();
     expect(model().tanks[0].clean).toBe(70);
+  });
+
+  it.each([1366 / 768, 1024 / 768, 1024 / 600])("borrows Clean framing for three workers and restores Underwater at aspect %s", async (aspect) => {
+    setGame({ coastUnderwater: true, coastRevealing: false });
+    coastCameraTick(aspect, 1);
+    const selected = structuredClone(rt.camera.shot);
+    await cleanTank();
+    coastCameraTick(aspect, 0.016);
+    const cleanCamera = structuredClone(rt.camera.shot);
+    expect(cleanCamera!.pos.y).toBeGreaterThan(10);
+    expect(getGame().coastUnderwater).toBe(true);
+    for (const shot of CLEAN_SHOTS) {
+      expect(cleanShotAt(keeperRt.clean.elapsed)?.workers).toHaveLength(3);
+      expect(keeperRt.clean.frame).toBe(shot.start);
+      expect(model().tanks[0].clean).toBe(35);
+      advance(1);
+    }
+    coastCameraTick(aspect, 1);
+    expect(keeperRt.clean.phase).toBe("idle");
+    expect(rt.camera.shot).toEqual(selected);
+    expect(getGame().coastUnderwater).toBe(true);
+  });
+
+  it("releases borrowed Clean framing on early departure", async () => {
+    await cleanTank();
+    coastCameraTick(1366 / 768, 1);
+    expect(rt.camera.shot!.pos.y).toBeGreaterThan(10);
+    setGame({ hall: 0 });
+    coastCameraTick(1366 / 768, 1);
+    expect(rt.camera.shot).toBeNull();
+    setGame({ hall: COAST_HALL, coastRevealing: false });
+    coastCameraTick(1366 / 768, 1);
+    expect(rt.camera.shot!.pos.y).toBeLessThan(14);
   });
 
   it.each(["feed", "clean"] as const)("settles unfinished %s exactly once when leaving and re-enters idle", async (kind) => {

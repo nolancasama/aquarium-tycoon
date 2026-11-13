@@ -6,10 +6,20 @@ import { cleanShotAt, keeperRt, type CleanTool } from "../../game/coast/keeper";
 import { personModel } from "../models/people";
 import { PartBuilder } from "../partBuilder";
 import { smoothMat } from "../materials";
+import { PENGUIN_GALLERY } from "./coastGallery";
 
 /** Shared, scene-lifetime staff rig and merged tools; no geometry is made while stepping. */
 function keeperAssets() {
   const model = personModel("adult", 0, { shirt: "#139aa0", pants: "#24476b", hair: "#2a1d14", skin: "#f3cfae", extra: "#0b6f8a" }, true);
+  // Cleaning alone articulates both arms. Remove the fixed left sleeve/hand from
+  // this copy; feeding retains the original body and its existing bucket rig.
+  const cleanBody = model.body.clone(), positions = cleanBody.getAttribute("position"), kept: number[] = [];
+  for (let i = 0; i < positions.count; i += 3) {
+    let fixedArm = true;
+    for (let j = 0; j < 3; j++) fixedArm &&= positions.getX(i + j) < -0.235 && positions.getY(i + j) < 1.4;
+    if (!fixedArm) kept.push(i, i + 1, i + 2);
+  }
+  cleanBody.setIndex(kept);
   const cap = new PartBuilder(0);
   cap.sphere(0.185, 0, 1.75, 0, "#0b6f8a", [1, 0.5, 1], 12);
   cap.box(0.27, 0.025, 0.16, 0, 1.75, 0.14, "#139aa0");
@@ -21,9 +31,9 @@ function keeperAssets() {
   bucket.add(new THREE.TorusGeometry(0.18, 0.014, 4, 12), "#e4eef0", [0, -0.04, 0], [Math.PI / 2, 0, 0]);
   bucket.add(new THREE.TorusGeometry(0.17, 0.014, 4, 12, Math.PI), "#546f7f", [0, -0.04, 0]);
   const brush = new PartBuilder(0);
-  brush.cyl(0.025, 0.025, 0.82, 0, -0.78, 0, "#bb925d", 6);
-  brush.box(0.34, 0.09, 0.16, 0, -0.86, 0.025, "#14999d");
-  for (let i = 0; i < 5; i++) brush.box(0.04, 0.07, 0.14, -0.13 + i * 0.065, -0.93, 0.025, "#e4d7af");
+  brush.cyl(0.022, 0.022, 0.3, 0, -0.24, 0, "#bb925d", 6);
+  brush.box(0.22, 0.055, 0.12, 0, -0.29, 0.025, "#14999d");
+  for (let i = 0; i < 4; i++) brush.box(0.035, 0.05, 0.1, -0.08 + i * 0.055, -0.34, 0.025, "#e4d7af");
   const sponge = new PartBuilder(0);
   sponge.box(0.18, 0.12, 0.09, 0.025, -0.04, 0.035, "#ffe18b");
   sponge.box(0.18, 0.025, 0.09, 0.025, -0.065, 0.035, "#62b692");
@@ -32,28 +42,28 @@ function keeperAssets() {
   spray.box(0.08, 0.1, 0.08, 0, 0.04, 0.025, "#f4f7dd");
   spray.box(0.08, 0.045, 0.18, 0, 0.1, 0.09, "#ecb74e");
   spray.box(0.025, 0.095, 0.025, 0, 0.04, 0.135, "#ecb74e");
-  for (let i = 0; i < 3; i++) spray.sphere(0.025, (i - 1) * 0.07, 0.1, 0.28 + i * 0.09, "#d6ffff", [1, 1, 1], 6);
   const cloth = new PartBuilder(0);
-  cloth.box(0.3, 0.035, 0.23, 0.03, -0.04, 0.07, "#fff0b3");
-  cloth.box(0.07, 0.18, 0.23, 0.145, -0.11, 0.07, "#e7ce84");
+  cloth.box(0.22, 0.025, 0.17, 0.02, -0.04, 0.055, "#fff0b3");
+  cloth.box(0.05, 0.12, 0.17, 0.1, -0.11, 0.055, "#e7ce84");
   // The cleaning focus travels with the photograph, never with an animated person.
-  // These small shore-ice faces / litter / rock use the habitat's existing palette.
-  const ice = new PartBuilder(0.3);
-  ice.box(0.75, 1.28, 0.2, 0.12, 0, 0.76, "#c6e4e9");
-  ice.box(0.92, 0.14, 0.42, 0.12, 0, 0.76, "#e8f2ed");
+  // Small marks only: no tall slab that can read as something held in a hand.
+  const smudge = new PartBuilder(0);
+  for (let i = 0; i < 3; i++) smudge.sphere(0.065, (i - 1) * 0.08, 1.2 + i * 0.07, 0, "#84bec1", [1.3, 0.65, 0.1], 7);
   const debris = new PartBuilder(0);
   for (let i = 0; i < 3; i++) debris.box(0.1, 0.06, 0.13, -0.12 + i * 0.15, 0.015, 0.52 + i * 0.1, "#7d8a85", i * 0.6);
   const rock = new PartBuilder(0.3);
-  rock.sphere(0.38, 0.05, 0.1, 0.78, "#697f8e", [1.35, 0.38, 1], 9);
+  rock.sphere(0.22, 0.05, 0.08, 0.55, "#697f8e", [1.2, 0.38, 1], 9);
   const sparkle = new PartBuilder(0);
   for (let i = 0; i < 3; i++) {
-    const x = (i - 1) * 0.48, y = 0.35 + i * 0.35, z = 0.55 - i * 0.17;
-    sparkle.box(0.035, 0.27, 0.035, x, y, z, "#e3ffff");
-    sparkle.box(0.2, 0.035, 0.035, x, y + 0.12, z, "#e3ffff");
+    const x = (i - 1) * 0.2, y = 0.95 + i * 0.18;
+    sparkle.box(0.025, 0.16, 0.025, x, y, 0, "#f0ffff");
+    sparkle.box(0.14, 0.025, 0.025, x, y + 0.07, 0, "#f0ffff");
   }
-  const iceFace = ice.build(), litter = debris.build(), scrubRock = rock.build();
-  return { model, cap: cap.build(), bucket: bucket.build(), brush: brush.build(), sponge: sponge.build(), spray: spray.build(), cloth: cloth.build(), sparkle: sparkle.build(),
-    focus: { sponge: iceFace, bucket: litter, spray: iceFace, brush: scrubRock, cloth: iceFace } };
+  const mist = new PartBuilder(0);
+  for (let i = 0; i < 7; i++) mist.sphere(0.035 + (i % 3) * 0.012, -0.3 + (i % 3) * 0.09, 1.08 + Math.floor(i / 3) * 0.1, 0.035, "#d9ffff", [1, 0.8, 0.45], 6);
+  const mark = smudge.build(), litter = debris.build(), scrubRock = rock.build();
+  return { model, cleanBody, cap: cap.build(), bucket: bucket.build(), brush: brush.build(), sponge: sponge.build(), spray: spray.build(), cloth: cloth.build(), sparkle: sparkle.build(), mist: mist.build(),
+    focus: { sponge: scrubRock, bucket: litter, spray: mark, brush: scrubRock, cloth: scrubRock } };
 }
 let shared: ReturnType<typeof keeperAssets> | undefined;
 const assets = () => shared ??= keeperAssets();
@@ -138,18 +148,19 @@ function StaffDoor({ shown }: { shown: () => boolean }) {
 }
 
 /** The shared visitor body bends at its hips; the split arm actually carries its tool. */
-function Keeper({ role, shown }: { role: "feed" | "clean"; shown: () => boolean }) {
+function Keeper({ role, worker = 0, shown }: { role: "feed" | "clean"; worker?: number; shown: () => boolean }) {
   const a = useMemo(assets, []), m = a.model, ex = EXHIBITS.penguins;
   const root = useRef<THREE.Group>(null), torso = useRef<THREE.Group>(null), arm = useRef<THREE.Group>(null);
   const left = useRef<THREE.Group>(null), right = useRef<THREE.Group>(null), wrist = useRef<THREE.Group>(null), spark = useRef<THREE.Mesh>(null);
   const leftKnee = useRef<THREE.Group>(null), rightKnee = useRef<THREE.Group>(null);
   const tools = useRef<THREE.Group>(null);
   const focuses = useRef<THREE.Group>(null);
+  const otherArm = useRef<THREE.Group>(null), glassMarks = useRef<THREE.Group>(null);
   useFrame(() => {
     const r = root.current;
     if (!r) return;
     const f = keeperRt.feed, c = keeperRt.clean;
-    const shot = role === "clean" && c.phase === "montage" ? cleanShotAt(c.elapsed) : null;
+    const shot = role === "clean" && c.phase === "montage" ? cleanShotAt(c.elapsed)?.workers[worker] : null;
     r.visible = shown() && (role === "feed" ? f.phase === "walkOut" || f.phase === "tip" || f.phase === "watch" || f.phase === "walkBack" : shot !== null);
     if (!r.visible) return;
     let bend = 0, armPitch = -0.18, swing = 0, tilt = 0, drop = 0, leftThigh = 0, rightThigh = 0, leftShin = 0, rightShin = 0;
@@ -165,10 +176,10 @@ function Keeper({ role, shown }: { role: "feed" | "clean"; shown: () => boolean 
       }
     } else if (shot) {
       // A held photograph: all body/tool transforms change only at the five cuts.
-      r.position.set(ex.x + shot.x, ex.land.y, ex.z + shot.z);
+      r.position.set(ex.x + shot.x, shot.y, ex.z + shot.z);
       r.rotation.y = shot.heading;
       switch (shot.pose) {
-        case "glassScrub": bend = 0.08; armPitch = -1.75; break;
+        case "glassScrub": bend = 0.08; armPitch = -1.55; break;
         case "crouchCollect":
           drop = 0.275; bend = 0.78; armPitch = -0.65;
           leftThigh = rightThigh = -1.15; leftShin = rightShin = 1.7;
@@ -178,14 +189,23 @@ function Keeper({ role, shown }: { role: "feed" | "clean"; shown: () => boolean 
           drop = 0.3; bend = 0.65; armPitch = -0.5;
           leftThigh = -1.35; rightThigh = -0.3; leftShin = 1.65; rightShin = 1.85;
           break;
-        case "finalWipe": bend = 0.35; armPitch = -2.3; break;
+        case "finalWipe": bend = -0.05; armPitch = -1.8; break;
       }
       if (tools.current) for (const tool of tools.current.children) tool.visible = tool.name === `penguin-clean-tool-${shot.tool}`;
       if (focuses.current) for (const focus of focuses.current.children) focus.visible = focus.name === `penguin-clean-focus-${shot.tool}`;
       if (spark.current) {
-        spark.current.visible = true;
-        spark.current.rotation.y = c.frame * 0.7;
-        spark.current.scale.setScalar(0.85);
+        spark.current.visible = worker !== 2;
+        spark.current.position.set(0, -0.5, 0.6);
+        spark.current.scale.setScalar(0.65);
+      }
+      if (focuses.current) focuses.current.visible = worker !== 2;
+      if (otherArm.current) otherArm.current.rotation.x = worker === 2 ? (shot.pose === "finalWipe" ? -2.1 : -1.65) : -0.25;
+      if (glassMarks.current) {
+        // Counter-rotate the marks so every held shot touches the actual fixed
+        // visitor face of the pane, rather than carrying a target with the wrist.
+        const dz = PENGUIN_GALLERY.window.paneZ + 0.015 - shot.z;
+        glassMarks.current.position.set(-Math.sin(shot.heading) * dz, 0, Math.cos(shot.heading) * dz);
+        glassMarks.current.rotation.y = -shot.heading;
       }
     }
     if (torso.current) { torso.current.rotation.x = bend; torso.current.position.y = m.hip - drop; }
@@ -197,9 +217,9 @@ function Keeper({ role, shown }: { role: "feed" | "clean"; shown: () => boolean 
     if (wrist.current) wrist.current.rotation.x = role === "clean" && (shot?.tool === "sponge" || shot?.tool === "cloth") ? 0 :
       role === "clean" && shot?.tool === "brush" ? -1.35 - armPitch - bend : -armPitch - bend + tilt;
   });
-  return <group ref={root} visible={false} name={`penguin-keeper-${role}`} dispose={null}>
+  return <group ref={root} visible={false} name={role === "clean" ? `penguin-keeper-clean-${worker}` : "penguin-keeper-feed"} dispose={null}>
     <group ref={torso} position={[0, m.hip, 0]}>
-      <mesh geometry={m.body} material={smoothMat} position={[0, -m.hip, 0]} raycast={noHit} />
+      <mesh geometry={role === "clean" ? a.cleanBody : m.body} material={smoothMat} position={[0, -m.hip, 0]} raycast={noHit} />
       <mesh geometry={a.cap} material={smoothMat} position={[0, -m.hip, 0]} raycast={noHit} />
       <group ref={arm} position={[m.armPivot![0], m.armPivot![1] - m.hip, 0]}>
         <mesh geometry={m.arm} material={smoothMat} raycast={noHit} />
@@ -209,6 +229,10 @@ function Keeper({ role, shown }: { role: "feed" | "clean"; shown: () => boolean 
               <mesh key={tool} name={`penguin-clean-tool-${tool}`} position={[0, tool === "bucket" ? 0.18 : 0, 0]} geometry={a[tool]} material={smoothMat} raycast={noHit} />)}</group>}
         </group>
       </group>
+      {role === "clean" && <group ref={otherArm} position={[-m.armPivot![0], m.armPivot![1] - m.hip, 0]}>
+        <mesh geometry={m.arm} material={smoothMat} scale={[-1, 1, 1]} raycast={noHit} />
+        {worker === 2 && <mesh name="penguin-clean-tool-gallery-cloth" geometry={a.cloth} material={smoothMat} position={[-0.03, -0.53, 0.01]} raycast={noHit} />}
+      </group>}
     </group>
     {[-1, 1].map((side) => <group key={side} ref={side < 0 ? left : right} position={[side * m.legX, m.hip, 0]}>
       <mesh geometry={m.leg} material={smoothMat} raycast={noHit} />
@@ -217,9 +241,14 @@ function Keeper({ role, shown }: { role: "feed" | "clean"; shown: () => boolean 
     {role !== "feed" && <mesh ref={spark} geometry={a.sparkle} material={smoothMat} raycast={noHit} />}
     {role === "clean" && <group ref={focuses}>{(["sponge", "bucket", "spray", "brush", "cloth"] as const).map((tool) =>
       <mesh key={tool} name={`penguin-clean-focus-${tool}`} geometry={a.focus[tool]} material={smoothMat} raycast={noHit} />)}</group>}
+    {role === "clean" && worker === 2 && <group ref={glassMarks} name="penguin-clean-glass-marks">
+      <mesh name="penguin-clean-glass-smudge" geometry={a.focus.spray} material={smoothMat} raycast={noHit} />
+      <mesh name="penguin-clean-glass-mist" geometry={a.mist} material={smoothMat} raycast={noHit} />
+      <mesh name="penguin-clean-glass-sparkle" geometry={a.sparkle} material={smoothMat} position={[0.35, 0.1, 0.02]} raycast={noHit} />
+    </group>}
   </group>;
 }
 
 export function CoastKeepers({ shown }: { shown: () => boolean }) {
-  return <><StaffDoor shown={shown} /><Keeper role="feed" shown={shown} /><Keeper role="clean" shown={shown} /></>;
+  return <><StaffDoor shown={shown} /><Keeper role="feed" shown={shown} />{[0, 1, 2].map((worker) => <Keeper key={worker} role="clean" worker={worker} shown={shown} />)}</>;
 }

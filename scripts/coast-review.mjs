@@ -13,7 +13,7 @@ const [base = "http://localhost:5341/", W = "1366", H = "768", MS = "3", label =
 const w = Number(W), h = Number(H), ms = Number(MS);
 const focused = process.argv.includes("--gallery-review");
 const baseline = process.argv.includes("--baseline");
-const out = path.resolve(`.tmp/coast-review/${baseline ? "before/" : label ? `${label}/` : ""}${focused || baseline ? `${w}x${h}` : w}`);
+const out = path.resolve(`.tmp/coast-review/${baseline ? "before/" : focused ? "clean3/" : label ? `${label}/` : ""}${focused || baseline ? `${w}x${h}` : w}`);
 fs.mkdirSync(out, { recursive: true });
 const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
@@ -78,21 +78,23 @@ const galleryEvidence = () => page.evaluate(() => {
   if (!store?.scene || !store.camera) return { available: false };
   const { scene, camera } = store;
   const canvas = document.querySelector("canvas").getBoundingClientRect();
-  const buttons = ["coast-view-penguins", "coast-view-underwater"].map((id) => {
-    const r = document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect();
-    return r ? { id, left: r.left, right: r.right, top: r.top, bottom: r.bottom } : null;
+  const buttons = [...document.querySelectorAll("button")].map((button) => {
+    const r = button.getBoundingClientRect();
+    const id = button.dataset.testid ?? button.textContent.trim();
+    return r.width && r.height ? { id, left: r.left, right: r.right, top: r.top, bottom: r.bottom } : null;
   }).filter(Boolean);
   const navigation = [...document.querySelectorAll("button")].filter((button) => /Grand Hub|Dolphin Lagoon/.test(button.textContent)).map((button) => {
     const r = button.getBoundingClientRect();
     return { id: button.dataset.testid ?? button.textContent.trim(), left: r.left, right: r.right, top: r.top, bottom: r.bottom };
   });
   const visible = (obj) => { for (let p = obj; p; p = p.parent) if (!p.visible) return false; return true; };
-  const workers = [], tools = [], architecture = [];
+  const workers = [], tools = [], visitors = [], architecture = [];
   scene.updateMatrixWorld(true);
   scene.traverse((root) => {
     if (/walkway|gallery|stair|window/.test(root.name)) architecture.push({ name: root.name, visible: visible(root) });
+    if (root.name.startsWith("coast-visitor-")) visitors.push({ name: root.name, visible: visible(root) });
     if (root.name.startsWith("penguin-clean-tool-")) tools.push({ name: root.name, visible: visible(root) });
-    if (root.name !== "penguin-keeper-clean") return;
+    if (!/^penguin-keeper-clean-[012]$/.test(root.name)) return;
     let box = null;
     root.traverse((mesh) => {
       if (!mesh.isMesh || !visible(mesh)) return;
@@ -101,7 +103,7 @@ const galleryEvidence = () => page.evaluate(() => {
       const b = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
       if (box) box.union(b); else box = b;
     });
-    if (!box) { workers.push({ visible: false }); return; }
+    if (!box) { workers.push({ name: root.name, visible: false }); return; }
     const projectBounds = (viewCamera) => {
       const points = [];
       for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
@@ -111,12 +113,12 @@ const galleryEvidence = () => page.evaluate(() => {
       return { left: Math.min(...points.map((p) => p.x)), right: Math.max(...points.map((p) => p.x)), top: Math.min(...points.map((p) => p.y)), bottom: Math.max(...points.map((p) => p.y)) };
     };
     const bounds = projectBounds(camera);
-    workers.push({ visible: true, worldBounds: { min: box.min.toArray(), max: box.max.toArray() }, screenBounds: bounds,
+    workers.push({ name: root.name, visible: true, position: root.position.toArray(), screenPosition: { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 }, worldBounds: { min: box.min.toArray(), max: box.max.toArray() }, screenBounds: bounds,
       insideViewport: bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight,
       overlapsButtons: buttons.filter((b) => bounds.left < b.right && bounds.right > b.left && bounds.top < b.bottom && bounds.bottom > b.top).map((b) => b.id),
       overlapsNavigation: navigation.filter((b) => bounds.left < b.right && bounds.right > b.left && bounds.top < b.bottom && bounds.bottom > b.top).map((b) => b.id) });
   });
-  return { available: true, workers, tools, buttons, navigation, architecture };
+  return { available: true, workers, tools, visitors, buttons, navigation, architecture };
 });
 const shot = async (name) => {
   await page.screenshot({ path: path.join(out, `${name}.png`) });
@@ -210,24 +212,15 @@ try {
     await shot("02-mid-transition");
     await step(1200);
     await shot("03-underwater");
-    const connectionCameras = {
-      "04-upper-connection": { pos: { x: -128, y: 14, z: -29 }, target: { x: -144, y: -0.7, z: -45 } },
-      "05-lower-connection": { pos: { x: -157, y: -1.45, z: -40 }, target: { x: -141, y: -0.8, z: -44.2 } }
-    };
-    for (const [name, camera] of Object.entries(connectionCameras)) {
-      await call("coastReviewCamera", camera);
-      await step(1500);
-      await shot(name);
-    }
-    await call("coastReviewCamera", null);
-    await page.getByTestId("coast-view-penguins").dispatchEvent("click");
-    await step(1500);
+    // Begin from the lower gallery to verify that care borrows its own framing
+    // and then restores the selected Underwater view.
     const tank = (await call("state")).tanks.find((t) => t.type === "penguins");
     if (!tank) throw new Error("Penguin tank missing");
     await call("setCare", tank.id, 95, 40);
     await call("set", { coastWaiting: null });
     await step(200);
     await page.getByTestId("btn-clean").dispatchEvent("click");
+    await page.getByTestId("btn-clean").dispatchEvent("click"); // rapid tap guard
     await step(16); // Let the renderer present the first photograph after the click.
     await shot("06-clean-start");
     let elapsed = 16;
@@ -236,25 +229,33 @@ try {
       await step(target - elapsed);
       elapsed = target;
       await shot(`07-clean-shot-${i + 1}`);
+      if (i === 2) await shot("07-lower-glass-spray");
     }
-    await step(5200 - elapsed);
+    await step(6500 - elapsed); // Include the bounded return to the selected view.
     await shot("08-clean-after");
     const cleanFrames = Object.entries(evidence.frames).filter(([name]) => name.startsWith("07-clean-shot-"));
+    const presentationFrames = Object.entries(evidence.frames).filter(([name]) => name === "06-clean-start" || name.startsWith("07-"));
     evidence.cleanReview = {
       shots: cleanFrames.map(([name, frame]) => ({ name, clean: frame.keeper?.clean, workers: frame.gallery.workers })),
-      buttonOverlaps: cleanFrames.flatMap(([name, frame]) => frame.gallery.workers.flatMap((worker) => (worker.overlapsButtons ?? []).map((button) => ({ name, button })))),
+      buttonOverlaps: presentationFrames.flatMap(([name, frame]) => frame.gallery.workers.flatMap((worker) => (worker.overlapsButtons ?? []).map((button) => ({ name, button })))),
       after: evidence.frames["08-clean-after"].keeper?.clean
     };
-    if (evidence.cleanReview.buttonOverlaps.length) evidence.errors.push("Clean worker overlaps a view button; see cleanReview.buttonOverlaps");
-    if (cleanFrames.some(([, frame]) => frame.gallery.workers.some((worker) => worker.overlapsNavigation?.length))) evidence.errors.push("Clean worker overlaps a room arrow");
-    if (cleanFrames.some(([, frame]) => frame.gallery.workers.some((worker) => worker.visible && !worker.insideViewport))) evidence.errors.push("Clean worker leaves the viewport");
-    if (cleanFrames.some(([, frame]) => frame.gallery.tools.filter((tool) => tool.visible).length !== 1)) evidence.errors.push("A Clean snapshot does not have exactly one tool");
-    if (cleanFrames.some(([, frame]) => !frame.gallery.workers.some((worker) => worker.visible))) evidence.errors.push("A Clean snapshot has no visible worker");
-    if (evidence.frames["08-clean-after"].gallery.workers.some((worker) => worker.visible)) evidence.errors.push("Clean worker remains visible after 5.2 seconds");
+    if (evidence.cleanReview.buttonOverlaps.length) evidence.errors.push("Clean worker overlaps a HUD button; see cleanReview.buttonOverlaps");
+    if (presentationFrames.some(([, frame]) => frame.gallery.workers.some((worker) => worker.overlapsNavigation?.length))) evidence.errors.push("Clean worker overlaps a room arrow");
+    if (presentationFrames.some(([, frame]) => frame.gallery.workers.some((worker) => worker.visible && !worker.insideViewport))) evidence.errors.push("Clean worker leaves the viewport");
+    if (presentationFrames.some(([, frame]) => frame.gallery.tools.filter((tool) => tool.visible).length < 4)) evidence.errors.push("A Clean snapshot is missing a hand tool (including gallery spray and cloth)");
+    if (presentationFrames.some(([, frame]) => frame.gallery.workers.filter((worker) => worker.visible).length !== 3)) evidence.errors.push("A Clean snapshot does not have exactly three visible workers");
+    if (presentationFrames.some(([, frame]) => frame.gallery.visitors.some((visitor) => visitor.visible))) evidence.errors.push("A stroller remains in a Clean photograph");
+    if (evidence.frames["08-clean-after"].gallery.workers.some((worker) => worker.visible)) evidence.errors.push("Clean worker remains visible after five seconds");
     for (const name of ["01-penguins", "03-underwater"]) {
-      const walkway = evidence.frames[name].gallery.architecture.find((part) => part.name === "coast-upper-walkway");
-      if (!walkway?.visible) evidence.errors.push(`Upper walkway is absent or hidden in ${name}`);
+      const parts = evidence.frames[name].gallery.architecture;
+      if (parts.some((part) => /upper-walkway|stairs/.test(part.name))) evidence.errors.push(`Removed terrace or stairs present in ${name}`);
+      if (!parts.find((part) => part.name === "coast-lower-gallery-floor")?.visible) evidence.errors.push(`Lower walkway absent in ${name}`);
     }
+    const beforeCamera = evidence.frames["03-underwater"].camera;
+    const afterCamera = evidence.frames["08-clean-after"].camera;
+    evidence.cleanReview.restoration = { before: beforeCamera, after: afterCamera };
+    if (Math.abs(beforeCamera.pos.y - afterCamera.pos.y) > 0.1 || Math.abs(beforeCamera.pos.z - afterCamera.pos.z) > 0.1) evidence.errors.push("Selected Underwater camera was not restored");
     mark("Focused gallery review completed without forcing animal positions");
     evidence.startHall = coastHall;
   } else {

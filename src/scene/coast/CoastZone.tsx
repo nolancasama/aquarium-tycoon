@@ -5,7 +5,7 @@ import { getGame, updateModel, useGame } from "../../game/store";
 import { effect, rt } from "../../game/runtime";
 import { COAST_HALL } from "../../game/data/rooms";
 import { COAST_HABITATS, EX_D, EX_W, EXHIBITS, GLASS_TOP, WALKWAY_D, WINDOW_Z, type CoastHabitat, type ExhibitDef } from "../../game/data/coast";
-import { coastHabitatShown } from "../../game/data/release";
+import { COAST_HABITATS_SHOWN, coastHabitatShown } from "../../game/data/release";
 import { HABITAT_PAD, habitatOpen } from "../../game/logic/coast";
 import { coastRt, drainSights, stepCoast } from "../../game/coast/coastRuntime";
 import { checkCoastNow, coastFocus, coastKeeperTick, coastVisitorTick, setCoastView, tapCoastSign } from "../../game/flow/coast";
@@ -26,6 +26,7 @@ import { CoastGallery } from "./GalleryStructure";
 import { PENGUIN_GALLERY } from "./coastGallery";
 import { CoastCamera } from "./CoastCamera";
 import { selectAnimal } from "../../game/flow/animalNames";
+import { keeperRt } from "../../game/coast/keeper";
 
 /**
  * The Coastal & Polar Zone: three cutaway exhibits behind one walkway. Each has
@@ -234,7 +235,7 @@ function penguinScenery(ex: ExhibitDef): THREE.BufferGeometry {
     b.add(new THREE.DodecahedronGeometry(scale, 0), rock, [x, l.y - 0.27, l.maxZ - 0.08], [0.2, x, 0], [1, 0.55, 0.45]);
     b.add(coastStratum(scale * 0.85, 0.16, 0.025, x), snow, [x, l.y + 0.005, l.maxZ - 0.12]);
   }
-  // The full-depth window exposes every dive level below the visitor terrace.
+  // The full-depth window exposes every dive level above the lower gallery.
   b.box(frame.width + 0.6, 0.18, 0.3, 0, GLASS_TOP, frame.front + 0.05, "#3d5566");
   b.box(frame.width + 0.6, 0.22, 0.32, 0, p.floor - 0.12, frame.front + 0.05, "#3d5566");
   for (const s of [-1, 1]) b.box(0.16, GLASS_TOP - p.floor, 0.2, s * (frame.width / 2 + 0.05), p.floor, frame.front + 0.05, "#3d5566");
@@ -699,10 +700,12 @@ function Walkway() {
     const x0 = Math.min(...shown.map((ex) => ex.x - exhibitFrame(ex).width / 2)) - 1.5;
     const x1 = Math.max(...shown.map((ex) => ex.x + exhibitFrame(ex).width / 2)) + 1.5;
     const z0 = Math.max(...shown.map((ex) => ex.z + exhibitFrame(ex).front)) + 0.2;
-    // A permanent terrace above the lower gallery: its floor is also the gallery ceiling.
-    const thickness = PENGUIN_GALLERY.upper.thickness;
-    b.box(x1 - x0, thickness, WALKWAY_D, (x0 + x1) / 2, -thickness, z0 + WALKWAY_D / 2, "#cdbfa6");
-    b.box(x1 - x0, 0.03, 0.4, (x0 + x1) / 2, 0, z0 + WALKWAY_D - 0.3, "#2f8f9d");
+    // Other bays retain their authored deck; Penguin Coast's visitors use the
+    // lower window gallery, so there is no upper slab or terrace stripe here.
+    if (shown.some((ex) => ex.id !== "penguins")) {
+      b.box(x1 - x0, 0.18, WALKWAY_D, (x0 + x1) / 2, -0.18, z0 + WALKWAY_D / 2, "#cdbfa6");
+      b.box(x1 - x0, 0.03, 0.4, (x0 + x1) / 2, 0, z0 + WALKWAY_D - 0.3, "#2f8f9d");
+    }
     // Rock dividers between exhibits and at the ends.
     const edges = new Set<number>();
     for (const ex of shown) {
@@ -717,7 +720,7 @@ function Walkway() {
         if (!expanded && x > x0 + 1 && x < x1 - 1) b.cone(0.35, 1, x, 0, z0 + 0.7, "#3e8f5a", 6);
       }
     }
-    if (shown.length < COAST_HABITATS.length) {
+    if (!shown.some((ex) => ex.id === "penguins") && shown.length < COAST_HABITATS.length) {
       // End the visitor terrace beside the last shown exhibit, with solid rock
       // returns rather than a walkway continuing into absent neighbouring bays.
       for (const x of [x0 + 0.5, x1 - 0.5]) {
@@ -729,7 +732,7 @@ function Walkway() {
   }, []);
   useEffect(() => () => geo.dispose(), [geo]);
   return <>
-    <mesh name="coast-upper-walkway" geometry={geo} material={smoothMat} raycast={() => undefined} />
+    <mesh name="coast-exhibit-dividers" geometry={geo} material={smoothMat} raycast={() => undefined} />
     {coastHabitatShown("penguins") && <CoastGallery />}
   </>;
 }
@@ -743,10 +746,15 @@ const STROLLERS: Stroller[] = [
 ];
 
 function Strollers() {
+  const root = useRef<THREE.Group>(null);
   const underwater = useGame((s) => s.coastUnderwater);
+  const lowerOnly = COAST_HABITATS_SHOWN.length === 1 && COAST_HABITATS_SHOWN[0] === "penguins";
   const count = Math.max(1, Math.floor(STROLLERS.length * COAST_HABITATS.filter(coastHabitatShown).length / COAST_HABITATS.length));
-  if (underwater) return null;
-  return <>{STROLLERS.slice(0, count).map((s) => <StrollerFigure key={s.id} s={s} />)}</>;
+  // Hide the enclosing group in the same frame as Clean starts, including
+  // before the nested figure has consumed its next pose.
+  useFrame(() => { if (root.current) root.current.visible = keeperRt.clean.phase === "idle"; });
+  if (!lowerOnly && underwater) return null;
+  return <group ref={root} position={[0, lowerOnly ? PENGUIN_GALLERY.lower.top : 0, 0]}>{STROLLERS.slice(0, count).map((s) => <StrollerFigure key={s.id} s={s} />)}</group>;
 }
 
 function StrollerFigure({ s }: { s: Stroller }) {

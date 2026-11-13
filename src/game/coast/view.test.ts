@@ -8,13 +8,14 @@ describe("coast exhibit cameras", () => {
     const land = coastExhibitShot("penguins", aspect, false);
     const lower = coastExhibitShot("penguins", aspect, true);
     expect(land.target.z - ex.z).toBeLessThan(-4);
+    expect(land.target.y).toBeLessThanOrEqual(4);
     expect(land.pos.z - ex.z).toBeLessThan(25);
     expect(lower.pos.y).toBeCloseTo(-3.05 + 1.6);
     expect(lower.pos.z - ex.z).toBe(17);
     expect(lower.target.z).toBeLessThan(ex.z + ex.pool.maxZ);
   });
 
-  it("finishes in 0.8 seconds without crossing the upper slab", () => {
+  it("finishes in 0.8 seconds outside the window and above the gallery floor", () => {
     const ex = EXHIBITS.penguins;
     const land = coastExhibitShot("penguins", 1366 / 768, false), lower = coastExhibitShot("penguins", 1366 / 768, true);
     const out = structuredClone(land);
@@ -22,7 +23,7 @@ describe("coast exhibit cameras", () => {
     for (let elapsed = 0; elapsed <= 0.8; elapsed += 0.005) {
       blendCoastShot(land, lower, elapsed, out);
       const z = out.pos.z - ex.z;
-      expect(z > 15.15 || out.pos.y > 0.18).toBe(true);
+      expect(z).toBeGreaterThan(11.8);
       expect(out.pos.y).toBeGreaterThan(-3.05 + 1.5);
     }
     expect(blendCoastShot(land, lower, COAST_VIEW_SECONDS, out)).toEqual(lower);
