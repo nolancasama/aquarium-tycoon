@@ -22,6 +22,9 @@ import { itemGeometry, otterParts, penguinBodyPitch, penguinFishGeometry, pengui
 import type { Mover } from "../../game/coast/motion";
 import { createPenguin, loadPenguin, type PenguinInstance } from "./penguinAsset";
 import { CoastKeepers, cutStaffOpening } from "./CoastKeepers";
+import { CoastGallery } from "./GalleryStructure";
+import { PENGUIN_GALLERY } from "./coastGallery";
+import { CoastCamera } from "./CoastCamera";
 
 /**
  * The Coastal & Polar Zone: three cutaway exhibits behind one walkway. Each has
@@ -686,18 +689,16 @@ function Animals() {
 // ------------------------------------------------------------------ walkway and visitors
 
 function Walkway() {
-  const underwater = useGame((s) => s.coastUnderwater && s.coastView === "penguins");
   const geo = useMemo(() => {
     const b = new PartBuilder(0.3);
     const shown = COAST_HABITATS.filter(coastHabitatShown).map((h) => EXHIBITS[h]);
     const x0 = Math.min(...shown.map((ex) => ex.x - exhibitFrame(ex).width / 2)) - 1.5;
     const x1 = Math.max(...shown.map((ex) => ex.x + exhibitFrame(ex).width / 2)) + 1.5;
     const z0 = Math.max(...shown.map((ex) => ex.z + exhibitFrame(ex).front)) + 0.2;
-    // The Underwater cutaway looks through the terrace; keep its returns at the edges.
-    if (!underwater) {
-      b.box(x1 - x0, 0.06, WALKWAY_D, (x0 + x1) / 2, -0.06, z0 + WALKWAY_D / 2, "#cdbfa6");
-      b.box(x1 - x0, 0.03, 0.4, (x0 + x1) / 2, 0, z0 + WALKWAY_D - 0.3, "#2f8f9d");
-    }
+    // A permanent terrace above the lower gallery: its floor is also the gallery ceiling.
+    const thickness = PENGUIN_GALLERY.upper.thickness;
+    b.box(x1 - x0, thickness, WALKWAY_D, (x0 + x1) / 2, -thickness, z0 + WALKWAY_D / 2, "#cdbfa6");
+    b.box(x1 - x0, 0.03, 0.4, (x0 + x1) / 2, 0, z0 + WALKWAY_D - 0.3, "#2f8f9d");
     // Rock dividers between exhibits and at the ends.
     const edges = new Set<number>();
     for (const ex of shown) {
@@ -721,9 +722,12 @@ function Walkway() {
       }
     }
     return b.build();
-  }, [underwater]);
+  }, []);
   useEffect(() => () => geo.dispose(), [geo]);
-  return <mesh geometry={geo} material={smoothMat} raycast={() => undefined} />;
+  return <>
+    <mesh name="coast-upper-walkway" geometry={geo} material={smoothMat} raycast={() => undefined} />
+    {coastHabitatShown("penguins") && <CoastGallery />}
+  </>;
 }
 
 interface Stroller { id: string; type: "child" | "adult" | "fan" | "grandma" | "explorer"; variant: number; x: number; dir: number; stopUntil: number; act: "walk" | "look" | "photo" | "point"; nextStop: number }
@@ -809,6 +813,7 @@ export function CoastZone() {
   const ref = useAreaGate(coastShown);
   return (
     <group ref={ref} name="coast-zone">
+      <CoastCamera />
       <Tick />
       <Walkway />
       {COAST_HABITATS.filter(coastHabitatShown).map((h) => (

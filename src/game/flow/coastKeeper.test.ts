@@ -3,10 +3,10 @@ import { clearCoast, stepCoast } from "../coast/coastRuntime";
 import { keeperRt } from "../coast/keeper";
 import { COAST_HALL } from "../data/rooms";
 import { clean, feed, newModel, newTank } from "../logic/model";
-import { resetRuntime } from "../runtime";
+import { resetRuntime, rt } from "../runtime";
 import { getGame, model, setGame } from "../store";
 import { cleanTank, feedTank } from "./actions";
-import { coastKeeperTick, startPenguinCare } from "./coast";
+import { coastCameraTick, coastKeeperTick, frameCoastWaterForQuestion, releaseCoastCamera, startPenguinCare } from "./coast";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn() } }));
 vi.mock("../sim", () => ({ dropPellets: vi.fn(), dropPinch: vi.fn() }));
@@ -44,6 +44,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  releaseCoastCamera();
   setGame({ hall: 0 });
   clearCoast();
   resetRuntime();
@@ -51,6 +52,26 @@ afterEach(() => {
 });
 
 describe("penguin keeper care actions", () => {
+  it("borrows a water/count framing and restores the selected lower gallery, including overlapping requests", () => {
+    setGame({ coastUnderwater: true, coastRevealing: false });
+    coastCameraTick(1366 / 768, 1);
+    const gallery = structuredClone(rt.camera.shot);
+    const restoreOld = frameCoastWaterForQuestion();
+    const restoreCount = frameCoastWaterForQuestion(true);
+    coastCameraTick(1366 / 768, 1);
+    expect(rt.camera.shot!.pos.y).toBeGreaterThan(10);
+    restoreOld();
+    coastCameraTick(1366 / 768, 1);
+    expect(rt.camera.shot!.pos.y).toBeGreaterThan(10);
+    restoreCount();
+    coastCameraTick(1366 / 768, 1);
+    expect(rt.camera.shot).toEqual(gallery);
+    expect(getGame().coastUnderwater).toBe(true);
+    setGame({ hall: 0 });
+    coastCameraTick(1366 / 768, 1);
+    expect(rt.camera.shot).toBeNull();
+  });
+
   it("guards direct and repeated Feed/Clean actions until one feeding finishes", async () => {
     const before = model(), expected = feed(before, before.tanks[0].id);
     if (!expected.ok) throw new Error(expected.reason);

@@ -30,7 +30,7 @@ function save(coins: number) {
   };
 }
 
-type Coast = { open: boolean; milestone: number; view: string; entries: Record<string, number>; animals: { id: string; habitat: string; mode: string; area: string; y: number }[]; progress: Record<string, unknown> | null };
+type Coast = { open: boolean; milestone: number; view: string; underwater: boolean; entries: Record<string, number>; animals: { id: string; habitat: string; mode: string; area: string; y: number }[]; progress: Record<string, unknown> | null };
 const coast = (page: Page) => hook<Coast>(page, "coast");
 
 async function load(page: Page, model: unknown) {
@@ -114,13 +114,20 @@ test("locked at the hub and on the map; a preview sandbox opens it; penguins nee
   expect((c.progress as { sawPenguinSwim: boolean }).sawPenguinSwim).toBe(true);
 
   // A visitor asks "How many penguins?"; answered by tapping (Tap mode).
+  await page.getByTestId("coast-view-underwater").click();
+  await page.waitForTimeout(1000);
   await hook(page, "coastVisitor", "penguins");
   await page.getByTestId("coast-visitor").click();
   await waitFor(page, (s) => s.prompt?.question === "How many penguins?", 10_000, "the question");
+  expect((await coast(page)).underwater).toBe(true);
+  expect((await state(page) as unknown as { camera: { pos: { y: number } } }).camera.pos.y).toBeGreaterThan(5);
   await answer(page, "pg3");
   await waitFor(page, (s) => !s.prompt, 10_000, "answered");
   c = await coast(page);
   expect((c.progress as { penguinActs: number }).penguinActs).toBe(1);
+  await page.waitForTimeout(1200);
+  expect((await state(page) as unknown as { camera: { pos: { y: number } } }).camera.pos.y).toBeCloseTo(-1.45, 1);
+  await page.getByTestId("coast-view-penguins").click();
 
   // Feed the penguins.
   await hook(page, "setCare", penguins.id, 30, 100);
@@ -207,7 +214,7 @@ test("leaving the coast while its first-visit reveal plays ends the reveal clean
   expect(errors).toEqual([]);
 });
 
-for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768]] as const) {
+for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768], [1024, 600]] as const) {
   test(`penguin window camera and coast HUD fit at ${width}x${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     const errors = await load(page, save(700));
@@ -224,12 +231,16 @@ for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768]] as const) 
     await page.waitForTimeout(1600);
     type CameraState = { camera: { pos: { x: number; y: number; z: number } } };
     const land = (await state(page) as unknown as CameraState).camera.pos;
+    expect(land.z).toBeLessThan(-35);
+    expect(land.y).toBeLessThan(14);
     await page.getByTestId("coast-view-underwater").click();
     await expect(page.getByTestId("coast-view-underwater")).toHaveAttribute("aria-pressed", "true");
     await page.waitForTimeout(1600);
     const water = (await state(page) as unknown as CameraState).camera.pos;
     expect(water.y).toBeLessThan(land.y - 3);
     expect(water.y).toBeLessThan(1.4);
+    expect(water.y).toBeCloseTo(-1.45, 1);
+    expect(water.z).toBeCloseTo(-43, 1);
 
     const box = async (tid: string) => (await page.getByTestId(tid).boundingBox())!;
     const goals = await box("coast-goals"), views = await box("coast-views"), status = await box("coast-status");

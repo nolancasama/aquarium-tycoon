@@ -8,6 +8,20 @@ export type KeeperPhase = "idle" | "doorOpening" | "walkOut" | "tip" | "watch" |
 export type KeeperCare = "feed" | "clean";
 const door = PENGUIN_STAFF_DOOR, ex = EXHIBITS.penguins;
 export const CLEAN_MONTAGE_SECONDS = 5;
+export type CleanPose = "glassScrub" | "crouchCollect" | "sprayWipe" | "kneelBrush" | "finalWipe";
+export type CleanTool = "sponge" | "bucket" | "spray" | "brush" | "cloth";
+/** Five photographs, held for one second each. Positions never interpolate or wrap. */
+export const CLEAN_SHOTS = [
+  { start: 0, duration: 1, x: -5.5, z: -3.2, heading: -0.45, pose: "glassScrub", tool: "sponge" },
+  { start: 1, duration: 1, x: -2.75, z: -3.2, heading: 0.5, pose: "crouchCollect", tool: "bucket" },
+  { start: 2, duration: 1, x: 0, z: -3.2, heading: -0.35, pose: "sprayWipe", tool: "spray" },
+  { start: 3, duration: 1, x: 2.75, z: -3.2, heading: 0.55, pose: "kneelBrush", tool: "brush" },
+  { start: 4, duration: 1, x: 5.5, z: -3.2, heading: -0.6, pose: "finalWipe", tool: "cloth" }
+] as const satisfies readonly { start: number; duration: number; x: number; z: number; heading: number; pose: CleanPose; tool: CleanTool }[];
+export function cleanShotAt(elapsed: number): (typeof CLEAN_SHOTS)[number] | null {
+  if (!Number.isFinite(elapsed) || elapsed < 0 || elapsed >= CLEAN_MONTAGE_SECONDS) return null;
+  return CLEAN_SHOTS.find((shot) => elapsed >= shot.start && elapsed < shot.start + shot.duration) ?? null;
+}
 export const KEEPER_CLEARANCE = 1.05;
 export const keeperRt = {
   feed: { phase: "idle" as KeeperPhase, elapsed: 0, x: door.x, z: door.z, heading: 0, door: 0, tip: 0, walking: false,
@@ -113,7 +127,7 @@ export function stepKeepers(_model: Model, dt: number, peers: readonly Mover[] =
   const f = keeperRt.feed, c = keeperRt.clean;
   if (c.phase === "montage") {
     c.elapsed = Math.min(CLEAN_MONTAGE_SECONDS, c.elapsed + dt + 1e-12);
-    c.frame = Math.min(9, Math.floor(c.elapsed * 2));
+    c.frame = Math.min(CLEAN_SHOTS.length - 1, Math.floor(c.elapsed));
     if (c.elapsed >= CLEAN_MONTAGE_SECONDS) { pending.clean = !delivered.clean; active = null; c.phase = "idle"; changed(); }
   }
   if (f.phase === "idle") return;

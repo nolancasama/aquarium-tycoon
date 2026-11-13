@@ -15,6 +15,8 @@ import { areaAvailable, COAST_HABITATS_SHOWN, coastHabitatShown } from "../data/
 import { audio } from "../../audio/audio";
 import { effect, rt } from "../runtime";
 import { latchRushCare } from "../rush/flow";
+import { blendCoastShot, coastExhibitShot, COAST_VIEW_SECONDS, type CoastQuestionFrame } from "../coast/view";
+import type { CameraShot } from "../runtime";
 
 /**
  * The Coastal & Polar Zone's flow: buying it at the hub, the exhibit views,
@@ -24,6 +26,50 @@ import { latchRushCare } from "../rush/flow";
  */
 
 export const inCoast = (g: GameState = getGame()) => g.screen === "game" && g.hall === COAST_HALL;
+
+const cameraShot: CameraShot = { pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 } };
+const cameraFrom: CameraShot = { pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 } };
+let cameraKey = "", cameraElapsed = COAST_VIEW_SECONDS;
+let questionFrame: { token: symbol; kind: CoastQuestionFrame } | null = null;
+let reviewShot: CameraShot | null = null;
+
+/** A question borrows the framing, never changes the player's selected view. */
+export function frameCoastWaterForQuestion(includeLand = false): () => void {
+  const token = Symbol("coast-question-camera");
+  questionFrame = { token, kind: includeLand ? "count" : "water" };
+  return () => { if (questionFrame?.token === token) questionFrame = null; };
+}
+
+/** Coast-only diagnostic hook; production UI never calls this. */
+export function reviewCoastCamera(shot: CameraShot | null) { reviewShot = shot; }
+
+export function releaseCoastCamera() {
+  if (rt.camera.shot === cameraShot) rt.camera.shot = null;
+  cameraKey = "";
+  questionFrame = null;
+  reviewShot = null;
+}
+
+/** A bounded move around the rear edge of the upper floor, not through it. */
+export function coastCameraTick(aspect: number, dt: number) {
+  const g = getGame();
+  const penguinView = g.coastView === "penguins" || (g.coastView === "all" && COAST_HABITATS_SHOWN.length === 1 && COAST_HABITATS_SHOWN[0] === "penguins");
+  if (!inCoast(g) || g.coastRevealing || !penguinView) { releaseCoastCamera(); return; }
+  // Other flow-owned shots retain ownership.
+  if (rt.camera.shot && rt.camera.shot !== cameraShot) return;
+  const key = `${g.coastView}:${g.coastUnderwater}:${questionFrame?.kind ?? ""}:${aspect}:${reviewShot ? JSON.stringify(reviewShot) : ""}`;
+  const points = questionFrame ? [...coastRt.animals.values()].filter((a) => a.habitat === "penguins" && (questionFrame?.kind === "count" || a.m.area === "water")).map((a) => ({ x: EXHIBITS.penguins.x + a.m.x, y: a.m.y, z: EXHIBITS.penguins.z + a.m.z })) : [];
+  const target = reviewShot ?? coastExhibitShot(g.coastView, aspect, g.coastUnderwater, questionFrame?.kind, points);
+  if (cameraKey !== key) {
+    Object.assign(cameraFrom.pos, rt.camera.pos); Object.assign(cameraFrom.target, rt.camera.target);
+    cameraElapsed = 0;
+    cameraKey = key;
+  }
+  cameraElapsed = Math.min(COAST_VIEW_SECONDS, cameraElapsed + dt);
+  blendCoastShot(cameraFrom, target, cameraElapsed, cameraShot);
+  rt.camera.shot = cameraShot;
+  rt.camera.snap = true;
+}
 
 /** The habitat tank the current view manages (null in the overview). */
 export function coastTank() {
@@ -166,7 +212,7 @@ export function coastKeeperTick() {
   const c = keeperRt.clean;
   if (c.phase === "montage" && c.frame !== cleanFrame) {
     cleanFrame = c.frame;
-    if (c.frame % 2 === 0) audio.play("tick");
+    audio.play("tick");
   }
   if (!keeperBusy()) { stopCareSubscription(); careTankId = null; }
 }
@@ -197,7 +243,8 @@ export async function startCoastActivity() {
   const w = g.coastWaiting;
   if (!w || !free() || !coastHabitatShown(w.habitat)) return;
   skipCoastReveal();
-  setGame({ coastWaiting: null, coastView: w.habitat, coastUnderwater: false, coastActivity: { habitat: w.habitat, by: w.type }, panel: null, placing: null });
+  setGame({ coastWaiting: null, coastView: w.habitat, ...(w.habitat !== "penguins" ? { coastUnderwater: false } : {}), coastActivity: { habitat: w.habitat, by: w.type }, panel: null, placing: null });
+  const restoreCamera = w.habitat === "penguins" ? frameCoastWaterForQuestion(true) : () => {};
   // Let the camera arrive before asking.
   await new Promise((r) => window.setTimeout(r, rt.time > 0 ? 700 : 0));
   let ok = false;
@@ -206,6 +253,7 @@ export async function startCoastActivity() {
     else if (w.habitat === "seals") ok = await askSeal(w.type);
     else ok = await askOtter(w.type);
   } finally {
+    restoreCamera();
     coastFocus.id = null;
     coastFocus.numbers = false;
     setGame({ coastActivity: null });
