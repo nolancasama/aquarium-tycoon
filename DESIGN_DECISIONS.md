@@ -2204,3 +2204,54 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
   run fine on the classroom Chromebooks; no performance pass planned.
 - **Coastal & Polar Zone, Dolphin Lagoon and Grand Ocean Sanctuary stay
   release-locked.** No unlock rule or price is to be designed for now.
+
+## 2026-11-13 — Hub passages, Lagoon boardwalk and solid treasure lids
+
+- **Hub passages:** the main and turning-branch floor/ceiling slabs overlapped
+  by 22 cm; wall corners, jambs, thresholds and relief backs also contained
+  duplicate contact faces. Build only the exterior boundary of their joined
+  solids, retaining the existing shell and portal material assignments.
+  Wall/threshold bottoms extend 2 cm below the unchanged hub floor; the
+  corridor retains its real 1.8 cm rise. The lintel underside is 2 cm below
+  the curved wall underside and ceiling lights have 2.25 cm clearance.
+  Production inspection also traced a dashed jamb seam to the independently
+  generated curved wall cut ending exactly on the jamb inner plane. Extend
+  the wooden reveal inward 1.5 cm to bury that edge, tested from the actual
+  sector endpoint; outer frame, portal mask and navigation stay unchanged.
+  Destination rooms are distant, separately gated scenes, not additional
+  geometry inside these passages. Portal clipping, door rules and travel
+  remain unchanged. Rejected: render-order/depth bias, changing the floor
+  footprint or lowering the whole hub floor (would float furniture).
+- **Lagoon entrance boardwalk:** the underwater gallery roof and side-wall
+  tops shared y=0.95 with the boardwalk, and seam-strip undersides coincided
+  with its slab. Replace slab plus strips with separate timber boards with
+  18 mm grooves. Gallery cover/wall tops end at y=0.78, a real 2 cm below
+  board undersides. Pavilion, supports, stairs and walking heights remain.
+  This is separate from the previously repaired raised observation deck.
+  Rejected: raising the whole boardwalk, retaining a duplicate slab beneath
+  decorative strips, polygonOffset and renderOrder.
+- **Treasure chest:** a partial cylinder had no radial cut face, leaving the
+  open lid without an underside; overlapping gold cylinders also duplicated
+  end faces. Build a closed, outward-wound half-round prism with flush wood
+  and gold bands sharing edges. Use the opaque chest finish on the lid and
+  replace the body's coincident inset with a shallow tray; coins stay visible.
+  Hinge and seven-second animation cycle remain unchanged. Rejected:
+  DoubleSide as a substitute for missing geometry, transparent materials,
+  depth-write changes and overlapping trim shells.
+- Geometry tests cover corridor boundary overlap/interior faces/winding,
+  boardwalk separation and gallery clearance, and lid manifold closure,
+  outward ray hits through the animation and opaque depth-writing material.
+  All scenery stays merged into the existing meshes; no per-frame geometry
+  or materials and no additional draw calls. Production review:
+  `node scripts/visual.mjs before|after http://localhost:5351/ 7 geometry`
+  writes 1366×768 frames and camera evidence under `.tmp/vis-review/`.
+- Verification on 2026-11-13: `npm run typecheck`, `npm run build` and
+  `npx vite build` passed. Final `npm test`: 858 passed, two existing marine pod
+  simulation tests exceeded their five-second timeout (leap frequency and
+  orca bay movement); no simulation files were changed for this work.
+  Production capture on port 5351 completed without page errors. Frames in
+  both `before/` and `after/`: `corridor-front.png`, `corridor-oblique.png`,
+  `corridor-mid-transition.png`, `lagoon-normal.png`,
+  `lagoon-boardwalk-side.png`, and `chest-{closed,half,open}-{front,above-side}.png`.
+  Final production oblique and front frames confirm the dashed jamb seam is
+  gone after the reveal overlap; baseline frames are retained for comparison.

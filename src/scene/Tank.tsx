@@ -12,7 +12,7 @@ import { tapDecor, tapFish, tapSlot, tapTank } from "../game/flow/actions";
 import { glassGeometry, surfaceGeometry, tankShellGeometry, waterGeometry } from "./models/tankShell";
 import { FishMesh } from "./Animals";
 import { decorModel } from "./models/decor";
-import { additiveSprite, algaeTexture, badgeTexture, flatMat, glassTexture, shaderTime, shadowMaterial, surfaceMaterial, tankShellMaterial, waterMaterial } from "./materials";
+import { additiveSprite, algaeTexture, badgeTexture, glassTexture, shaderTime, shadowMaterial, surfaceMaterial, tankShellMaterial, waterMaterial } from "./materials";
 import { project, FOV } from "./CameraRig";
 import { footprintContains, footprintPoints, sandSurfaceY, slotMarkerY, SLOT_MARKER_LIFT, SLOT_MARKER_RADIUS } from "../game/logic/tankLayout";
 import type { TankType } from "../game/types";
@@ -370,7 +370,7 @@ function DecorMesh({ tank, d }: { tank: TankRec; d: PlacedDecor }) {
       <mesh geometry={grounded ?? model.geo} material={model.mat} />
       {model.lid && (
         <group ref={lid} position={model.lid.hinge}>
-          <mesh geometry={model.lid.geo} material={flatMat} />
+          <mesh geometry={model.lid.geo} material={model.mat} />
         </group>
       )}
       <sprite ref={glow} material={glowMat} position={[0, top * 0.5, 0.02]} scale={[0.5, Math.max(0.35, top * 1.3), 1]} visible={false} />

@@ -1,7 +1,41 @@
 import { describe, expect, it } from "vitest";
 import { DECK } from "../../game/data/lagoon";
 import { PartBuilder } from "../partBuilder";
-import { addObservationDeck, coplanarWalkingSurfaces, deckLayout, DECK_STAIRS } from "./deckGeometry";
+import { addBoardwalk, addObservationDeck, BOARDWALK, boardwalkLayout, coplanarWalkingSurfaces, deckLayout, DECK_STAIRS, GALLERY_COVER_TOP } from "./deckGeometry";
+
+describe("lagoon pavilion boardwalk construction", () => {
+  it("separates every board and clears the gallery roof and wall tops below it", () => {
+    const boards = boardwalkLayout();
+    expect(boards[0].minX).toBe(BOARDWALK.minX);
+    expect(boards.at(-1)!.maxX).toBe(BOARDWALK.maxX);
+    expect(BOARDWALK.top - BOARDWALK.thickness - GALLERY_COVER_TOP).toBeCloseTo(0.02, 9);
+    for (let i = 0; i < boards.length; i++) for (let j = i + 1; j < boards.length; j++) {
+      expect(coplanarWalkingSurfaces(boards[i], boards[j]), `${boards[i].name} / ${boards[j].name}`).toBe(false);
+    }
+    for (let i = 1; i < boards.length; i++) expect(boards[i].minX - boards[i - 1].maxX).toBeCloseTo(0.018, 9);
+  });
+
+  it("renders exactly the board area, without an overlapping slab or seam faces", () => {
+    const builder = new PartBuilder(0.4);
+    addBoardwalk(builder);
+    const geometry = builder.build(), positions = geometry.getAttribute("position");
+    const seen = new Set<string>();
+    let topArea = 0;
+    for (let i = 0; i < positions.count; i += 3) {
+      const vertices = [0, 1, 2].map(k => [positions.getX(i + k), positions.getY(i + k), positions.getZ(i + k)]);
+      const key = vertices.map(v => v.map(n => n.toFixed(5)).join(",")).sort().join("|");
+      expect(seen.has(key), key).toBe(false);
+      seen.add(key);
+      if (vertices.every(v => Math.abs(v[1] - BOARDWALK.top) < 0.00001)) {
+        const [a, b, c] = vertices;
+        topArea += Math.abs((b[0] - a[0]) * (c[2] - a[2]) - (c[0] - a[0]) * (b[2] - a[2])) / 2;
+      }
+    }
+    const expected = boardwalkLayout().reduce((sum, p) => sum + (p.maxX - p.minX) * (p.maxZ - p.minZ), 0);
+    expect(topArea).toBeCloseTo(expected, 3);
+    geometry.dispose();
+  });
+});
 
 describe("lagoon observation deck construction", () => {
   it("joins the existing boardwalk landing to the deck at a consistent incline", () => {
