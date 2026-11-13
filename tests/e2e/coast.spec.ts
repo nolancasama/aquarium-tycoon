@@ -241,7 +241,8 @@ for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768], [1024, 600
     expect(water.y).toBeLessThan(land.y - 3);
     expect(water.y).toBeLessThan(1.4);
     expect(water.y).toBeCloseTo(-1.45, 1);
-    expect(water.z).toBeCloseTo(-43, 1);
+    // Standing back in the lower gallery (local z = 30) so its walkway shows.
+    expect(water.z).toBeCloseTo(-30, 1);
 
     const box = async (tid: string) => (await page.getByTestId(tid).boundingBox())!;
     const goals = await box("coast-goals"), views = await box("coast-views"), status = await box("coast-status");

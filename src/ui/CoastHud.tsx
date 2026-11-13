@@ -108,6 +108,7 @@ function Views() {
 
 function HabitatCard({ h }: { h: CoastHabitat }) {
   const tank = useGame((s) => tankAt(s.model, HABITAT_PAD[h]));
+  const careBusy = useSyncExternalStore(subscribeKeeperCare, keeperBusy, keeperBusy);
   if (!tank || tank.type !== h || !coastHabitatShown(h)) return null;
   const used = usedSpace(tank), cap = TANKS[h].capacity, happy = happiness(tank);
   const bar = (v: number, icon: "food" | "sponge" | "happy", id: string) => (
@@ -124,7 +125,7 @@ function HabitatCard({ h }: { h: CoastHabitat }) {
         <span className="fishcount" data-testid="coast-capacity">{used}/{cap}</span>
       </header>
       {bar(tank.fish.length ? tank.food : 100, "food", "coast-food")}
-      {bar(tank.clean, "sponge", "coast-clean")}
+      {bar(h === "penguins" && careBusy && keeperRt.clean.phase === "montage" ? Math.max(tank.clean, keeperRt.clean.startClean) : tank.clean, "sponge", "coast-clean")}
       {bar(happy ?? 0, "happy", "coast-happy")}
       {need && (
         <button className="coast-need" data-testid="coast-need" onClick={() => playHintAudio(NEED_TEXT[h].en)}>

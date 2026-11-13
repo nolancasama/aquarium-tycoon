@@ -17,23 +17,38 @@ function colony(slot: number | null = 1) {
 }
 
 describe("penguin keeper runtime", () => {
-  it("cuts through five distinct left-to-right photographs for exactly five seconds", () => {
-    expect(CLEAN_SHOTS.length).toBeGreaterThanOrEqual(5);
+  it("holds five photographs of exactly three cleaners across land and the lower visitor gallery", () => {
+    expect(CLEAN_SHOTS.length).toBe(5);
     expect(CLEAN_SHOTS.reduce((total, shot) => total + shot.duration, 0)).toBe(CLEAN_MONTAGE_SECONDS);
     expect(CLEAN_MONTAGE_SECONDS).toBe(5);
     for (let i = 0; i < CLEAN_SHOTS.length; i++) {
       const shot = CLEAN_SHOTS[i], previous = CLEAN_SHOTS[i - 1];
       expect(shot.duration).toBeGreaterThan(0);
       expect(shot.start).toBe(previous ? previous.start + previous.duration : 0);
-      if (previous) {
-        expect(shot.x).toBeGreaterThan(previous.x);
-        expect(shot.pose).not.toBe(previous.pose);
-        expect(shot.tool).not.toBe(previous.tool);
+      expect(shot.workers).toHaveLength(3);
+      const [left, right, glass] = shot.workers;
+      expect(left.x).toBeLessThan(EXHIBITS.penguins.land.minX / 3);
+      expect(right.x).toBeGreaterThan(EXHIBITS.penguins.land.maxX / 3);
+      for (const worker of [left, right]) {
+        expect(worker.y).toBe(EXHIBITS.penguins.land.y);
+        expect(worker.z).toBeLessThan(EXHIBITS.penguins.land.maxZ);
+        expect(Math.cos(worker.heading)).toBeLessThan(0.2);
       }
+      expect(glass.y).toBe(-3.05);
+      expect(glass.z).toBeGreaterThan(11.42); // Feet behind the connected window plinth.
+      expect(glass.z).toBeLessThan(12);
+      expect(glass.tool).toBe("spray"); // Renderer also holds the cloth in the other hand.
+      expect(Math.cos(glass.heading)).toBeLessThan(-0.95);
+      if (previous) expect(shot.workers).not.toEqual(previous.workers);
       expect(cleanShotAt(shot.start)).toBe(shot);
       expect(cleanShotAt(shot.start + shot.duration - 0.001)).toBe(shot);
     }
-    expect(new Set(CLEAN_SHOTS.map((shot) => shot.pose)).size).toBe(5);
+    const workers = CLEAN_SHOTS.flatMap((shot) => [...shot.workers]);
+    expect(new Set(workers.map((worker) => worker.pose)).size).toBe(5);
+    expect(new Set(workers.map((worker) => worker.tool)).size).toBe(5);
+    expect(workers.some((worker) => worker.heading === Math.PI)).toBe(true);
+    const glassPositions = CLEAN_SHOTS.map((shot) => shot.workers[2].x);
+    expect(Math.max(...glassPositions) - Math.min(...glassPositions)).toBeGreaterThan(1);
     for (const elapsed of [-1, 5, 5.001, 10, Infinity, NaN]) expect(cleanShotAt(elapsed)).toBeNull();
   });
 

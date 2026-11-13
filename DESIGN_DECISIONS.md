@@ -2499,3 +2499,123 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
 - **Rejected:** keeping abilities or prepositions as optional practice. An
   optional visitor/tour question would still expose and assess the retired
   targets, contradicting their removal from the beginner curriculum.
+
+## 2026-11-14 — Penguin Coast three-cleaner photographs and lower visitor gallery
+
+- **Team montage:** five held one-second photographs, hard cuts and no loop.
+  Exactly three teal cleaners appear in each photograph: left habitat, right
+  habitat and visitor side of the lower pool window. All vanish at five seconds.
+  The shared care guard, bilingual disabled Feed/Clean buttons, single cleaning
+  benefit, rapid-tap protection, departure settlement and preview discard remain.
+  Feeding's door/walk/bucket state machine is unchanged.
+- **Authored shot table:** positions below are exhibit-local `(x, y, z)` metres;
+  headings are radians about y, with 0 facing +z and pi fully back-facing toward
+  the glass. Kneeling land poses scrub a small ground rock; crouches collect
+  little debris. Standing wipes and high reaches happen against the real pane.
+
+  | Time | Left habitat cleaner | Right habitat cleaner | Lower-glass cleaner |
+  | --- | --- | --- | --- |
+  | 0–1 s | (-5.8, 2.35, -2.1), -1.75, kneeling sponge scrub | (4.8, 2.35, -2.2), 1.55, sideways crouch, debris/bucket | (5.8, -3.05, 11.72), pi, standing spray while wiping, spray + cloth |
+  | 1–2 s | (-4.2, 2.35, -2.8), pi, back-facing crouch, debris/bucket | (4.1, 2.35, -2.0), 1.75, sideways kneeling brush scrub | (6.9, -3.05, 11.72), 2.95, high reaching wipe, spray + cloth |
+  | 2–3 s | (-5.2, 2.35, -2.0), -1.45, sideways crouch, debris/bucket | (5.0, 2.35, -3.0), pi, fully back-facing kneeling cloth wipe | (6.3, -3.05, 11.72), 3.32, standing glass scrub, spray + cloth |
+  | 3–4 s | (-4.1, 2.35, -2.7), -2.35, turned-away kneeling cloth wipe | (4.3, 2.35, -2.0), 1.65, sideways crouch, debris/bucket | (6.6, -3.05, 11.72), pi, high reaching wipe, spray + cloth |
+  | 4–5 s | (-5.7, 2.35, -2.0), pi, back-facing kneeling brush scrub | (4.8, 2.35, -2.8), 1.85, sideways kneeling sponge scrub | (5.9, -3.05, 11.72), 3.05, spray while wiping, spray + cloth |
+
+- **Lower-glass cleaner and tools:** a second articulated arm holds the cloth
+  while the other holds a trigger spray bottle. Small mist dots, smudges and
+  sparkles sit just outside the actual pane at z=10.985, counter-rotated independently
+  of the body. Removed the previous 0.75 x 1.28 m rectangular ice-face targets.
+  Cloth is 0.22 x 0.17 m; brush has a 0.3 m handle and 0.22 m head. Sponge,
+  small bucket, debris and low scrub rocks stay at hand-tool/ground-target scale.
+  Standing land workers wiping empty air were rejected after removing the slabs;
+  those land poses now kneel to their ground targets. The right worker stands
+  clear of the fixed feeding tray so it cannot read as a large carried prop.
+  Crouches keep a 0.21 m hip drop and 0.58 rad torso bend so their faces and
+  bucket pickup remain readable. The two land workers stay in opposite land
+  thirds, change position at every cut, and the glass worker shifts 1.1 m
+  along the pane between the first two shots. Shared meshes/materials,
+  scalar pose updates, no new shadows or render targets.
+- **Temporary Clean framing:** `frameCoastForClean` borrows the same camera
+  owner as `frameCoastWaterForQuestion`, with a token-safe restore callback.
+  It cuts immediately to the complete composition and holds it across shots.
+  Round 2 replaces the distant `(0,16,38)` camera with `(0,3.5,29)`, target
+  `(0,0.8,4)`. At narrow aspects, `r=max(1,1.4/aspect)` gives position
+  `(side,3.5*r,4+25*r)`, with `side=max(0,(1.6-aspect)/(1.6-4/3))*1.1`
+  used for both position and target x. At 1024x768: `(1.1,3.675,30.25)`
+  looking at `(1.1,0.8,4)`. The low angle compresses the land/window separation
+  and places land workers below the 4:3 status card; the lateral offset leaves
+  the glass worker between Clean and the visitor-question button. Selected view
+  is preserved and restored on completion or departure; question/count framing
+  retains priority and its existing animal bounds. Normal gallery strollers now
+  use the lower floor and hide during the montage to keep the three-worker read.
+- **Walkway architecture:** removed the Penguin Coast upper visitor slab,
+  stripe, end terrace returns and stair mesh/builders. The principal gallery
+  is a horizontal floor at y=-3.05, x=-11.7..11.7, z=11.16..34, parallel to
+  the pool floor. The floor meets the bottom window frame and a low front plinth.
+  Side passages at z=14.8..18.4 extend level to x=+/-14.5, with open ends and
+  2.6 m clear height. Side piers support a plain 0.65 m deep coping at y=2.55,
+  z=11.15..11.8. This narrow cap reads as a window edge, with no deck or rails.
+  Two 0.12 m mullions at x=+/-6.4 join sill and lintel so the glass frame is
+  readable even when the outer piers are offscreen at 4:3. The deeper floor
+  keeps the rearward standing camera inside the gallery with 4 m behind it.
+  Joints use butted faces; glass, frame, plinth, piers and floor are connected.
+  All new solids remain beyond the pool; animal bounds, routes and ramps stay.
+- **Normal cameras:** Penguins retains its close habitat camera and horizontal
+  narrow retreat. Its tall-screen aim now lowers from y=4 to y=2.5 at 4:3,
+  rather than rising to y=6.5 and leaving the habitat beneath a large sky area.
+  Land camera height is `10.2 + (retreat - 1) * 3.7`; at 4:3 its position is
+  still `(0,12.118,23.137)`. Underwater moves back from z=17 to `(0,-1.45,30)`,
+  1.6 m above the floor, and aims at `(0,-2.3,4)`. The sill is near 58% of
+  frame height, leaving about 22–26% of the frame as floor above the action
+  buttons (at the three reviewed sizes). Sill, lintel and mullions remain in
+  view with swimming penguins visible through the glass. Both use
+  the existing 35-degree lens. The 0.8-second view transition stays outside
+  the coping; close question restoration retains its safe outward bend.
+- **Cleanliness presentation:** the review script deliberately sets food=95,
+  clean=40 before pressing Clean, so the initial green-to-yellow reset is
+  fixture setup. Ordinary care decay could then cross 40 into red during the
+  montage. The penguin Clean HUD now holds at least its starting cleanliness
+  until the existing once-only completion benefit fills it; underlying care
+  decay/maths and reward timing are unchanged. Evidence records the intentional
+  reset, each displayed value/class, and checks the montage never decreases.
+- **Verification:** round 2 `npm run typecheck`, `npm test` (918/918 across
+  74 files, PowerShell), and `npm run build` pass. The build retains its
+  existing large-chunk advisory. No full E2E, smoke or browser suite was run.
+  Gallery tests cover removed levels, level/open side passages, joined floor
+  and frame, pool clearance, standing eye height, window rays and transition
+  clearance. Keeper tests cover three workers per shot, all poses/tools, exact
+  duration, no loop, once-only benefit and guards; flow tests cover all three
+  aspects, camera restoration, early departure and preview discard.
+  No E2E suite was run for this order.
+- **Production evidence:** `scripts/coast-review.mjs --gallery-review`, fresh
+  production preview on port 5365 with BASE_URL set, SwiftShader. Output:
+  `.tmp/coast-review/clean3b/{1366x768,1024x768,1024x600}/`. Each has Penguins
+  (with/without station), Underwater, mid-transition, Clean start, every one of
+  the five shots, a lower-glass spray frame, after-clean, and `evidence.json`.
+  Evidence includes each worker's projected body height per shot, from actual
+  body/cap/limb vertices (excluding tools, targets, mist and sparkles), full
+  world/screen bounds and positions, viewport checks, overlap checks against
+  HUD buttons, panels and navigation, tools, disappearance and selected
+  Underwater restoration. `--strict-clean-height` enforces >=55 px at 1366x768
+  and >=40 px at 1024x600. All 36 final frames captured; all three runs pass
+  with zero errors and zero worker overlaps against buttons, panels or room
+  arrows. Displayed cleanliness stays 40 throughout the five photographs and
+  rounds to 100 afterwards. Land bodies measure 56.3–59.5 px at 1366x768,
+  54.3–57.2 px at 1024x768, and 44.0–46.5 px at 1024x600. Gallery bodies
+  measure 124.2–125.8, 115.9–117.4, and 97.0–98.3 px respectively.
+
+  | Shot | 1366x768 body height px, left / right / glass |
+  | --- | --- |
+  | 0–1 s | 58.0 / 59.1 / 124.2 |
+  | 1–2 s | 57.2 / 57.8 / 125.1 |
+  | 2–3 s | 59.5 / 56.3 / 125.8 |
+  | 3–4 s | 56.9 / 59.4 / 124.5 |
+  | 4–5 s | 58.1 / 56.4 / 124.5 |
+
+  Underwater and all five final photographs inspected at each size, plus the
+  restored after-clean view at 1024x600. Claude retains
+  final aesthetic judgment. Hardware Chromebook performance was not measured.
+- **Rejected:** a single roaming keeper; keeping the upper terrace as the main
+  walkway; keeping stairs to a removed level; floating floors or unsupported
+  slabs; oversized focus objects held beside hands; interpolating or looping
+  the photographs. No save, economy, release-lock, curriculum or other-bay changes.
