@@ -16,10 +16,10 @@ import { HUB_BAYS, HUB_R, onRing } from "./data/hub";
 import { coastTo, lagoonTo, sanctuaryTo } from "../ui/DebugPanel";
 import { sanctRt } from "./sanctuary/sanctuaryRuntime";
 import { sanctFocus, startSanctActivity, type SanctQuestionKind } from "./flow/sanctuary";
-import { startLagoonActivity, type LagoonQuestion } from "./flow/lagoon";
+import { holdLagoonBall, throwLagoonBall, startLagoonActivity, type LagoonQuestion } from "./flow/lagoon";
 import { SANCTUARY_ORIGIN } from "./data/sanctuary";
 import { enterOutdoor } from "./flow/outdoor";
-import { dropToy, forceRing, forceTrick, lagoonRt } from "./lagoon/lagoonRuntime";
+import { ballCatchSnapshot, dropToy, forceRing, forceTrick, lagoonPod, lagoonRt } from "./lagoon/lagoonRuntime";
 import type { TrickKind } from "./marine/pod";
 import { LAGOON_ORIGIN } from "./data/lagoon";
 import type { OutdoorArea } from "./store";
@@ -399,6 +399,40 @@ export function installE2eHook(seed: number) {
       dropToy(kind);
       return true;
     },
+    lagoonCatch() {
+      const chaser = lagoonRt.pod?.members.find((m) => m.attract?.kind === "toy");
+      return { ...ballCatchSnapshot(), chaser: chaser ? { id: chaser.id, x: chaser.x, y: chaser.y, z: chaser.z } : null };
+    },
+    lagoonHold() { return holdLagoonBall(); },
+    lagoonThrow(x?: number, z?: number) { return throwLagoonBall(x, z); },
+    lagoonEntries() { return lagoonRt.entries.map((e) => ({ ...e, ids: [...e.ids] })); },
+    /** Review setup only: place animals before the sequence; subsequent movement is real simulation. */
+    lagoonReviewSetup(kind: "catch" | "high" | "hop") {
+      const pod = lagoonPod();
+      lagoonRt.look = null;
+      lagoonRt.lookReadyAt = lagoonRt.time + 90;
+      lagoonRt.watch = null;
+      for (let i = 0; i < pod.members.length; i++) {
+        const m = pod.members[i];
+        m.x = -6 + i * 3; m.z = -3; m.y = -0.3;
+        m.yaw = 0; m.pitch = 0; m.roll = 0; m.vy = 0; m.turn = 0;
+        m.speed = m.p.cruise; m.mode = "swim"; m.modeT = 0;
+        m.air = null; m.trick = null; m.attract = null; m.follow = null;
+        m.hold = pod.time + 90; m.holdY = null; m.breathAt = pod.time + 90;
+      }
+      if (kind === "catch") {
+        for (const m of pod.members) m.hold = 0;
+        dropToy("ball");
+        return true;
+      }
+      const m = pod.byId(kind === "hop" ? "mimi" : "kai")!;
+      m.x = kind === "hop" ? -2 : 2; m.z = -3; m.hold = 0;
+      m.y = -1.2;
+      return pod.trick(m.id, kind) ? m.id : null;
+    },
+    lagoonWaterWhere(x: number, z: number) {
+      return project(LAGOON_ORIGIN.x + x, 0, LAGOON_ORIGIN.z + z);
+    },
     /** Review: where a dolphin and the toy are now (area-local). */
     lagoonBody(id: string) {
       const m = lagoonRt.pod?.byId(id);
@@ -410,6 +444,10 @@ export function installE2eHook(seed: number) {
     },
     /** Screen position of a lagoon thing: the Look! bubble or a dolphin. */
     lagoonWhere(what: "look" | string) {
+      if (what === "ball") {
+        const t = lagoonRt.toy;
+        return t?.kind === "ball" ? project(LAGOON_ORIGIN.x + t.x, t.y + 0.12, LAGOON_ORIGIN.z + t.z) : null;
+      }
       if (what === "look") {
         const l = lagoonRt.look;
         if (!l) return null;

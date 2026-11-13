@@ -7,7 +7,7 @@ import {
 } from "../logic/lagoon";
 import { award } from "../logic/model";
 import { DOLPHIN_NUMBER_PHRASE, type PhraseId } from "../logic/english";
-import { dropToy, feedPod, isFeeding, lagoonPod, lagoonRt, stepLagoonRt, WATCH_SPOTS } from "../lagoon/lagoonRuntime";
+import { dropToy, feedPod, holdBall, throwBall, isFeeding, lagoonPod, lagoonRt, stepLagoonRt, WATCH_SPOTS } from "../lagoon/lagoonRuntime";
 import { surfaceY, type PodEvent } from "../marine/pod";
 import { GALLERY, LAGOON_ORIGIN } from "../data/lagoon";
 import type { VisitorType } from "../types";
@@ -109,6 +109,21 @@ export function giveLagoonToy(toy: LagoonToy) {
   celebrate(before);
 }
 
+/** Catch uses the same calm gate as care; a held ball never delays another activity. */
+export function holdLagoonBall() {
+  if (!calm() || getGame().areaPanel || getGame().lagoonView === "gallery") return false;
+  if (!holdBall()) return false;
+  audio.play("pick");
+  return true;
+}
+
+export function throwLagoonBall(x?: number, z?: number) {
+  if (!calm() || getGame().areaPanel || getGame().lagoonView === "gallery") return false;
+  if (!throwBall(x, z)) return false;
+  audio.play("place");
+  return true;
+}
+
 // ------------------------------------------------------------------ the live lagoon
 
 const LOOK_TEXT: Record<LagoonSight, { label: string; ja: string; line: string }> = {
@@ -170,6 +185,7 @@ export function lagoonTick(dt: number) {
   lagoonRt.watch = view === "lagoon" ? null : WATCH_SPOTS[view];
   // No spontaneous tricks while a visitor's question is about the dolphins (counting, where, which one).
   lagoonRt.tricksPaused = lagoonFocus.count || lagoonFocus.id !== null || Boolean(getGame().areaActivity);
+  lagoonRt.catchInputPaused = !calm() || Boolean(getGame().areaPanel) || view === "gallery";
   const events = stepLagoonRt(dt);
   const before = model().progress.lagoon?.milestone ?? 0;
   for (const e of events) {

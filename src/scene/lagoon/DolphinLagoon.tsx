@@ -8,8 +8,9 @@ import {
   BRIDGE, DECK, DECK_SPOTS, BOARDWALK_PATH, GALLERY, GALLERY_SPOTS, LAGOON_DOMAIN, LAGOON_ORIGIN, PLATFORM, SEA_GATE
 } from "../../game/data/lagoon";
 import { LAND_Y, pointInPolygon } from "../../game/marine/domain";
-import { feedingPose, lagoonRt, resetFeeding, RING } from "../../game/lagoon/lagoonRuntime";
-import { lagoonFocus, lagoonTick, lookText, tapDolphin, tapLook } from "../../game/flow/lagoon";
+import { BALL_HELD, feedingPose, lagoonRt, resetFeeding, RING } from "../../game/lagoon/lagoonRuntime";
+import { holdLagoonBall, throwLagoonBall, lagoonFocus, lagoonTick, lookText, tapDolphin, tapLook } from "../../game/flow/lagoon";
+import { audio } from "../../audio/audio";
 import { DOLPHINS } from "../../game/logic/lagoon";
 import { PartBuilder } from "../partBuilder";
 import { addBoardwalk, addObservationDeck, GALLERY_COVER_TOP } from "./deckGeometry";
@@ -490,6 +491,15 @@ function numberMat(n: number) {
 
 function Toys() {
   const ball = useRef<THREE.Mesh>(null), kelp = useRef<THREE.Group>(null), ringRef = useRef<THREE.InstancedMesh>(null);
+  const hands = useRef<THREE.Mesh>(null);
+  const handGeo = useMemo(() => {
+    const b = new PartBuilder(0);
+    for (const side of [-1, 1]) {
+      b.add(new THREE.SphereGeometry(1, 10, 6), "#f2be91", [side * 0.25, -0.24, 0.05], [0, 0, side * 0.3], [0.19, 0.12, 0.24]);
+      b.add(new THREE.CylinderGeometry(0.1, 0.12, 0.42, 8), "#47a7bb", [side * 0.29, -0.47, 0.13], [0.3, 0, side * 0.18]);
+    }
+    return b.build();
+  }, []);
   const ballGeo = useMemo(() => {
     const b = new PartBuilder(0);
     const cols = ["#ff5c5c", "#ffffff", "#4dabf7", "#ffd43b", "#ffffff", "#4cd27a"];
@@ -505,6 +515,7 @@ function Toys() {
   const acc = useRef(0);
   useFrame((_, dt) => {
     const toy = lagoonRt.toy;
+    if (hands.current) hands.current.visible = toy?.kind === "ball" && toy.state === "held";
     if (ball.current) {
       ball.current.visible = Boolean(toy && toy.kind === "ball");
       if (toy && toy.kind === "ball") {
@@ -512,6 +523,7 @@ function Toys() {
         const bob = toy.y === 0 ? Math.sin(rt.time * 2) * 0.03 : 0;
         ball.current.position.set(toy.x, toy.y + 0.12 + bob, toy.z);
         ball.current.rotation.set(toy.z * 0.9, 0, -toy.x * 0.9);
+        ball.current.scale.setScalar(toy.state === "held" ? 1.2 : 1);
       }
     }
     if (kelp.current) {
@@ -545,7 +557,20 @@ function Toys() {
   });
   return (
     <group>
-      <mesh ref={ball} geometry={ballGeo} material={smoothMat} visible={false} raycast={() => undefined} />
+      <mesh ref={ball} geometry={ballGeo} material={smoothMat} visible={false} onClick={tap(holdLagoonBall)} />
+      <mesh ref={hands} geometry={handGeo} material={smoothMat} visible={false} position={[BALL_HELD.x, BALL_HELD.y + 0.12, BALL_HELD.z]} raycast={() => undefined} />
+      {/* Raycast-only water target, with no rendered draw call. Runtime clamps to the lagoon outline. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} onClick={(e) => {
+        if (e.delta > 8 || lagoonRt.toy?.state !== "held") return;
+        const x = e.point.x - O.x, z = e.point.z - O.z;
+        if (!pointInPolygon(LAGOON_DOMAIN.outline, x, z)) return;
+        // A paused catch must let the existing dolphin/question handlers receive
+        // the tap underneath this invisible water target.
+        if (throwLagoonBall(x, z)) e.stopPropagation();
+      }}>
+        <planeGeometry args={[110, 80]} />
+        <meshBasicMaterial visible={false} side={THREE.DoubleSide} />
+      </mesh>
       <group ref={kelp} visible={false}><mesh geometry={kelpGeo} material={smoothMat} raycast={() => undefined} /></group>
       {/* The ring stands upright, its opening facing along RING.yaw (local z). */}
       <group position={[RING.x, RING.y, RING.z]} rotation={[0, RING.yaw, 0]}>
@@ -743,15 +768,26 @@ function Tick() {
     if (!lagoonShown()) { resetFeeding(); return; }
     lagoonTick(Math.min(dt, 0.1));
     const fx = fxPool.current;
-    for (const e of lagoonRt.fx.splice(0, lagoonRt.fx.length)) {
+    for (let i = 0; i < lagoonRt.fx.length; i++) {
+      const e = lagoonRt.fx[i];
       if (!fx) continue;
       const k = e.len / 2.6;
       if (e.kind === "breathe") fx.spout(O.x + e.x, 0.15, O.z + e.z, 1.1 * k);
-      else if (e.kind === "splash" || e.kind === "leap") fx.splash(O.x + e.x, 0, O.z + e.z, 1.4 * k);
+      else if (e.kind === "splash") {
+        const strength = e.strength ?? 0;
+        fx.splash(O.x + e.x, 0, O.z + e.z, e.entry ? (0.9 + 2 * strength) * k : 1.4 * k, e.age, e.entry);
+        if (e.entry) {
+          audio.play("splash");
+          // Existing audio layers: larger impacts add a low body hit and a spray tail.
+          if (strength > 0.3) audio.play("gulp");
+          if (strength > 0.55) audio.play("sprinkle");
+        }
+      }
       else if (e.kind === "dive") fx.splash(O.x + e.x, 0, O.z + e.z, 0.6 * k);
       // Through the bubble ring: a little burst of bubbles from the ring.
       else if (e.kind === "ring") fx.bubbles(O.x + e.x, e.y, O.z + e.z, 18);
     }
+    lagoonRt.fx.length = 0;
   });
   return null;
 }

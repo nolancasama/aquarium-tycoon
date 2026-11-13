@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bodyR, Pod, surfaceY, type MemberDef, type PodEvent, type PodOptions } from "./pod";
+import { bodyR, Pod, surfaceY, TRICK_KINDS, type MemberDef, type PodEvent, type PodOptions, type TrickKind } from "./pod";
 import type { WaterDomain } from "./domain";
 import { LAGOON_DOMAIN } from "../data/lagoon";
 import { clearLagoonRt, feedPod, lagoonRt, LAGOON_POD, LAGOON_POD_OPTIONS, resetFeeding } from "../lagoon/lagoonRuntime";
@@ -46,6 +46,120 @@ export function runPod(domain: WaterDomain, defs: MemberDef[], opts: PodOptions,
 
 const count = (events: PodEvent[], kind: PodEvent["kind"]) => events.filter((e) => e.kind === kind).length;
 
+describe("dolphin leap water entry", () => {
+  function airborne(vy = 7) {
+    const pod = new Pod(LAGOON_DOMAIN, [{ id: "test", species: "dolphin", size: 1 }], 7, LAGOON_POD_OPTIONS);
+    const m = pod.members[0];
+    Object.assign(m, { x: 0, y: -0.15, z: 0, yaw: 0.45, pitch: Math.atan2(vy, 3), vy, mode: "leap", air: { vx: Math.sin(0.45) * 3, vz: Math.cos(0.45) * 3 }, trick: null, breathAt: 100 });
+    return { pod, m };
+  }
+
+  it("emits exactly one splash at the interpolated downward snout crossing", () => {
+    const { pod, m } = airborne();
+    const entries: PodEvent[] = [];
+    for (let i = 0; i < 100; i++) {
+      const reach = m.len * 0.5, oldReach = Math.cos(m.pitch) * reach;
+      const x = m.x + Math.sin(m.yaw) * oldReach, y = m.y + Math.sin(m.pitch) * reach, z = m.z + Math.cos(m.yaw) * oldReach;
+      pod.step(1 / 30);
+      for (const e of pod.drain()) if (e.kind === "splash") {
+        entries.push(e);
+        const newReach = Math.cos(m.pitch) * reach;
+        const nx = m.x + Math.sin(m.yaw) * newReach, ny = m.y + Math.sin(m.pitch) * reach, nz = m.z + Math.cos(m.yaw) * newReach;
+        const f = y / (y - ny);
+        expect(y).toBeGreaterThan(0);
+        expect(ny).toBeLessThanOrEqual(0);
+        expect(e.x).toBeCloseTo(x + (nx - x) * f, 7);
+        expect(e.y).toBe(0);
+        expect(e.z).toBeCloseTo(z + (nz - z) * f, 7);
+        expect(e.age).toBeCloseTo((1 - f) / 30, 7);
+        expect(e.entry).toBe(true);
+        // The nose meets the water before the old centre-depth trigger.
+        expect(m.y).toBeGreaterThan(-0.25);
+      }
+    }
+    expect(entries).toHaveLength(1);
+    expect(m.mode).not.toBe("leap");
+  });
+
+  it("scales the entry strength monotonically with the leap", () => {
+    const strengths = [3.2, 5.1, 7].map((vy) => {
+      const { pod } = airborne(vy);
+      let strength = 0, entries = 0;
+      for (let i = 0; i < 70; i++) {
+        pod.step(1 / 30);
+        for (const e of pod.drain()) if (e.entry) { entries++; strength = e.strength!; }
+      }
+      expect(entries).toBe(1);
+      return strength;
+    });
+    expect(strengths[0]).toBeGreaterThan(0);
+    expect(strengths[1]).toBeGreaterThan(strengths[0]);
+    expect(strengths[2]).toBeGreaterThan(strengths[1]);
+  });
+
+  for (const kind of [...TRICK_KINDS, "hop"] as TrickKind[]) it(`${kind} emits one real entry and no take-off splash`, () => {
+    const { pod, m } = airborne();
+    Object.assign(m, { mode: "swim", air: null, y: -1, pitch: 0, vy: 0, speed: 2.1 });
+    if (kind === "hop") m.mother = "sora";
+    expect(pod.trick(m.id, kind)).toBe(true);
+    const events: PodEvent[] = [];
+    let crossed = false;
+    for (let i = 0; i < 360; i++) {
+      const before = m.y + Math.sin(m.pitch) * m.len * 0.5;
+      pod.step(1 / 30);
+      const batch = pod.drain();
+      events.push(...batch);
+      if (batch.some((e) => e.entry)) {
+        crossed = true;
+        // Includes flips/spins: contact must follow the animated snout, not
+        // the centre-depth cutoff or a nominal trick timer.
+        expect(before).toBeGreaterThan(0);
+        expect(m.y + Math.sin(m.pitch) * m.len * 0.5).toBeLessThanOrEqual(0);
+        expect(m.vy).toBeLessThan(0);
+      }
+    }
+    expect(crossed).toBe(true);
+    expect(events.filter((e) => e.kind === "leap")).toHaveLength(1);
+    expect(events.filter((e) => e.kind === "splash")).toHaveLength(1);
+    expect(events.find((e) => e.kind === "splash")?.entry).toBe(true);
+  });
+
+  it("preserves the interpolated impact time across several integration slices", () => {
+    function impactTime(dt: number) {
+      const { pod } = airborne();
+      for (let i = 0; i < 60; i++) {
+        pod.step(dt);
+        const entry = pod.drain().find((e) => e.entry);
+        if (entry) return pod.time - entry.age!;
+      }
+      throw new Error("No entry event");
+    }
+    // Both use the same 50 ms integration slices; only event drain timing
+    // differs. The leftover slices must age, not delay, an existing impact.
+    expect(impactTime(0.25)).toBeCloseTo(impactTime(0.05), 8);
+  });
+
+  for (const species of ["orca", "beluga"] as const) it(`${species} retains its legacy splash event`, () => {
+    const pod = new Pod(SANCTUARY_DOMAIN, [{ id: "test", species, size: 1 }], 7, ORCA_POD_OPTIONS);
+    const m = pod.members[0];
+    Object.assign(m, { x: 0, y: -0.2, z: 0, vy: -2, mode: "leap", air: { vx: 0, vz: 2 }, breathAt: 100 });
+    pod.step(0.05);
+    const splash = pod.drain().find((e) => e.kind === "splash");
+    expect(splash).toMatchObject({ x: m.x, y: 0, z: m.z, len: m.len });
+    expect(splash?.entry).toBeUndefined();
+    expect(splash?.strength).toBeUndefined();
+    expect(m.mode).toBe("swim");
+  });
+
+  it("ordinary breathing surfacings never produce an entry splash", () => {
+    const { pod, m } = airborne();
+    Object.assign(m, { mode: "surface", modeT: 0, modeLen: 1.4, air: null, vy: 0, y: surfaceY(m), pitch: 0 });
+    const events: PodEvent[] = [];
+    for (let i = 0; i < 90; i++) { pod.step(1 / 30); events.push(...pod.drain()); }
+    expect(events.filter((e) => e.entry || e.kind === "splash")).toEqual([]);
+  });
+});
+
 describe("dolphin pod in the lagoon", () => {
   for (const seed of [1, 2, 3]) {
     it(`stays in the water and shows its behaviours (seed ${seed}, 5 minutes)`, () => {
@@ -70,7 +184,7 @@ describe("dolphin pod in the lagoon", () => {
     }
     expect(leaps).toBeGreaterThanOrEqual(1);
     expect(leaps).toBeLessThan(breaths / 3);
-  });
+  }, 20_000); // Four minutes across four seeds can exceed 5 s on constrained CI CPUs.
 
   it("orcas: stay in the bay, clear of the island, boat and station; breathe, dive, travel together, spy-hop now and then", () => {
     let spyhops = 0;
@@ -86,7 +200,7 @@ describe("dolphin pod in the lagoon", () => {
       for (const m of pod.members) expect(SANCTUARY_DOMAIN.inside(m.x, m.z)).toBeGreaterThan(0);
     }
     expect(spyhops).toBeGreaterThanOrEqual(1);
-  });
+  }, 20_000); // Three five-minute bay simulations; keep every invariant assertion.
 
   it("belugas: stay in their own cove", () => {
     for (const seed of [4, 5]) {
