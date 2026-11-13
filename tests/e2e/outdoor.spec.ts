@@ -39,7 +39,8 @@ async function load(page: Page, coins = 600) {
   const errors = await boot(page, "fast=1&seed=11");
   await page.getByTestId("btn-continue").click();
   await waitFor(page, (s) => s.screen === "game", 20_000, "game");
-  await hook(page, "visitors", false);
+  // Also drop hall visitors already present: one leaving later would tip and break exact coin checks.
+  await hook(page, "visitors", false, true);
   return errors;
 }
 
@@ -52,6 +53,20 @@ async function clearLines(page: Page) {
     await page.getByTestId("next").click({ timeout: 2000 }).catch(() => undefined);
     await page.waitForTimeout(300);
   }
+}
+/**
+ * Enter an outdoor area in a preview. Travel is refused (silently, as a doorway
+ * tap is) while a line, request or celebration is up, which can start just after
+ * "calm"; so retry the entry until the area is reached, then wait for the fade.
+ */
+async function enterArea(page: Page, area: "lagoon" | "sanctuary") {
+  await hook(page, "preview", area);
+  for (let i = 0; i < 20 && (await room(page)).roomId !== area; i++) {
+    if ((await state(page)).line) await page.getByTestId("next").click({ timeout: 2000 }).catch(() => undefined);
+    await hook(page, "outdoor", area);
+    await page.waitForTimeout(750);
+  }
+  await inRoom(page, area);
 }
 type Lagoon = { progress: { milestone: number; food: number; fed: number; seen: string[]; acts: number; toys: string[]; decor: string[] } | null; view: string; toy: { kind: string } | null };
 type Feeding = { phase: string; completed: number; ready: string[]; history: { phase: string; at: number }[] };
@@ -177,9 +192,7 @@ test("Grand Ocean Sanctuary preview: a research sticker, the cleanup by tapping 
   test.setTimeout(300_000);
   const errors = await load(page, 600);
   await waitFor(page, (s) => s.mode === "play" && !s.line, 15_000, "calm");
-  expect(await hook(page, "preview", "sanctuary")).toBe(true);
-  await hook(page, "outdoor", "sanctuary");
-  await inRoom(page, "sanctuary");
+  await enterArea(page, "sanctuary");
   await page.waitForTimeout(7000);
   await clearLines(page);
   await expect(page.getByTestId("sanctuary-goals")).toContainText("Welcome to the Sanctuary");
@@ -251,9 +264,7 @@ for (const [w, h] of [[1366, 768], [1280, 720], [1024, 768]] as const) {
     const errors = await load(page, 600);
     await waitFor(page, (s) => s.mode === "play" && !s.line, 15_000, "calm");
     for (const area of ["lagoon", "sanctuary"] as const) {
-      await hook(page, "preview", area);
-      await hook(page, "outdoor", area);
-      await inRoom(page, area);
+      await enterArea(page, area);
       await page.waitForTimeout(7000);
       await clearLines(page);
       await page.waitForTimeout(800);

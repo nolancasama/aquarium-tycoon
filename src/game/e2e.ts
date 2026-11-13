@@ -38,7 +38,7 @@ import { SHARK_DOOR, TUNNEL_SECTIONS, TUNNEL_VIEWING_SPOTS, TUNNEL_ZONES, sectio
 import { tunnelRuntime } from "./tunnel/contract";
 import { cameraTubeCheck, playerWorld, snapCamera } from "./tunnel/explore";
 import { findTargetId, locate, runActivity } from "./tunnel/activities";
-import { personWorld, tunnelPeople } from "./tunnel/tunnelVisitors";
+import { personWorld, tunnelCrowd, tunnelPeople } from "./tunnel/tunnelVisitors";
 
 /**
  * Test hook (only with ?e2e=1): read game state, find where things are on
@@ -251,10 +251,16 @@ export function installE2eHook(seed: number) {
       advanceCare(seconds);
     },
     /** Ordinary visitors on/off (tests spawn their own request visitors). */
-    visitors(on: boolean) {
+    /**
+     * Spawning on/off. `clear` also removes the hall visitors already present and
+     * empties/pauses the Shark Tunnel crowd (neither tips), so exact coin checks stay exact.
+     */
+    visitors(on: boolean, clear = false) {
       visitorsOn = on;
       rt.nextSpawn = on ? 3 : 1e9;
       rt.spawnClock = 0;
+      if (!on && clear) { rt.visitors = []; tunnelCrowd.paused = true; }
+      if (on) tunnelCrowd.paused = false;
     },
     /** A request visitor already sitting on the bench. */
     requestVisitor(type: VisitorType, req: Request) {

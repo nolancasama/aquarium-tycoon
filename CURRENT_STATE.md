@@ -72,9 +72,19 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
    the `../aq-keeper` worktree / `feat/keeper` branch is merged and can be
    removed. Optional polish: move the montage's glass keeper clear of the
    view buttons.
-2. Stabilise `outdoor.spec` (preview entry wait) when convenient.
-3. Old merged worktrees `../aq-st1` and `../aq-wt-*` (exp-* branches) can be
-   removed after checking them; the `fix/*` ones were removed 2026-11-13.
+2. No open items from the owner. All old worktrees and merged branches were
+   removed on 2026-11-13 (only `main` remains).
+
+**`outdoor.spec` stabilised (2026-11-13):** three test-side causes, 25/25 on
+`--repeat-each=5` afterwards (it failed 1/25 and 3/25 on the way):
+- Area entry raced a line/request (travel is silently refused while busy):
+  `enterArea()` retries the entry until the area is reached.
+- Exact coin checks caught Shark Tunnel visitor tips (2 coins): the tunnel
+  crowd runs whenever the tunnel is open. `__at.visitors(false, true)` now
+  also clears hall visitors and pauses the tunnel crowd (`tunnelCrowd.paused`,
+  test hook only; plain `visitors(false)` is unchanged).
+- `click3d` (shared helper) waits up to 5 s for its target to project on
+  screen, since the camera can still frame the previous area just after a switch.
 
 **Environment notes:**
 - Vitest fails in Git Bash here; run tests from **PowerShell**.

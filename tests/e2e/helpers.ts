@@ -138,7 +138,12 @@ export async function say(page: Page, text: string | null, error: string | null 
 
 /** Click a thing in the 3D view at its projected screen position. */
 export async function click3d(page: Page, kind: string, id = "") {
-  const p = await hook<{ x: number; y: number } | null>(page, "where", kind, id);
+  // Just after a room switch the camera can still frame the previous area for a moment.
+  let p = await hook<{ x: number; y: number } | null>(page, "where", kind, id);
+  for (let i = 0; i < 20 && !p; i++) {
+    await page.waitForTimeout(250);
+    p = await hook<{ x: number; y: number } | null>(page, "where", kind, id);
+  }
   if (!p) throw new Error(`nothing on screen for ${kind} ${id}`);
   await page.mouse.click(p.x, p.y);
 }

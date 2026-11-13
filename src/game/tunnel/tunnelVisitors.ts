@@ -158,10 +158,13 @@ function maybeReact(p: TunnelPerson): boolean {
   return false;
 }
 
+/** Test hook only: an empty tunnel with no arrivals (so no tips), for exact coin checks. */
+export const tunnelCrowd = { paused: false };
+
 /** One step of the tunnel crowd. */
 export function stepTunnelVisitors(dt: number) {
   const g = getGame();
-  if (g.screen !== "game" || !g.model.progress.tunnelOpen) {
+  if (g.screen !== "game" || !g.model.progress.tunnelOpen || tunnelCrowd.paused) {
     if (tunnelPeople.length) clearTunnelVisitors();
     return;
   }
