@@ -1,6 +1,6 @@
 // Shark Tunnel visual review (not the browser suite). Start a server first
 // (npx vite --port 5330). Usage: node scripts/tunnel-review.mjs [baseUrl] [part]
-// part: all | manage | explore. Writes .tmp/tunnel-review/ (frames + evidence.json).
+// part: all | manage | explore | divers. Writes .tmp/tunnel-review/ (frames + evidence.json).
 import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
@@ -20,6 +20,8 @@ const habitat = tank("sharks", "L", ["blacktip", "blacktip", "zebrashark", "eagl
 const tanks = [tank("small", "A", ["clownfish"]), tank("ocean", "C", ["turtle"]), tank("cylinder", "G", ["moonjelly"]),
   tank("reef", "I", ["clownfish", "bluetang", "yellowfish", "angelfish", "goby"]), habitat];
 const model = (open) => ({
+  rush: { unlocked: true, introSeen: true, phase: "waiting", untilNext: 9999, pendingFor: 0, event: null,
+    lastCommitted: null, stats: { events: 0, bronze: 0, silver: 0, gold: 0, successes: 0, best: null, bestReady: 0 }, rewards: ["cabinet"] },
   coins: 600, tanks: open ? tanks : tanks.filter((t) => t.type !== "sharks"), inv: { fish: [], decor: [{ id: "dx1", kind: "tunnelSand", variant: null }], tanks: [] },
   progress: { stage: 8, tutorial: "done", firstFish: "clownfish", fedOnce: true, cleanedOnce: true, counted: true,
     hearts: 10, photo: true, star: true, freePlay: true, hallOpen: true, galleryOpen: true, atriumOpen: true,
@@ -39,7 +41,9 @@ await page.addInitScript((model) => {
 }, model(true));
 const epoch = new Date("2026-11-06T00:00:00Z");
 await page.clock.install({ time: epoch });
-await page.clock.pauseAt(epoch);
+// Leave startup headroom: installation itself can take over a second under
+// software rendering/load, making pauseAt(epoch) a request to go into the past.
+await page.clock.pauseAt(new Date(epoch.getTime() + 60_000));
 const call = (name, ...args) => page.evaluate(([name, args]) => window.__at[name](...args), [name, args]);
 const tun = (name, ...args) => page.evaluate(([name, args]) => window.__tunnel[name](...args), [name, args]);
 const step = async (ms) => { for (let t = 0; t < ms; t += 100) await page.clock.fastForward(Math.min(100, ms - t)); };
@@ -51,6 +55,46 @@ try {
   await step(800);
   if (await page.getByTestId("next").count()) { await page.getByTestId("next").dispatchEvent("click"); await step(300); }
   await call("visitors", false);
+  if (part === "divers") {
+    const dir = path.join(out, "divers"); fs.mkdirSync(dir, { recursive: true });
+    const frame = async name => page.screenshot({ path: path.join(dir, `${name}.png`) });
+    await call("set", { hall: 4, view: "room", tankId: null, panel: null, tunnelView: "whole" });
+    await step(1500);
+    await page.evaluate(() => window.dispatchEvent(new Event("tunnel-skip")));
+    await step(5000);
+    for (let i = 0; i < 8 && await page.getByTestId("next").count(); i++) {
+      await page.getByTestId("next").dispatchEvent("click"); await step(500);
+    }
+    // Dismissing the opening dialogue can itself start the first-visit reveal.
+    await page.evaluate(() => window.dispatchEvent(new Event("tunnel-skip")));
+    await step(2600);
+    await call("setCare", habitat.id, 80, 20);
+    await frame("00-before");
+    evidence.divers = { before: (await call("state")).perf, shots: [] };
+    await page.getByTestId("btn-clean").dispatchEvent("click");
+    await tun("clean"); // real shared action: double activation must be refused
+    if (!await page.getByTestId("btn-clean").isDisabled()) throw new Error("Clean must be disabled during montage");
+    await step(200);
+    for (let i = 0; i < 5; i++) {
+      const state = await tun("divers");
+      await frame(`0${i + 1}-${state.shot}`);
+      evidence.divers.shots.push({ ...state, perf: (await call("state")).perf });
+      if (!state.visible) throw new Error(`Diver hidden during ${state.shot}`);
+      await step(1000);
+    }
+    await step(500);
+    await frame("06-after");
+    evidence.divers.after = { ...await tun("divers"), perf: (await call("state")).perf };
+    if (evidence.divers.after.active) throw new Error("Divers must finish after five seconds");
+    if (await page.getByTestId("btn-clean").isDisabled()) throw new Error("Clean must re-enable");
+    // Verify the same presentation while exploring, plus immediate early departure cleanup.
+    await page.getByTestId("btn-explore").dispatchEvent("click"); await step(2400);
+    await tun("goTo", (await tun("sectionStart", "firstView")) + 2, 0); await step(1500);
+    await tun("clean"); await step(200); await frame("07-exploring");
+    await call("set", { hall: 3 });
+    evidence.divers.departure = await tun("divers");
+    if (evidence.divers.departure.active) throw new Error("Departure must reset divers");
+  }
   if (part === "all" || part === "manage") {
     await call("set", { hall: 3, view: "room", tankId: null, panel: null });
     await step(2600);

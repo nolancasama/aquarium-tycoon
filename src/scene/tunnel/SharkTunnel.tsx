@@ -18,6 +18,7 @@ import { useAreaGate, wingShown } from "./wing";
 import { isWingHall } from "../../game/data/rooms";
 import { ExplorePlayer } from "./ExplorePlayer";
 import { TunnelVisitors } from "./TunnelVisitors";
+import { TunnelDivers } from "./TunnelDivers";
 
 /** The four original rooms: hidden (and untappable) while the wing is shown. */
 export function MainRooms({ children }: { children: ReactNode }) {
@@ -252,6 +253,7 @@ export function SharkTunnel() {
         <ZoneRings placed={placed} />
         <Animals placed={placed} />
         <FeedChunks />
+        <TunnelDivers />
         <TunnelTrophy />
         <TunnelVisitors />
         <ExplorePlayer />
