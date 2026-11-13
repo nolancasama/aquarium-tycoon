@@ -25,6 +25,7 @@ import { CoastKeepers, cutStaffOpening } from "./CoastKeepers";
 import { CoastGallery } from "./GalleryStructure";
 import { PENGUIN_GALLERY } from "./coastGallery";
 import { CoastCamera } from "./CoastCamera";
+import { selectAnimal } from "../../game/flow/animalNames";
 
 /**
  * The Coastal & Polar Zone: three cutaway exhibits behind one walkway. Each has
@@ -559,6 +560,9 @@ function Penguin({ id, index }: { id: string; index: number }) {
   });
   return (
     <group ref={root} name={`coast-animal-${id}`}>
+      <mesh position={[0, 0.5, 0]} material={hitMat} onClick={tap(() => selectAnimal("coast", id))} name={`penguin-hit-${id}`}>
+        <sphereGeometry args={[0.85, 8, 6]} />
+      </mesh>
       <group ref={body}>
         {asset ? <primitive object={asset.scene} dispose={null} /> : <group position={[0, -parts.centre * PENGUIN_SCALE, 0]} scale={PENGUIN_SCALE}>
           <mesh geometry={parts.body} material={smoothMat} raycast={() => undefined} />

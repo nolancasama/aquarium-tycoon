@@ -22,6 +22,8 @@ export type TutorialStep = "intro" | "buy" | "place" | "feed" | "visitor" | "dec
 export interface FishRec {
   id: string;
   species: SpeciesId;
+  /** Optional individual penguin name; identity is the existing persistent id. */
+  name?: string;
 }
 
 export interface DecorRec {
@@ -156,6 +158,8 @@ export interface Stats {
 }
 
 export interface Model {
+  /** Custom names for the lagoon's authored stable IDs, independent of locked progress. */
+  dolphinNames?: Partial<Record<import("./lagoon").DolphinId, string>>;
   coins: number;
   tanks: TankRec[];
   inv: Inventory;

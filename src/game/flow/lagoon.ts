@@ -2,7 +2,7 @@ import { getGame, model, nudge, setGame, toast, updateModel, useGame } from "../
 import { rt } from "../runtime";
 import { LAGOON_HALL } from "../data/rooms";
 import {
-  checkLagoonMilestones, DOLPHINS, feedLagoon, finishLagoonTour, giveToy, lagoonActive, lagoonPlayed, lagoonTogether, lowestNeed,
+  checkLagoonMilestones, feedLagoon, finishLagoonTour, giveToy, lagoonActive, lagoonPlayed, lagoonTogether, lowestNeed,
   recordLagoonActivity, recordLagoonSight, tickLagoon, visitLagoonView, type LagoonSight, type LagoonToy, type LagoonView
 } from "../logic/lagoon";
 import { award } from "../logic/model";
@@ -14,6 +14,7 @@ import type { VisitorType } from "../types";
 import { ask, say, speak } from "./ask";
 import { project } from "../../scene/CameraRig";
 import { audio } from "../../audio/audio";
+import { selectAnimal } from "./animalNames";
 
 /**
  * The Dolphin Lagoon's flow: viewpoints, feeding, toys, the "Look!" moments,
@@ -422,13 +423,9 @@ export function watchLagoonIntro(): () => void {
 }
 
 export function tapDolphin(id: string) {
-  const g = getGame();
-  if (g.prompt || g.areaActivity || !inLagoon(g)) return;
-  const d = DOLPHINS.find((x) => x.id === id);
-  if (!d) return;
+  if (!selectAnimal("lagoon", id)) return;
   audio.play("bubble");
   void speak("Dolphin!");
-  toast({ en: `${d.name} the dolphin!`, ja: `イルカの ${d.ja}`, tone: "info" }, 1800);
 }
 
 /** Help: point at the lowest need, else at what the next milestone asks. */

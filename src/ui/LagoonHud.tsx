@@ -11,6 +11,7 @@ import { PersonFace } from "./Portraits";
 import { Ja } from "./Talk";
 import { playHintAudio } from "./hintAudio";
 import { AreaCelebration, NeedBar, OutdoorArrival } from "./OutdoorHud";
+import { AnimalNamePanel } from "./AnimalNamePanel";
 
 /** The Dolphin Lagoon's HUD: goals, viewpoints, the dolphins' three needs, Feed and Toys, a visitor with a question. */
 
@@ -220,6 +221,7 @@ export function LagoonHud() {
   return (
     <>
       <HappinessCard />
+      <AnimalNamePanel area="lagoon" />
       {free && panel !== "toys" && <Views />}
       {panel === "toys" && <ToyPanel />}
       {free && panel !== "toys" && (

@@ -17,6 +17,7 @@ import { DecorPicture, PersonFace } from "./Portraits";
 import { Ja } from "./Talk";
 import { playHintAudio } from "./hintAudio";
 import "./CoastHud.css";
+import { AnimalNamePanel } from "./AnimalNamePanel";
 
 /** The coastal zone's management HUD (shown in its hall, like the Shark Tunnel's WingHud). */
 
@@ -193,6 +194,7 @@ export function CoastHud() {
         </button>
       )}
       {h && !decorating && <HabitatCard h={h} />}
+      <AnimalNamePanel area="coast" />
       {free && !panel && <Views />}
       {h && panel === "decorShop" && <ItemShop h={h} />}
       {free && !panel && (

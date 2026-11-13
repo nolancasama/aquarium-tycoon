@@ -12,6 +12,7 @@ import { areaReleased } from "../data/release";
 import { storeLocked } from "./stored";
 import { readLagoonProgress } from "./lagoon";
 import { readSanctuaryProgress } from "./sanctuary";
+import { cleanAnimalName, readDolphinNames } from "./animalNames";
 import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep, type TunnelProgress } from "./model";
 
 /**
@@ -109,7 +110,8 @@ function readFish(raw: unknown, ids: Set<string>, reject: Reject, kind: "fish" |
   if (ids.has(id)) return reject(kind, raw, "duplicate-id", slot);
   if (!isSpecies(raw.species)) return reject(kind, raw, "unknown-species", slot);
   ids.add(id);
-  return { id, species: raw.species };
+  const name = raw.species === "penguin" ? cleanAnimalName(raw.name) : undefined;
+  return { id, species: raw.species, ...(name ? { name } : {}) };
 }
 
 function readDecor(raw: unknown, ids: Set<string>, reject: Reject, kind: "decor" | "invDecor" = "decor", slot?: SlotId): DecorRec | null {
@@ -291,6 +293,8 @@ function decodeWithReport(text: string | null, report: DecodeReport): { data: Sa
   const version = raw.v;
   const src = raw.model;
   const m = newModel();
+  const dolphinNames = readDolphinNames(src.dolphinNames);
+  if (dolphinNames) m.dolphinNames = dolphinNames;
   m.progress = readProgress(src.progress, version);
   const ids = new Set<string>();
   const used = new Set<SlotId>();

@@ -199,6 +199,8 @@ export interface GameState {
   /** A visitor at a coastal window has a question (the chip). */
   coastWaiting: { habitat: "penguins" | "seals" | "otters"; type: VisitorType } | null;
   coastCelebration: { milestone: number } | null;
+  /** Individual animal info, runtime only (never part of a save). */
+  animalSelection: { area: "coast" | "lagoon"; id: string } | null;
   /** Development previews of release-locked areas (session only; mirrors data/release.ts so the UI re-renders). */
   previewAreas: ReleaseArea[];
   /** Dolphin Lagoon and Grand Ocean Sanctuary: the viewpoint shown. */
@@ -336,6 +338,7 @@ export const useGame = create<GameState>(() => ({
   coastActivity: null,
   coastWaiting: null,
   coastCelebration: null,
+  animalSelection: null,
   previewAreas: [],
   lagoonView: "lagoon",
   sanctuaryView: "overview",
