@@ -2204,3 +2204,73 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
   run fine on the classroom Chromebooks; no performance pass planned.
 - **Coastal & Polar Zone, Dolphin Lagoon and Grand Ocean Sanctuary stay
   release-locked.** No unlock rule or price is to be designed for now.
+
+## 2026-11-13 — Penguin Coast stop-motion care and connected gallery
+
+- **Clean photographs:** five one-second held shots at local x = -5.5, -2.75,
+  0, 2.75, 5.5, all z = -3.2, crossing the open shore between its edge rocks.
+  Standing sponge scrub, crouched debris/bucket
+  collection, standing spray wipe, kneeling rock brush and final high cloth
+  wipe use five distinct poses and tools, with a small cleaning target and
+  sparkle at each location. Cuts replace the entire photograph; nothing
+  interpolates between locations or loops. Workers disappear at five seconds.
+  The existing once-only benefit, double-tap guard and early-exit settlement
+  are unchanged. Light ticks mark each cut.
+- **Connected architecture:** the upper terrace remains at y = 0 in both
+  views, z = 11.15..15.15. A permanent lower floor at y = -3.05 runs from
+  z = 11.15..21, x = -11.7..11.7. The right-hand stair spans x = 8.15..10.25,
+  z = 15.15..19.47, with 17 equal 0.1794 m risers and 16 0.27 m treads.
+  One closed stair profile meets both floors; edge columns support the upper
+  slab outside the window width. The lower gallery looks through the existing
+  full-depth pool window. All additions lie outside the pool: penguin routes,
+  ramps and movement bounds are unchanged.
+- **Cameras (exhibit-local metres):** Penguins base position (0, 10.2, 13.6),
+  target (0, 4, -4.8). Narrower screens step back along this sightline by
+  max(1, 1.78/aspect) + max(0, 1.7-aspect)*0.5; the extra 4:3 retreat keeps
+  the end photographs clear of the full-width room arrows. The 4:3 aim rises
+  to y=6.5 (interpolated below aspect 1.7) to crop excess pool. The gallery
+  camera does not retreat. At 1366x768 the actual land position is
+  (0, 10.205, 13.614); at 1024x768 it is (0, 12.118, 23.137); at 1024x600
+  it is (0, 10.466, 14.391).
+  Underwater position (0, -1.45, 17), target (0, -0.8, 4), with 1.6 m
+  standing eye height and no narrow-screen retreat through architecture.
+  Both retain the shared natural 35-degree FOV. View changes use a bounded
+  0.8-second smoothstep move outside the rear edge of the upper slab. The
+  exported frameCoastWaterForQuestion helper borrows the camera and restores
+  the selected view; the existing all-penguin count requests its inclusive
+  land/water framing. Question text, kinds and curriculum are unchanged.
+- **Review:** scripts/coast-review.mjs --gallery-review records both normal
+  views, diagnostic upper/lower stair angles, a mid-transition frame, Clean
+  start, all five shots and its end, with camera/performance/worker-button
+  overlap evidence at 1366x768, 1024x768 and 1024x600. Geometry tests cover
+  the stair joins, window/pool clearance, standing height and window rays.
+- **Production evidence paths:** `.tmp/coast-review/final/1366x768/`,
+  `.tmp/coast-review/final/1024x768/`, `.tmp/coast-review/final/1024x600/`.
+  Each contains `01-penguins.png`, `03-underwater.png`,
+  `02-mid-transition.png`, `04-upper-connection.png`,
+  `05-lower-connection.png`, `06-clean-start.png`, `07-clean-shot-1.png`,
+  `07-clean-shot-2.png`, `07-clean-shot-3.png`, `07-clean-shot-4.png`,
+  `07-clean-shot-5.png`, `08-clean-after.png`, and `evidence.json`.
+  The connection shots use diagnostic angles from above and from the lower
+  floor; the regular cameras concentrate on the animals. The additional
+  `00-penguins-no-station.png` matches the baseline's item configuration.
+  All captures use the production build served on port 5352, SwiftShader,
+  the seeded four-penguin preview and unchanged animal paths.
+- **1366x768 frame measurements (draw calls / triangles):** Penguins
+  24 / 14,909 before -> 16 / 13,121 after; Underwater 16 / 12,967 before ->
+  17 / 13,181 after. Before evidence is the retained prior production capture
+  in `.tmp/coast-review/before/1366x768/evidence.json`; after is the
+  `00-penguins-no-station` and `03-underwater` frames in the final evidence.
+  These are view-dependent frame snapshots, including culling, animal
+  poses and transient effects, rather than a hardware frame-rate benchmark. The architecture adds
+  two merged meshes, with no new render targets or shadows.
+- **Verification:** final typecheck and production build passed; unit tests
+  865/865 passed (the first run had two unrelated marine simulation timeouts;
+  the rerun with no capture/E2E processes passed). Targeted `coast.spec.ts`
+  passed 8/8, including selected Underwater restoration after counting and
+  the 1024x600 fallback. All three production review runs reported no errors
+  across 39 frames. Claude retains final aesthetic judgment.
+- **Rejected:** hiding the terrace in Underwater view, floating disconnected
+  floors, stairs in the swimming volume, a wide-angle lens, and continuously
+  moving/gliding workers or alternating two looping poses. Release locks,
+  care maths, rewards, saves and the other coastal habitats stay unchanged.

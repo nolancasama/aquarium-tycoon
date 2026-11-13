@@ -28,6 +28,9 @@ import { atmosphere } from "../scene/marine/outdoor";
 import { endPreview, previewActive, startPreview } from "./flow/preview";
 import { areaReleased, previewAreas, RELEASE_AREAS, type ReleaseArea } from "./data/release";
 import { coastRt } from "./coast/coastRuntime";
+import { keeperRt } from "./coast/keeper";
+import { reviewCoastCamera } from "./flow/coast";
+import type { CameraShot } from "./runtime";
 import { EXHIBITS } from "./data/coast";
 import { dprState, perf } from "../scene/GameScene";
 import { sandSurfaceY, slotMarkerY } from "./logic/tankLayout";
@@ -418,6 +421,7 @@ export function installE2eHook(seed: number) {
       const m = lagoonRt.pod?.byId(what);
       return m ? project(LAGOON_ORIGIN.x + m.x, m.y, LAGOON_ORIGIN.z + m.z) : null;
     },
+    coastReviewCamera(shot: CameraShot | null) { reviewCoastCamera(shot); },
     /** The coastal animals now (exhibit-local positions). */
     coast() {
       const g = getGame();
@@ -426,6 +430,8 @@ export function installE2eHook(seed: number) {
         milestone: g.model.progress.coast?.milestone ?? 0,
         progress: g.model.progress.coast ?? null,
         view: g.coastView,
+        underwater: g.coastUnderwater,
+        keeper: { clean: { ...keeperRt.clean }, feed: { phase: keeperRt.feed.phase } },
         waiting: g.coastWaiting,
         activity: g.coastActivity,
         entries: { ...coastRt.entries },

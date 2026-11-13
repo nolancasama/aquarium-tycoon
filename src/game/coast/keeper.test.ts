@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { EXHIBITS, PENGUIN_STAFF_DOOR } from "../data/coast";
 import { newModel, newTank } from "../logic/model";
 import { clearCoast, coastRt, habitatCtx, stepCoast } from "./coastRuntime";
-import { consumeKeeperBenefit, finishKeepers, KEEPER_CLEARANCE, keeperRt, keeperSegmentClear, resetKeepers, startKeeperClean, startKeeperFeed, stepKeepers } from "./keeper";
+import { CLEAN_MONTAGE_SECONDS, CLEAN_SHOTS, cleanShotAt, consumeKeeperBenefit, finishKeepers, KEEPER_CLEARANCE, keeperRt, keeperSegmentClear, resetKeepers, startKeeperClean, startKeeperFeed, stepKeepers } from "./keeper";
 import { landLegClear, newMover, stepMover, type MoveCtx } from "./motion";
 
 afterEach(clearCoast);
@@ -17,6 +17,26 @@ function colony(slot: number | null = 1) {
 }
 
 describe("penguin keeper runtime", () => {
+  it("cuts through five distinct left-to-right photographs for exactly five seconds", () => {
+    expect(CLEAN_SHOTS.length).toBeGreaterThanOrEqual(5);
+    expect(CLEAN_SHOTS.reduce((total, shot) => total + shot.duration, 0)).toBe(CLEAN_MONTAGE_SECONDS);
+    expect(CLEAN_MONTAGE_SECONDS).toBe(5);
+    for (let i = 0; i < CLEAN_SHOTS.length; i++) {
+      const shot = CLEAN_SHOTS[i], previous = CLEAN_SHOTS[i - 1];
+      expect(shot.duration).toBeGreaterThan(0);
+      expect(shot.start).toBe(previous ? previous.start + previous.duration : 0);
+      if (previous) {
+        expect(shot.x).toBeGreaterThan(previous.x);
+        expect(shot.pose).not.toBe(previous.pose);
+        expect(shot.tool).not.toBe(previous.tool);
+      }
+      expect(cleanShotAt(shot.start)).toBe(shot);
+      expect(cleanShotAt(shot.start + shot.duration - 0.001)).toBe(shot);
+    }
+    expect(new Set(CLEAN_SHOTS.map((shot) => shot.pose)).size).toBe(5);
+    for (const elapsed of [-1, 5, 5.001, 10, Infinity, NaN]) expect(cleanShotAt(elapsed)).toBeNull();
+  });
+
   it("holds one care action at a time and emits feeding care once, only when tipping starts", () => {
     const m = colony(), before = JSON.stringify(m);
     expect(startKeeperFeed(m)).toBe(true);
@@ -119,10 +139,10 @@ describe("penguin keeper runtime", () => {
       expect(keeperRt.clean.phase).toBe("montage");
       expect(consumeKeeperBenefit("clean")).toBe(false);
     }
-    expect(frames.size).toBeGreaterThanOrEqual(3);
-    expect(frames.size).toBeLessThanOrEqual(12);
+    expect([...frames]).toEqual([0, 1, 2, 3, 4]);
     stepKeepers(m, 0.11);
     expect(keeperRt.clean.phase).toBe("idle");
+    expect(cleanShotAt(keeperRt.clean.elapsed)).toBeNull();
     expect(consumeKeeperBenefit("clean")).toBe(true);
     expect(consumeKeeperBenefit("clean")).toBe(false);
     expect(JSON.stringify(m)).toBe(before);

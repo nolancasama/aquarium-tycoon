@@ -2,7 +2,7 @@ import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { EXHIBITS, PENGUIN_STAFF_DOOR } from "../../game/data/coast";
-import { keeperRt } from "../../game/coast/keeper";
+import { cleanShotAt, keeperRt, type CleanTool } from "../../game/coast/keeper";
 import { personModel } from "../models/people";
 import { PartBuilder } from "../partBuilder";
 import { smoothMat } from "../materials";
@@ -27,13 +27,33 @@ function keeperAssets() {
   const sponge = new PartBuilder(0);
   sponge.box(0.18, 0.12, 0.09, 0.025, -0.04, 0.035, "#ffe18b");
   sponge.box(0.18, 0.025, 0.09, 0.025, -0.065, 0.035, "#62b692");
+  const spray = new PartBuilder(0);
+  spray.box(0.13, 0.22, 0.1, 0, -0.12, 0.025, "#b5e5ea");
+  spray.box(0.08, 0.1, 0.08, 0, 0.04, 0.025, "#f4f7dd");
+  spray.box(0.08, 0.045, 0.18, 0, 0.1, 0.09, "#ecb74e");
+  spray.box(0.025, 0.095, 0.025, 0, 0.04, 0.135, "#ecb74e");
+  for (let i = 0; i < 3; i++) spray.sphere(0.025, (i - 1) * 0.07, 0.1, 0.28 + i * 0.09, "#d6ffff", [1, 1, 1], 6);
+  const cloth = new PartBuilder(0);
+  cloth.box(0.3, 0.035, 0.23, 0.03, -0.04, 0.07, "#fff0b3");
+  cloth.box(0.07, 0.18, 0.23, 0.145, -0.11, 0.07, "#e7ce84");
+  // The cleaning focus travels with the photograph, never with an animated person.
+  // These small shore-ice faces / litter / rock use the habitat's existing palette.
+  const ice = new PartBuilder(0.3);
+  ice.box(0.75, 1.28, 0.2, 0.12, 0, 0.76, "#c6e4e9");
+  ice.box(0.92, 0.14, 0.42, 0.12, 0, 0.76, "#e8f2ed");
+  const debris = new PartBuilder(0);
+  for (let i = 0; i < 3; i++) debris.box(0.1, 0.06, 0.13, -0.12 + i * 0.15, 0.015, 0.52 + i * 0.1, "#7d8a85", i * 0.6);
+  const rock = new PartBuilder(0.3);
+  rock.sphere(0.38, 0.05, 0.1, 0.78, "#697f8e", [1.35, 0.38, 1], 9);
   const sparkle = new PartBuilder(0);
   for (let i = 0; i < 3; i++) {
     const x = (i - 1) * 0.48, y = 0.35 + i * 0.35, z = 0.55 - i * 0.17;
     sparkle.box(0.035, 0.27, 0.035, x, y, z, "#e3ffff");
     sparkle.box(0.2, 0.035, 0.035, x, y + 0.12, z, "#e3ffff");
   }
-  return { model, cap: cap.build(), bucket: bucket.build(), brush: brush.build(), sponge: sponge.build(), sparkle: sparkle.build() };
+  const iceFace = ice.build(), litter = debris.build(), scrubRock = rock.build();
+  return { model, cap: cap.build(), bucket: bucket.build(), brush: brush.build(), sponge: sponge.build(), spray: spray.build(), cloth: cloth.build(), sparkle: sparkle.build(),
+    focus: { sponge: iceFace, bucket: litter, spray: iceFace, brush: scrubRock, cloth: iceFace } };
 }
 let shared: ReturnType<typeof keeperAssets> | undefined;
 const assets = () => shared ??= keeperAssets();
@@ -118,17 +138,21 @@ function StaffDoor({ shown }: { shown: () => boolean }) {
 }
 
 /** The shared visitor body bends at its hips; the split arm actually carries its tool. */
-function Keeper({ role, shown }: { role: "feed" | "glass" | "shore" | "debris"; shown: () => boolean }) {
+function Keeper({ role, shown }: { role: "feed" | "clean"; shown: () => boolean }) {
   const a = useMemo(assets, []), m = a.model, ex = EXHIBITS.penguins;
   const root = useRef<THREE.Group>(null), torso = useRef<THREE.Group>(null), arm = useRef<THREE.Group>(null);
   const left = useRef<THREE.Group>(null), right = useRef<THREE.Group>(null), wrist = useRef<THREE.Group>(null), spark = useRef<THREE.Mesh>(null);
+  const leftKnee = useRef<THREE.Group>(null), rightKnee = useRef<THREE.Group>(null);
+  const tools = useRef<THREE.Group>(null);
+  const focuses = useRef<THREE.Group>(null);
   useFrame(() => {
     const r = root.current;
     if (!r) return;
     const f = keeperRt.feed, c = keeperRt.clean;
-    r.visible = shown() && (role === "feed" ? f.phase === "walkOut" || f.phase === "tip" || f.phase === "watch" || f.phase === "walkBack" : c.phase === "montage");
+    const shot = role === "clean" && c.phase === "montage" ? cleanShotAt(c.elapsed) : null;
+    r.visible = shown() && (role === "feed" ? f.phase === "walkOut" || f.phase === "tip" || f.phase === "watch" || f.phase === "walkBack" : shot !== null);
     if (!r.visible) return;
-    let bend = 0, armPitch = -0.18, swing = 0, tilt = 0;
+    let bend = 0, armPitch = -0.18, swing = 0, tilt = 0, drop = 0, leftThigh = 0, rightThigh = 0, leftShin = 0, rightShin = 0;
     if (role === "feed") {
       r.position.set(ex.x + f.x, ex.land.y, ex.z + f.z);
       r.rotation.y = f.heading;
@@ -139,54 +163,63 @@ function Keeper({ role, shown }: { role: "feed" | "glass" | "shore" | "debris"; 
         armPitch = -0.18 - Math.max(0, pose) * 0.9;
         tilt = -Math.max(0, Math.min(1, (f.tip - 0.2) / 0.2, (0.9 - f.tip) / 0.15)) * 1.85;
       }
-    } else {
-      const step = c.frame % 2, shift = step ? 0.22 : -0.22;
-      if (role === "glass") {
-        r.position.set(ex.x - 5.6 + shift, 0, ex.z + ex.pool.maxZ + 0.6);
-        r.rotation.y = Math.PI;
-        armPitch = step ? -2.15 : -1.4;
-        bend = 0.05;
-      } else if (role === "shore") {
-        r.position.set(ex.x - 5.1 + shift, ex.land.y, ex.z - 5.85);
-        r.rotation.y = 0.4 + shift;
-        bend = step ? 0.7 : 0.42;
-        armPitch = step ? -0.5 : -0.9;
-      } else {
-        r.position.set(ex.x + 3.3 + shift, ex.land.y, ex.z - 4.6);
-        r.rotation.y = -0.65 + shift;
-        bend = step ? 0.75 : 0.08;
-        armPitch = step ? -0.65 : -0.25;
+    } else if (shot) {
+      // A held photograph: all body/tool transforms change only at the five cuts.
+      r.position.set(ex.x + shot.x, ex.land.y, ex.z + shot.z);
+      r.rotation.y = shot.heading;
+      switch (shot.pose) {
+        case "glassScrub": bend = 0.08; armPitch = -1.75; break;
+        case "crouchCollect":
+          drop = 0.275; bend = 0.78; armPitch = -0.65;
+          leftThigh = rightThigh = -1.15; leftShin = rightShin = 1.7;
+          break;
+        case "sprayWipe": bend = -0.08; armPitch = -1.2; break;
+        case "kneelBrush":
+          drop = 0.3; bend = 0.65; armPitch = -0.5;
+          leftThigh = -1.35; rightThigh = -0.3; leftShin = 1.65; rightShin = 1.85;
+          break;
+        case "finalWipe": bend = 0.35; armPitch = -2.3; break;
       }
+      if (tools.current) for (const tool of tools.current.children) tool.visible = tool.name === `penguin-clean-tool-${shot.tool}`;
+      if (focuses.current) for (const focus of focuses.current.children) focus.visible = focus.name === `penguin-clean-focus-${shot.tool}`;
       if (spark.current) {
-        spark.current.visible = c.frame % 3 !== 1;
+        spark.current.visible = true;
         spark.current.rotation.y = c.frame * 0.7;
-        spark.current.scale.setScalar(c.frame % 2 ? 0.65 : 1);
+        spark.current.scale.setScalar(0.85);
       }
     }
-    if (torso.current) torso.current.rotation.x = bend;
+    if (torso.current) { torso.current.rotation.x = bend; torso.current.position.y = m.hip - drop; }
     if (arm.current) arm.current.rotation.x = armPitch;
-    if (left.current) left.current.rotation.x = swing;
-    if (right.current) right.current.rotation.x = -swing;
-    if (wrist.current) wrist.current.rotation.x = role === "glass" ? 0 : -armPitch - bend + tilt;
+    if (left.current) { left.current.rotation.x = leftThigh + swing; left.current.position.y = m.hip - drop; }
+    if (right.current) { right.current.rotation.x = rightThigh - swing; right.current.position.y = m.hip - drop; }
+    if (leftKnee.current) leftKnee.current.rotation.x = leftShin;
+    if (rightKnee.current) rightKnee.current.rotation.x = rightShin;
+    if (wrist.current) wrist.current.rotation.x = role === "clean" && (shot?.tool === "sponge" || shot?.tool === "cloth") ? 0 :
+      role === "clean" && shot?.tool === "brush" ? -1.35 - armPitch - bend : -armPitch - bend + tilt;
   });
-  const tool = role === "glass" ? a.sponge : role === "shore" ? a.brush : a.bucket;
   return <group ref={root} visible={false} name={`penguin-keeper-${role}`} dispose={null}>
     <group ref={torso} position={[0, m.hip, 0]}>
       <mesh geometry={m.body} material={smoothMat} position={[0, -m.hip, 0]} raycast={noHit} />
       <mesh geometry={a.cap} material={smoothMat} position={[0, -m.hip, 0]} raycast={noHit} />
       <group ref={arm} position={[m.armPivot![0], m.armPivot![1] - m.hip, 0]}>
         <mesh geometry={m.arm} material={smoothMat} raycast={noHit} />
-        <group ref={wrist} position={[0.03, -0.53, 0.01]}><mesh geometry={tool} material={smoothMat} raycast={noHit} /></group>
+        <group ref={wrist} position={[0.03, -0.53, 0.01]}>
+          {role === "feed" ? <mesh geometry={a.bucket} material={smoothMat} raycast={noHit} /> :
+            <group ref={tools}>{(["sponge", "bucket", "spray", "brush", "cloth"] as const satisfies readonly CleanTool[]).map((tool) =>
+              <mesh key={tool} name={`penguin-clean-tool-${tool}`} position={[0, tool === "bucket" ? 0.18 : 0, 0]} geometry={a[tool]} material={smoothMat} raycast={noHit} />)}</group>}
+        </group>
       </group>
     </group>
     {[-1, 1].map((side) => <group key={side} ref={side < 0 ? left : right} position={[side * m.legX, m.hip, 0]}>
       <mesh geometry={m.leg} material={smoothMat} raycast={noHit} />
-      <mesh geometry={m.shin} material={smoothMat} position={[0, -m.thigh, 0]} raycast={noHit} />
+      <group ref={side < 0 ? leftKnee : rightKnee} position={[0, -m.thigh, 0]}><mesh geometry={m.shin} material={smoothMat} raycast={noHit} /></group>
     </group>)}
     {role !== "feed" && <mesh ref={spark} geometry={a.sparkle} material={smoothMat} raycast={noHit} />}
+    {role === "clean" && <group ref={focuses}>{(["sponge", "bucket", "spray", "brush", "cloth"] as const).map((tool) =>
+      <mesh key={tool} name={`penguin-clean-focus-${tool}`} geometry={a.focus[tool]} material={smoothMat} raycast={noHit} />)}</group>}
   </group>;
 }
 
 export function CoastKeepers({ shown }: { shown: () => boolean }) {
-  return <><StaffDoor shown={shown} /><Keeper role="feed" shown={shown} /><Keeper role="glass" shown={shown} /><Keeper role="shore" shown={shown} /><Keeper role="debris" shown={shown} /></>;
+  return <><StaffDoor shown={shown} /><Keeper role="feed" shown={shown} /><Keeper role="clean" shown={shown} /></>;
 }
