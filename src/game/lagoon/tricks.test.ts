@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { LAGOON_DOMAIN } from "../data/lagoon";
 import { bodyR, surfaceY, TRICK_KINDS, type PodEvent, type Swimmer, type TrickKind } from "../marine/pod";
 import { clearLagoonRt, dropToy, forceRing, forceTrick, lagoonAirClear, lagoonPod, lagoonRt, RING, ringPassOk, stepLagoonRt } from "./lagoonRuntime";
@@ -119,6 +119,11 @@ describe("dolphin tricks", () => {
 
 describe("ball play", () => {
   it("passes go snout to snout through the air; the ball stays in the lagoon and on (or over) the water", () => {
+    // The runtime picks passers with Math.random. Unseeded, 70 s gave 2–20
+    // passes and about 1 run in 15 dropped to 1 (2026-11-14), so seed it.
+    let s = 2654435761;
+    const random = vi.spyOn(Math, "random").mockImplementation(() => { s = (s * 1664525 + 1013904223) >>> 0; return s / 2 ** 32; });
+    onTestFinished(() => random.mockRestore());
     clearLagoonRt();
     lagoonPod(3);
     lagoonRt.tricksPaused = true;
