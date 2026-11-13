@@ -48,9 +48,17 @@ export function ringPassOk(x: number, y: number, z: number, yaw: number, pitch: 
   return radial + bodyRadius < RING.inner && along > 0.9 && Math.abs(pitch) < 0.4;
 }
 
-/** Toys float for this long, then the care team takes them out. */
+/** Kelp floats for this long; the catch ball stays available until replaced. */
 export const TOY_SECONDS = 75;
 export const BUBBLE_SECONDS = 30;
+
+export type BallState = "floating" | "held" | "thrown" | "dolphin-play" | "returning";
+/** A reachable strip of water beside the deck; every catch round begins and ends here. */
+export const BALL_LANDING = { x: -10, z: 7.1 } as const;
+export const BALL_HELD = { ...BALL_LANDING, y: 1.35 } as const;
+export const BALL_DEFAULT_TARGET = { x: -2, z: -2 } as const;
+export const BALL_FETCH_TIMEOUT = 18;
+export const BALL_RETURN_TIMEOUT = 8;
 
 export interface Toy {
   kind: Exclude<LagoonToy, "bubbles">;
@@ -69,6 +77,11 @@ export interface Toy {
   passTo: string | null;
   landX: number;
   landZ: number;
+  state: BallState;
+  /** Player involvement keeps this same ball available until another toy is chosen. */
+  catchRound: boolean;
+  returned: boolean;
+  stateTime: number;
 }
 
 export interface LookMoment {
@@ -93,6 +106,8 @@ export const lagoonRt = {
   lastLeap: -100,
   /** Effects for the scene to play (spouts, splashes); drained each frame. */
   fx: [] as PodEvent[],
+  /** Recent exact dolphin entries, retained after the renderer drains the effect queue. */
+  entries: [] as (PodEvent & { time: number })[],
   /** Plays since the last need gain (the flow rate-limits). */
   plays: 0,
   pairs: 0,
@@ -100,6 +115,8 @@ export const lagoonRt = {
   watch: null as null | { x: number; y: number; z: number; spread: number },
   /** No spontaneous tricks now (a question holds or counts the dolphins); set by the flow. */
   tricksPaused: false,
+  /** Flow-level holds (visitor questions, counting and transitions). */
+  catchInputPaused: false,
   /** Counters for tests and review: tricks started, ball passes (and misses), bubble-ring passes. */
   tricks: 0,
   passes: 0,
@@ -127,7 +144,65 @@ export function dropToy(kind: LagoonToy) {
     lagoonRt.bubblesUntil = t + BUBBLE_SECONDS;
     return;
   }
-  lagoonRt.toy = { kind, x: PLATFORM.x - PLATFORM.w / 2 - 1.2, z: PLATFORM.z + 0.6, vx: -1.4, vz: 0.3, vy: 0, y: 0, born: t, carriedBy: null, carryUntil: 0, lastBy: null, passTo: null, landX: 0, landZ: 0 };
+  lagoonRt.toy = { kind, x: kind === "ball" ? BALL_LANDING.x : PLATFORM.x - PLATFORM.w / 2 - 1.2, z: kind === "ball" ? BALL_LANDING.z : PLATFORM.z + 0.6, vx: kind === "ball" ? 0 : -1.4, vz: kind === "ball" ? 0 : 0.3, vy: 0, y: 0, born: t, carriedBy: null, carryUntil: 0, lastBy: null, passTo: null, landX: 0, landZ: 0, state: "floating", catchRound: false, returned: false, stateTime: 0 };
+}
+
+/** Catch never takes an animal or the pointer away from an existing activity. */
+export function ballCatchPaused(): boolean {
+  if (lagoonRt.catchInputPaused || lagoonRt.tricksPaused || isFeeding()) return true;
+  const pod = lagoonRt.pod;
+  if (pod) for (const m of pod.members) if (m.mode === "charge" || m.mode === "leap" || lagoonRt.time < m.hold) return true;
+  return false;
+}
+
+export function canHoldBall(): boolean {
+  const t = lagoonRt.toy;
+  return !!t && t.kind === "ball" && t.state === "floating" && !ballCatchPaused()
+    && (t.returned || Math.hypot(t.x - BALL_LANDING.x, t.z - BALL_LANDING.z) < 2.5);
+}
+
+function releaseBallAttractions() {
+  if (lagoonRt.pod) for (const m of lagoonRt.pod.members) if (m.attract?.kind === "toy") m.attract = null;
+}
+
+export function holdBall(): boolean {
+  if (!canHoldBall()) return false;
+  const t = lagoonRt.toy!;
+  t.state = "held";
+  t.catchRound = true;
+  t.stateTime = 0;
+  t.x = BALL_HELD.x; t.y = BALL_HELD.y; t.z = BALL_HELD.z;
+  t.vx = t.vy = t.vz = 0;
+  t.carriedBy = t.passTo = null;
+  releaseBallAttractions();
+  return true;
+}
+
+export function throwBall(x: number = BALL_DEFAULT_TARGET.x, z: number = BALL_DEFAULT_TARGET.z): boolean {
+  const t = lagoonRt.toy;
+  if (!t || t.kind !== "ball" || t.state !== "held" || ballCatchPaused()) return false;
+  if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+  // Pull targets into accessible water, including taps on the pontoon or beyond a shore.
+  x = Math.max(domain.box.minX, Math.min(domain.box.maxX, x));
+  z = Math.max(domain.box.minZ, Math.min(domain.box.maxZ, z));
+  for (let i = 0; i < 40 && (domain.inside(x, z) < 2 || domain.floor(x, z) > -1.5); i++) {
+    x += (domain.centre.x - x) * 0.2;
+    z += (domain.centre.z - z) * 0.2;
+  }
+  const duration = Math.min(1.6, Math.max(1, Math.hypot(x - t.x, z - t.z) / 10));
+  t.vx = (x - t.x) / duration; t.vz = (z - t.z) / duration;
+  t.vy = (4.9 * duration * duration - t.y) / duration;
+  t.landX = x; t.landZ = z;
+  t.state = "thrown"; t.stateTime = 0; t.returned = false;
+  t.lastBy = t.passTo = null;
+  return true;
+}
+
+/** Detached only on request: scene animation reads the single live Toy directly. */
+export function ballCatchSnapshot() {
+  const t = lagoonRt.toy;
+  return { state: t?.kind === "ball" ? t.state : null, x: t?.x ?? null, y: t?.y ?? null, z: t?.z ?? null,
+    returned: t?.returned ?? false, canHold: canHoldBall(), paused: ballCatchPaused(), lastBy: t?.lastBy ?? null, passTo: t?.passTo ?? null };
 }
 
 /** Feeding: the keeper throws fish from the pontoon; the pod comes to its lagoon side. */
@@ -166,7 +241,51 @@ function stepToy(dt: number) {
   const toy = lagoonRt.toy;
   const pod = lagoonRt.pod!;
   if (!toy) return;
-  if (lagoonRt.time - toy.born > TOY_SECONDS) { lagoonRt.toy = null; return; }
+  if (toy.kind !== "ball" && lagoonRt.time - toy.born > TOY_SECONDS) { lagoonRt.toy = null; return; }
+  if (toy.kind === "ball" && !toy.catchRound) {
+    toy.stateTime += dt;
+    if (toy.stateTime >= BALL_FETCH_TIMEOUT && toy.y === 0 && Math.hypot(toy.x - BALL_LANDING.x, toy.z - BALL_LANDING.z) > 2.5) {
+      // An unattended recovery remains automatic play, including in the gallery.
+      toy.state = "returning"; toy.stateTime = BALL_RETURN_TIMEOUT;
+    }
+  }
+  if (toy.kind === "ball" && (toy.catchRound || toy.state === "returning")) {
+    if (toy.catchRound && ballCatchPaused()) { releaseBallAttractions(); return; }
+    if (toy.catchRound) toy.stateTime += dt;
+    if (toy.state === "held") return;
+    if (toy.state === "thrown") {
+      // Analytic gravity keeps the arc and the target stable at variable frame rates.
+      toy.x += toy.vx * dt; toy.z += toy.vz * dt;
+      toy.y += toy.vy * dt - 4.9 * dt * dt; toy.vy -= 9.8 * dt;
+      if (toy.y <= 0) {
+        toy.x = toy.landX; toy.z = toy.landZ; toy.y = 0;
+        toy.vx = toy.vy = toy.vz = 0;
+        toy.state = "dolphin-play"; toy.stateTime = 0;
+        lagoonRt.fx.push({ kind: "splash", ids: [], x: toy.x, y: 0, z: toy.z, len: 0.9 });
+      }
+      return;
+    }
+    if (toy.state === "dolphin-play" && toy.stateTime >= BALL_FETCH_TIMEOUT) {
+      toy.state = "returning"; toy.stateTime = BALL_RETURN_TIMEOUT;
+    }
+    if (toy.state === "returning") {
+      const dx = BALL_LANDING.x - toy.x, dz = BALL_LANDING.z - toy.z, distance = Math.hypot(dx, dz);
+      if (distance < 0.65) {
+        toy.state = "floating"; toy.returned = true; toy.stateTime = 0;
+        toy.catchRound = false;
+        toy.x = BALL_LANDING.x; toy.z = BALL_LANDING.z; toy.y = 0;
+        toy.vx = toy.vy = toy.vz = 0;
+        releaseBallAttractions();
+        return;
+      }
+      // A nudge starts the return; repeated snout contact keeps it moving. If the
+      // dolphin is interrupted, a gentle current recovers even an inaccessible ball.
+      if (toy.stateTime >= BALL_RETURN_TIMEOUT) {
+        const speed = Math.min(1.8, distance / dt);
+        toy.vx = dx / distance * speed; toy.vz = dz / distance * speed;
+      }
+    }
+  }
   if (toy.carriedBy) {
     // Kelp draped over a dolphin's fin: it travels with the dolphin for a while.
     const c = pod.byId(toy.carriedBy);
@@ -243,7 +362,7 @@ function interest() {
   if (!free.length) return;
   const m = free[Math.floor(Math.random() * free.length)];
   const toy = lagoonRt.toy;
-  if (toy && !toy.carriedBy) {
+  if (toy && !toy.carriedBy && !(toy.kind === "ball" && (toy.state === "returning" || (toy.returned && toy.stateTime < 6) || (toy.catchRound && (ballCatchPaused() || toy.state !== "floating"))))) {
     // Someone fetches the toy (a missed pass, or nobody playing yet), unless a catcher is already on the way.
     const chasing = pod.members.some((o) => o.attract?.kind === "toy");
     if (!chasing && toy.y === 0) pod.attract(m.id, { x: toy.x, y: -0.3, z: toy.z }, 9, "toy");
@@ -304,6 +423,36 @@ export function forceTrick(kind: TrickKind): string | null {
 // ------------------------------------------------------------------ ball play: snout passes between dolphins
 
 const PASS_MISS = 0.25;
+let nextCatchNotice = 0;
+
+/** The nearest available adult notices the ball, then swims to it normally. */
+function catchInterest() {
+  const toy = lagoonRt.toy, pod = lagoonRt.pod!;
+  if (!toy || toy.kind !== "ball" || !toy.catchRound) return;
+  if (ballCatchPaused()) { releaseBallAttractions(); return; }
+  if (toy.state !== "dolphin-play" && toy.state !== "returning") return;
+  if (lagoonRt.time < nextCatchNotice) return;
+  nextCatchNotice = lagoonRt.time + 0.7;
+  let nearest: Swimmer | null = null, distance = Infinity;
+  for (const m of pod.members) {
+    if (m.attract?.kind === "toy") return;
+    if (m.mother || m.attract || m.mode !== "swim") continue;
+    const d = Math.hypot(m.x - toy.x, m.z - toy.z);
+    if (d < distance) { nearest = m; distance = d; }
+  }
+  if (nearest) pod.attract(nearest.id, { x: toy.x, y: -0.3, z: toy.z }, 16, "toy");
+}
+
+function nudgeBallHome(m: Swimmer, toy: Toy) {
+  const dx = BALL_LANDING.x - toy.x, dz = BALL_LANDING.z - toy.z, distance = Math.hypot(dx, dz);
+  toy.state = "returning";
+  toy.stateTime = 0;
+  toy.lastBy = m.id;
+  toy.passTo = null;
+  toy.vx = dx / Math.max(0.01, distance) * 3;
+  toy.vz = dz / Math.max(0.01, distance) * 3;
+  toy.vy = 0;
+}
 
 /** A dolphin's rostrum tip, where the ball is touched. */
 export const snoutOf = (m: Swimmer) => ({ x: m.x + Math.sin(m.yaw) * m.len * 0.5, z: m.z + Math.cos(m.yaw) * m.len * 0.5 });
@@ -311,6 +460,7 @@ export const snoutOf = (m: Swimmer) => ({ x: m.x + Math.sin(m.yaw) * m.len * 0.5
 /** The ball was nudged by this dolphin's snout: a ballistic pass toward a partner (or a miss into open water). */
 function passBall(m: Swimmer, toy: Toy) {
   const pod = lagoonRt.pod!;
+  toy.stateTime = 0;
   const partners = pod.members.filter((o) => o !== m && !o.mother && o.mode !== "leap" && o.mode !== "charge" && (!o.attract || o.attract.kind === "toy"));
   const dist = (o: Swimmer) => Math.hypot(o.x - toy.x, o.z - toy.z);
   // The one who passed it before is the natural partner (back and forth); else the nearest within reach.
@@ -396,6 +546,7 @@ export function stepLagoonRt(dt: number): PodEvent[] {
   lagoonRt.time += dt;
   // Keep chasing a moving toy: where a pass will come down while it is in the air, else the toy itself.
   const toy = lagoonRt.toy;
+  catchInterest();
   if (toy) for (const m of pod.members) if (m.attract?.kind === "toy") {
     m.attract.x = toy.y > 0 ? toy.landX : toy.x;
     m.attract.z = toy.y > 0 ? toy.landZ : toy.z;
@@ -409,14 +560,22 @@ export function stepLagoonRt(dt: number): PodEvent[] {
   scheduleTricks();
   const events = pod.drain();
   for (const e of events) {
+    if (e.entry) {
+      lagoonRt.entries.push({ ...e, time: lagoonRt.time - (e.age ?? 0) });
+      if (lagoonRt.entries.length > 32) lagoonRt.entries.shift();
+    }
     if (e.kind === "touch") {
       const m = pod.byId(e.ids[0]);
       const t = lagoonRt.toy;
       if (m && t && t.kind === "ball") {
         const tip = snoutOf(m);
         // Only a ball floating on the water, right at the snout, is nudged; else keep going for it.
-        if (t.y === 0 && Math.hypot(tip.x - t.x, tip.z - t.z) < 0.9) { lagoonRt.plays++; passBall(m, t); }
-        else pod.attract(m.id, { x: t.x, y: -0.3, z: t.z }, 6, "toy");
+        if (t.catchRound && (ballCatchPaused() || t.state === "held" || t.state === "thrown")) continue;
+        if (t.y === 0 && Math.hypot(tip.x - t.x, tip.z - t.z) < 0.9) {
+          lagoonRt.plays++;
+          if (t.state === "returning" || (t.catchRound && t.state === "dolphin-play")) nudgeBallHome(m, t);
+          else passBall(m, t);
+        } else pod.attract(m.id, { x: t.x, y: -0.3, z: t.z }, 6, "toy");
       } else if (m && t && Math.hypot(m.x - t.x, m.z - t.z) < m.len) {
         lagoonRt.plays++;
         if (t.kind === "kelp" && !t.carriedBy) { t.carriedBy = m.id; t.carryUntil = lagoonRt.time + 6; }
@@ -443,15 +602,18 @@ export function clearLagoonRt() {
   lagoonRt.lookReadyAt = 6;
   lagoonRt.lastLeap = -100;
   lagoonRt.fx = [];
+  lagoonRt.entries = [];
   lagoonRt.plays = 0;
   lagoonRt.pairs = 0;
   lagoonRt.watch = null;
   lagoonRt.tricksPaused = false;
+  lagoonRt.catchInputPaused = false;
   lagoonRt.tricks = 0;
   lagoonRt.passes = 0;
   lagoonRt.misses = 0;
   lagoonRt.ringPasses = 0;
   nextInterest = 0;
+  nextCatchNotice = 0;
   nextWatch = 0;
   nextTrick = 9;
   lastKind = null;

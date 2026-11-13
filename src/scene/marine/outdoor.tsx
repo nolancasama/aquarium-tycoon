@@ -264,14 +264,14 @@ const FX_N = 220;
 
 export interface FxPool {
   spout(x: number, y: number, z: number, size: number): void;
-  splash(x: number, y: number, z: number, size: number): void;
+  splash(x: number, y: number, z: number, size: number, age?: number, entry?: boolean): void;
   bubbles(x: number, y: number, z: number, n: number): void;
 }
 
-/** One instanced draw for every blow, splash and bubble in an area (world coordinates). */
+/** One instanced draw for every blow, splash, surface ripple and bubble (world coordinates). */
 export function MarineFx({ pool, active }: { pool: { current: FxPool | null }; active: () => boolean }) {
   const ref = useRef<THREE.Mesh>(null);
-  const parts = useMemo(() => Array.from({ length: FX_N }, () => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, age: 1, life: 1, size: 0.2, drag: 1, grav: 0, kind: 0 })), []);
+  const parts = useMemo(() => Array.from({ length: FX_N }, () => ({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, age: 1, life: 1, size: 0.2, drag: 1, grav: 0, kind: 0, newborn: false })), []);
   const next = useRef(0);
   const geo = useMemo(() => {
     const g = new THREE.InstancedBufferGeometry();
@@ -281,21 +281,35 @@ export function MarineFx({ pool, active }: { pool: { current: FxPool | null }; a
     g.setAttribute("uv", quad.getAttribute("uv"));
     g.setAttribute("aPos", new THREE.InstancedBufferAttribute(new Float32Array(FX_N * 3), 3));
     g.setAttribute("aSize", new THREE.InstancedBufferAttribute(new Float32Array(FX_N * 2), 2));
+    g.setAttribute("aKind", new THREE.InstancedBufferAttribute(new Float32Array(FX_N), 1));
     g.instanceCount = FX_N;
     return g;
   }, []);
   const mat = useMemo(() => new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
-    vertexShader: /* glsl */ `attribute vec3 aPos; attribute vec2 aSize; varying float vA; varying vec2 vUv;
-      void main() { vUv = uv; vA = aSize.y; vec4 mv = viewMatrix * vec4(aPos, 1.0); mv.xy += position.xy * aSize.x; gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: /* glsl */ `varying float vA; varying vec2 vUv;
-      void main() { float d = length(vUv - 0.5) * 2.0; float a = (1.0 - smoothstep(0.55, 1.0, d)) * vA; if (a < 0.01) discard; gl_FragColor = vec4(0.96, 0.99, 1.0, a); }`
+    vertexShader: /* glsl */ `attribute vec3 aPos; attribute vec2 aSize; attribute float aKind; varying float vA; varying float vKind; varying vec2 vUv;
+      void main() {
+        vUv = uv; vA = aSize.y; vKind = aKind;
+        vec4 mv = viewMatrix * vec4(aPos, 1.0);
+        if (aKind > 2.5) mv = viewMatrix * vec4(aPos + vec3(position.x, 0.0, -position.y) * aSize.x, 1.0);
+        else mv.xy += position.xy * aSize.x;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: /* glsl */ `varying float vA; varying float vKind; varying vec2 vUv;
+      void main() {
+        float d = length(vUv - 0.5) * 2.0;
+        float a = (1.0 - smoothstep(0.55, 1.0, d)) * vA;
+        if (vKind > 2.5) a = smoothstep(0.72, 0.82, d) * (1.0 - smoothstep(0.86, 1.0, d)) * vA;
+        if (a < 0.01) discard;
+        gl_FragColor = vec4(0.96, 0.99, 1.0, a);
+      }`
   }), []);
   const emit = (n: number, f: (p: (typeof parts)[number], i: number) => void) => {
     for (let i = 0; i < n; i++) {
       const p = parts[next.current];
       next.current = (next.current + 1) % FX_N;
       p.age = 0;
+      p.newborn = false;
       f(p, i);
     }
   };
@@ -305,13 +319,29 @@ export function MarineFx({ pool, active }: { pool: { current: FxPool | null }; a
       p.vx = (Math.random() - 0.5) * 0.35 * size; p.vz = (Math.random() - 0.5) * 0.35 * size; p.vy = (1.6 + Math.random() * 1.6) * Math.sqrt(size);
       p.life = 1.3 + Math.random() * 0.7; p.size = 0.18 * size + Math.random() * 0.2 * size; p.drag = 1.6; p.grav = -1.2; p.kind = 0;
     }),
-    splash: (x, y, z, size) => emit(Math.round(12 + size * 4), (p, i) => {
-      const a = (i / 12) * Math.PI * 2 + Math.random();
-      p.x = x; p.y = y + 0.05; p.z = z;
-      const sp = (0.8 + Math.random() * 1.4) * Math.sqrt(size);
-      p.vx = Math.cos(a) * sp; p.vz = Math.sin(a) * sp; p.vy = (1.5 + Math.random() * 2.4) * Math.sqrt(size);
-      p.life = 0.8 + Math.random() * 0.5; p.size = 0.12 * size + Math.random() * 0.12 * size; p.drag = 0.6; p.grav = 9.8; p.kind = 1;
-    }),
+    splash: (x, y, z, size, age = 0, entry = false) => {
+      const n = Math.round(entry ? 24 + size * 8 : 12 + size * 4);
+      emit(n, (p, i) => {
+        const a = (i / (entry ? n : 12)) * Math.PI * 2 + Math.random();
+        const sp = ((entry ? 1.3 : 0.8) + Math.random() * 1.4) * Math.sqrt(size);
+        p.vx = Math.cos(a) * sp; p.vz = Math.sin(a) * sp;
+        p.vy = ((entry ? 1.9 : 1.5) + Math.random() * (entry ? 1.9 : 2.4)) * Math.sqrt(size);
+        p.life = (entry ? 1.1 : 0.8) + Math.random() * 0.5;
+        p.size = entry ? (0.2 + Math.random() * 0.19) * Math.sqrt(size) : 0.12 * size + Math.random() * 0.12 * size;
+        p.drag = 0.6; p.grav = 9.8; p.kind = 1;
+        p.age = age; p.newborn = entry;
+        p.x = x + p.vx * age; p.y = y + (entry ? 0.07 : 0.05) + p.vy * age - 4.9 * age * age; p.z = z + p.vz * age;
+        p.vy -= 9.8 * age;
+      });
+      // Flat annuli share the particle draw. Keep them above the sea plane so
+      // its transparency cannot hide the short-lived spreading water rings.
+      if (entry) emit(2, (p, i) => {
+        p.x = x; p.y = y + 0.035 + i * 0.004; p.z = z;
+        p.vx = p.vy = p.vz = 0; p.drag = p.grav = 0;
+        p.kind = 3; p.age = age; p.newborn = true; p.life = 1.05 + i * 0.28;
+        p.size = size * (1.1 + i * 0.25);
+      });
+    },
     bubbles: (x, y, z, n) => emit(n, (p) => {
       p.x = x + (Math.random() - 0.5) * 0.8; p.y = y; p.z = z + (Math.random() - 0.5) * 0.8;
       p.vx = 0; p.vz = 0; p.vy = 0.9 + Math.random() * 0.6;
@@ -326,13 +356,25 @@ export function MarineFx({ pool, active }: { pool: { current: FxPool | null }; a
     if (!m.visible) return;
     const dt = Math.min(rawDt, 0.1);
     const pos = geo.getAttribute("aPos") as THREE.InstancedBufferAttribute, sz = geo.getAttribute("aSize") as THREE.InstancedBufferAttribute;
+    const kind = geo.getAttribute("aKind") as THREE.InstancedBufferAttribute;
     for (let i = 0; i < FX_N; i++) {
       const p = parts[i];
       if (p.age >= p.life) { sz.setXY(i, 0, 0); continue; }
-      p.age += dt;
-      const drag = Math.exp(-p.drag * dt);
-      p.vx *= drag; p.vz *= drag; p.vy = p.vy * (p.kind === 0 ? drag : 1) - p.grav * dt;
-      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      // Entry events already include the integration remainder up to this
+      // frame. Publish that pose first; only subsequent frames advance it.
+      const h = p.newborn ? 0 : dt;
+      p.newborn = false;
+      p.age += h;
+      kind.setX(i, p.kind);
+      if (p.kind === 3) {
+        const k = Math.min(1, p.age / p.life);
+        pos.setXYZ(i, p.x, p.y, p.z);
+        sz.setXY(i, p.size * (0.25 + k * 1.7), 0.7 * (1 - k) * (1 - k));
+        continue;
+      }
+      const drag = Math.exp(-p.drag * h);
+      p.vx *= drag; p.vz *= drag; p.vy = p.vy * (p.kind === 0 ? drag : 1) - p.grav * h;
+      p.x += p.vx * h; p.y += p.vy * h; p.z += p.vz * h;
       if (p.kind === 1 && p.y < 0) p.age = p.life;
       if (p.kind === 2 && p.y > -0.05) p.age = p.life;
       const k = p.age / p.life;
@@ -341,6 +383,7 @@ export function MarineFx({ pool, active }: { pool: { current: FxPool | null }; a
     }
     pos.needsUpdate = true;
     sz.needsUpdate = true;
+    kind.needsUpdate = true;
   });
   return <mesh ref={ref} geometry={geo} material={mat} frustumCulled={false} renderOrder={9} raycast={() => undefined} />;
 }

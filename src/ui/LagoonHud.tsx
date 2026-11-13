@@ -2,8 +2,9 @@ import { useEffect, useState, type ReactNode } from "react";
 import { setGame, useGame } from "../game/store";
 import { lagoonHappiness, lagoonMood, lowestNeed, LAGOON_TOYS, type LagoonToy, type LagoonView } from "../game/logic/lagoon";
 import {
-  feedDolphins, giveLagoonToy, lagoonHelpNudge, LAGOON_MILESTONES, openToys, setLagoonView, startLagoonActivity, startLagoonTour, TOY_NAMES, watchLagoonIntro
+  feedDolphins, giveLagoonToy, holdLagoonBall, throwLagoonBall, lagoonHelpNudge, LAGOON_MILESTONES, openToys, setLagoonView, startLagoonActivity, startLagoonTour, TOY_NAMES, watchLagoonIntro
 } from "../game/flow/lagoon";
+import { ballCatchPaused, canHoldBall, lagoonRt } from "../game/lagoon/lagoonRuntime";
 import { Big } from "./Hud";
 import { Icon } from "./icons";
 import { PersonFace } from "./Portraits";
@@ -179,6 +180,39 @@ function WaitingVisitor() {
   );
 }
 
+/** React updates only on a catch-state boundary; the scene owns ball motion. */
+function CatchControls() {
+  const read = () => {
+    const toy = lagoonRt.toy;
+    return `${toy?.kind === "ball" ? toy.state : "none"}|${ballCatchPaused()}|${canHoldBall()}`;
+  };
+  const [status, setStatus] = useState(read);
+  useEffect(() => {
+    let previous = read();
+    setStatus(previous);
+    const timer = window.setInterval(() => {
+      const next = read();
+      if (next !== previous) { previous = next; setStatus(next); }
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, []);
+  const [state, paused, reachable] = status.split("|");
+  if (state === "none") return null;
+  const held = state === "held";
+  const disabled = paused === "true" || (!held && reachable !== "true");
+  return (
+    <button className="big-btn ui" data-testid={held ? "btn-lagoon-throw" : "btn-lagoon-hold"}
+      data-ball-state={state} style={{ position: "relative" }} disabled={disabled} onClick={() => held ? throwLagoonBall() : holdLagoonBall()}>
+      <span className="big-icon"><BallGlyph size={40} /></span>
+      <span className="big-label">{held ? "Throw!" : "Hold the ball"}<Ja>{held ? "なげる！" : "ボールを もつ"}</Ja></span>
+      {held && <small data-testid="lagoon-ball-held" style={{ position: "absolute", bottom: "calc(100% + 8px)", right: 0, minWidth: 156,
+        padding: "6px 9px", borderRadius: 12, border: "2px solid #e7b63e", background: "#fff7d5", color: "#3d4d56", fontSize: 13, lineHeight: 1.25 }}>
+        In your hands<Ja>ボールを もっているよ</Ja>
+      </small>}
+    </button>
+  );
+}
+
 export function LagoonHud() {
   const free = useGame((s) => s.mode === "play" && !s.prompt && !s.line && !s.stageCard && !s.areaActivity && s.fade === 0);
   const panel = useGame((s) => s.areaPanel);
@@ -194,6 +228,7 @@ export function LagoonHud() {
           <div className="bar-main">
             <Big id="btn-lagoon-feed" icon="food" label="Feed" ja="えさ" onClick={feedDolphins} />
             <Big id="btn-lagoon-toys" icon="ball" label="Toys" ja="おもちゃ" onClick={openToys} />
+            <CatchControls />
           </div>
           <div className="chips-right"><WaitingVisitor /></div>
         </div>

@@ -2204,3 +2204,59 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
   run fine on the classroom Chromebooks; no performance pass planned.
 - **Coastal & Polar Zone, Dolphin Lagoon and Grand Ocean Sanctuary stay
   release-locked.** No unlock rule or price is to be designed for now.
+
+## 2026-11-13 — Dolphin Lagoon re-entry splashes and player catch (preview only)
+
+- **Splash root cause:** take-off emitted both a leap and a splash, and the
+  Lagoon scene rendered each as a splash. Re-entry waited for the body centre
+  to sink below −0.25 m, then splashed at that centre instead of the head's
+  surface crossing. Small fading billboard droplets had no surface ripples.
+- **Entry:** dolphins now emit one entry per airborne phase at the interpolated
+  downward snout crossing of y = 0. A latch prevents duplicates; the effect's
+  sub-frame age includes the remaining simulation time, without advancing a
+  second frame when first rendered. Strength is vertical entry speed / 5;
+  visual size is `(0.9 + 2 × strength) × bodyLength / 2.6`. Stronger entries
+  throw more spray outward and upward and expand two short-lived circular
+  ripples. All particles and ripple quads reuse the existing 220-instance
+  effect pool and draw. Breathing remains a spout, with no entry splash.
+  Orca and beluga event and effect behavior retain their previous defaults.
+- **Sound:** entry triggers the existing splash sound once; medium impacts
+  add the existing low gulp layer and large impacts add the sprinkle spray
+  tail (strength thresholds 0.3 and 0.55). This scales the sound in three
+  tiers through the existing audio system without changing global volume.
+- **One ball:** the existing toy is the sole ball object, with states
+  `floating → held → thrown → dolphin-play → returning → floating`.
+  Hold is available near the landing water beside the deck, or anywhere
+  after a completed return. The same ball is raised in two visible hands at
+  a fixed waterside position. Throw follows a ballistic arc to a tapped
+  water point clamped inside accessible water, or a default open-water point
+  from the large bilingual Throw button. Dolphins approach through the
+  existing attraction steering and nudge the ball home only at snout contact.
+  After 18 seconds without a fetch, or 8 seconds without continued return
+  progress, a gentle current completes recovery. The ball remains available
+  until the player selects a replacement toy; automatic passes still work
+  without player input and resume after the return's short pickup grace.
+  Automatic recovery never becomes a player catch round, so gallery viewing
+  and question input gates cannot freeze unattended ball play. Finishing a
+  player return also hands the ball back to automatic play after that grace.
+- **Input:** tap the ball or Hold the ball / ボールを もつ, then tap water or
+  Throw! / なげる！. A bilingual held indicator confirms possession. Catch
+  pauses and ignores input during feeding except idle/finished, trick
+  run-ups/flights, visitor questions and counting holds, dialogs and gallery
+  viewing. It releases its toy attractions so those activities can proceed.
+  Animation stays in runtime/scene refs; the HUD updates on state changes.
+  The invisible water hit target accepts only lagoon water taps and consumes
+  a tap only when the throw succeeds, preserving question taps while paused.
+- **Rejected:** drag-to-throw (trackpad/touch precision), microphone input,
+  a second held-ball mesh/state, dolphin teleports, unbounded fetch waits,
+  a separate particle draw for each splash, and changing feeding, questions,
+  saves, care rewards or release locks. Deck/building geometry is untouched.
+- **Review:** `scripts/lagoon-review.mjs --play` records high-jump and calf-hop
+  frame strips under `.tmp/lagoon-review/splash/1366x768/`, a real HUD
+  hold/throw/return/hold round under `.tmp/lagoon-review/catch/1366x768/`,
+  and the held layout at `.tmp/lagoon-review/catch/1024x768/`. The splash
+  adds zero draws; the merged held hands add one while visible. Production
+  review measured 35 draws before/during the high entry, 34–35 during the
+  calf entry, and 35 floating / 36 held / 35 thrown for the same ball. Both
+  review sizes passed, including ignored water input during a spontaneous
+  trick and a successful water throw once it landed.

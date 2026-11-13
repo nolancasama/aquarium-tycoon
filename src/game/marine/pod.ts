@@ -114,7 +114,7 @@ export interface Swimmer {
   /** Hold still (a question is about this animal) until this time, at this depth. */
   hold: number;
   holdY: number | null;
-  air: { vx: number; vz: number } | null;
+  air: { vx: number; vz: number; above?: boolean; entered?: boolean } | null;
   /** A trick under way (run-up or airborne), with the take-off time once launched. */
   trick: { kind: TrickKind; t0: number; airtime: number } | null;
   diveEmitted: boolean;
@@ -131,6 +131,10 @@ export interface PodEvent {
   z: number;
   /** Body length of the (first) animal, to scale effects. */
   len: number;
+  /** Dolphin water entry only: impact speed relative to 5 m/s, and sub-frame effect age. */
+  strength?: number;
+  age?: number;
+  entry?: boolean;
 }
 
 const TAU = Math.PI * 2;
@@ -359,6 +363,9 @@ export class Pod {
 
   private tick(dt: number) {
     this.time += dt;
+    // A step can contain several integration slices; preserve the actual entry
+    // time when the scene receives the event at the end of the whole step.
+    for (const e of this.events) if (e.entry) e.age = (e.age ?? 0) + dt;
     const now = this.time;
     if (now >= this.planAt) this.plan();
     for (const s of this.members) this.move(s, dt, now);
@@ -541,6 +548,7 @@ export class Pod {
     if (s.mode === "leap") {
       // Ballistic through the air, nose following the arc.
       const air = s.air!;
+      const px = s.x, py = s.y, pz = s.z, pitch = s.pitch, vy = s.vy;
       s.x += air.vx * dt;
       s.z += air.vz * dt;
       s.vy -= 9.8 * dt;
@@ -554,9 +562,29 @@ export class Pod {
         s.pitch = along + L.flip * TAU * e;
         s.roll = L.spin * TAU * e;
       }
+      if (s.species === "dolphin" && !air.entered) {
+        // The mesh's snout is +L/2 along its pitched forward axis. Detect its
+        // downward crossing, rather than waiting for the body centre to sink.
+        const reach = s.len * 0.5;
+        const before = py + Math.sin(pitch) * reach, after = s.y + Math.sin(s.pitch) * reach;
+        if (before > 0 || after > 0) air.above = true;
+        if (air.above && before >= 0 && after <= 0 && s.vy < 0) {
+          const f = clamp(before / (before - after), 0, 1);
+          const oldReach = Math.cos(pitch) * reach, newReach = Math.cos(s.pitch) * reach;
+          const horizontal = oldReach + (newReach - oldReach) * f;
+          this.emit("splash", s, {
+            x: px + (s.x - px) * f + Math.sin(s.yaw) * horizontal,
+            y: 0,
+            z: pz + (s.z - pz) * f + Math.cos(s.yaw) * horizontal,
+            strength: Math.abs(vy + (s.vy - vy) * f) / 5,
+            age: dt * (1 - f), entry: true
+          });
+          air.entered = true;
+        }
+      }
       if (s.y < -0.25 && s.vy < 0) {
         const big = s.trick && s.trick.kind !== "hop" ? 1.35 : 1;
-        this.emit("splash", s, { y: 0, len: s.len * big });
+        if (s.species !== "dolphin") this.emit("splash", s, { y: 0, len: s.len * big });
         s.air = null;
         s.vy *= 0.25;
         s.pitch = wrap(s.pitch);
@@ -625,7 +653,7 @@ export class Pod {
     s.vy = 4.3 + r() * 0.9;
     s.y = Math.max(s.y, -0.2);
     this.emit("leap", s);
-    this.emit("splash", s, { y: 0 });
+    if (s.species !== "dolphin") this.emit("splash", s, { y: 0 });
   }
 
   /** Take off into a trick figure (the run-up has reached the surface at speed). */
@@ -637,7 +665,7 @@ export class Pod {
     s.vy = L.vy;
     s.trick = { kind, t0: this.time, airtime: trickAirtime(kind) };
     this.emit("leap", s);
-    this.emit("splash", s, { y: 0 });
+    if (s.species !== "dolphin") this.emit("splash", s, { y: 0 });
   }
 
   /** Two animals swimming side by side, heading the same way, for a few seconds. */
