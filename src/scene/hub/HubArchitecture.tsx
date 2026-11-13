@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { clipToHubPortal, markHubPortal } from "./hubPortalClip";
+import { corridorBoundary, corridorFaceGeometry, corridorStructure } from "./corridorGeometry";
 import { useGame } from "../../game/store";
 import { bayOf, DOOR_OPENING, HUB_CENTRE, HUB_CORRIDOR, HUB_DOORS, HUB_R, HUB_WALL_H, HUB_WINDOW, doorLocal, hubDoorOpen, onRing, type HubDestination } from "../../game/data/hub";
 import { PartBuilder } from "../partBuilder";
@@ -78,38 +79,23 @@ export function HubShell() {
       b.boxAt(0.18, HUB_WINDOW.top - HUB_WINDOW.bottom, 0.62, [p.x, (HUB_WINDOW.top + HUB_WINDOW.bottom) / 2, p.z], [0, -a, 0], "#dfcdac");
     }
     for (const kind of HUB_DOORS) {
-      const a = bayOf(kind).angle, theme = THEMES[kind], w = DOOR_OPENING.w, h = DOOR_OPENING.h, D = HUB_CORRIDOR.depth;
+      const a = bayOf(kind).angle, theme = THEMES[kind], h = DOOR_OPENING.h, D = HUB_CORRIDOR.depth;
       const box = (builder: PartBuilder, side: number, depth: number, y: number, width: number, height: number, length: number, color: string) => {
         const p = doorLocal(kind, side, depth);
         builder.boxAt(width, height, length, [p.x, y, p.z], [0, -a, 0], color);
       };
-      // Reveal extends across the curved wall's thickness to the straight corridor.
-      for (const side of [-1, 1]) box(b, side * (w / 2 + 0.14), 0.05, h / 2, 0.28, h + 0.1, 0.8, "#e2d2b4");
-      box(b, 0, 0.05, h + 0.22, w + 0.7, 0.44, 0.8, "#e2d2b4");
-      box(b, 0, -0.03, 0.045, w, 0.09, 0.95, "#d9c195");
-      box(b, 0, 0, h + 0.25, 0.42, 0.55, 0.87, "#d9a441");
       const corridor = new PartBuilder(0.35), lights = new PartBuilder(0);
-      // L corridor: a full-height right-hand turn conceals arriving/leaving groups.
-      box(corridor, 0, D / 2, -0.047, w + 0.44, 0.13, D + 0.4, theme.floor);
-      box(corridor, -w / 2 - 0.11, D / 2, h / 2, 0.22, h, D, theme.wall);
-      box(corridor, w / 2 + 0.11, 1.225, h / 2, 0.22, h, 2.45, theme.wall);
-      box(corridor, 0, D + 0.11, h / 2, w + 0.44, h, 0.22, theme.wall);
-      box(corridor, 0, D / 2, h + 0.08, w + 0.44, 0.16, D + 0.4, theme.trim);
-      const branchEnd = HUB_CORRIDOR.endSide + 0.65, branchWidth = branchEnd - w / 2;
-      box(corridor, w / 2 + branchWidth / 2, 3.475, -0.047, branchWidth, 0.13, 2.05, theme.floor);
-      box(corridor, w / 2 + branchWidth / 2, 3.475, h + 0.08, branchWidth, 0.16, 2.05, theme.trim);
-      for (const depth of [2.34, D + 0.11]) box(corridor, w / 2 + branchWidth / 2, depth, h / 2, branchWidth, h, 0.22, theme.wall);
-      box(corridor, branchEnd + 0.11, 3.475, h / 2, 0.22, h, 2.05, theme.wall);
+      // The reveal, threshold and L bend are one physical solid. Keep only its
+      // boundary, while retaining the shell/portal material assignment.
+      const origin = doorLocal(kind, 0, 0);
+      for (const face of corridorBoundary(corridorStructure(theme))) {
+        (face.box.shell ? b : corridor).add(corridorFaceGeometry(face), face.box.color, [origin.x, 0, origin.z], [0, -a, 0]);
+      }
       // Inset rails, ceiling coffers and a glowing further portal suggest the wing.
       for (const depth of [0.6, 1.5, 2.5, 3.5]) {
-        box(corridor, -w / 2 + 0.035, depth, 1.1, 0.07, 0.09, 0.75, theme.trim);
-        box(lights, 0, depth, h - 0.015, 0.7, 0.035, 0.16, theme.glow);
+        box(lights, 0, depth, h - 0.04, 0.7, 0.035, 0.16, theme.glow);
       }
-      box(corridor, 0, D - 0.035, 1.55, 1.4, 2.7, 0.07, theme.trim);
       box(lights, 0, D - 0.08, 1.6, 1.15, 2.35, 0.035, theme.glow);
-      // Small themed wall reliefs are geometry, not destination-sized paintings.
-      for (let i = 0; i < 3; i++) box(corridor, -w / 2 + 0.09, 1.1 + i * 0.65, 1.9 + (i % 2) * 0.2, 0.12, 0.22, 0.35, theme.glow);
-      const origin = doorLocal(kind, 0, 0);
       corridorParts.push(markHubPortal(corridor.build(), origin.x, origin.z, a));
       lightParts.push(markHubPortal(lights.build(), origin.x, origin.z, a));
     }

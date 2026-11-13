@@ -7,6 +7,10 @@ import { fileURLToPath } from "node:url";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const [label = "before", base = "http://localhost:5320/", seed = "7", review = "full"] = process.argv.slice(2);
+if (review === "geometry") {
+  await import("./geometry-review.mjs");
+  process.exit(0);
+}
 if (!/^[a-zA-Z0-9_-]+$/.test(label)) throw new Error("Use a simple label (before/after).");
 const out = path.join(root, ".tmp", "visual", label);
 fs.mkdirSync(out, { recursive: true });

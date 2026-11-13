@@ -14,6 +14,30 @@ export interface WalkingSurface {
   minX: number; maxX: number; minZ: number; maxZ: number; top: number;
 }
 
+// The gallery's roof used to end at the boardwalk's walking height, leaving
+// two visible top faces in the same plane. Leave real clearance below timber.
+export const GALLERY_COVER_TOP = LAND_Y - 0.02;
+export const BOARDWALK = { minX: -11.5, maxX: 22.5, minZ: 10.2, maxZ: 15.8, top: LAND_Y + 0.15, thickness: 0.15 };
+
+export function boardwalkLayout(): WalkingSurface[] {
+  const count = 31, width = (BOARDWALK.maxX - BOARDWALK.minX) / count;
+  return Array.from({ length: count }, (_, i) => ({
+    name: `boardwalk-plank-${i}`,
+    minX: BOARDWALK.minX + i * width + (i === 0 ? 0 : 0.009),
+    maxX: BOARDWALK.minX + (i + 1) * width - (i === count - 1 ? 0 : 0.009),
+    minZ: BOARDWALK.minZ, maxZ: BOARDWALK.maxZ, top: BOARDWALK.top
+  }));
+}
+
+/** Real timber boards replace the slab and its coplanar seam-strip undersides. */
+export function addBoardwalk(b: PartBuilder) {
+  boardwalkLayout().forEach((p, i) => b.box(
+    p.maxX - p.minX, BOARDWALK.thickness, p.maxZ - p.minZ,
+    (p.minX + p.maxX) / 2, p.top - BOARDWALK.thickness, (p.minZ + p.maxZ) / 2,
+    i % 3 === 0 ? "#a87c50" : "#b88a5a"
+  ));
+}
+
 export function deckLayout() {
   const s = DECK_STAIRS;
   const rise = (DECK.top - s.ground) / (s.count - 1);

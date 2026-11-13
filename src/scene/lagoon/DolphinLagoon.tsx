@@ -12,7 +12,7 @@ import { feedingPose, lagoonRt, resetFeeding, RING } from "../../game/lagoon/lag
 import { lagoonFocus, lagoonTick, lookText, tapDolphin, tapLook } from "../../game/flow/lagoon";
 import { DOLPHINS } from "../../game/logic/lagoon";
 import { PartBuilder } from "../partBuilder";
-import { addObservationDeck } from "./deckGeometry";
+import { addBoardwalk, addObservationDeck, GALLERY_COVER_TOP } from "./deckGeometry";
 import { shaderTime, signMaterial, smoothMat } from "../materials";
 import { useAreaGate } from "../tunnel/wing";
 import { newPose, TunnelFigure } from "../tunnel/TunnelFigure";
@@ -185,16 +185,15 @@ function Structures() {
     // The gallery room behind it: floor, ceiling, walls, benches, light strips.
     const z0 = G.z + 0.6, z1 = G.back;
     b.box(G.maxX - G.minX + 0.8, 0.3, z1 - z0 + 0.4, (G.minX + G.maxX) / 2, G.floor - 0.3, (z0 + z1) / 2, "#1c2f3d");
-    b.box(G.maxX - G.minX + 0.8, 0.95 - G.ceiling, z1 - z0 + 0.4, (G.minX + G.maxX) / 2, G.ceiling, (z0 + z1) / 2, "#223a4d");
-    b.box(G.maxX - G.minX + 0.8, 0.95 - G.floor + 0.3, 0.4, (G.minX + G.maxX) / 2, G.floor - 0.3, z1 + 0.2, "#26445b");
-    for (const s of [-1, 1]) b.box(0.4, 0.95 - G.floor + 0.3, z1 - z0 + 0.6, s < 0 ? G.minX - 0.2 : G.maxX + 0.2, G.floor - 0.3, (z0 + z1) / 2, "#26445b");
+    b.box(G.maxX - G.minX + 0.8, GALLERY_COVER_TOP - G.ceiling, z1 - z0 + 0.4, (G.minX + G.maxX) / 2, G.ceiling, (z0 + z1) / 2, "#223a4d");
+    b.box(G.maxX - G.minX + 0.8, GALLERY_COVER_TOP - G.floor + 0.3, 0.4, (G.minX + G.maxX) / 2, G.floor - 0.3, z1 + 0.2, "#26445b");
+    for (const s of [-1, 1]) b.box(0.4, GALLERY_COVER_TOP - G.floor + 0.3, z1 - z0 + 0.6, s < 0 ? G.minX - 0.2 : G.maxX + 0.2, G.floor - 0.3, (z0 + z1) / 2, "#26445b");
     for (const x of [5.6, 12.4]) { b.box(2.8, 0.42, 0.6, x, G.floor, 14.4, "#3d6680"); b.box(2.8, 0.08, 0.66, x, G.floor + 0.42, 14.4, "#5d8aa5"); }
     for (const x of [4.2, 9, 13.8]) for (const z of [z0 + 0.35, 13.5]) b.box(3.2, 0.06, 0.18, x, G.ceiling - 0.07, z, "#bff0ff");
     // A soft blue carpet runner and two dolphin posters on the side walls.
     b.box(3.4, 0.02, G.back - z0 - 1, 9, G.floor, (z0 + G.back) / 2 + 0.3, "#2a5d7a");
     // The boardwalk along the front, with planks, a rail at the quay and lamps.
-    b.box(34, 0.15, 5.6, 5.5, LAND_Y, 13, "#b88a5a");
-    for (let x = -11; x <= 22; x += 1.1) b.box(0.05, 0.02, 5.6, x, LAND_Y + 0.15, 13, "#8f6a43");
+    addBoardwalk(b);
     const railPts = [{ x: -4, z: 10.15 }, { x: 15.5, z: 10.15 }, { x: 19, z: 8.75 }];
     for (let k = 0; k < railPts.length - 1; k++) {
       const a = railPts[k], c = railPts[k + 1], l = Math.hypot(c.x - a.x, c.z - a.z), ang = Math.atan2(c.x - a.x, c.z - a.z) + Math.PI / 2;

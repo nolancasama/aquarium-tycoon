@@ -271,15 +271,48 @@ function chest(): DecorModel {
   const w = 0.3;
   const d = 0.2;
   const h = 0.14;
-  b.box(w, h, d, 0, 0, 0, "#8a5326");
-  b.box(w * 0.92, 0.02, d * 0.9, 0, h - 0.02, 0, "#5c3412");
-  for (const x of [-w * 0.32, w * 0.32]) b.box(0.03, h + 0.005, d + 0.01, x, 0, 0, "#ffc935");
+  // A real tray: the former solid box and its dark inset shared a top face.
+  const wall = 0.018;
+  const bottom = h - 0.02;
+  b.box(w, bottom, d, 0, 0, 0, "#5c3412");
+  for (const z of [-(d - wall) / 2, (d - wall) / 2]) b.box(w, h - bottom, wall, 0, bottom, z, "#8a5326");
+  for (const x of [-(w - wall) / 2, (w - wall) / 2]) b.box(wall, h - bottom, d - wall * 2, x, bottom, 0, "#8a5326");
+  for (const x of [-w * 0.32, w * 0.32]) {
+    for (const z of [-(d / 2 + 0.003), d / 2 + 0.003]) b.box(0.03, h, 0.006, x, 0, z, "#ffc935");
+  }
   // Gold coins visible when the lid opens.
   for (let i = 0; i < 6; i++) b.sphere(0.03, -0.09 + i * 0.036, h - 0.005, (i % 2) * 0.03 - 0.015, "#ffd84a", [1, 0.45, 1], 8);
   const lid = new PartBuilder(0.05);
-  // The lid's hinge is its back-bottom edge, at the origin.
-  lid.add(new THREE.CylinderGeometry(d / 2, d / 2, w, 14, 1, false, 0, Math.PI), "#9a5d2b", [0, 0, d / 2], [0, 0, Math.PI / 2]);
-  for (const x of [-w * 0.32, w * 0.32]) lid.add(new THREE.CylinderGeometry(d / 2 + 0.006, d / 2 + 0.006, 0.03, 14, 1, false, 0, Math.PI), "#ffc935", [x, 0, d / 2], [0, 0, Math.PI / 2]);
+  // Closed half-round prism, hinged at its back-bottom edge. A partial
+  // CylinderGeometry omits the radial cut face, so the open lid had no underside.
+  // Flush gold bands share edges with the wood instead of overlapping end caps.
+  const section: [number, number][] = [];
+  for (let i = 0; i <= 14; i++) {
+    const a = i * Math.PI / 14;
+    section.push([i === 0 || i === 14 ? 0 : Math.sin(a) * d / 2, (1 - Math.cos(a)) * d / 2]);
+  }
+  const edges = [-w / 2, -w * 0.32 - 0.015, -w * 0.32 + 0.015, w * 0.32 - 0.015, w * 0.32 + 0.015, w / 2];
+  for (let band = 0; band < edges.length - 1; band++) {
+    const vertices: number[] = [];
+    const triangle = (a: number[], c: number[], e: number[]) => vertices.push(...a, ...c, ...e);
+    const left = edges[band], right = edges[band + 1];
+    for (let i = 0; i < section.length; i++) {
+      const [y, z] = section[i];
+      const [ny, nz] = section[(i + 1) % section.length];
+      triangle([left, y, z], [right, ny, nz], [right, y, z]);
+      triangle([left, y, z], [left, ny, nz], [right, ny, nz]);
+    }
+    // Only the outer ends need caps; internal band boundaries have no faces.
+    for (let i = 1; i < section.length - 1; i++) {
+      const [y, z] = section[i], [ny, nz] = section[i + 1];
+      if (band === 0) triangle([left, 0, 0], [left, ny, nz], [left, y, z]);
+      if (band === edges.length - 2) triangle([right, 0, 0], [right, y, z], [right, ny, nz]);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
+    geo.computeVertexNormals();
+    lid.add(geo, band % 2 ? "#ffc935" : "#9a5d2b", [0, 0, 0]);
+  }
   lid.box(0.05, 0.05, 0.02, 0, -0.03, d + 0.002, "#ffc935");
   return { geo: painted(b.build(), "chest"), mat: finishMaterial("chest"), lid: { geo: painted(lid.build(), "chest"), hinge: [0, h, -d / 2] } };
 }
