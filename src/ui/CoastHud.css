@@ -1,4 +1,5 @@
 .coast-views button.locked { opacity: 0.55; }
+.coast-care:disabled { opacity: 0.65; cursor: wait; }
 .coast-views button.locked svg { margin-right: 3px; vertical-align: -2px; }
 
 .coast-status .coast-need {

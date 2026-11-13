@@ -6,7 +6,7 @@ import { DECOR } from "../data/decor";
 import { HALL_OF, isWingHabitat, PAD_TYPES, TANKS } from "../data/tanks";
 import { COAST_HALL, isWingHall, roomOpen, SHARKS_HALL } from "../data/rooms";
 import { isCoastTank } from "../data/decor";
-import { coastTank, feedCoastVisual } from "./coast";
+import { coastTank, feedCoastVisual, startPenguinCare } from "./coast";
 import { EXHIBITS } from "../data/coast";
 import { openSharkTunnel, tunnelUnlocked } from "../logic/tunnel";
 import { startExplore, stopExplore } from "../tunnel/explore";
@@ -818,6 +818,7 @@ export async function feedTank() {
     toast({ en: "Full!", ja: "おなか いっぱい!", tone: "info" });
     return;
   }
+  if (g.hall === COAST_HALL && t.type === "penguins") { startPenguinCare("feed"); return; }
   if (!model().progress.fedOnce && !isWingHabitat(t.type)) {
     const id = await ask({
       kind: "command",
@@ -857,6 +858,7 @@ export async function cleanTank() {
   const g = getGame();
   const t = g.hall === SHARKS_HALL ? tankAt(model(), "L") : g.hall === COAST_HALL ? coastTank() : g.tankId ? tankById(model(), g.tankId) : null;
   if (!t) return;
+  if (g.hall === COAST_HALL && t.type === "penguins") { startPenguinCare("clean"); return; }
   if (!model().progress.cleanedOnce && !isWingHabitat(t.type)) {
     const id = await ask({
       kind: "command",

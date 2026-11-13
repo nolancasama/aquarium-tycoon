@@ -8,7 +8,7 @@ import { COAST_HABITATS, EX_D, EX_W, EXHIBITS, GLASS_TOP, WALKWAY_D, WINDOW_Z, t
 import { coastHabitatShown } from "../../game/data/release";
 import { HABITAT_PAD, habitatOpen } from "../../game/logic/coast";
 import { coastRt, drainSights, stepCoast } from "../../game/coast/coastRuntime";
-import { checkCoastNow, coastFocus, coastVisitorTick, setCoastView, tapCoastSign } from "../../game/flow/coast";
+import { checkCoastNow, coastFocus, coastKeeperTick, coastVisitorTick, setCoastView, tapCoastSign } from "../../game/flow/coast";
 import { tapSlot } from "../../game/flow/actions";
 import { tankAt } from "../../game/logic/model";
 import { ITEM_ON } from "../../game/data/coast";
@@ -21,6 +21,7 @@ import { tunnelPersonModel } from "../models/people";
 import { itemGeometry, otterParts, penguinBodyPitch, penguinFishGeometry, penguinParts, penguinRampGeometry, sealParts } from "./coastModels";
 import type { Mover } from "../../game/coast/motion";
 import { createPenguin, loadPenguin, type PenguinInstance } from "./penguinAsset";
+import { CoastKeepers, cutStaffOpening } from "./CoastKeepers";
 
 /**
  * The Coastal & Polar Zone: three cutaway exhibits behind one walkway. Each has
@@ -155,10 +156,10 @@ function penguinScenery(ex: ExhibitDef): THREE.BufferGeometry {
       const x = cliff.x * 1.55 + Math.sin(phase) * 0.14;
       const rx = cliff.rx * 1.55 * (1 - k * 0.055), rz = 0.43 - (i + k) % 3 * 0.035;
       const z = frame.back - 0.13 + (k % 2) * 0.025;
-      b.add(cliffSlab(rx, rz, height, phase), (i + k) % 3 === 1 ? "#7d939f" : rock, [x, y, z]);
+      b.add(cutStaffOpening(cliffSlab(rx, rz, height, phase), x, y), (i + k) % 3 === 1 ? "#7d939f" : rock, [x, y, z]);
       if (k === cliff.cuts.length - 2 || (i + k) % 3 === 0) {
         // A slight overhang keeps snow drapes clear of the rock's coplanar faces.
-        b.add(cliffSlab(rx + 0.012, rz + 0.012, height + 0.018, phase, 0.15 + (i + k) % 3 * 0.065), snow, [x, y, z]);
+        b.add(cutStaffOpening(cliffSlab(rx + 0.012, rz + 0.012, height + 0.018, phase, 0.15 + (i + k) % 3 * 0.065), x, y), snow, [x, y, z]);
       }
       if (k === 1 && i % 2 === 0) b.add(new THREE.ConeGeometry(0.045, 0.32, 4), ice, [x + 0.4, y + height - 0.23, frame.back + 0.28], [0, 0, Math.PI]);
     }
@@ -791,9 +792,10 @@ function StrollerFigure({ s }: { s: Stroller }) {
 function Tick() {
   useFrame((_, dt) => {
     const shown = coastShown();
-    if (!shown) return;
     const g = getGame();
-    stepCoast(g.model, Math.min(dt, 0.1), true);
+    stepCoast(g.model, Math.min(dt, 0.1), shown);
+    coastKeeperTick();
+    if (!shown) return;
     if (coastRt.sights.length) {
       updateModel(drainSights);
       checkCoastNow();
@@ -821,6 +823,7 @@ export function CoastZone() {
       ))}
       {coastHabitatShown("penguins") && <PenguinBubbles />}
       {coastHabitatShown("penguins") && <PenguinStationFish />}
+      {coastHabitatShown("penguins") && <CoastKeepers shown={coastShown} />}
       <Animals />
       <Strollers />
     </group>

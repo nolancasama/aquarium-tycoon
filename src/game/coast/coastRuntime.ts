@@ -1,8 +1,9 @@
-import { COAST_HABITATS, EXHIBITS, type CoastHabitat } from "../data/coast";
+import { COAST_HABITATS, EXHIBITS, PENGUIN_STAFF_DOOR, type CoastHabitat } from "../data/coast";
 import { tankAt, type Model } from "../logic/model";
 import { HABITAT_PAD, recordCoastSight } from "../logic/coast";
 import { coastHabitatShown } from "../data/release";
 import { newMover, RAMP_STEP, SPECIES_OF, stationSpots, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
+import { finishKeepers, KEEPER_CLEARANCE, keeperBusy, keeperRt, resetKeepers, stepKeepers } from "./keeper";
 
 /**
  * Live animals of the coastal habitats (runtime only, never saved). One mover
@@ -34,8 +35,10 @@ export const coastRt = {
 let seed = 1;
 const peerLists: Record<CoastHabitat, Mover[]> = { penguins: [], seals: [], otters: [] };
 const liveIds = new Set<string>();
+const staffBody = { x: 0, z: 0, active: false, r: KEEPER_CLEARANCE };
 function makeContext(h: CoastHabitat): MoveCtx { return {
   time: 0, landItems: [], toy: null, restSpots: [], movers: peerLists[h],
+  ...(h === "penguins" ? { staff: staffBody } : {}),
   onEvent: (_m: Mover, kind: Parameters<NonNullable<MoveCtx["onEvent"]>>[1]) => {
     if (kind === "eatFish" && coastRt.stationFood) coastRt.stationFood.fish = Math.max(0, coastRt.stationFood.fish - 1);
     if (kind === "enterWater") coastRt.entries[h]++;
@@ -107,6 +110,7 @@ export function habitatCtx(model: Model, h: CoastHabitat): Pick<MoveCtx, "landIt
   const t = tankAt(model, HABITAT_PAD[h]);
   const ex = EXHIBITS[h];
   const landItems: MoveCtx["landItems"] = [];
+  if (h === "penguins") landItems.push({ x: PENGUIN_STAFF_DOOR.x, z: PENGUIN_STAFF_DOOR.z, r: 0.8 });
   const restSpots: NonNullable<MoveCtx["restSpots"]> = [];
   let toy: MoveCtx["toy"] = null;
   for (const d of t?.decor ?? []) {
@@ -121,9 +125,29 @@ export function habitatCtx(model: Model, h: CoastHabitat): Pick<MoveCtx, "landIt
 
 /** Advance every coastal animal (called each frame while the zone is shown). */
 export function stepCoast(model: Model, dt: number, shown: boolean) {
-  if (!shown) return;
+  if (!shown) {
+    if (keeperBusy()) { finishKeepers(); clearCoastMeal(); }
+    staffBody.active = false;
+    return;
+  }
   coastRt.time += dt;
   syncCoast(model);
+  stepKeepers(model, dt, peerLists.penguins);
+  const f = keeperRt.feed;
+  staffBody.x = f.x; staffBody.z = f.z;
+  staffBody.active = f.phase !== "idle" && f.phase !== "doorClosing";
+  if (f.phase === "tip" && !f.pileStarted) {
+    clearCoastMeal();
+    f.pileStarted = true;
+    if (f.slot >= 0 && tankAt(model, HABITAT_PAD.penguins)?.decor.some((d) => d.kind === "penguinFeeder" && d.slot === f.slot)) {
+      coastRt.stationFood = { slot: f.slot, fish: 0, fedAt: coastRt.time };
+    }
+  }
+  if (f.phase === "tip" && coastRt.stationFood) coastRt.stationFood.fish = Math.floor(f.tip * peerLists.penguins.length * 3);
+  if (f.phase === "watch" && !f.mealStarted) {
+    f.mealStarted = true;
+    feedCoast(model, "penguins");
+  }
   for (const a of coastRt.animals.values()) {
     const until = coastRt.hold.get(a.m.id);
     if (until !== undefined) {
@@ -134,6 +158,15 @@ export function stepCoast(model: Model, dt: number, shown: boolean) {
     ctx.time = coastRt.time;
     stepMover(a.m, EXHIBITS[a.habitat], dt, ctx);
     if (a.habitat === "otters" && a.m.mode === "float" && a.m.y > EXHIBITS.otters.pool.surface - 0.1) coastRt.sights.push("otterFloat");
+  }
+}
+
+/** Presentation cleanup on leave: re-entry never resumes a half-finished meal. */
+export function clearCoastMeal() {
+  coastRt.stationFood = null;
+  for (const a of coastRt.animals.values()) if (a.habitat === "penguins") {
+    a.m.feeding = undefined; a.m.attract = null;
+    if (a.m.action === "eat") a.m.action = null;
   }
 }
 
@@ -158,7 +191,10 @@ export function feedCoast(model: Model, h: CoastHabitat) {
   const fs = feeder ? ex.slots[feeder.slot] : null;
   if (h === "penguins" && fs && feeder) {
     const animals = [...coastRt.animals.values()].filter((a) => a.habitat === h);
-    const spots = stationSpots(ex, fs, animals.length, habitatCtx(model, h).landItems);
+    const items = habitatCtx(model, h).landItems;
+    // Reserve the keeper's working spot through the departure, including birds already on land.
+    if (keeperRt.feed.phase !== "idle") items.push({ x: keeperRt.feed.x, z: keeperRt.feed.z, r: KEEPER_CLEARANCE });
+    const spots = stationSpots(ex, fs, animals.length, items);
     coastRt.stationFood = { slot: feeder.slot, fish: Math.min(spots.length, animals.length) * 3, fedAt: coastRt.time };
     animals.forEach((a, i) => {
       a.m.feeding = undefined;
@@ -185,6 +221,8 @@ export function holdAnimal(id: string, seconds: number) {
 }
 
 export function clearCoast() {
+  resetKeepers();
+  staffBody.active = false;
   coastRt.animals.clear();
   coastRt.hold.clear();
   coastRt.sights = [];
