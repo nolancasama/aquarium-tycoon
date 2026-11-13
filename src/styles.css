@@ -1896,11 +1896,25 @@ mark.key {
   line-height: 1.1;
 }
 
-/* Compact edge navigation keeps its accessible destination name on narrow or
-   short screens. */
+.hall-arrow .short { display: none; font-style: normal; }
+
+/* Compact edge navigation on narrow or short screens: the icon with a short
+   English room name under it; the full name stays for screen readers. */
 @media (width < 1024px), (height < 700px) {
-  :root { --room-nav-width: 56px; }
-  .hall-arrow { justify-content: center; padding: 8px; gap: 0; }
+  :root { --room-nav-width: 64px; }
+  .hall-arrow { flex-direction: column; justify-content: center; padding: 6px 4px; gap: 2px; }
+  .hall-arrow b { font-size: 26px; line-height: 1; order: 0; }
+  .hall-arrow .short {
+    display: block;
+    order: 1;
+    max-width: 100%;
+    font-size: 10px;
+    line-height: 1.1;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .hall-arrow > span {
     position: absolute;
     width: 1px;

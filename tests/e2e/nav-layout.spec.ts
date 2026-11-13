@@ -117,7 +117,7 @@ type Reference = { box: Box; appearance: Appearance };
 
 async function arrowLayout(page: Page, label: string, reference?: Reference) {
   const viewport = page.viewportSize()!;
-  const width = viewport.width < 1024 ? 56 : 216;
+  const width = viewport.width < 1024 || viewport.height < 700 ? 64 : 216;
   let result = reference;
   const arrows: Box[] = [];
   for (const side of ["prev", "next"]) {

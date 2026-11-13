@@ -15,9 +15,11 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
   `src/game/logic/realSave.fixture.json` (byte-exact copy also in
   `../aquarium-tycoon-save-backup/`).
 - **Arrows:** one layout in every room (midpoint of each edge, fixed size);
-  icon-only below 1024 px wide **or 700 px tall**; on short screens the
-  room-view request card stands right of the arrow lane at full height.
-  Controls and goal panels move out of the arrow lane.
+  below 1024 px wide **or 700 px tall** the arrow is 64 px wide with the icon
+  and a short English room name under it (`SHORT_ROOM_NAMES` in
+  `ui/Hud.tsx`, added 2026-11-13); on short screens the room-view request
+  card stands right of the arrow lane at full height. Controls and goal
+  panels move out of the arrow lane.
 - **Grand Hub reef tank:** live-rock ridge, attached corals, anemones,
   seagrass; fish on collision-checked paths (`scene/hub/hubReef.ts`,
   `reefFishPaths.ts`). **Lagoon deck:** overlaps removed, supported stairs,
@@ -32,12 +34,11 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
   checked by eye); `outdoor.spec` Lagoon/Sanctuary previews time out
   "waiting for in lagoon/sanctuary" (or an extra 2-coin tip) **on 290ada1
   too**, a pre-existing flake in the debug-only preview areas.
-- **Known / not verified:** shore ramps are hard to see from the Penguins
-  camera and the shore edge still reads straight; real Chromebook fps; the
-  other PC's lost tanks (once this release loads there, Settings → Save
-  Recovery shows its save, backups and quarantined records; backups exist
-  only from this release on). Open question for the owner: keep arrows
-  icon-only on small screens, or a short label / name on tap.
+- **Known / not verified:** the other PC's lost tanks (once this release
+  loads there, Settings → Save Recovery shows its save, backups and
+  quarantined records; backups exist only from this release on). The owner
+  accepted the shore ramps and Chromebook frame rates as they are, and keeps
+  all three outdoor areas release-locked (DESIGN_DECISIONS 2026-11-13).
 
 ## Next steps
 
@@ -55,9 +56,12 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
    light sound/sparkle, exhibit refreshed and workers gone at the end; Clean
    disabled and guarded the same way; existing cleanliness maths unchanged.
    Reuse the visitor character models; no new dependencies.
+   **In flight (2026-11-13):** Codex is building this in the worktree
+   `../aq-keeper` (branch `feat/keeper`, from fa550c6); review before
+   merging, don't re-delegate.
 2. Stabilise `outdoor.spec` (preview entry wait) when convenient.
-3. The four `fix/*` worktrees are merged and can be removed (each has its own
-   `npm ci` install; never `--force` with a junctioned node_modules).
+3. Old merged worktrees `../aq-st1` and `../aq-wt-*` (exp-* branches) can be
+   removed after checking them; the `fix/*` ones were removed 2026-11-13.
 
 **Environment notes:**
 - Vitest fails in Git Bash here; run tests from **PowerShell**.

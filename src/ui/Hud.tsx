@@ -298,6 +298,13 @@ function LevelOverview({ stage, star }: { stage: number; star: boolean }) {
   );
 }
 
+/** Short English room names shown under the arrow icon on small screens. */
+const SHORT_ROOM_NAMES: Partial<Record<RoomId, string>> = {
+  hall: "Hall 1", ocean: "Ocean", gallery: "Jellyfish", atrium: "Reef", sharks: "Sharks",
+  hub: "Hub", coast: "Coast", lagoon: "Lagoon", sanctuary: "Sanctuary"
+};
+const shortName = (i: number) => SHORT_ROOM_NAMES[ROOMS[i].id as RoomId] ?? ROOMS[i].name;
+
 /** The arrows at the screen edges to the neighbouring rooms (open rooms only). */
 function HallSwitch() {
   const progress = useGame((s) => s.model.progress);
@@ -340,6 +347,7 @@ function HallSwitch() {
         <button className={`hall-arrow left ui ${guidePrev ? "guide" : ""} ${prevLink?.locked ? "locked" : ""}`} onClick={() => go(prev, prevLink)} data-testid="btn-hall-prev"
           data-locked={prevLink?.locked ? "true" : undefined} aria-label={`${ROOMS[prev].name}${prevLink?.locked ? " (coming soon)" : ""}`}>
           <b>◀</b>
+          <i className="short" aria-hidden="true">{shortName(prev)}</i>
           <span>
             {lockMark(prevLink)}{ROOMS[prev].name} <Ja>{prevLink?.locked ? "もうすぐ オープン" : ROOMS[prev].ja}</Ja>
           </span>
@@ -352,6 +360,7 @@ function HallSwitch() {
             {lockMark(nextLink)}{ROOMS[next].name} <Ja>{nextLink?.locked ? "もうすぐ オープン" : ROOMS[next].ja}</Ja>
           </span>
           <b>▶</b>
+          <i className="short" aria-hidden="true">{shortName(next)}</i>
         </button>
       )}
     </>

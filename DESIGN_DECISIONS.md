@@ -2161,3 +2161,17 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
   a tapering rocky base. The Underwater view has no structural bar across
   the middle. The shore is deeper, with a clear route from the back cliff
   (future staff door) to the feeding station.
+
+## 2026-11-13 — Owner decisions after the save-safety release
+
+- **Small-screen arrows get a short label under the icon** (chosen by the
+  owner from the options offered on 2026-11-12). Wherever arrows are
+  icon-only today (below 1024 px wide or 700 px tall), a short English room
+  name sits under the icon, keeping the one fixed arrow width. Rejected:
+  icon-only (children lose the English room name); name on tap.
+- **Penguin Coast shore ramps are accepted as they are.** The owner judged
+  them fine; no reframing or re-shaping planned.
+- **Chromebook frame rates are accepted.** The owner reports the newer areas
+  run fine on the classroom Chromebooks; no performance pass planned.
+- **Coastal & Polar Zone, Dolphin Lagoon and Grand Ocean Sanctuary stay
+  release-locked.** No unlock rule or price is to be designed for now.
