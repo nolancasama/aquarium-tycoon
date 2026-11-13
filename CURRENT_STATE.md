@@ -102,8 +102,9 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
    Merged main verified: typecheck, unit 941/941, build, coast + outdoor
    13/13. Known: the Underwater frame's empty walkway floor fills the lower
    ~40%; the glass cleaner moves only slightly between shots.
-2. **Not pushed:** `main` is 6 commits ahead of origin (curriculum + coast).
-   Push = GitHub Pages deploy; awaiting owner OK. Only `main` worktree remains.
+2. Curriculum + coast cleaner/walkway are LIVE on GitHub Pages (pushed
+   2026-11-14 with owner OK, deploy run 43529807232 green). Only the `main`
+   worktree remains.
 
 **`outdoor.spec` stabilised (2026-11-13):** three test-side causes, 25/25 on
 `--repeat-each=5` afterwards (it failed 1/25 and 3/25 on the way):
