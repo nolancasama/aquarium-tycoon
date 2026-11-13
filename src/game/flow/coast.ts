@@ -3,16 +3,18 @@ import { COAST_HALL } from "../data/rooms";
 import { EXHIBITS, type CoastHabitat } from "../data/coast";
 import { COAST_DECOR } from "../data/decor";
 import { PENGUIN_NUMBER_PHRASE, type PhraseId } from "../logic/english";
-import { award, buyDecor, tankAt } from "../logic/model";
+import { award, buyDecor, clean, feed, tankAt } from "../logic/model";
 import { checkCoastMilestones, COAST_PRICE, coastUnlocked, coastQuestionHabitats, HABITAT_PAD, habitatOpen, openCoast, recordCoastActivity, storeHiddenCoast } from "../logic/coast";
-import { coastRt, feedCoast, holdAnimal } from "../coast/coastRuntime";
+import { clearCoastMeal, coastRt, feedCoast, holdAnimal, syncCoast } from "../coast/coastRuntime";
+import { consumeKeeperBenefit, finishKeepers, keeperBusy, keeperRt, resetKeepers, startKeeperClean, startKeeperFeed, type KeeperCare } from "../coast/keeper";
 import { isOnRock } from "../coast/motion";
 import type { CoastDecorKind, VisitorType } from "../types";
 import { ask, speak } from "./ask";
 import { canTravel, comingSoon, travelTo } from "./hub";
 import { areaAvailable, COAST_HABITATS_SHOWN, coastHabitatShown } from "../data/release";
 import { audio } from "../../audio/audio";
-import { rt } from "../runtime";
+import { effect, rt } from "../runtime";
+import { latchRushCare } from "../rush/flow";
 
 /**
  * The Coastal & Polar Zone's flow: buying it at the hub, the exhibit views,
@@ -111,6 +113,63 @@ export function feedCoastVisual(h: CoastHabitat) {
 
 /** Which animal a question is about (the scene rings it). */
 export const coastFocus = { id: null as string | null, numbers: false };
+
+// One transaction owns both care presentations. No promises/timers can outlive it.
+let careTankId: string | null = null;
+let stopCareWatch: (() => void) | null = null;
+let cleanFrame = -1;
+function stopCareSubscription() { const stop = stopCareWatch; stopCareWatch = null; stop?.(); }
+
+/** Penguin branch of the shared actions: guard before applying any care maths. */
+export function startPenguinCare(kind: KeeperCare): boolean {
+  const g = getGame(), tank = coastTank();
+  if (!free() || g.stageCard || g.panel || g.placing || g.model.rush?.phase === "results" || !tank || tank.type !== "penguins" || keeperBusy() || careTankId) return false;
+  if (kind === "feed" && (!tank.fish.length || tank.food >= 90)) return false;
+  syncCoast(g.model);
+  if (!(kind === "feed" ? startKeeperFeed(g.model) : startKeeperClean(g.model))) return false;
+  careTankId = tank.id; cleanFrame = -1;
+  const preview = g.previewAreas.includes("coast");
+  stopCareWatch = useGame.subscribe((now) => {
+    const previewEnded = preview && !now.previewAreas.includes("coast");
+    if (!inCoast(now) || previewEnded || !now.model.tanks.some((t) => t.id === careTankId && t.type === "penguins")) {
+      stopCareSubscription();
+      if (!previewEnded) { finishKeepers(); applyKeeperBenefits(); }
+      // Ending preview restores its entire original model, discarding temporary care too.
+      careTankId = null; resetKeepers(); clearCoastMeal();
+    }
+  });
+  return true;
+}
+
+function applyKeeperBenefits() {
+  const id = careTankId;
+  if (!id) return;
+  if (consumeKeeperBenefit("feed")) {
+    const r = commit(feed(model(), id));
+    if (r.ok) { latchRushCare(); audio.play("sprinkle"); }
+  }
+  if (consumeKeeperBenefit("clean")) {
+    const r = commit(clean(model(), id));
+    if (r.ok) {
+      latchRushCare(); rt.cleaning.set(id, rt.time);
+      const ex = EXHIBITS.penguins;
+      for (const dx of [-3, 0, 3]) effect("sparkle", ex.x + dx, ex.pool.surface + 0.3, ex.z + 2, 8);
+      audio.play("scrub");
+    }
+  }
+}
+
+/** Immediately after the coast step; sound is emitted only on discrete montage cuts. */
+export function coastKeeperTick() {
+  if (!careTankId) return;
+  applyKeeperBenefits();
+  const c = keeperRt.clean;
+  if (c.phase === "montage" && c.frame !== cleanFrame) {
+    cleanFrame = c.frame;
+    if (c.frame % 2 === 0) audio.play("tick");
+  }
+  if (!keeperBusy()) { stopCareSubscription(); careTankId = null; }
+}
 
 const VISITORS: VisitorType[] = ["child", "adult", "fan", "grandma", "explorer"];
 let nextVisitorAt = 12;

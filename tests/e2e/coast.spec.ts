@@ -125,8 +125,12 @@ test("locked at the hub and on the map; a preview sandbox opens it; penguins nee
   // Feed the penguins.
   await hook(page, "setCare", penguins.id, 30, 100);
   await page.getByTestId("btn-feed").click();
-  await waitFor(page, (s) => s.tanks.find((t) => t.type === "penguins")!.food >= 85, 5_000, "fed");
-
+  // The keeper walks out of the staff door first (no station here: the shore fallback).
+  await expect(page.getByTestId("btn-feed")).toBeDisabled();
+  await expect(page.getByTestId("btn-feed")).toContainText("Feeding...");
+  await waitFor(page, (s) => s.tanks.find((t) => t.type === "penguins")!.food >= 85, 30_000, "fed");
+  await expect(page.getByTestId("btn-feed")).toBeEnabled({ timeout: 30_000 });
+  await expect(page.getByTestId("btn-feed")).toContainText("Feed");
   // Reload: the preview was never saved. Coins, the coast and everything else are as before it.
   await page.reload();
   await page.getByTestId("btn-continue").click();

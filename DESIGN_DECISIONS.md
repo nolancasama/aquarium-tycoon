@@ -1,5 +1,34 @@
 # Design Decisions
 
+## 2026-11-13 — Penguin Coast keeper care
+
+- Feeding uses a runtime state machine: doorOpening → walkOut → tip → watch →
+  walkBack → doorClosing → idle. The framed doorway is an actual cut through
+  the back cliff, with a short dark corridor and an inward swinging leaf.
+- Apply the existing feeding benefit once on entering tip. Apply the existing
+  cleaning benefit once after the five-second montage. Leaving early settles
+  the outstanding benefit immediately, then clears the workers, door and meal.
+  Ending a development preview restores its original snapshot and discards
+  all temporary preview care, including any pending benefit; it never changes
+  the restored aquarium. Nothing new is saved.
+- Feed and Clean share one runtime guard, including shared keyboard/action
+  entry points. Both buttons stay disabled while either sequence is active;
+  the active button reads Feeding... / えさやりちゅう or Cleaning... / そうじちゅう.
+- Keepers use the existing articulated adult people model, teal shirt/cap,
+  navy trousers and simple merged hand tools. Keeper walks use the land
+  visibility graph and swept collision checks; penguins avoid the staff
+  threshold, working spot and moving keeper. Obstructed staff yield and
+  reroute, rather than moving through an animal.
+- Without a station, the keeper walks to an open shore spot and tips there;
+  penguins retain the existing no-station feeding attraction. With a station,
+  the pile grows during the tip and penguins approach when tipping finishes.
+- Cleaning lasts five seconds with three keepers: glass wiping, shore
+  brushing and debris pickup into a bucket. Poses change twice per second,
+  with small sparkles and light ticks, followed by the existing cleaning
+  refresh and workers disappearing. Shared meshes and scalar frame updates
+  keep steady animation allocation-free; route planning occurs at sequence
+  transitions or exceptional obstructions.
+
 ## 2026-11-01 — Animal picture vocabulary previews
 
 - Fish/Animals pictures are independent, keyboard-accessible preview buttons,

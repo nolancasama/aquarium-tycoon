@@ -113,6 +113,9 @@ export interface ExhibitDef {
 
 const SURFACE = 1.95;
 
+/** Penguin-only staff threshold; the scene cuts a real corridor into the back cliff. */
+export const PENGUIN_STAFF_DOOR = { x: -2.8, z: -8.85, width: 1.3, height: 2.3, depth: 1 };
+
 export const EXHIBITS: Record<CoastHabitat, ExhibitDef> = {
   penguins: {
     id: "penguins", name: "Penguin Coast", ja: "ペンギンの かいがん",

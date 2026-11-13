@@ -1,5 +1,31 @@
 # Current State
 
+## Penguin Coast keeper care (2026-11-13)
+
+- Feed now runs an explicit door / walk / bucket tip / watch / return state
+  machine. The back cliff has a real opening, dark corridor and hinged leaf.
+  Fish grow on the tray during tipping; keeper and penguin segments respect
+  staff, door and station clearance. With no station the keeper tips at the
+  shore and retains the existing no-station attraction.
+- Clean runs a five-second montage with three teal staff figures, hand tools,
+  discrete wiping/scrubbing/pickup poses, sparkles and light sounds. Both care
+  actions share a runtime guard and bilingual disabled HUD buttons.
+- Existing care maths is applied once at the tip / end of cleaning, or on
+  early departure. Preview restoration discards temporary care along with the
+  preview model. Runtime presentation resets on leaving. Saves, release locks,
+  Seal Cove and Otter Bay are unchanged. Decisions: DESIGN_DECISIONS.md,
+  "2026-11-13 — Penguin Coast keeper care".
+- Verification: typecheck; unit 850/850 on an idle machine (18 new keeper
+  tests in `coast/keeper.test.ts`, `flow/coastKeeper.test.ts`); build;
+  `coast.spec` 7/7 (the feed step now asserts "Feeding..." disabled, fed,
+  then re-enabled, through the no-station fallback). Frames reviewed by eye
+  at 1366×768 (SwiftShader): door open with dark interior, keeper walking out
+  with the bucket, tipping, returning, door closed; three-keeper montage; all
+  keepers gone and bars full afterwards. A double tap on Feed fed once
+  (40 → 98). Script: `node .tmp/keeper-review.mjs <url> 1366 768` (local).
+- Known: in the montage the glass-wiping keeper stands partly behind the
+  Penguins/Underwater view buttons; the feed sequence is ~19 s end to end.
+
 ## Save safety, one arrow layout, hub reef, Lagoon deck, bigger Penguin Coast (2026-11-13)
 
 Merged into `main` and pushed to GitHub Pages on 2026-11-13. Design:
@@ -41,20 +67,8 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
 
 ## Next steps
 
-1. **Items 7–8** as a new order on a branch from `main` (they touch the
-   penguin scene and `CoastHud`): **keeper feeding**: a real staff door built
-   into the back rocks (opening/closing, short dark interior); on Feed a
-   keeper with a bucket walks out, goes to the feeding station, bends and tips
-   fish in (pile grows), watches, walks back, closes the door; penguins gather
-   and eat without passing through the keeper/door/station; Feed disabled with
-   "Feeding... / えさやりちゅう", the action itself guarded (one sequence, one
-   benefit), a runtime state machine, safe when leaving the area, a fallback
-   when no station is placed. **Cleaning montage**: a short stop-motion /
-   time-lapse of several keepers in distinct cleaning poses at plausible spots
-   (glass, shore, debris bucket, near the station, wash-down), tools in hands,
-   light sound/sparkle, exhibit refreshed and workers gone at the end; Clean
-   disabled and guarded the same way; existing cleanliness maths unchanged.
-   Reuse the visitor character models; no new dependencies.
+1. **Items 7–8 implemented above:** Claude to review keeper feeding and the
+   cleaning montage aesthetically; real Chromebook performance not measured.
 2. Stabilise `outdoor.spec` (preview entry wait) when convenient.
 3. The four `fix/*` worktrees are merged and can be removed (each has its own
    `npm ci` install; never `--force` with a junctioned node_modules).

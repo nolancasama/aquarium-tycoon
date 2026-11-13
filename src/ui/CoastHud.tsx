@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { keeperBusy, keeperRt, subscribeKeeperCare } from "../game/coast/keeper";
 import { setGame, useGame } from "../game/store";
 import { COAST_HALL } from "../game/data/rooms";
 import { DECOR, COAST_DECOR } from "../game/data/decor";
@@ -173,6 +174,9 @@ function WaitingVisitor() {
 }
 
 export function CoastHud() {
+  const careBusy = useSyncExternalStore(subscribeKeeperCare, keeperBusy, keeperBusy);
+  const feeding = careBusy && keeperRt.feed.phase !== "idle";
+  const cleaning = careBusy && keeperRt.clean.phase !== "idle";
   const view = useGame((s) => s.coastView);
   const revealing = useGame((s) => s.coastRevealing);
   const free = useGame((s) => s.mode === "play" && !s.prompt && !s.line && !s.stageCard && !s.placing && !s.coastActivity);
@@ -197,10 +201,16 @@ export function CoastHud() {
           <div className="bar-main">
             {h ? (
               <>
-                <Big id="btn-coast-items" icon="decor" label="Items" ja="どうぐ" onClick={() => setGame({ panel: "decorShop" })} />
-                <Big id="btn-decorate" icon="hand" label="Place" ja="おく" onClick={openDecorate} />
-                <Big id="btn-feed" icon="food" label="" ja="えさ" onClick={() => void feedTank()} />
-                <Big id="btn-clean" icon="sponge" label="" ja="そうじ" onClick={() => void cleanTank()} />
+                <Big id="btn-coast-items" icon="decor" label="Items" ja="どうぐ" locked={h === "penguins" && careBusy} onClick={() => { if (!careBusy) setGame({ panel: "decorShop" }); }} />
+                <Big id="btn-decorate" icon="hand" label="Place" ja="おく" locked={h === "penguins" && careBusy} onClick={() => { if (!careBusy) openDecorate(); }} />
+                <button className="big-btn ui coast-care" data-testid="btn-feed" disabled={h === "penguins" && careBusy} onClick={() => void feedTank()}>
+                  <span className="big-icon"><Icon id="food" size={40} /></span>
+                  <span>{feeding ? "Feeding..." : "Feed"}</span><Ja>{feeding ? "えさやりちゅう" : "えさ"}</Ja>
+                </button>
+                <button className="big-btn ui coast-care" data-testid="btn-clean" disabled={h === "penguins" && careBusy} onClick={() => void cleanTank()}>
+                  <span className="big-icon"><Icon id="sponge" size={40} /></span>
+                  <span>{cleaning ? "Cleaning..." : "Clean"}</span><Ja>{cleaning ? "そうじちゅう" : "そうじ"}</Ja>
+                </button>
               </>
             ) : (
               <button className="panel hub-hint ui" data-testid="coast-hint" onClick={() => playHintAudio("Tap a habitat!")}>

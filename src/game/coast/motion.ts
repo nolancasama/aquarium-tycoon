@@ -94,6 +94,8 @@ export interface MoveCtx {
   restSpots?: Vec2[];
   /** Same-exhibit peers; reused by the runtime, never constructed during steering. */
   movers?: readonly Mover[];
+  /** Penguin staff body, reused by the runtime; checked on each swept movement step. */
+  staff?: { x: number; z: number; active: boolean; r: number };
   /** Events: entered or left the water (for milestones and activities). */
   onEvent?: (m: Mover, kind: "enterWater" | "leaveWater" | "breathe" | "dive" | "play" | "eatFish") => void;
 }
@@ -317,6 +319,7 @@ function rampLane(m: Mover, ex: ExhibitDef, i: number, up = false) {
 
 function destinationFree(m: Mover, q: Vec2, ctx: MoveCtx, clearance = PENGUIN_LAND_SEPARATION + 0.12) {
   if (m.species !== "penguin") return true;
+  if (ctx.staff?.active && Math.hypot(q.x - ctx.staff.x, q.z - ctx.staff.z) < ctx.staff.r + 0.12) return false;
   for (const peer of ctx.movers ?? []) {
     if (peer === m) continue;
     if (Math.hypot(peer.x - q.x, peer.z - q.z) < clearance) return false;
@@ -459,7 +462,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
       return;
     }
     if (m.area === "land" && (m.mode === "rest" || m.mode === "walk") && !meal.routed) {
-      const route = stationLandRoute(ex, m, meal.spot, ctx.landItems);
+      const route = stationLandRoute(ex, m, meal.spot, ctx.staff?.active ? [...ctx.landItems, { x: ctx.staff.x, z: ctx.staff.z, r: ctx.staff.r }] : ctx.landItems);
       if (route) {
         m.mode = "walk"; m.path = route; m.rampNext = -1; m.ledgeNext = -1; m.action = null; meal.routed = true;
       }
@@ -646,8 +649,7 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
 }
 
 /** A small visibility graph around solid footprints, used only for station trips. */
-export function stationLandRoute(ex: ExhibitDef, from: Vec2, to: Vec2, items: MoveCtx["landItems"]): Vec3[] | null {
-  const body = PARAMS.penguin.body;
+export function stationLandRoute(ex: ExhibitDef, from: Vec2, to: Vec2, items: MoveCtx["landItems"], body = PARAMS.penguin.body): Vec3[] | null {
   const clear = (a: Vec2, b: Vec2) => landLegClear(ex, a, b, items, body);
   if (!clear(to, to)) return null;
   if (clear(from, to)) return [{ ...to, y: ex.land.y }];
@@ -750,6 +752,16 @@ function travel(m: Mover, ex: ExhibitDef, dt: number, speed: number, steer: bool
         pace = Math.min(pace, 0.35 + Math.max(0, Math.min(0.65, (distance - gap) / 1.8)));
       }
     }
+    const staff = ctx.staff;
+    if (!swimming && staff?.active && Math.abs(m.y - ex.land.y) < 0.85) {
+      const ax = m.x - staff.x, az = m.z - staff.z, distance = Math.hypot(ax, az);
+      if (distance < staff.r + 1.3 && -(ax * vx + az * vz) > -0.1) {
+        const strength = Math.max(0, (staff.r + 1.3 - distance) / 1.3);
+        const horizontal = Math.hypot(vx, vz) || 1, oldVx = vx;
+        vx += (vz / horizontal * 1.4 + ax / (distance || 1)) * strength;
+        vz += (-oldVx / horizontal * 1.4 + az / (distance || 1)) * strength;
+      }
+    }
     const heading = Math.hypot(vx, vz) > 1e-7 ? Math.atan2(vx, vz) : m.heading;
     const pitch = swimming ? Math.atan2(vy, Math.hypot(vx, vz)) : 0;
     if (freeSteer) {
@@ -772,10 +784,13 @@ function travel(m: Mover, ex: ExhibitDef, dt: number, speed: number, steer: bool
     let valid = true;
     if (swimming) valid = waterLegClear(ex, m, proposed, PARAMS.penguin.body) && waterLegClear(ex, proposed, t, PARAMS.penguin.body) && proposed.y >= ex.pool.floor + SWIM_MARGIN && proposed.y <= ex.pool.surface - 0.04;
     else if (m.mode === "walk") valid = landLegClear(ex, m, proposed, ctx.landItems, PARAMS.penguin.body) && landLegClear(ex, proposed, t, ctx.landItems, PARAMS.penguin.body);
+    if (!swimming && staff?.active && Math.abs(proposed.y - ex.land.y) < 0.85 &&
+      segDist(m, proposed, staff) < Math.min(staff.r, Math.hypot(m.x - staff.x, m.z - staff.z)) - 1e-8) valid = false;
     if (!valid || (peers && !peerStepClear(m, proposed.x, proposed.y, proposed.z, peers))) {
       // Yield in place; never project a body out of a wall or teleport it away from a peer.
       m.speed = 0;
       m.blockedFor = (m.blockedFor ?? 0) + dt;
+      if (m.feeding && staff?.active && m.blockedFor > 1.5) { m.feeding.routed = false; m.blockedFor = 0; }
       if (!valid && freeSteer) {
         const wantHeading = flat > 1e-7 ? Math.atan2(dx, dz) : m.heading;
         m.heading += Math.max(-dt * 2.4, Math.min(dt * 2.4, angleDiff(m.heading, wantHeading)));
