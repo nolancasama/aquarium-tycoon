@@ -80,7 +80,11 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
    from a small panel (stable ids, one sanitizer, preview-safe); unit 913/913,
    frames + reload checked at 1366/1024 (`.tmp/naming/review.mjs`). Claude
    dropped the selection toast (it covered the panel) and moved the panel
-   left of the status card below 1100 px.
+   left of the status card below 1100 px. Wave 1 + naming are LIVE on
+   GitHub Pages (2026-11-14, deploy run green, live bundle = local build).
+   CI first failed on a flaky lagoon test: after the catch change automatic
+   ball passes in 70 s fell from mean ~13 (min 3) to ~10.6 (min 2), ~1/15
+   runs gave 1; `tricks.test.ts` now seeds Math.random.
    **PARTIAL: wave 2 curriculum** in `../aq-curriculum` (`feat/curriculum`),
    Codex usage limit until 2026-11-14 04:07 JST. Done: activities rewritten
    across 24 files, unit tests pass. Left: typecheck errors in
