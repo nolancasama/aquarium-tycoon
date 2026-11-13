@@ -85,18 +85,25 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
    CI first failed on a flaky lagoon test: after the catch change automatic
    ball passes in 70 s fell from mean ~13 (min 3) to ~10.6 (min 2), ~1/15
    runs gave 1; `tricks.test.ts` now seeds Math.random.
-   **PARTIAL: wave 2 curriculum** in `../aq-curriculum` (`feat/curriculum`),
-   Codex usage limit until 2026-11-14 04:07 JST. Done: activities rewritten
-   across 24 files, unit tests pass. Left: typecheck errors in
-   `visitors.test.ts` / `requests.test.ts` (test typings), docs/CURRICULUM.md,
-   the DESIGN_DECISIONS entry, then requests/tunnel/outdoor/coast specs.
-   Resume with a `partialWork` block in its `.ai/work-order.json`.
-1. Keeper feeding and the cleaning montage are done (see the top section);
-   the `../aq-keeper` worktree / `feat/keeper` branch is merged and can be
-   removed. Optional polish: move the montage's glass keeper clear of the
-   view buttons.
-2. No open items from the owner. All old worktrees and merged branches were
-   removed on 2026-11-13 (only `main` remains).
+   Wave 2 curriculum DONE and merged locally 2026-11-14 (74d3ea7): ability
+   ("Can it...?") and location ("Where is...?") targets retired, replaced by
+   identification/likes/counting/size; retired ids still load
+   (saveRecovery test); inventory in docs/CURRICULUM.md. requests + tunnel +
+   outdoor + coast specs 20/20 on its branch.
+1. **Penguin Coast three cleaners + lower walkway** DONE and merged locally
+   2026-11-14 (8462a36), two Codex rounds. Clean = five held shots, three
+   staff each (land left third, land right third, one spraying the lower
+   gallery glass from the visitor side), temporary Clean framing restores the
+   view; the clean bar no longer dips during the montage. Upper terrace and
+   stairs removed; the lower gallery is the walkway, and the Underwater camera
+   stands back at local z = 30 so floor, sill and mullions show. Decision:
+   DESIGN_DECISIONS "2026-11-14 — Penguin Coast three-cleaner photographs and
+   lower visitor gallery". Frames: `.tmp/coast-review/clean3b/<size>/`.
+   Merged main verified: typecheck, unit 941/941, build, coast + outdoor
+   13/13. Known: the Underwater frame's empty walkway floor fills the lower
+   ~40%; the glass cleaner moves only slightly between shots.
+2. **Not pushed:** `main` is 6 commits ahead of origin (curriculum + coast).
+   Push = GitHub Pages deploy; awaiting owner OK. Only `main` worktree remains.
 
 **`outdoor.spec` stabilised (2026-11-13):** three test-side causes, 25/25 on
 `--repeat-each=5` afterwards (it failed 1/25 and 3/25 on the way):
@@ -966,9 +973,10 @@ approach frames, the trophy from front/side/rear.
    names).
 
 ## Codex / Delegated Work
-**Pending (2026-11-13):** wave 2 in `../aq-curriculum` and `../aq-naming` (see
-Next steps item 0). If a run stops PARTIAL, add a `partialWork` block to its
-`.ai/work-order.json` and re-run `delegate.js`; never start it over.
+**Pending:** none (2026-11-14). Curriculum and the coast cleaner/walkway work
+were reviewed, merged and their worktrees removed. If a future run stops
+PARTIAL, add a `partialWork` block to its `.ai/work-order.json` and re-run
+`delegate.js`; never start it over.
 
 Earlier work: none pending. The Shark Tunnel's two Codex slices (worktrees aq-st1 and aq-st2) stopped
 on a usage limit on 2026-11-06; Claude finished and integrated all of it on branch
