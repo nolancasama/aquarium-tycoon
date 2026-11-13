@@ -181,7 +181,7 @@ function Keeper({ role, worker = 0, shown }: { role: "feed" | "clean"; worker?: 
       switch (shot.pose) {
         case "glassScrub": bend = 0.08; armPitch = -1.55; break;
         case "crouchCollect":
-          drop = 0.275; bend = 0.78; armPitch = -0.65;
+          drop = 0.21; bend = 0.58; armPitch = -0.65;
           leftThigh = rightThigh = -1.15; leftShin = rightShin = 1.7;
           break;
         case "sprayWipe": bend = -0.08; armPitch = -1.2; break;

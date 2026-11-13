@@ -89,6 +89,8 @@ describe("principal lower penguin gallery", () => {
     const shot = coastExhibitShot("penguins", aspect, true);
     const eye = new THREE.Vector3(shot.pos.x - ex.x, shot.pos.y, shot.pos.z - ex.z);
     expect(eye.y - lower.top).toBeCloseTo(1.6);
+    expect(eye.z).toBeGreaterThan(lower.minZ);
+    expect(eye.z).toBeLessThan(lower.maxZ - 1);
     const camera = new THREE.PerspectiveCamera(35, aspect, 0.1, 500);
     camera.position.copy(eye);
     camera.lookAt(shot.target.x - ex.x, shot.target.y, shot.target.z - ex.z);
@@ -103,8 +105,13 @@ describe("principal lower penguin gallery", () => {
       const floorPoint = new THREE.Vector3(0, lower.top, lower.minZ + 0.8).project(camera);
       expect(floorPoint.x).toBeGreaterThan(-1);
       expect(floorPoint.x).toBeLessThan(1);
-      expect(floorPoint.y).toBeGreaterThan(-0.98);
-      expect(floorPoint.y).toBeLessThan(-0.3);
+      // The sill sits near 58% of image height, leaving 20-30% foreground
+      // floor before the bottom controls, rather than merely inside the image.
+      expect(floorPoint.y).toBeGreaterThan(-0.25);
+      expect(floorPoint.y).toBeLessThan(-0.1);
+      const lintel = new THREE.Vector3(0, PENGUIN_GALLERY.coping.bottom, PENGUIN_GALLERY.coping.maxZ).project(camera);
+      expect(lintel.y).toBeGreaterThan(0.7);
+      expect(lintel.y).toBeLessThan(1);
       const foregroundRay = new THREE.Raycaster();
       foregroundRay.setFromCamera(new THREE.Vector2(0, -0.9), camera);
       expect(foregroundRay.intersectObject(gallery.mesh)[0]?.point.y).toBeCloseTo(lower.top);

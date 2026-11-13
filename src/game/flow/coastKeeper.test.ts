@@ -124,7 +124,8 @@ describe("penguin keeper care actions", () => {
     await cleanTank();
     coastCameraTick(aspect, 0.016);
     const cleanCamera = structuredClone(rt.camera.shot);
-    expect(cleanCamera!.pos.y).toBeGreaterThan(10);
+    expect(cleanCamera!.pos.y).toBeGreaterThan(2.73); // Above the window lintel.
+    expect(cleanCamera).not.toEqual(selected);
     expect(getGame().coastUnderwater).toBe(true);
     for (const shot of CLEAN_SHOTS) {
       expect(cleanShotAt(keeperRt.clean.elapsed)?.workers).toHaveLength(3);
@@ -141,7 +142,7 @@ describe("penguin keeper care actions", () => {
   it("releases borrowed Clean framing on early departure", async () => {
     await cleanTank();
     coastCameraTick(1366 / 768, 1);
-    expect(rt.camera.shot!.pos.y).toBeGreaterThan(10);
+    expect(rt.camera.shot!.pos.y).toBeGreaterThan(2.73);
     setGame({ hall: 0 });
     coastCameraTick(1366 / 768, 1);
     expect(rt.camera.shot).toBeNull();

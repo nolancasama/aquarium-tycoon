@@ -16,29 +16,29 @@ export type CleanWorker = { x: number; y: number; z: number; heading: number; po
  */
 export const CLEAN_SHOTS = [
   { start: 0, duration: 1, workers: [
-    { x: -5.65, y: ex.land.y, z: -3.25, heading: -1.75, pose: "kneelBrush", tool: "sponge" },
-    { x: -1.1, y: ex.land.y, z: -3.25, heading: 1.55, pose: "crouchCollect", tool: "bucket" },
-    { x: 3.3, y: -3.05, z: 11.72, heading: Math.PI, pose: "sprayWipe", tool: "spray" }
+    { x: -5.8, y: ex.land.y, z: -2.1, heading: -1.75, pose: "kneelBrush", tool: "sponge" },
+    { x: 4.8, y: ex.land.y, z: -2.2, heading: 1.55, pose: "crouchCollect", tool: "bucket" },
+    { x: 5.8, y: -3.05, z: 11.72, heading: Math.PI, pose: "sprayWipe", tool: "spray" }
   ] },
   { start: 1, duration: 1, workers: [
-    { x: -5.6, y: ex.land.y, z: -3.3, heading: -2.1, pose: "kneelBrush", tool: "brush" },
-    { x: -0.5, y: ex.land.y, z: -3.4, heading: Math.PI, pose: "kneelBrush", tool: "cloth" },
-    { x: 3.7, y: -3.05, z: 11.72, heading: 2.95, pose: "glassScrub", tool: "spray" }
+    { x: -4.2, y: ex.land.y, z: -2.8, heading: Math.PI, pose: "crouchCollect", tool: "bucket" },
+    { x: 4.1, y: ex.land.y, z: -2.0, heading: 1.75, pose: "kneelBrush", tool: "brush" },
+    { x: 6.9, y: -3.05, z: 11.72, heading: 2.95, pose: "finalWipe", tool: "spray" }
   ] },
   { start: 2, duration: 1, workers: [
-    { x: -5.2, y: ex.land.y, z: -3.2, heading: -1.45, pose: "crouchCollect", tool: "bucket" },
-    { x: -0.9, y: ex.land.y, z: -3.3, heading: 2.25, pose: "kneelBrush", tool: "brush" },
-    { x: 3.2, y: -3.05, z: 11.72, heading: 3.32, pose: "sprayWipe", tool: "spray" }
+    { x: -5.2, y: ex.land.y, z: -2.0, heading: -1.45, pose: "crouchCollect", tool: "bucket" },
+    { x: 5.0, y: ex.land.y, z: -3.0, heading: Math.PI, pose: "kneelBrush", tool: "cloth" },
+    { x: 6.3, y: -3.05, z: 11.72, heading: 3.32, pose: "glassScrub", tool: "spray" }
   ] },
   { start: 3, duration: 1, workers: [
-    { x: -5.7, y: ex.land.y, z: -3.35, heading: -2.35, pose: "kneelBrush", tool: "cloth" },
-    { x: -1.3, y: ex.land.y, z: -3.2, heading: 1.65, pose: "kneelBrush", tool: "sponge" },
-    { x: 3.65, y: -3.05, z: 11.72, heading: Math.PI, pose: "finalWipe", tool: "spray" }
+    { x: -4.1, y: ex.land.y, z: -2.7, heading: -2.35, pose: "kneelBrush", tool: "cloth" },
+    { x: 4.3, y: ex.land.y, z: -2.0, heading: 1.65, pose: "crouchCollect", tool: "bucket" },
+    { x: 6.6, y: -3.05, z: 11.72, heading: Math.PI, pose: "finalWipe", tool: "spray" }
   ] },
   { start: 4, duration: 1, workers: [
-    { x: -5.4, y: ex.land.y, z: -3.2, heading: -1.8, pose: "kneelBrush", tool: "brush" },
-    { x: -0.7, y: ex.land.y, z: -3.3, heading: 2.7, pose: "crouchCollect", tool: "bucket" },
-    { x: 3.3, y: -3.05, z: 11.72, heading: 3.05, pose: "sprayWipe", tool: "spray" }
+    { x: -5.7, y: ex.land.y, z: -2.0, heading: Math.PI, pose: "kneelBrush", tool: "brush" },
+    { x: 4.8, y: ex.land.y, z: -2.8, heading: 1.85, pose: "kneelBrush", tool: "sponge" },
+    { x: 5.9, y: -3.05, z: 11.72, heading: 3.05, pose: "sprayWipe", tool: "spray" }
   ] }
 ] as const satisfies readonly { start: number; duration: number; workers: readonly [CleanWorker, CleanWorker, CleanWorker] }[];
 export function cleanShotAt(elapsed: number): (typeof CLEAN_SHOTS)[number] | null {
@@ -49,7 +49,7 @@ export const KEEPER_CLEARANCE = 1.05;
 export const keeperRt = {
   feed: { phase: "idle" as KeeperPhase, elapsed: 0, x: door.x, z: door.z, heading: 0, door: 0, tip: 0, walking: false,
     route: [] as Vec3[], leg: 0, blocked: 0, targetX: 0, targetZ: 0, slot: -1, mealStarted: false, pileStarted: false },
-  clean: { phase: "idle" as "idle" | "montage", elapsed: 0, frame: 0 }
+  clean: { phase: "idle" as "idle" | "montage", elapsed: 0, frame: 0, startClean: 100 }
 };
 const pending = { feed: false, clean: false }, delivered = { feed: true, clean: true };
 let active: KeeperCare | null = null;
@@ -92,9 +92,10 @@ export function startKeeperFeed(model: Model): boolean {
   return true;
 }
 
-export function startKeeperClean(_model: Model): boolean {
+export function startKeeperClean(model: Model): boolean {
   if (keeperBusy() || pending.feed || pending.clean) return false;
   keeperRt.clean.phase = "montage"; keeperRt.clean.elapsed = 0; keeperRt.clean.frame = 0;
+  keeperRt.clean.startClean = tankAt(model, HABITAT_PAD.penguins)?.clean ?? 100;
   active = "clean"; delivered.clean = false;
   changed();
   return true;

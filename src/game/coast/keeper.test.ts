@@ -26,10 +26,10 @@ describe("penguin keeper runtime", () => {
       expect(shot.duration).toBeGreaterThan(0);
       expect(shot.start).toBe(previous ? previous.start + previous.duration : 0);
       expect(shot.workers).toHaveLength(3);
-      const [left, centre, glass] = shot.workers;
-      expect(left.x).toBeLessThan(-4);
-      expect(Math.abs(centre.x)).toBeLessThan(2);
-      for (const worker of [left, centre]) {
+      const [left, right, glass] = shot.workers;
+      expect(left.x).toBeLessThan(EXHIBITS.penguins.land.minX / 3);
+      expect(right.x).toBeGreaterThan(EXHIBITS.penguins.land.maxX / 3);
+      for (const worker of [left, right]) {
         expect(worker.y).toBe(EXHIBITS.penguins.land.y);
         expect(worker.z).toBeLessThan(EXHIBITS.penguins.land.maxZ);
         expect(Math.cos(worker.heading)).toBeLessThan(0.2);
@@ -47,6 +47,8 @@ describe("penguin keeper runtime", () => {
     expect(new Set(workers.map((worker) => worker.pose)).size).toBe(5);
     expect(new Set(workers.map((worker) => worker.tool)).size).toBe(5);
     expect(workers.some((worker) => worker.heading === Math.PI)).toBe(true);
+    const glassPositions = CLEAN_SHOTS.map((shot) => shot.workers[2].x);
+    expect(Math.max(...glassPositions) - Math.min(...glassPositions)).toBeGreaterThan(1);
     for (const elapsed of [-1, 5, 5.001, 10, Infinity, NaN]) expect(cleanShotAt(elapsed)).toBeNull();
   });
 

@@ -15,9 +15,11 @@ export function coastExhibitShot(view: CoastView, aspect: number, underwater: bo
   const k = Math.max(1, 1.78 / aspect) + portrait * 0.5;
   if (view !== "penguins" && !(view === "all" && COAST_HABITATS_SHOWN.length === 1 && COAST_HABITATS_SHOWN[0] === "penguins")) return coastCamera(view, false, underwater);
   if (question === "clean") {
-    // Fit the shore and the visitor side of the window with room for the HUD.
-    const retreat = Math.max(1, 1.6 / aspect);
-    return { pos: world(0, 16 * retreat, 38 * retreat), target: world(0, -0.9, 4) };
+    // A low, close view gives the land team readable silhouettes, with the
+    // gallery worker beside the bottom controls rather than behind them.
+    const retreat = Math.max(1, 1.4 / aspect);
+    const side = Math.max(0, (1.6 - aspect) / (1.6 - 4 / 3)) * 1.1;
+    return { pos: world(side, 3.5 * retreat, 4 + 25 * retreat), target: world(side, 0.8, 4) };
   }
   if (question) {
     const points = animals.length ? animals : question === "count"
@@ -28,7 +30,7 @@ export function coastExhibitShot(view: CoastView, aspect: number, underwater: bo
     const distance = Math.max(12, spread * 6.2) * k;
     return { pos: { x: center.x, y: center.y + distance * 0.622, z: center.z + distance * 0.783 }, target: { ...center, y: center.y + 0.3 } };
   }
-  if (underwater) return { pos: world(0, -1.45, 17), target: world(0, -2, 4) };
+  if (underwater) return { pos: world(0, -1.45, 30), target: world(0, -2.3, 4) };
   // Retreat for width, but keep the habitat in the middle of tall screens;
   // the former upward aim left the penguins down behind the care controls.
   const target = world(0, 4 - portrait * (1.5 / (1.7 - 4 / 3)), -4.8);

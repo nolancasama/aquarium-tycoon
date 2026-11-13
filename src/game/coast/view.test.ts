@@ -11,7 +11,7 @@ describe("coast exhibit cameras", () => {
     expect(land.target.y).toBeLessThanOrEqual(4);
     expect(land.pos.z - ex.z).toBeLessThan(25);
     expect(lower.pos.y).toBeCloseTo(-3.05 + 1.6);
-    expect(lower.pos.z - ex.z).toBe(17);
+    expect(lower.pos.z - ex.z).toBe(30);
     expect(lower.target.z).toBeLessThan(ex.z + ex.pool.maxZ);
   });
 

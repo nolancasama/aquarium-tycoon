@@ -3,7 +3,7 @@ import { PartBuilder } from "../partBuilder";
 
 /** Exhibit-local metres. The lower gallery is the only penguin visitor level. */
 export const PENGUIN_GALLERY = {
-  lower: { minX: -11.7, maxX: 11.7, minZ: 11.16, maxZ: 21, top: -3.05, thickness: 0.24 },
+  lower: { minX: -11.7, maxX: 11.7, minZ: 11.16, maxZ: 34, top: -3.05, thickness: 0.24 },
   window: { minX: -10.2, maxX: 10.2, minZ: 10.84, maxZ: 11.16, paneZ: 10.97 },
   coping: { minX: -10.97, maxX: 10.97, minZ: 11.15, maxZ: 11.8, bottom: 2.55, thickness: 0.18 },
   entrance: { minZ: 14.8, maxZ: 18.4, outerX: 14.5, clearHeight: 2.6 },
@@ -19,6 +19,10 @@ export function lowerGalleryGeometry(): THREE.BufferGeometry {
   // bottom without entering the swimming volume or overlapping a visible face.
   b.box(window.maxX - window.minX, 0.22, 0.26,
     0, lower.top, window.maxZ + 0.13, "#718c93");
+  // Slender vertical frame members remain in view at 4:3, where the outer
+  // piers are beyond the image. They join the sill to the existing lintel.
+  for (const x of [-6.4, 6.4]) b.box(0.12, coping.bottom - lower.top, 0.12,
+    x, lower.top, window.maxZ - 0.06, "#718c93");
   // Narrow piers carry a plain 65 cm coping, with no terrace or rails.
   for (const side of [-1, 1]) {
     b.box(0.64, coping.bottom - lower.top, coping.maxZ - coping.minZ,
