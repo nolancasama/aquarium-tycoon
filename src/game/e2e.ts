@@ -5,7 +5,8 @@ import { advanceCare, seedSim } from "./sim";
 import { ensureRush } from "./rush/logic";
 import { RUSH_SECONDS } from "./rush/config";
 import { leave, seedVisitors, spawnVisitor, visitorCrowdStats } from "./flow/visitors";
-import { decay, goals, happiness, latchHappy, setCare } from "./logic/model";
+import { decay, goals, happiness, latchHappy, setCare, tankAt } from "./logic/model";
+import { recordCoastActivity, recordCoastSight } from "./logic/coast";
 import type { Request } from "./logic/requests";
 import { requestStep } from "./logic/requestGuide";
 import { SLOT_POS, STAND_H, TANKS } from "./data/tanks";
@@ -30,14 +31,14 @@ import { endPreview, previewActive, startPreview } from "./flow/preview";
 import { areaReleased, previewAreas, RELEASE_AREAS, type ReleaseArea } from "./data/release";
 import { coastRt } from "./coast/coastRuntime";
 import { keeperRt } from "./coast/keeper";
-import { reviewCoastCamera } from "./flow/coast";
+import { celebrate as celebrateCoast, reviewCoastCamera } from "./flow/coast";
 import type { CameraShot } from "./runtime";
 import { EXHIBITS } from "./data/coast";
 import { dprState, perf } from "../scene/GameScene";
 import { sandSurfaceY, slotMarkerY } from "./logic/tankLayout";
 import type { SlotId, VisitorType } from "./types";
 import { visibleCountNumbers } from "./logic/counting";
-import { ROOMS } from "./data/rooms";
+import { COAST_HALL, ROOMS } from "./data/rooms";
 import { SHARK_DOOR, TUNNEL_SECTIONS, TUNNEL_VIEWING_SPOTS, TUNNEL_ZONES, sectionAt, walkwayFrame, walkwayLength, type TunnelSection } from "./data/sharkTunnel";
 import { tunnelRuntime } from "./tunnel/contract";
 import { cameraTubeCheck, playerWorld, snapCamera } from "./tunnel/explore";
@@ -294,6 +295,23 @@ export function installE2eHook(seed: number) {
     coastTo(n: number) {
       startPreview("coast");
       updateModel((m) => coastTo(m, n));
+    },
+    /** Satisfy Penguin Paradise's actual rules for a real owner, without opening a preview. */
+    coastParadise() {
+      const g = getGame();
+      if (previewActive() || g.hall !== COAST_HALL || !g.model.progress.coastOpen || (g.model.progress.coast?.milestone ?? 0) >= 2 || !tankAt(g.model, "M")) return false;
+      const before = g.model.progress.coast?.milestone ?? 0;
+      updateModel((m) => {
+        const tank = tankAt(m, "M")!;
+        const rocks = tank.decor.some((d) => d.kind === "penguinRock");
+        const withRocks = rocks ? m : {
+          ...m, nextId: m.nextId + 1,
+          tanks: m.tanks.map((t) => t.id === tank.id ? { ...t, decor: [...t.decor, { id: `d${m.nextId}`, kind: "penguinRock" as const, variant: null, slot: 0 }] } : t)
+        };
+        return recordCoastActivity(recordCoastActivity(recordCoastSight(withRocks, "penguinSwim"), "penguins"), "penguins");
+      });
+      celebrateCoast(before);
+      return true;
     },
     /** Development preview of a release-locked area (session only, never saved), as Ctrl+Alt+D does. */
     preview(area: ReleaseArea) {

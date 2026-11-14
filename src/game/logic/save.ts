@@ -6,11 +6,11 @@ import { roomOpen, roomOwned } from "../data/rooms";
 import { isSavedPhrase } from "./english";
 import { isSavedSentencePattern } from "./sentenceTeaching";
 import { decodeRush } from "../rush/decode";
-import { PENGUIN_PURCHASES, type CoastProgress } from "./coast";
+import { PENGUIN_PURCHASES, storeHiddenCoast, type CoastProgress } from "./coast";
 import { coastSlotFits } from "../data/coast";
 import { areaReleased } from "../data/release";
 import { storeLocked } from "./stored";
-import { readLagoonProgress } from "./lagoon";
+import { grantLagoon, readLagoonProgress } from "./lagoon";
 import { readSanctuaryProgress } from "./sanctuary";
 import { cleanAnimalName, readDolphinNames } from "./animalNames";
 import { canLive, hasSpace, LIGHT_COLORS, newModel, newProgress, newTank, type DecorRec, type FishRec, type Model, type PlacedDecor, type Progress, type TankRec, type TutorialStep, type TunnelProgress } from "./model";
@@ -251,9 +251,13 @@ function readProgress(raw: unknown, version: number): Progress {
       penguinsBought: Math.max(0, Math.min(PENGUIN_PURCHASES, Math.floor(num(c.penguinsBought, 0))))
     };
   }
-  // The outdoor expansions: only a released area can be owned. Until then any
-  // saved field is dropped (no unlock rule exists, and previews are never saved).
-  if (areaReleased("lagoon") && src.lagoonOpen === true && p.freePlay) {
+  // Validate ownership from Coast progress, also migrating saves that earned
+  // Penguin Paradise before the Lagoon was released. Forged flags cannot grant it.
+  const earned = grantLagoon({ ...newModel(), progress: p }).progress;
+  p.lagoonOpen = earned.lagoonOpen;
+  p.lagoonIntroSeen = earned.lagoonIntroSeen;
+  p.lagoon = earned.lagoon;
+  if (p.lagoonOpen && src.lagoonOpen === true) {
     p.lagoonOpen = true;
     p.lagoonIntroSeen = src.lagoonIntroSeen === true;
     p.lagoon = readLagoonProgress(src.lagoon);
@@ -426,7 +430,7 @@ function decodeWithReport(text: string | null, report: DecodeReport): { data: Sa
     .slice(-60);
   m.rush = decodeRush(src.rush);
   // What belongs to a release-locked area waits out of play (kept, and saved back).
-  return { data: { v: VERSION, model: storeLocked(m) }, report };
+  return { data: { v: VERSION, model: storeHiddenCoast(storeLocked(m)) }, report };
 }
 
 /** Compatibility wrapper: callers that do not need diagnostics keep the same API. */

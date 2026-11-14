@@ -2,8 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { answer, boot, cameraStill, click3d, hook, state, waitFor } from "./helpers";
 
 /**
- * The outdoor expansions (Dolphin Lagoon, Grand Ocean Sanctuary) are built but
- * release-locked: these tests reach them only through the development preview
+ * The outdoor development sandboxes (including release-locked Grand Ocean
+ * Sanctuary): these tests reach them through the development preview
  * (Ctrl+Alt+D), play them mic-free (Tap mode), return to the hub, and check
  * that ending the preview or reloading leaves the save exactly as it was.
  */
@@ -176,7 +176,7 @@ test("Ctrl+Alt+D previews the Dolphin Lagoon; it plays mic-free; back to the hub
   await expect(page.getByTestId("preview-badge")).toHaveCount(0);
   await cameraStill(page);
   await click3d(page, "hub-door", "lagoon");
-  await expect(page.getByTestId("toast").filter({ hasText: "Coming soon" }).first()).toBeVisible();
+  await expect(page.getByTestId("toast").filter({ hasText: "Finish Penguin Paradise" }).first()).toBeVisible();
   expect((await room(page)).roomId).toBe("hub");
 
   // A reload: nothing of the preview was ever saved.

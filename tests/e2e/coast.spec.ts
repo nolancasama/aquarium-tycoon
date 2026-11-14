@@ -2,12 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { answer, boot, click3d, hook, state, waitFor } from "./helpers";
 
 /**
- * Coastal & Polar Zone, release-locked (data/release.ts): in ordinary play its
- * doorway and map card only say "Coming soon" whatever the trophy and coins; a
- * saved coast is kept (stored out of play). Inside a development preview the
- * real rules still work: the offer, the penguin slice (needs rocks -> place
+ * Released Penguin Coast and Dolphin Lagoon use ordinary saved ownership.
+ * Development previews remain sandboxes. The penguin slice needs rocks -> place
  * resting rocks; penguins use the ramp and swim; "How many penguins?" by
- * tapping), feeding; and a reload forgets the preview entirely.
+ * tapping, feeding; and a reload forgets the preview entirely.
  */
 
 let id = 400;
@@ -44,7 +42,7 @@ async function load(page: Page, model: unknown) {
   const errors = await boot(page, "fast=1&seed=9");
   await page.getByTestId("btn-continue").click();
   await waitFor(page, (s) => s.screen === "game", 20_000, "game");
-  await hook(page, "visitors", false);
+  await hook(page, "visitors", false, true);
   for (let i = 0; i < 6 && (await state(page)).line; i++) await page.getByTestId("next").click({ timeout: 2000 }).catch(() => undefined);
   return errors;
 }
@@ -53,22 +51,143 @@ type Release = { preview: string[]; active: boolean; released: Record<string, bo
 const release = (page: Page) => hook<Release>(page, "release");
 const roomId = async (page: Page) => (await state(page) as unknown as { roomId: string }).roomId;
 
-test("locked at the hub and on the map; a preview sandbox opens it; penguins need rocks; a question; feed; reload forgets it", async ({ page }) => {
+type OutdoorProgress = { coastOpen?: boolean; lagoonOpen?: boolean; lagoonIntroSeen?: boolean; coast?: { milestone: number }; lagoon?: { milestone: number; fed: number; visited: string[]; toysUsed: string[]; decor: string[] } };
+const progress = async (page: Page) => (await state(page)).progress as unknown as OutdoorProgress;
+async function calm(page: Page) {
+  for (let i = 0; i < 12; i++) {
+    if (!(await state(page)).line) { await page.waitForTimeout(400); if (!(await state(page)).line) return; }
+    await page.getByTestId("next").click({ timeout: 2000 }).catch(() => undefined);
+  }
+}
+async function inRoom(page: Page, room: string) {
+  await waitFor(page, (s) => (s as unknown as { roomId: string; fade: number }).roomId === room && (s as unknown as { fade: number }).fade === 0 && s.mode === "play", 15_000, `in ${room}`);
+}
+async function mapTo(page: Page, room: string) {
+  await calm(page);
+  await page.getByTestId("btn-map").click();
+  await page.getByTestId(`map-${room}`).click();
+  await inRoom(page, room);
+}
+
+test("normal purchase, Penguin Paradise, Lagoon travel and autosave survive a reload without a preview", async ({ page }) => {
+  test.setTimeout(150_000);
+  const errors = await load(page, save(700));
+  await mapTo(page, "hub");
+  await page.waitForTimeout(1200);
+
+  // Released but not earned: the requirement replaces Coming soon and cannot travel.
+  await click3d(page, "hub-door", "lagoon");
+  await expect(page.getByTestId("toast").filter({ hasText: "Finish Penguin Paradise" })).toBeVisible();
+  expect(await roomId(page)).toBe("hub");
+  await page.getByTestId("btn-map").click();
+  await expect(page.getByTestId("map-lagoon")).toContainText("Finish Penguin Paradise");
+  await page.getByTestId("map-lagoon").click();
+  expect(await roomId(page)).toBe("hub");
+  await page.getByTestId("map-close").click();
+
+  await click3d(page, "hub-door", "coast");
+  await expect(page.getByTestId("coast-offer")).toBeVisible();
+  await expect(page.getByTestId("coast-offer")).toContainText("320");
+  await page.getByTestId("btn-buy-coast").click();
+  await inRoom(page, "coast");
+  expect((await state(page)).coins).toBe(380);
+  expect((await progress(page)).coastOpen).toBe(true);
+  await waitFor(page, (s) => !s.line && (s.progress as unknown as { coastIntroSeen?: boolean }).coastIntroSeen === true, 15_000, "coast intro done");
+  await expect(page.getByTestId("btn-hall-next")).toHaveCount(0);
+  await expect(page.getByTestId("coast-view-seals")).toHaveCount(0);
+  await expect(page.getByTestId("coast-view-otters")).toHaveCount(0);
+
+  // This owner-only hook supplies rocks and records the swim and two activities through the real rules.
+  expect(await hook(page, "coastParadise")).toBe(true);
+  await expect.poll(async () => (await coast(page)).milestone).toBe(2);
+  expect((await progress(page)).lagoonOpen).toBe(true);
+  expect((await progress(page)).lagoonIntroSeen).toBe(false);
+  expect((await state(page)).coins).toBe(380);
+  await expect(page.getByTestId("toast").filter({ hasText: "Dolphin Lagoon is open!" })).toBeVisible();
+  expect(await hook(page, "coastParadise")).toBe(false);
+  expect((await state(page)).tanks.find((t) => t.type === "penguins")?.fish).toHaveLength(3);
+  await page.waitForTimeout(5000);
+  await calm(page);
+  await expect(page.getByTestId("coast-goals")).toContainText("Dolphin Lagoon");
+
+  // First entry uses the owned doorway and keeps the regular introduction.
+  await mapTo(page, "hub");
+  await page.waitForTimeout(1200);
+  await click3d(page, "hub-door", "sanctuary");
+  await expect(page.getByTestId("toast").filter({ hasText: "Coming soon" })).toBeVisible();
+  expect(await roomId(page)).toBe("hub");
+  await click3d(page, "hub-door", "lagoon");
+  await inRoom(page, "lagoon");
+  await page.waitForTimeout(4500);
+  await calm(page);
+  expect((await progress(page)).lagoonIntroSeen).toBe(true);
+  await expect(page.getByTestId("lagoon-goals")).toContainText("Welcome to the Lagoon");
+  await expect(page.getByTestId("preview-badge")).toHaveCount(0);
+
+  // Normal Lagoon actions persist their progress, rather than only changing a sandbox.
+  await page.getByTestId("lagoon-view-gallery").click();
+  await page.waitForTimeout(1600);
+  await page.getByTestId("lagoon-view-deck").click();
+  await page.waitForTimeout(1600);
+  await page.getByTestId("btn-lagoon-feed").click();
+  await expect.poll(async () => (await progress(page)).lagoon?.milestone).toBe(1);
+  await expect.poll(async () => (await hook<{ phase: string }>(page, "lagoonFeeding")).phase, { timeout: 35_000 }).toBe("finished");
+  await page.waitForTimeout(4500);
+  await page.getByTestId("btn-lagoon-toys").click();
+  await page.locator("[data-testid=lagoon-toy][data-toy=ball]").click();
+  await expect.poll(async () => (await progress(page)).lagoon?.toysUsed).toContain("ball");
+  await page.waitForTimeout(4500);
+
+  // Map and both arrows use the same saved ownership as the doorway.
+  await mapTo(page, "coast");
+  await page.waitForTimeout(1200);
+  await calm(page);
+  await page.getByTestId("btn-hall-next").click();
+  await inRoom(page, "lagoon");
+  await page.waitForTimeout(1200);
+  await calm(page);
+  await page.getByTestId("btn-hall-prev").click();
+  await inRoom(page, "coast");
+  await mapTo(page, "lagoon");
+  await page.waitForTimeout(1200);
+  const before = (await progress(page)).lagoon!;
+  await page.reload();
+  await page.getByTestId("btn-continue").click();
+  await waitFor(page, (s) => s.screen === "game", 20_000, "continued saved game");
+  const restored = await progress(page);
+  expect(restored.coastOpen).toBe(true);
+  expect(restored.lagoonOpen).toBe(true);
+  expect(restored.lagoonIntroSeen).toBe(true);
+  expect(restored.coast?.milestone).toBe(2);
+  expect(restored.lagoon).toMatchObject({ milestone: before.milestone, fed: before.fed, visited: before.visited, toysUsed: before.toysUsed, decor: before.decor });
+  expect((await state(page)).coins).toBe(380);
+  expect((await release(page)).active).toBe(false);
+  await expect(page.getByTestId("preview-badge")).toHaveCount(0);
+  await mapTo(page, "lagoon");
+  expect(errors).toEqual([]);
+});
+
+test("an existing Penguin Paradise save grants Lagoon access on load", async ({ page }) => {
+  const s = save(500);
+  const errors = await load(page, { ...s, tanks: [...s.tanks, tank("penguins", "M", ["penguin", "penguin", "penguin"])], progress: { ...s.progress, coastOpen: true, coastIntroSeen: true, coast: { milestone: 2 } } });
+  expect((await progress(page)).lagoonOpen).toBe(true);
+  expect((await progress(page)).lagoonIntroSeen).toBe(false);
+  expect((await state(page)).coins).toBe(500);
+  await expect(page.getByTestId("toast").filter({ hasText: "Dolphin Lagoon is open!" })).toHaveCount(0);
+  await mapTo(page, "lagoon");
+  await expect(page.getByTestId("preview-badge")).toHaveCount(0);
+  expect((await release(page)).active).toBe(false);
+  expect(errors).toEqual([]);
+});
+
+test("a preview sandbox opens the coast; penguins need rocks; a question; feed; reload forgets it", async ({ page }) => {
   const errors = await load(page, save(700));
   await waitFor(page, (s) => s.mode === "play" && !s.line, 10_000, "calm");
-  // The Shark Tunnel trophy and 700 coins: still only "Coming soon" (no offer, no travel, no charge).
+  // The released map advertises the ordinary purchase; preview purchases still do not persist.
   await page.getByTestId("btn-map").click();
-  await expect(page.getByTestId("map-coast")).toHaveAttribute("data-soon", "true");
-  await page.getByTestId("map-coast").click();
-  await expect(page.getByTestId("map-coast-soon")).toContainText("Coming soon!");
-  await expect(page.getByTestId("coast-offer")).toHaveCount(0);
-  await page.getByTestId("map-hub").click();
-  await waitFor(page, (s) => (s as unknown as { roomId: string; fade: number }).roomId === "hub" && (s as unknown as { fade: number }).fade === 0 && s.mode === "play", 10_000, "in the hub");
-  await page.waitForTimeout(900);
-  await click3d(page, "hub-door", "coast");
-  await expect(page.getByTestId("toast").filter({ hasText: "Coming soon" })).toBeVisible();
-  await page.waitForTimeout(600);
-  expect(await roomId(page)).toBe("hub");
+  await expect(page.getByTestId("map-coast")).not.toHaveAttribute("data-soon", "true");
+  await expect(page.getByTestId("map-coast")).toContainText("320");
+  await page.getByTestId("map-close").click();
   await expect(page.getByTestId("coast-offer")).toHaveCount(0);
   expect((await state(page)).coins).toBe(700);
   expect((await coast(page)).open).toBe(false);
@@ -186,22 +305,22 @@ test("locked at the hub and on the map; a preview sandbox opens it; penguins nee
   expect(errors).toEqual([]);
 });
 
-test("a saved coast is kept but closed; End preview restores the save", async ({ page }) => {
-  // A save from before the lock: the coast owned at milestone 2, three penguins on their rocks.
+test("a saved coast returns to play; hidden seals stay stored; End preview restores the save", async ({ page }) => {
+  // Existing ownership returns the penguins to normal play, while seals remain hidden.
   const s = save(500);
   const penguins = tank("penguins", "M", ["penguin", "penguin", "penguin"]);
   penguins.decor = [{ id: "d901", kind: "penguinRock", variant: null, slot: 0 }] as never;
   const owned = { ...s, tanks: [...s.tanks, penguins, tank("seals", "N", ["seal"])],
     progress: { ...s.progress, coastOpen: true, coastIntroSeen: true, coast: { milestone: 2, sawPenguinSwim: true, sawSealDive: false, sawOtterFloat: false, penguinActs: 0, sealActs: 0, otterActs: 0, trophy: false } } };
   const errors = await load(page, owned);
-  // Kept, out of play: not among the tanks, but stored with its animals and items.
-  expect((await state(page)).tanks.some((t) => t.slot === "M" || t.slot === "N")).toBe(false);
+  expect((await state(page)).tanks.find((t) => t.slot === "M")?.fish).toHaveLength(3);
+  expect((await state(page)).tanks.some((t) => t.slot === "N")).toBe(false);
   const r = await release(page);
-  expect(r.stored!.tanks.map((t) => [t.slot, t.fish.length, t.decor.map((d) => d.kind)])).toEqual([["M", 3, ["penguinRock"]], ["N", 1, []]]);
+  expect(r.stored!.tanks.map((t) => [t.slot, t.fish.length, t.decor.map((d) => d.kind)])).toEqual([["N", 1, []]]);
   expect((await coast(page)).milestone).toBe(2);
   await page.getByTestId("btn-map").click();
-  await expect(page.getByTestId("map-coast")).toHaveAttribute("data-soon", "true");
-  await expect(page.getByTestId("map-coast-soon")).toContainText("2/5 saved");
+  await expect(page.getByTestId("map-coast")).not.toHaveAttribute("data-soon", "true");
+  await expect(page.getByTestId("map-coast")).toContainText("2/5");
   await page.getByTestId("map-close").click();
 
   // A preview shows the saved habitats; ending it puts the saved game back exactly.
@@ -215,8 +334,8 @@ test("a saved coast is kept but closed; End preview restores the save", async ({
   expect(await hook(page, "endPreview")).toBe(true);
   await hook(page, "set", { hall: 5 });
   await page.waitForTimeout(400);
-  expect((await state(page)).tanks.some((t) => t.slot === "M")).toBe(false);
-  expect((await release(page)).stored!.tanks.length).toBe(2);
+  expect((await state(page)).tanks.find((t) => t.slot === "M")?.fish).toHaveLength(3);
+  expect((await release(page)).stored!.tanks.length).toBe(1);
   expect(errors).toEqual([]);
 });
 

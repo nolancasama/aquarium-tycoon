@@ -33,8 +33,8 @@ Lagoon High Jump". Release locks, save version and the eight levels unchanged.
   (closest snout-to-buoy-centre 0.40–0.45 m, buoy r 0.42), no cancels.
 - **Known / not verified:** real Chromebook frame rates; motion judged from
   frames, not watched live; the crane's parked jib is visible at the back
-  of the Deck view; penguin purchases can only be played inside a preview while
-  the coast is release-locked (save round-trip covered by unit tests).
+  of the Deck view. Penguin purchases are now available in ordinary owned
+  Coast gameplay (see the release update below).
 
 ## Penguin Coast keeper care (2026-11-13)
 
@@ -100,7 +100,7 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
   loads there, Settings → Save Recovery shows its save, backups and
   quarantined records; backups exist only from this release on). The owner
   accepted the shore ramps and Chromebook frame rates as they are, and keeps
-  all three outdoor areas release-locked (DESIGN_DECISIONS 2026-11-13).
+  Sanctuary release-locked; Coast/Lagoon now use the 2026-11-14 release rules.
 
 ## Next steps
 
@@ -174,8 +174,8 @@ Design: DESIGN_DECISIONS.md 2026-11-11 entries "Penguin Coast only…",
 - **Arrows:** Shark Tunnel → Grand Hub; Penguin Coast ← Hub / → Lagoon;
   Lagoon ← Coast / → Sanctuary (`AREA_LINKS`, `arrowState`/`arrowTravel` in
   `flow/hub.ts`). Locked neighbours show greyed with a lock and only say
-  "Coming soon!". Release locks unchanged; all three outdoor areas stay
-  preview-only.
+  "Coming soon!" for the Sanctuary. Released Coast/Lagoon arrows require
+  ownership; the unearned Lagoon arrow is hidden (2026-11-14 release update).
 - **Grand Hub:** one panoramic window onto an animated coast; real doorway
   openings with short corridors (`scene/hub/HubArchitecture.tsx`,
   `HubCoastWindow.tsx`, `hubPortalClip.ts`); closed doors on unavailable
@@ -206,28 +206,34 @@ Design: DESIGN_DECISIONS.md 2026-11-11 entries "Penguin Coast only…",
   overview (the Deck view is closer); the coast's Feed/Clean buttons show
   only Japanese (as before).
 
-## Release locks: Coastal & Polar, Dolphin Lagoon, Grand Ocean Sanctuary (2026-11-10)
+## Release locks: Penguin Coast and Dolphin Lagoon released; Sanctuary locked (2026-11-14)
 
-Design: DESIGN_DECISIONS.md "Dolphin Lagoon + Grand Ocean Sanctuary, release
-locks (plan review)" and "Lagoon and sanctuary: decided while building".
+Design: DESIGN_DECISIONS.md "2026-11-14 — Release of Penguin Coast and Dolphin
+Lagoon", superseding the earlier outdoor release locks.
 
-- **All three are built and release-locked** (`src/game/data/release.ts`: one
-  `{ built, released }` entry per area; all `released: false`). Travel needs a
-  release and the save's ownership, or a development preview (`roomOpen`);
-  save validation uses ownership only (`roomOwned`), so saved coastal habitats
-  are kept. The coast's purchase rule (`openCoast`) also refuses while locked.
-- **Hub and map:** the three doorways show closed doors (since 2026-11-11) with a lock, a rope
-  and a bilingual COMING SOON ribbon; plaques read DOLPHIN LAGOON / イルカの
-  ラグーン and GRAND OCEAN SANCTUARY / うみの サンクチュアリ. A tap says "Coming
-  soon! / もうすぐ オープン！ おたのしみに！" (doorway: toast; map card: the card
-  itself) and nothing else happens. A coast owner's map card shows "n/5 saved".
-- **Saved coastal progress** (`coastOpen`, milestones, habitats, bagged animals,
-  unplaced items) loads into `model.stored` (`logic/stored.ts`), out of every
-  rule (care decay, Rush Hour checklists, the Level 8 judge), and is written
-  back unchanged. Releasing the coast later brings it back as it was.
-- **Lagoon and sanctuary state** (`progress.lagoon`, `progress.sanctuary`) is
-  dropped on load while the area is unreleased; nothing in ordinary play
-  creates it. No unlock rule or price exists yet (deliberately undecided).
+- **Release table:** Coast and Lagoon are built and released; Grand Ocean
+  Sanctuary stays built and `released: false`. Travel requires release plus
+  saved ownership, or a development preview. Coast retains the Shark Tunnel
+  trophy requirement and exactly one 320-coin purchase.
+- **Hub, map and arrows:** Coast offers its requirement/price until owned.
+  Lagoon explains "Finish Penguin Paradise at Penguin Coast" until earned,
+  with no travel and no arrow. Owned Coast/Lagoon doors visibly open and all
+  three navigation paths travel normally. Only Sanctuary keeps its closed,
+  locked door, rope, COMING SOON ribbon and "Coming soon!" response.
+- **Saved coastal progress:** existing ownership, every penguin/name,
+  `penguinsBought`, decor, food, cleanliness and milestone are retained.
+  Released penguin records return to play. `COAST_HABITATS_SHOWN = ["penguins"]`
+  stays unchanged: Seal Cove/Otter Bay records remain frozen in `model.stored`
+  and continue to round-trip without affecting normal rules.
+- **Lagoon unlock and migration:** pure idempotent `grantLagoon` grants free
+  ownership when `freePlay && coastOpen && coast.milestone >= 2` (Penguin
+  Paradise). It never revokes. In play, the same update grants ownership and
+  announces it bilingually; first entry runs the unseen introduction. Loading
+  an existing milestone-2 save also grants ownership, without an announcement.
+  Forged Lagoon ownership lacking that progress is dropped. Valid owned Lagoon
+  progress and dolphin names autosave normally; runtime animation does not.
+  Sanctuary saved progress is still dropped on load. Save version and recovery,
+  backups and quarantined records are unchanged.
 - **Previews (Ctrl+Alt+D, "Release-locked areas · preview"):** Preview
   Coastal & Polar Zone / coast: all habitats / Dolphin Lagoon / Grand Ocean
   Sanctuary, milestone jumps 1–5 for each (through the real rules), Return to
@@ -236,11 +242,14 @@ locks (plan review)" and "Lagoon and sanctuary: decided while building".
   preview restores the model; a reload, the title, New Game or Continue simply
   forget it. Test hooks: `__at.preview(area)`, `endPreview()`, `release()`,
   `outdoor(area)`, `lagoonTo(n)`, `sanctuaryTo(n)`, `coastTo(n)` (now in a preview).
-- **To release an area:** set `released: true` in `data/release.ts`, decide
-  its unlock rule (and price) and set `progress.lagoonOpen` / `sanctuaryOpen`
-  through it; the coast already has its rule (Shark Tunnel trophy, 320 coins).
+- **Future Sanctuary release:** still requires a separate release decision
+  and ownership rule; this update does not open it.
 
-## Dolphin Lagoon (2026-11-10, preview only)
+## Dolphin Lagoon (built 2026-11-10; released 2026-11-14)
+
+- **Access:** free on Penguin Paradise (owned Coast milestone >= 2), including
+  existing saves on load. Normal ownership/progress persist; previews remain
+  available as unsaved sandboxes. See "Release locks" above.
 
 - **Where:** `ROOMS` id `lagoon` (wing of the hub), area origin (−320, 260).
   Layout data `game/data/lagoon.ts`; rules `logic/lagoon.ts`; live state
@@ -327,7 +336,7 @@ locks (plan review)" and "Lagoon and sanctuary: decided while building".
 - All five doorway plaques and the Trophies plaque now follow each bay's actual wall tangent, instead of rotating part-way toward the camera. Thin framed backings sit at the curved plaster and the sign faces project slightly forward, so the labels appear physically mounted above their doorways.
 - The camera, doors, map links, interactive sign hit areas, and saves are unchanged. A new mount-orientation test guards the alignment. Inspect side-door legibility and wall contact in the deployed hub.
 
-## Penguin Coast redesign + ITHappy penguin (2026-11-10, preview only)
+## Penguin Coast redesign + ITHappy penguin (built 2026-11-10; released 2026-11-14)
 
 Design: DESIGN_DECISIONS.md 2026-11-10 entries on the Penguin Coast redesign and
 the owner-supplied penguin model.
@@ -339,7 +348,8 @@ the owner-supplied penguin model.
   ledges, nest visits. Seal Cove and Otter Bay unchanged (hidden since 2026-11-11).
 - **Views:** Penguins view re-framed; an Underwater / みずのなか button appears only
   in the Penguins view (`coastUnderwater` in the store). A 7.2 s skippable
-  first-visit reveal (`coastReveal` in `flow/coast.ts`), debug preview only.
+  first-visit reveal (`coastReveal` in `flow/coast.ts`), now also in ordinary
+  owned gameplay.
 - **Penguin model:** `src/assets/models/penguin.glb` (232 KiB, 818 tris, idle /
   walk / run, root motion stripped) built by `npm run build:penguin` from the
   owner's `Downloads/3D & Game Assets/Unity_2021_Animals_FREE_v2.3.unitypackage`
@@ -361,10 +371,10 @@ the owner-supplied penguin model.
 Design: DESIGN_DECISIONS.md "Grand Aquarium Hub + Coastal & Polar Zone (plan review)"
 and "Hub and coast: decided while building".
 
-- **Release-locked since 2026-11-10** (see "Release locks" above): nothing
-  below is reachable in ordinary play; saved coastal progress is kept.
+- **Released 2026-11-14** (see "Release locks" above): Penguin Coast is
+  reachable in ordinary owned gameplay; Seal Cove and Otter Bay stay hidden.
 - **What:** a wing entered from the hub (`ROOMS` id `coast`, index 6, x −152..−108).
-  When released, it unlocks when the Shark Tunnel trophy is won and costs 320 coins
+  It unlocks when the Shark Tunnel trophy is won and costs 320 coins
   (`logic/coast.ts`), bought through an offer card from the hub doorway or the
   Map. Three cutaway exhibits behind one walkway: Penguin Coast (pad M,
   Humboldt penguins), Seal Cove (pad N, harbor seals) and Otter Bay (pad O, sea
@@ -439,10 +449,10 @@ and "Hub and coast: decided while building".
   in `roomOpen`; only `progress.hubIntroSeen` is saved). Pico announces it once,
   then nudges the new **Map / マップ** chip (top right; just the glyph below 1180 px).
 - **Navigation:** the Aquarium Map (`ui/AquariumMap.tsx`) offers Grand Hub,
-  the four halls, the Shark Tunnel, the coast (locked) and two future
-  attractions, with a "You are here" pin and milestone counts. The hub's
+  the four halls, the Shark Tunnel, the owned Coast/Lagoon and the locked
+  Sanctuary, with a "You are here" pin and milestone counts. The hub's
   doorways travel too: indoor (back to the last indoor hall), Shark Tunnel,
-  coast, and Lagoon/Sanctuary ("Coming soon"). Hall arrows link the hall row
+  coast, and Lagoon/Sanctuary (only Sanctuary stays "Coming soon"). Hall arrows link the hall row
   and the Shark Tunnel (`inHallRow`), plus the branching areas' own links
   (`AREA_LINKS`, 2026-11-11). Any wing switch fades (`isWingHall`). Travel
   is blocked during prompts, lines, panels, placement, celebrations and the
@@ -1005,8 +1015,9 @@ approach frames, the trophy from front/side/rear.
    sweep.
 11. Decide whether `layout.spec` "HUD, close-up and prompts fit" needs to wait for
    the status panel's own transition (intermittent 50 px vs 48 px gap).
-12. Decided 2026-11-10: the coast, the lagoon and the sanctuary stay
-   debug-only (Ctrl+Alt+D preview); no release order or unlock rule for now.
+12. Updated 2026-11-14: Coast and Lagoon are released with saved ownership;
+   Sanctuary stays debug-only (Ctrl+Alt+D preview). Lagoon is free on owned
+   Coast milestone >= 2, including migration of existing saves.
 13. Before releasing the outdoor areas: preview them on a real school
    Chromebook (fps in the lagoon overview and the sanctuary lookout, which draw
    the most), watch the dolphins and orcas move live, and try the new phrases

@@ -5,6 +5,7 @@ import { areaAvailable, COAST_HABITATS_SHOWN, coastHabitatShown } from "../data/
 import type { CoastHabitat } from "../data/coast";
 import type { DecorKind, SlotId, SpeciesId, TankType } from "../types";
 import { happiness, HAPPY, hasSpace, NEED_CAP, newTank, tankAt, type Model, type Result, type TankRec } from "./model";
+import { grantLagoon } from "./lagoon";
 
 export { NEED_CAP };
 
@@ -205,6 +206,7 @@ export function checkCoastMilestones(m: Model): { m: Model; reached: number[] } 
     if (next === 2) {
       out = giveAnimals(out, "penguins", 1);
       if (coastHabitatShown("seals")) out = addHabitat(out, "seals", 1);
+      out = grantLagoon(out);
     }
     if (next === 3) out = addHabitat(giveItem(out, "sealBall"), "otters", 2);
     if (next === 4) out = giveAnimals(giveItem(out, "otterDen"), "seals", 1);

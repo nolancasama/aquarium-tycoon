@@ -4,7 +4,8 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { clipToHubPortal, markHubPortal } from "./hubPortalClip";
 import { corridorBoundary, corridorFaceGeometry, corridorStructure } from "./corridorGeometry";
 import { useGame } from "../../game/store";
-import { bayOf, DOOR_OPENING, HUB_CENTRE, HUB_CORRIDOR, HUB_DOORS, HUB_R, HUB_WALL_H, HUB_WINDOW, doorLocal, hubDoorOpen, onRing, type HubDestination } from "../../game/data/hub";
+import { bayOf, DOOR_OPENING, HUB_CENTRE, HUB_CORRIDOR, HUB_DOORS, HUB_R, HUB_WALL_H, HUB_WINDOW, doorLocal, hubDoorOpen, onRing, RELEASE_DOORS, type HubDestination } from "../../game/data/hub";
+import { areaAvailable } from "../../game/data/release";
 import { PartBuilder } from "../partBuilder";
 import { signMaterial, smoothMat } from "../materials";
 
@@ -107,7 +108,7 @@ export function HubShell() {
   return <group><mesh geometry={geometries.shell} material={shellMat} raycast={() => undefined} /><mesh geometry={geometries.corridors} material={corridorMat} raycast={() => undefined} /><mesh geometry={geometries.lights} material={lightMat} raycast={() => undefined} /></group>;
 }
 
-/** Every unavailable destination gets real leaves and the same bilingual ribbon. */
+/** Closed doors retain leaves; only release-locked destinations get a Coming Soon ribbon. */
 export function HubDoorClosures() {
   const key = useGame(s => (void s.previewAreas, HUB_DOORS.filter(kind => !hubDoorOpen(kind, s.model.progress)).join(",")));
   const geometry = useMemo(() => {
@@ -122,7 +123,8 @@ export function HubDoorClosures() {
         const knob = doorLocal(kind, side * 0.12, -0.02);
         b.boxAt(0.05, 0.26, 0.06, [knob.x, 1.55, knob.z], [0, -a, 0], "#d9b25e");
       }
-      ribbon.add(new THREE.PlaneGeometry(2.43, 0.54), "#ffffff", [p.x - Math.sin(a) * 0.26, 0.7, p.z + Math.cos(a) * 0.26], [0, -a, -0.055]);
+      const area = RELEASE_DOORS[kind];
+      if (area && !areaAvailable(area)) ribbon.add(new THREE.PlaneGeometry(2.43, 0.54), "#ffffff", [p.x - Math.sin(a) * 0.26, 0.7, p.z + Math.cos(a) * 0.26], [0, -a, -0.055]);
     }
     return { doors: b.build(), ribbon: ribbon.build() };
   }, [key]);

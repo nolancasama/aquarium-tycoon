@@ -54,7 +54,7 @@ export function CoastGoals({ before }: { before?: ReactNode } = {}) {
       {before}
       <header><PenguinGlyph /> Coastal &amp; Polar <Ja>かいがんと さむい ちいき</Ja></header>
       {done >= limit && limit < 5 ? (
-        <div className="guide-next" data-testid="coast-complete"><b>All done! More coming soon!</b><Ja>つづきは もうすぐ！</Ja></div>
+        <div className="guide-next" data-testid="coast-complete"><b>Visit Dolphin Lagoon!</b><Ja>イルカの ラグーンへ いこう！</Ja></div>
       ) : done >= 5 ? (
         <div className="guide-next"><b>All done! Enjoy the animals.</b> <Ja>ぜんぶ できた！ どうぶつと あそぼう</Ja></div>
       ) : (

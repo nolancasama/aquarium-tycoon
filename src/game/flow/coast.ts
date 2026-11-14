@@ -368,7 +368,7 @@ async function askOtter(by: VisitorType): Promise<boolean> {
 
 export const COAST_MILESTONES = [
   { en: "Open the Coast", ja: "かいがんを ひらこう", todo: { en: "Open the zone at the Grand Hub", ja: "グランド ホールで ひらこう" }, reward: { en: "Two penguins", ja: "ペンギン 2わ" } },
-  { en: "Penguin Paradise", ja: "ペンギンの らくえん", todo: { en: "Resting rocks, a swim, 2 questions", ja: "やすむ いわ・およぐ ところ・しつもん 2つ" }, reward: { en: "A penguin and Seal Cove", ja: "ペンギンと アザラシの いりえ" } },
+  { en: "Penguin Paradise", ja: "ペンギンの らくえん", todo: { en: "Resting rocks, a swim, 2 questions", ja: "やすむ いわ・およぐ ところ・しつもん 2つ" }, reward: { en: "A penguin and Dolphin Lagoon", ja: "ペンギンと イルカの ラグーン" } },
   { en: "Seal Cove", ja: "アザラシの いりえ", todo: { en: "Haul-out rock, a dive, help 2 visitors", ja: "いわ・もぐる ところ・2にん たすける" }, reward: { en: "A play ball and Otter Bay", ja: "ボールと ラッコの わん" } },
   { en: "Otter Bay", ja: "ラッコの わん", todo: { en: "Floating toy, watch otters float, 1 question", ja: "おもちゃ・うかぶ ラッコ・しつもん 1つ" }, reward: { en: "A cozy den and a seal", ja: "かくれがと アザラシ" } },
   { en: "Coastal Celebration", ja: "かいがんの おいわい", todo: { en: "All three happy, one question each", ja: "3つ ぜんぶ ハッピー・しつもんを 1つずつ" }, reward: { en: "The Coastal & Polar trophy", ja: "かいがんの トロフィー" } }
@@ -385,10 +385,8 @@ export function celebrate(before: number) {
   window.setTimeout(() => { if (getGame().coastCelebration?.milestone === after) setGame({ coastCelebration: null }); }, 4200);
 }
 
-/** Reward text follows the same content switch as the actual reward. */
-export const coastMilestoneReward = (milestone: number) => milestone === 2 && !coastHabitatShown("seals")
-  ? { en: "A penguin", ja: "ペンギン 1わ" }
-  : COAST_MILESTONES[milestone - 1].reward;
+/** Shared reward text for the milestone card and goals. */
+export const coastMilestoneReward = (milestone: number) => COAST_MILESTONES[milestone - 1].reward;
 
 /** Commit the model's own milestone check (items placed, happiness reached) and celebrate. */
 export function checkCoastNow() {
@@ -405,7 +403,7 @@ export function skipCoastReveal() {
   // Clear first: the model update below re-runs watchCoastIntro, which calls back in here.
   coastReveal.t0 = null;
   window.clearTimeout(revealTimer);
-  if (getGame().previewAreas.includes("coast") && getGame().model.progress.coastOpen) {
+  if (getGame().model.progress.coastOpen) {
     updateModel((m) => ({ ...m, progress: { ...m.progress, coastIntroSeen: true } }));
   }
   setGame({ coastRevealing: false });
@@ -419,8 +417,14 @@ export function coastRevealProgress() {
 /** First visit: a brief coastal tour. Any tap, including a HUD action, skips it. */
 export function watchCoastIntro(): () => void {
   let lastInCoast = false;
+  let lagoonOwned = Boolean(model().progress.lagoonOpen);
   const check = () => {
     const g = getGame();
+    const unlockedLagoon = !lagoonOwned && Boolean(g.model.progress.lagoonOpen);
+    lagoonOwned = Boolean(g.model.progress.lagoonOpen);
+    if (unlockedLagoon && inCoast(g) && !g.previewAreas.length && (g.model.progress.coast?.milestone ?? 0) >= 2) {
+      toast({ en: "Dolphin Lagoon is open!", ja: "イルカの ラグーンが オープン！", tone: "good" }, 4500);
+    }
     const here = inCoast(g);
     const entering = here && !lastInCoast;
     lastInCoast = here;
@@ -435,7 +439,7 @@ export function watchCoastIntro(): () => void {
         return;
       }
     }
-    if (!inCoast(g) || !g.previewAreas.includes("coast")) { skipCoastReveal(); return; }
+    if (!inCoast(g)) { skipCoastReveal(); return; }
     if (coastReveal.t0 !== null || !g.model.progress.coastOpen || g.model.progress.coastIntroSeen || g.mode !== "play" || g.fade !== 0 || g.line || g.prompt) return;
     coastReveal.t0 = rt.time;
     setGame({ coastUnderwater: false, coastRevealing: true });

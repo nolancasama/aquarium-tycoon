@@ -232,7 +232,7 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 1024, height: 768
       await capture(page, info, "hub-doorways");
 
       await setup("Penguin Coast session preview", async () => {
-        await hook(page, "coastTo", 1);
+        await hook(page, "coastTo", 2);
         const release = await hook<{ preview: string[] }>(page, "release");
         expect(release.preview).toContain("coast");
       });

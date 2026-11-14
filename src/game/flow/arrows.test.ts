@@ -32,18 +32,34 @@ describe("area arrows", () => {
     expect(SHARKS_HALL).toBeGreaterThan(0);
   });
 
-  it("show release-locked areas as locked, whatever the save claims", () => {
+  it("opens owned released areas, while Sanctuary stays locked whatever the save claims", () => {
     const m = tunnelOwner();
     const owner = { ...m, progress: { ...m.progress, coastOpen: true, lagoonOpen: true, sanctuaryOpen: true } };
-    for (const hall of [COAST_HALL, LAGOON_HALL, SANCTUARY_HALL]) expect(arrowState(hall, owner)).toBe("locked");
+    for (const hall of [COAST_HALL, LAGOON_HALL]) expect(arrowState(hall, owner)).toBe("open");
+    expect(arrowState(SANCTUARY_HALL, owner)).toBe("locked");
   });
 
-  it("open only the previewed area during a preview; its neighbours stay locked", () => {
+  it("hides unowned released areas, including Lagoon until Penguin Paradise", () => {
+    const m = tunnelOwner();
+    expect(arrowState(COAST_HALL, m)).toBeNull();
+    expect(arrowState(LAGOON_HALL, m)).toBeNull();
+    expect(arrowState(SANCTUARY_HALL, m)).toBe("locked");
+  });
+
+  it("opens only the previewed area during a preview; unowned neighbours stay hidden", () => {
     grantPreview("lagoon");
     const m = tunnelOwner();
     expect(arrowState(LAGOON_HALL, m)).toBe("open");
     expect(arrowState(SANCTUARY_HALL, m)).toBe("locked");
-    expect(arrowState(COAST_HALL, m)).toBe("locked");
+    expect(arrowState(COAST_HALL, m)).toBeNull();
     expect(arrowState(HUB_HALL, m)).toBe("open");
+  });
+
+  it("keeps Sanctuary preview available without granting normal ownership", () => {
+    const m = tunnelOwner();
+    grantPreview("sanctuary");
+    expect(arrowState(SANCTUARY_HALL, m)).toBe("open");
+    clearPreviewAccess();
+    expect(arrowState(SANCTUARY_HALL, m)).toBe("locked");
   });
 });

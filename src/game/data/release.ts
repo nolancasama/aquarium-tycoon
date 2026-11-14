@@ -20,9 +20,9 @@ export type ReleaseArea = "coast" | "lagoon" | "sanctuary";
 export const RELEASE_AREAS: ReleaseArea[] = ["coast", "lagoon", "sanctuary"];
 
 export const RELEASE: Readonly<Record<ReleaseArea, { built: boolean; released: boolean }>> = {
-  // Built and played in 2026-11-10, held back until the outdoor areas are ready.
-  coast: { built: true, released: false },
-  lagoon: { built: true, released: false },
+  // Coast is purchased after the Shark Tunnel; Lagoon is earned at Penguin Paradise.
+  coast: { built: true, released: true },
+  lagoon: { built: true, released: true },
   sanctuary: { built: true, released: false }
 };
 

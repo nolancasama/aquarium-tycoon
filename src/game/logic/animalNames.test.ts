@@ -36,8 +36,8 @@ describe("individual animal names", () => {
     expect(report.synthesizedTanks).toEqual([]);
     expect(report.counts.raw).toEqual(report.counts.decoded);
     expect(data!.model.quarantine).toBeUndefined();
-    expect(data!.model.tanks).toEqual(fixture.model.tanks);
-    expect(data!.model.stored).toEqual(fixture.model.stored);
+    expect(data!.model.tanks).toEqual([...fixture.model.tanks, ...fixture.model.stored.tanks.filter((tank) => tank.type === "penguins")]);
+    expect(data!.model.stored).toEqual({ ...fixture.model.stored, tanks: fixture.model.stored.tanks.filter((tank) => tank.type !== "penguins") });
     expect(data!.model.inv).toEqual(fixture.model.inv);
     expect(data!.model.coins).toBe(fixture.model.coins);
     expect(data!.model.progress.stage).toBe(fixture.model.progress.stage);
@@ -50,7 +50,7 @@ describe("individual animal names", () => {
     for (const dolphin of DOLPHINS) expect(animalName(data!.model, "lagoon", dolphin.id)).toBe(dolphin.name);
   });
 
-  it("round-trips named stored penguins and release-locked dolphins without touching the aquarium", () => {
+  it("round-trips named released penguins and dolphins without changing other aquarium records", () => {
     const before = loaded();
     let named = renameAnimal(before, "coast", "f91", "ゆきちゃん");
     named = renameAnimal(named, "lagoon", "sora", "青空");
@@ -62,17 +62,18 @@ describe("individual animal names", () => {
     expect(data!.model).toEqual(named);
     expect(animalName(data!.model, "coast", "f91")).toBe("ゆきちゃん");
     expect(animalName(data!.model, "lagoon", "sora")).toBe("青空");
-    expect(named.tanks).toEqual(before.tanks);
+    expect(named.tanks).toEqual(before.tanks.map((tank) => ({ ...tank, fish: tank.fish.map((fish) => fish.id === "f91" ? { ...fish, name: "ゆきちゃん" } : fish) })));
+    expect(named.stored).toEqual(before.stored);
     expect(named.coins).toBe(before.coins);
     expect(named.progress).toEqual(before.progress);
   });
 
   it("keeps names attached to ids when other penguins reorder, arrive or leave", () => {
     const named = renameAnimal(loaded(), "coast", "f91", "雪");
-    const changed: Model = { ...named, stored: { ...named.stored!, tanks: named.stored!.tanks
+    const changed: Model = { ...named, tanks: named.tanks
       .slice().reverse().map((tank) => tank.type === "penguins" ? {
-        ...tank, fish: [{ id: "f1000", species: "penguin" }, ...tank.fish.slice().reverse().filter((fish) => fish.id !== "f92")]
-      } : tank) } };
+        ...tank, fish: [{ id: "f1000", species: "penguin" as const }, ...tank.fish.slice().reverse().filter((fish) => fish.id !== "f92")]
+      } : tank) };
     const reloaded = decodeSave(encodeSave(changed))!.model;
     expect(animalName(reloaded, "coast", "f91")).toBe("雪");
     expect(animalName(reloaded, "coast", "f93")).toBe(animalName(named, "coast", "f93"));
@@ -83,16 +84,17 @@ describe("individual animal names", () => {
     expect(animalName(dolphin, "lagoon", "sora")).toBe("Sora");
   });
 
-  it("preserves the name when a penguin is bagged into locked-area storage", () => {
+  it("preserves the name when a released penguin is bagged into inventory", () => {
     const named = renameAnimal(loaded(), "coast", "f91", "ゆき");
     const fish = penguin(named);
-    const bagged: Model = { ...named, stored: { ...named.stored!,
-      tanks: named.stored!.tanks.map((tank) => ({ ...tank, fish: tank.fish.filter((animal) => animal.id !== fish.id) })),
-      fish: [...named.stored!.fish, fish]
-    } };
+    const bagged: Model = { ...named,
+      tanks: named.tanks.map((tank) => ({ ...tank, fish: tank.fish.filter((animal) => animal.id !== fish.id) })),
+      inv: { ...named.inv, fish: [...named.inv.fish, fish] }
+    };
     const renamed = renameAnimal(bagged, "coast", "f91", "雪ちゃん");
     const reloaded = decodeSave(encodeSave(renamed))!.model;
-    expect(reloaded.stored!.fish.find((animal) => animal.id === "f91")?.name).toBe("雪ちゃん");
+    expect(reloaded.inv.fish.find((animal) => animal.id === "f91")?.name).toBe("雪ちゃん");
+    expect(reloaded.stored).toEqual(named.stored);
     expect(animalName(reloaded, "coast", "f91")).toBe("雪ちゃん");
   });
 

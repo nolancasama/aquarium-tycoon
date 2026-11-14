@@ -55,7 +55,7 @@ async function calm(page: Page) {
   }
 }
 
-test("side arrows: Shark Tunnel → Grand Hub; coast and lagoon arrows travel only where a preview allows", async ({ page }) => {
+test("side arrows: Shark Tunnel → Grand Hub; previews preserve ownership gates and the sanctuary lock", async ({ page }) => {
   test.setTimeout(180_000);
   await page.setViewportSize({ width: 1366, height: 768 });
   const errors = await load(page, 600);
@@ -82,21 +82,19 @@ test("side arrows: Shark Tunnel → Grand Hub; coast and lagoon arrows travel on
   // The hub keeps its doorways only.
   await expect(page.getByTestId("btn-hall-next")).toHaveCount(0);
 
-  // A lagoon preview: both neighbours are still release-locked.
+  // A lagoon preview: the released, unowned Coast is hidden; Sanctuary stays release-locked.
   const coins = (await state(page)).coins;
   expect(await hook(page, "preview", "lagoon")).toBe(true);
   await hook(page, "outdoor", "lagoon");
   await inRoom(page, "lagoon");
   await page.waitForTimeout(6000);
   await calm(page);
-  for (const tid of ["btn-hall-prev", "btn-hall-next"]) {
-    await expect(page.getByTestId(tid)).toHaveAttribute("data-locked", "true");
-    await page.getByTestId(tid).click();
-    await expect(page.getByTestId("toast").filter({ hasText: "Coming soon" }).first()).toBeVisible();
-    await page.waitForTimeout(600);
-    expect(await roomId(page)).toBe("lagoon");
-  }
-  await expect(page.getByTestId("btn-hall-prev")).toContainText("Coastal");
+  await expect(page.getByTestId("btn-hall-prev")).toHaveCount(0);
+  await expect(page.getByTestId("btn-hall-next")).toHaveAttribute("data-locked", "true");
+  await page.getByTestId("btn-hall-next").click();
+  await expect(page.getByTestId("toast").filter({ hasText: "Coming soon" }).first()).toBeVisible();
+  await page.waitForTimeout(600);
+  expect(await roomId(page)).toBe("lagoon");
   await expect(page.getByTestId("btn-hall-next")).toContainText("Sanctuary");
 
   // Preview the coast too: the lagoon's left arrow now walks there, and the coast's arrows lead on.
@@ -120,7 +118,7 @@ test("side arrows: Shark Tunnel → Grand Hub; coast and lagoon arrows travel on
   await page.getByTestId("btn-hall-prev").click();
   await inRoom(page, "hub");
 
-  // End preview: nothing was saved, the arrows' areas are locked again.
+  // End preview: nothing was saved and ordinary ownership is restored.
   await hook(page, "endPreview");
   await page.waitForTimeout(800);
   expect((await state(page)).coins).toBe(coins);
