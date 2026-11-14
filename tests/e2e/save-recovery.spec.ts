@@ -18,7 +18,7 @@ interface SavedTank {
 interface Saved {
   model: {
     coins: number;
-    progress: { stage: number };
+    progress: { stage: number; lagoonOpen?: boolean };
     tanks: SavedTank[];
     inv: { fish: unknown[]; decor: unknown[]; tanks: unknown[] };
     stored?: { tanks: SavedTank[]; fish: unknown[]; decor: unknown[] };
@@ -42,6 +42,8 @@ function owned(save: Saved) {
 }
 
 const expected = owned(fixture);
+const penguinTank = fixture.model.stored!.tanks.find((t) => t.slot === "M")!;
+const playableTanks = [...fixture.model.tanks, penguinTank];
 const totalFish = expected.tanks.reduce((n, t) => n + t.fish.length, expected.fish.length);
 const totalDecor = expected.tanks.reduce((n, t) => n + t.decor.length, expected.decor.length);
 const readRaw = (page: Page) => page.evaluate((key) => localStorage.getItem(key), SAVE_KEY);
@@ -64,10 +66,10 @@ async function continueFromTitle(page: Page) {
 
 async function assertPlayableFixture(page: Page, missingFish = 0) {
   const s = await state(page);
-  expect(s.tanks.map((t) => t.slot).sort()).toEqual(fixture.model.tanks.map((t) => t.slot).sort());
+  expect(s.tanks.map((t) => t.slot).sort()).toEqual(playableTanks.map((t) => t.slot).sort());
   expect(s.tanks.filter((t) => ["A", "B", "F", "G", "H"].includes(t.slot)).map((t) => t.slot).sort()).toEqual(["A", "B", "F", "G", "H"]);
-  expect(s.tanks.reduce((n, t) => n + t.fishIds.length, 0)).toBe(fixture.model.tanks.reduce((n, t) => n + t.fish.length, 0) - missingFish);
-  expect(s.tanks.reduce((n, t) => n + t.decor.length, 0)).toBe(fixture.model.tanks.reduce((n, t) => n + t.decor.length, 0));
+  expect(s.tanks.reduce((n, t) => n + t.fishIds.length, 0)).toBe(playableTanks.reduce((n, t) => n + t.fish.length, 0) - missingFish);
+  expect(s.tanks.reduce((n, t) => n + t.decor.length, 0)).toBe(playableTanks.reduce((n, t) => n + t.decor.length, 0));
   expect(s.stage).toBe(fixture.model.progress.stage);
 }
 
@@ -89,7 +91,11 @@ test("save recovery preserves the fixture, exposes rejected records, and restore
   await hook(page, "advance", 1); // A real model update schedules the production autosave.
   await prerequisite("autosave wrote the continued fixture", () => expect.poll(() => readRaw(page)).not.toBe(fixtureRaw));
   expect(owned(await readSaved(page))).toEqual(expected);
-  expect((await readSaved(page)).model.stored?.tanks.map((t) => t.slot).sort()).toEqual(["M", "N", "O"]);
+  const saved = await readSaved(page);
+  expect(saved.model.stored?.tanks.map((t) => t.slot).sort()).toEqual(["N", "O"]);
+  expect(saved.model.tanks.find((t) => t.slot === "M")?.fish).toEqual(penguinTank.fish);
+  expect(saved.model.tanks.find((t) => t.slot === "M")?.decor).toEqual(penguinTank.decor);
+  expect(saved.model.progress.lagoonOpen).toBe(true);
 
   await page.reload();
   await continueFromTitle(page);

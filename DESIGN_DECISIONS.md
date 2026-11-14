@@ -1,5 +1,34 @@
 # Design Decisions
 
+## 2026-11-14 — Release of Penguin Coast and Dolphin Lagoon
+
+- **Release:** Penguin Coast and Dolphin Lagoon enter normal, saved gameplay.
+  Grand Ocean Sanctuary stays release-locked. `COAST_HABITATS_SHOWN` stays
+  `["penguins"]`; Seal Cove and Otter Bay remain hidden, with their saved
+  records preserved in `model.stored`.
+- **Coast ownership:** the Shark Tunnel trophy enables the existing 320-coin
+  offer. Purchase deducts 320 once and saves `coastOpen`. Existing owners keep
+  all penguins, names, purchase allowance, decorations, care and milestones;
+  released penguin records return from storage to play.
+- **Lagoon ownership:** free play plus owned Coast and coast milestone **>= 2**
+  (Penguin Paradise) grants the Lagoon for free, once. The pure idempotent
+  `grantLagoon` initializes Lagoon progress and the unseen introduction; it
+  never revokes ownership. In play, Penguin Paradise announces the opening in
+  English and Japanese. The first visit uses the existing introduction.
+- **Load-time migration:** after reading coast progress, normalisation grants
+  the Lagoon to existing Penguin Paradise owners without replaying the
+  milestone or announcement. Saved Lagoon ownership without the prerequisite
+  is dropped. Valid owned Lagoon progress and dolphin names round-trip through
+  normal autosave; runtime animation state is not saved. Save version, backups,
+  recovery and quarantined records are unchanged.
+- **Navigation:** Coast keeps its requirement and price offer. An unearned
+  Lagoon explains Penguin Paradise and cannot be entered; its arrow stays
+  hidden. Owned destinations open through doorway, map and arrows. Only the
+  Sanctuary retains Coming Soon. Ctrl+Alt+D previews remain unsaved sandboxes.
+- **Rejected:** a coin price for the Lagoon; gating ownership on
+  `coastMilestoneLimit()` (revealing hidden habitats later must not take away
+  earned access). No new main levels, curriculum or area mechanics.
+
 ## 2026-11-13 — Penguin Coast keeper care
 
 - Feeding uses a runtime state machine: doorOpening → walkOut → tip → watch →

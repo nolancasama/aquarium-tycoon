@@ -1,11 +1,11 @@
-import { areaAvailable } from "../data/release";
+import { areaAvailable, areaPreviewed } from "../data/release";
 import { HAPPY, OKAY, type Model } from "./model";
 
 /**
  * Dolphin Lagoon rules (pure). The lagoon is not a tank: its welfare is three
  * visible needs (Food, Play, Together) whose average is the dolphins'
  * happiness, and they only change while the lagoon is shown (the care team
- * looks after the pod otherwise). Five milestones, in order. Release-locked:
+ * looks after the pod otherwise). Five milestones, in order:
  * nothing here runs unless the area is available (released and owned, or a
  * development preview). See DESIGN_DECISIONS.md "Dolphin Lagoon".
  */
@@ -65,8 +65,15 @@ export const newLagoonProgress = (): LagoonProgress => ({
   toys: ["ball", "bubbles"], toysUsed: [], decor: [], tourDone: false, trophy: false
 });
 
+/** Penguin Paradise permanently earns the Lagoon, free. Independent of later Coast habitats. */
+export function grantLagoon(m: Model): Model {
+  const p = m.progress;
+  if (p.lagoonOpen || !p.freePlay || !p.coastOpen || (p.coast?.milestone ?? 0) < 2) return m;
+  return { ...m, progress: { ...p, lagoonOpen: true, lagoonIntroSeen: false, lagoon: newLagoonProgress() } };
+}
+
 /** The lagoon's rules run only where the area may be entered (released + owned, or a preview). */
-export const lagoonActive = (m: Model): boolean => Boolean(m.progress.lagoon) && areaAvailable("lagoon");
+export const lagoonActive = (m: Model): boolean => Boolean(m.progress.lagoon) && areaAvailable("lagoon") && (m.progress.lagoonOpen === true || areaPreviewed("lagoon"));
 
 export const lagoonHappiness = (p: LagoonProgress): number => Math.round((p.food + p.play + p.together) / 3);
 export const lagoonMood = (p: LagoonProgress): "happy" | "okay" | "sad" => {
@@ -87,9 +94,9 @@ function patch(m: Model, fn: (p: LagoonProgress) => LagoonProgress): Model {
   return checkLagoonMilestones({ ...m, progress: { ...m.progress, lagoon: fn(p) } }).m;
 }
 
-/** Open the lagoon's state (a preview, or later a release's unlock rule). Idempotent. */
+/** Initialise an owner's state, or a development sandbox. Idempotent. */
 export function startLagoon(m: Model): Model {
-  if (m.progress.lagoon || !areaAvailable("lagoon")) return m;
+  if (m.progress.lagoon || !areaAvailable("lagoon") || (!m.progress.lagoonOpen && !areaPreviewed("lagoon"))) return m;
   return { ...m, progress: { ...m.progress, lagoon: newLagoonProgress() } };
 }
 

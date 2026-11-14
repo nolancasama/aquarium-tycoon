@@ -84,9 +84,13 @@ test("hub: introduction, map travel, doorways both ways, arrows unchanged, reloa
   await page.getByTestId("btn-map").click();
   await expect(page.getByTestId("aquarium-map")).toBeVisible();
   await expect(page.getByTestId("map-room-hall").getByTestId("map-here")).toBeVisible();
-  // All three release-locked destinations: a lock and "Coming soon"; a tap only says so.
-  await expect(page.getByTestId("map-lagoon")).toHaveAttribute("aria-label", /coming soon/);
-  for (const id of ["map-coast", "map-lagoon", "map-sanctuary"]) await expect(page.getByTestId(id)).toHaveAttribute("data-soon", "true");
+  // The lagoon is released but requires Penguin Paradise; Sanctuary is still coming soon.
+  await expect(page.getByTestId("map-lagoon")).toHaveClass(/\blocked\b/);
+  await expect(page.getByTestId("map-lagoon")).toContainText("Finish Penguin Paradise at Penguin Coast");
+  await page.getByTestId("map-lagoon").click();
+  await expect(page.getByTestId("aquarium-map")).toBeVisible();
+  expect((await hstate(page)).roomId).toBe("hall");
+  await expect(page.getByTestId("map-sanctuary")).toHaveAttribute("data-soon", "true");
   await expect(page.getByTestId("map-sanctuary")).toContainText("Grand Ocean Sanctuary");
   await page.getByTestId("map-sanctuary").click();
   await expect(page.getByTestId("map-sanctuary-soon")).toContainText("Coming soon!");
@@ -102,12 +106,13 @@ test("hub: introduction, map travel, doorways both ways, arrows unchanged, reloa
   await expect(page.getByTestId("btn-fish-shop")).toHaveCount(0);
   await page.waitForTimeout(900);
 
-  // The release-locked doorways stay closed; the room and the coins do not change.
+  // Unearned destinations stay closed; the room and the coins do not change.
   const coins = (await hstate(page)).coins;
   for (const door of ["lagoon", "sanctuary", "coast"]) {
     await click3d(page, "hub-door", door);
-    await expect(page.getByTestId("toast").filter({ hasText: "Coming soon" }).first()).toBeVisible();
-    await expect(page.getByTestId("toast").filter({ hasText: "おたのしみに" }).first()).toBeVisible();
+    const message = door === "lagoon" ? "Finish Penguin Paradise at Penguin Coast" : door === "coast" ? "Finish the Shark Tunnel first!" : "Coming soon";
+    await expect(page.getByTestId("toast").filter({ hasText: message }).first()).toBeVisible();
+    if (door === "sanctuary") await expect(page.getByTestId("toast").filter({ hasText: "おたのしみに" }).first()).toBeVisible();
     await page.waitForTimeout(500);
     expect((await hstate(page)).roomId).toBe("hub");
   }

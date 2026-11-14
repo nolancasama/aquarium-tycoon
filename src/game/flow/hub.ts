@@ -68,6 +68,7 @@ export function tapHubDoor(kind: HubDestination) {
 }
 
 export const COMING_SOON = { en: "Coming soon!", ja: "もうすぐ オープン！ おたのしみに！" } as const;
+export const LAGOON_REQUIREMENT = { en: "Finish Penguin Paradise at Penguin Coast", ja: "ペンギン コーストで ペンギンの らくえんを クリア" } as const;
 
 /** A release-locked destination: only the message (no travel, no coins, no offer, no ceremony). */
 export function comingSoon() {
@@ -79,7 +80,14 @@ export function comingSoon() {
 export function tapOutdoorDoor(area: "lagoon" | "sanctuary") {
   if (!canTravel()) return;
   const hall = area === "lagoon" ? LAGOON_HALL : SANCTUARY_HALL;
-  if (!roomOpen(hall, getGame().model.progress)) { comingSoon(); return; }
+  if (!roomOpen(hall, getGame().model.progress)) {
+    if (!areaAvailable(area)) comingSoon();
+    else {
+      audio.play("error");
+      toast({ ...LAGOON_REQUIREMENT, tone: "info" }, 4500);
+    }
+    return;
+  }
   enterOutdoor(area);
 }
 

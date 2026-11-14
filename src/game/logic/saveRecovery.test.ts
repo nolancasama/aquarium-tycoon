@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import fixture from "./realSave.fixture.json";
 import { decodeSave, decodeSaveReport, encodeSave } from "./save";
 import { bagAnimal, moveDecor, newModel, newTank, remodelTank, type Model, type Result } from "./model";
+import { newLagoonProgress } from "./lagoon";
 
 function editable() {
   return JSON.parse(encodeSave(newModel()));
@@ -36,16 +37,16 @@ describe("save recovery diagnostics", () => {
     expect(loaded.report.counts.decoded).toEqual(loaded.report.counts.raw);
     const model = loaded.data!.model;
     // Tank equality includes every placed fish and decoration, their ids and care.
-    expect(model.tanks).toEqual(raw.model.tanks);
+    expect(model.tanks).toEqual([...raw.model.tanks, ...raw.model.stored.tanks.filter((t: { type: string }) => t.type === "penguins")]);
     expect(model.inv).toEqual(raw.model.inv);
-    expect(model.stored).toEqual(raw.model.stored);
+    expect(model.stored).toEqual({ ...raw.model.stored, tanks: raw.model.stored.tanks.filter((t: { type: string }) => t.type !== "penguins") });
     expect(model.coins).toBe(raw.model.coins);
     expect(model.stats).toEqual(raw.model.stats);
     // Includes the eight-level stage, stars, photo, trophies and historical answers.
-    // The only migration: saves from before 2026-11-14 gain an empty penguin-purchase allowance.
+    // Old saves gain an empty purchase allowance and the Lagoon earned at Penguin Paradise.
     const migrated = raw.model.progress.coast && raw.model.progress.coast.penguinsBought === undefined
       ? { ...raw.model.progress, coast: { ...raw.model.progress.coast, penguinsBought: 0 } } : raw.model.progress;
-    expect(model.progress).toEqual(migrated);
+    expect(model.progress).toEqual({ ...migrated, lagoonOpen: true, lagoonIntroSeen: false, lagoon: newLagoonProgress() });
     expect(model.rush).toEqual(raw.model.rush);
     expect(model.quarantine).toEqual(raw.model.quarantine);
     expect(decodeSave(encodeSave(model))!.model).toEqual(model);
@@ -57,11 +58,12 @@ describe("save recovery diagnostics", () => {
     expect(first.report.rejected).toEqual([]);
     expect(first.report.synthesizedTanks).toEqual([]);
     expect(first.report.counts.raw).toEqual(first.report.counts.decoded);
-    expect(first.data!.model.tanks).toEqual(fixture.model.tanks);
-    expect(first.data!.model.stored).toEqual(fixture.model.stored);
+    expect(first.data!.model.tanks).toEqual([...fixture.model.tanks, ...fixture.model.stored.tanks.filter((t) => t.type === "penguins")]);
+    expect(first.data!.model.stored).toEqual({ ...fixture.model.stored, tanks: fixture.model.stored.tanks.filter((t) => t.type !== "penguins") });
     expect(first.data!.model.tanks.filter((t) => ["A", "B"].includes(t.slot)).map((t) => t.slot)).toEqual(["A", "B"]);
     expect(first.data!.model.tanks.filter((t) => ["F", "G", "H"].includes(t.slot)).map((t) => t.slot).sort()).toEqual(["F", "G", "H"]);
-    expect(first.data!.model.stored!.tanks.map((t) => t.slot)).toEqual(["M", "N", "O"]);
+    expect(first.data!.model.tanks.filter((t) => t.slot === "M").map((t) => t.slot)).toEqual(["M"]);
+    expect(first.data!.model.stored!.tanks.map((t) => t.slot)).toEqual(["N", "O"]);
     for (let n = 0; n < 5; n++) expect(decodeSave(text)).toEqual(first.data);
     let model = first.data!.model;
     for (let n = 0; n < 20; n++) {

@@ -6,8 +6,7 @@ import { startEvent } from "../rush/logic";
 import { newRushState } from "../rush/types";
 import { unstoreAvailable } from "./stored";
 
-// The zone is release-locked (data/release.ts; release.test.ts covers the lock).
-// Its own rules are tested as they run when it may be entered: in a preview here.
+// The sandbox remains available alongside normal owned gameplay (release.test.ts).
 beforeAll(() => grantPreview("coast"));
 afterAll(() => clearPreviewAccess());
 import { buyPenguin, PENGUIN_PRICE, PENGUIN_PURCHASES, penguinBuyState, checkCoastMilestones, COAST_PRICE, coastMilestoneLimit, coastQuestionHabitats, coastUnlocked, habitatOpen, NEED_CAP, newCoastProgress, openCoast, recordCoastActivity, recordCoastSight, storeHiddenCoast } from "./coast";
@@ -256,6 +255,7 @@ describe("Coastal & Polar Zone rules", () => {
     // A missing habitat is rebuilt for the milestone reached.
     const noSeals = { ...m, progress: { ...m.progress, coast: { ...m.progress.coast!, milestone: 2 as const } } };
     const repaired = decodeSave(encodeSave(noSeals))!.model;
-    expect(tankAt(repaired, "N")?.type).toBe("seals");
+    expect(tankAt(repaired, "N")).toBeNull();
+    expect(repaired.stored?.tanks.find((t) => t.slot === "N")?.type).toBe("seals");
   });
 });

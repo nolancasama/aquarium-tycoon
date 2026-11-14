@@ -4,7 +4,7 @@ import { COAST_HALL, HUB_HALL, LAGOON_HALL, ROOMS, roomOpen, SANCTUARY_HALL, SHA
 import { areaAvailable, type ReleaseArea } from "../game/data/release";
 import { tapCoastDoor } from "../game/flow/coast";
 import { COAST_PRICE, coastUnlocked } from "../game/logic/coast";
-import { canTravel, closeMap, closeTrophies, COMING_SOON, hubUnlocked, openMap, tapOutdoorDoor, travelTo, trophiesToRush } from "../game/flow/hub";
+import { canTravel, closeMap, closeTrophies, COMING_SOON, LAGOON_REQUIREMENT, hubUnlocked, openMap, tapOutdoorDoor, travelTo, trophiesToRush } from "../game/flow/hub";
 import { audio } from "../audio/audio";
 import { Icon, type IconId } from "./icons";
 import { Ja } from "./Talk";
@@ -116,7 +116,7 @@ function MapDialog() {
             line={progress.coastOpen ? milestoneLine(progress.coast?.milestone ?? 0, Boolean(progress.coast?.trophy)) : coastUnlocked(model) ? <><Icon id="coin" size={16} /> {COAST_PRICE}</> : <>Finish the Shark Tunnel<Ja>サメの トンネルを クリア</Ja></>}
             saved={progress.coastOpen ? progress.coast?.milestone ?? 0 : null} />
           <ReleaseCard area="lagoon" hall={LAGOON_HALL} testId="map-lagoon" icon="☀" en="Dolphin Lagoon" ja="イルカの ラグーン" onOpen={() => tapOutdoorDoor("lagoon")}
-            line={milestoneLine(progress.lagoon?.milestone ?? 0, Boolean(progress.lagoon?.trophy))} saved={null} />
+            line={progress.lagoonOpen ? milestoneLine(progress.lagoon?.milestone ?? 0, Boolean(progress.lagoon?.trophy)) : <>{LAGOON_REQUIREMENT.en}<Ja>{LAGOON_REQUIREMENT.ja}</Ja></>} saved={null} />
           <ReleaseCard area="sanctuary" hall={SANCTUARY_HALL} testId="map-sanctuary" icon="≈" en="Grand Ocean Sanctuary" ja="うみの サンクチュアリ" onOpen={() => tapOutdoorDoor("sanctuary")}
             line={milestoneLine(progress.sanctuary?.milestone ?? 0, Boolean(progress.sanctuary?.trophy))} saved={null} />
         </div>
@@ -137,6 +137,7 @@ function ReleaseCard({ area, hall, testId, icon, en, ja, line, saved, onOpen }: 
   area: ReleaseArea; hall: number; testId: string; icon: string; en: string; ja: string; line: ReactNode; saved: number | null; onOpen: () => void;
 }) {
   const here = useGame((s) => s.hall === hall);
+  const owned = useGame((s) => (void s.previewAreas, roomOpen(hall, s.model.progress)));
   const soon = useGame((s) => (void s.previewAreas, !areaAvailable(area)));
   const [flash, setFlash] = useState(0);
   useEffect(() => {
@@ -159,8 +160,8 @@ function ReleaseCard({ area, hall, testId, icon, en, ja, line, saved, onOpen }: 
     );
   }
   return (
-    <button className={`map-card wing ${area} ${here ? "here" : ""}`} onClick={onOpen} data-testid={testId}>
-      <span className="map-icon" aria-hidden="true">{icon}</span>
+    <button className={`map-card wing ${area} ${here ? "here" : ""} ${owned ? "" : "locked"}`} onClick={onOpen} data-testid={testId}>
+      <span className="map-icon" aria-hidden="true">{owned ? icon : <Icon id="lock" size={26} />}</span>
       <span className="map-name">{en}<Ja>{ja}</Ja></span>
       <span className="map-progress">{line}</span>
       {here && <Here />}
