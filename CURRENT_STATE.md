@@ -1,6 +1,6 @@
 # Current State
 
-## Hub tank, penguin purchases, five cleaners, fast swims, Lagoon High Jump (2026-11-14, uncommitted on `main`)
+## Hub tank, penguin purchases, five cleaners, fast swims, Lagoon High Jump (2026-11-14, LIVE)
 
 Built directly by Claude (owner asked: no router). Decisions: DESIGN_DECISIONS
 "2026-11-14 — Tall hub tank, penguin purchases, five cleaners, fast swims,
@@ -104,10 +104,10 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
 
 ## Next steps
 
-0. **2026-11-14 hub/coast/lagoon update** (section above): implemented and
-   verified, NOT committed or pushed; awaiting the owner's OK to commit to
-   `main` and deploy to GitHub Pages. Owner to judge motion live (bursts,
-   arrival, High Jump) on a Chromebook.
+0. **2026-11-14 hub/coast/lagoon update** (section above): merged to `main`
+   (c2c7207) and LIVE on GitHub Pages (run 43579905334 green; live bundle =
+   local build). Owner to judge motion live (bursts, arrival, High Jump) on a
+   Chromebook.
 0. **12-item improvement plan.** Wave 1 DONE, merged and pushed live 2026-11-14
    (e9adffe): hub corridor + Lagoon boardwalk z-fighting and a
    solid chest lid; Penguin Coast time-lapse Clean montage, connected lower
