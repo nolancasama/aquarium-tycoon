@@ -104,6 +104,16 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
 
 ## Next steps
 
+0. **Penguin Coast + Dolphin Lagoon RELEASED and LIVE (2026-11-14).** Merged
+   to `main` (09175d4), Pages run 43603118003 green, live bundle
+   `index-CkPZoDkl.js` = local build. Sanctuary still release-locked; Seal
+   Cove / Otter Bay hidden. Lagoon = free at Penguin Paradise (coast milestone
+   >= 2, `grantLagoon`, also applied on load). Verified: typecheck, unit
+   976/976, build, Playwright coast/outdoor/arrows/hub/nav-layout/save/
+   save-recovery 26/26 on a production preview; the two no-preview release
+   tests also passed against the live files (via a local proxy, because
+   `helpers.boot` navigates to `/` and cannot target the `/aquarium-tycoon/`
+   sub-path directly). Owner to play it on a Chromebook.
 0. **2026-11-14 hub/coast/lagoon update** (section above): merged to `main`
    (c2c7207) and LIVE on GitHub Pages (run 43579905334 green; live bundle =
    local build). Owner to judge motion live (bursts, arrival, High Jump) on a
