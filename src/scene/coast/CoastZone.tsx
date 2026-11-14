@@ -348,6 +348,56 @@ function PenguinBubbles() {
   );
 }
 
+/**
+ * Bubbles shed behind a penguin swimming a fast burst: a fixed ring of 56
+ * instances (one draw). Faster birds shed more; each bubble rises, wobbles,
+ * shrinks away within ~1.4 s and never passes the surface.
+ */
+const TRAIL_N = 56, TRAIL_LIFE = 1.4;
+function PenguinTrails() {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const ex = EXHIBITS.penguins;
+  const s = useMemo(() => ({ x: new Float32Array(TRAIL_N), y: new Float32Array(TRAIL_N), z: new Float32Array(TRAIL_N), born: new Float32Array(TRAIL_N).fill(-100), size: new Float32Array(TRAIL_N), next: 0, owed: new Map<string, number>() }), []);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  useFrame((_, frameDt) => {
+    const mesh = ref.current;
+    if (!coastShown() || !mesh) return;
+    const dt = Math.min(frameDt, 0.1), now = coastRt.time, top = ex.pool.surface - 0.08;
+    for (const a of coastRt.animals.values()) {
+      const m = a.m;
+      if (a.habitat !== "penguins" || m.mode !== "swim" || m.speed < 2.1) { s.owed.delete(m.id); continue; }
+      // ~5 bubbles a second at 2.2 m/s, ~13 at 3.3 m/s, from just behind the feet.
+      let owed = (s.owed.get(m.id) ?? 0) + dt * (m.speed - 1.7) * 8;
+      while (owed >= 1) {
+        owed -= 1;
+        const i = s.next; s.next = (s.next + 1) % TRAIL_N;
+        const back = 0.32 + Math.random() * 0.12, cp = Math.cos(m.pitch);
+        s.x[i] = m.x - Math.sin(m.heading) * cp * back + (Math.random() - 0.5) * 0.08;
+        s.y[i] = Math.min(top, m.y - Math.sin(m.pitch) * back + (Math.random() - 0.5) * 0.06);
+        s.z[i] = m.z - Math.cos(m.heading) * cp * back + (Math.random() - 0.5) * 0.08;
+        s.born[i] = now - Math.random() * dt; s.size[i] = 0.55 + Math.random() * 0.7;
+      }
+      s.owed.set(m.id, owed);
+    }
+    for (let i = 0; i < TRAIL_N; i++) {
+      const age = now - s.born[i];
+      const y = s.y[i] + age * (0.35 + s.size[i] * 0.25);
+      const alive = age >= 0 && age < TRAIL_LIFE && y < top;
+      dummy.position.set(s.x[i] + Math.sin(age * 9 + i) * 0.03, Math.min(y, top), s.z[i]);
+      dummy.scale.setScalar(alive ? s.size[i] * (1 - age / TRAIL_LIFE) * (0.6 + Math.min(1, age * 6) * 0.4) : 0);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  });
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, TRAIL_N]} position={[ex.x, 0, ex.z]} name="coast-penguin-trails" raycast={() => undefined} frustumCulled={false}>
+      <sphereGeometry args={[0.032, 6, 4]} />
+      <meshBasicMaterial color="#d6f3f5" transparent opacity={0.55} depthWrite={false} />
+    </instancedMesh>
+  );
+}
+
 const slotY = (ex: ExhibitDef, on: "land" | "water" | "floor") => on === "land" ? ex.land.y : on === "water" ? ex.pool.surface - 0.04 : ex.pool.floor;
 
 function Items({ ex, h }: { ex: ExhibitDef; h: CoastHabitat }) {
@@ -839,6 +889,7 @@ export function CoastZone() {
         </group>
       ))}
       {coastHabitatShown("penguins") && <PenguinBubbles />}
+      {coastHabitatShown("penguins") && <PenguinTrails />}
       {coastHabitatShown("penguins") && <PenguinStationFish />}
       {coastHabitatShown("penguins") && <CoastKeepers shown={coastShown} />}
       <Animals />

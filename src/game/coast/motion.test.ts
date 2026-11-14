@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COAST_HABITATS, EXHIBITS, ISLAND_CLEAR, rampSections, type CoastHabitat } from "../data/coast";
-import { angleDiff, landLegClear, MAX_SPEED, newMover, PENGUIN_LAND_SEPARATION, PENGUIN_SWIM_SEPARATION, rampRect, SPECIES_OF, stationLandRoute, stationSpots, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
+import { angleDiff, landLegClear, MAX_SPEED, MAX_SWIM_SPEED, newMover, PENGUIN_DASH, PARAMS, speedCap, PENGUIN_LAND_SEPARATION, PENGUIN_SWIM_SEPARATION, rampRect, SPECIES_OF, stationLandRoute, stationSpots, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
 
 /** The island's rock: a frustum from its waterline radius up to a flat top (the scene draws the same shape). */
 export const ISLAND_TOP_R = 0.55;
@@ -22,8 +22,9 @@ function check(m: Mover, h: CoastHabitat, prev: Pick<Mover, "x" | "y" | "z" | "m
   const ex = EXHIBITS[h];
   const where = `${h} ${m.id} ${m.mode} ${m.area} (${m.x.toFixed(2)}, ${m.y.toFixed(2)}, ${m.z.toFixed(2)})`;
   expect(Number.isFinite(m.x + m.y + m.z + m.heading + m.pitch + m.speed), where).toBe(true);
-  // No teleporting: never further than the fastest leg allows.
-  expect(Math.hypot(m.x - prev.x, m.y - prev.y, m.z - prev.z), where).toBeLessThanOrEqual(MAX_SPEED * dt + 1e-6);
+  // No teleporting: never further than the fastest leg allows (penguin bursts under water have their own cap).
+  const cap = Math.max(speedCap(m), speedCap({ species: m.species, mode: prev.mode }));
+  expect(Math.hypot(m.x - prev.x, m.y - prev.y, m.z - prev.z), where).toBeLessThanOrEqual(cap * dt + 1e-6);
   if (m.mode === "rest" || m.mode === "walk") {
     if (m.area === "land") {
       expect(m.y, where).toBeCloseTo(ex.land.y, 6);
@@ -149,7 +150,8 @@ describe("semi-aquatic movement", { timeout: 60_000 }, () => {
       expect(landLegClear(ex, { x: s.x, z: s.z + 0.9 }, { x: s.x, z: s.z + 0.9 }, landItems, 0.35)).toBe(true);
     }
     const restSpots = ex.slots.map((s) => ({ x: s.x, z: s.z + 0.9 }));
-    const { entered, returned, quietRests } = simulate("penguins", 13, 600, { landItems, restSpots });
+    // 660 s: with every slot occupied, one bird of this seed only reaches the water at ~574 s (quiet rests first).
+    const { entered, returned, quietRests } = simulate("penguins", 13, 660, { landItems, restSpots });
     expect(entered.size).toBe(3);
     expect(returned.size).toBe(3);
     expect(quietRests).toBeGreaterThan(0);
@@ -250,7 +252,7 @@ describe("semi-aquatic movement", { timeout: 60_000 }, () => {
     for (let i = 0; i < 6; i++) movers.push(newMover(`colony-${i}`, "penguin", ex, 100 + i, 0, [], movers));
     const visitedWater = new Set<string>(), visitedLand = new Set<string>(), returnedToLand = new Set<string>();
     let minGround = Infinity, minWater = Infinity, deepest = Infinity, shallowest = -Infinity;
-    let maxStep = 0, finite = true, forbiddenSwimSamples = 0, waterPairs = 0, groundPairs = 0;
+    let maxStep = 0, overCap = -Infinity, fastest = 0, fastestWalk = 0, finite = true, forbiddenSwimSamples = 0, waterPairs = 0, groundPairs = 0;
     const windows = Array.from({ length: 5 }, () => ({ land: 0, ramp: 0, water: 0, perBird: new Map<string, number>(), depths: new Set<number>() }));
     for (let frame = 1; frame <= 900 / dt; frame++) {
       const window = windows[Math.min(4, Math.floor((frame - 1) * dt / 180))];
@@ -262,6 +264,10 @@ describe("semi-aquatic movement", { timeout: 60_000 }, () => {
         finite &&= Number.isFinite(m.x + m.y + m.z + m.heading + m.pitch + m.speed);
         const distance = Math.hypot(m.x - x, m.y - y, m.z - z);
         maxStep = Math.max(maxStep, distance);
+        const cap = Math.max(speedCap(m), speedCap({ species: m.species, mode }));
+        overCap = Math.max(overCap, distance - cap * dt);
+        if (mode === "swim" && m.mode === "swim") fastest = Math.max(fastest, distance / dt);
+        if (mode === "walk" && m.mode === "walk") fastestWalk = Math.max(fastestWalk, distance / dt);
         window.perBird.set(m.id, (window.perBird.get(m.id) ?? 0) + distance);
         if (mode === "walk") window.land += distance;
         if (mode === "rampDown" || mode === "rampUp") window.ramp += distance;
@@ -290,7 +296,11 @@ describe("semi-aquatic movement", { timeout: 60_000 }, () => {
     }
     const trace = motionTrace(movers);
     expect(finite, trace).toBe(true);
-    expect(maxStep, trace).toBeLessThanOrEqual(MAX_SPEED * dt + 1e-6);
+    expect(overCap, trace).toBeLessThanOrEqual(1e-6);
+    expect(maxStep, trace).toBeLessThanOrEqual(MAX_SWIM_SPEED * dt + 1e-6);
+    // Bursts really happen in the colony, and walking is not sped up.
+    expect(fastest, trace).toBeGreaterThan(2.6);
+    expect(fastestWalk, trace).toBeLessThanOrEqual(MAX_SPEED + 1e-6);
     expect(forbiddenSwimSamples, trace).toBe(0);
     expect(groundPairs).toBeGreaterThan(1000);
     expect(waterPairs).toBeGreaterThan(1000);
@@ -327,7 +337,7 @@ describe("semi-aquatic movement", { timeout: 60_000 }, () => {
         stepMover(m, ex, dt, { time: frame * dt, landItems: [], toy: null, movers, onEvent: (animal, kind) => {
           if (kind === "enterWater" || kind === "leaveWater") completed.add(animal.id);
         } });
-        maxStep = Math.max(maxStep, Math.hypot(m.x - x, m.y - y, m.z - z));
+        maxStep = Math.max(maxStep, Math.hypot(m.x - x, m.y - y, m.z - z) / Math.max(speedCap(m), speedCap({ species: m.species, mode })) * MAX_SPEED);
         if (mode === "rampDown") maxReverse = Math.max(maxReverse, z - m.z);
         if (mode === "rampUp") maxReverse = Math.max(maxReverse, m.z - z);
       }
@@ -352,9 +362,9 @@ describe("semi-aquatic movement", { timeout: 60_000 }, () => {
       let minimum = Infinity, maxStep = 0;
       for (let frame = 1; frame <= 45 / dt; frame++) {
         for (const m of movers) {
-          const { x, y, z } = m;
+          const { x, y, z, mode } = m;
           stepMover(m, ex, dt, { time: frame * dt, landItems: [], toy: null, movers });
-          maxStep = Math.max(maxStep, Math.hypot(m.x - x, m.y - y, m.z - z));
+          maxStep = Math.max(maxStep, Math.hypot(m.x - x, m.y - y, m.z - z) / Math.max(speedCap(m), speedCap({ species: m.species, mode })) * MAX_SPEED);
         }
         const [a, b] = movers;
         if (a.area === (water ? "water" : "land") && b.area === a.area) minimum = Math.min(minimum, Math.hypot(a.x - b.x, water ? a.y - b.y : 0, a.z - b.z));
@@ -366,6 +376,48 @@ describe("semi-aquatic movement", { timeout: 60_000 }, () => {
       expect(passed, motionTrace(movers)).toEqual([true, true]);
     });
   }
+
+  it("swimming penguins zip across the window both ways, banking through turns, without bursts on land", () => {
+    const ex = EXHIBITS.penguins, dt = 1 / 30;
+    const movers = [0, 1, 2].map((i) => newMover(`burst-${i}`, "penguin", ex, 700 + i));
+    movers.forEach((m, i) => {
+      Object.assign(m, { x: -4 + i * 4, y: -1 + i * 0.5, z: 3.4 + i * 0.6, heading: Math.PI / 2, mode: "swim", area: "water", boutEnd: 1e9, nextBreath: 1e9 });
+      m.path = [];
+    });
+    let right = 0, left = 0, fastest = 0, misaligned = 0, fastSamples = 0, nearGlass = 0;
+    const depths = new Set<number>();
+    for (let frame = 1; frame <= 240 / dt; frame++) {
+      for (const m of movers) {
+        const prev = { x: m.x, y: m.y, z: m.z, mode: m.mode, area: m.area };
+        m.nextBreath = 1e9; m.boutEnd = 1e9;
+        stepMover(m, ex, dt, { time: frame * dt, landItems: [], toy: null, movers });
+        check(m, "penguins", prev, dt);
+        const vx = (m.x - prev.x) / dt, vz = (m.z - prev.z) / dt, v = Math.hypot(vx, (m.y - prev.y) / dt, vz);
+        fastest = Math.max(fastest, v);
+        if (v > 2.5) {
+          fastSamples++;
+          if (vx > 2.3) right++;
+          if (vx < -2.3) left++;
+          if (m.z > 7) nearGlass++;
+          depths.add(Math.floor((m.y - ex.pool.floor) / 1.7));
+          if (Math.abs(angleDiff(m.heading, Math.atan2(vx, vz))) > 0.2) misaligned++;
+        }
+      }
+    }
+    expect(fastest).toBeGreaterThan(PARAMS.penguin.swim * PENGUIN_DASH.factor[0] * 0.95);
+    expect(fastest).toBeLessThanOrEqual(MAX_SWIM_SPEED + 1e-6);
+    // Many fast passes, in both directions, at several depths, some near the glass.
+    expect(right).toBeGreaterThan(150);
+    expect(left).toBeGreaterThan(150);
+    expect(nearGlass).toBeGreaterThan(60);
+    expect(depths.size).toBeGreaterThanOrEqual(2);
+    // The beak leads: the body points where it travels, even through the banked turns.
+    expect(misaligned / fastSamples).toBeLessThan(0.02);
+    // Seals and otters keep their own, unchanged pace.
+    expect(PARAMS.seal.swim).toBe(1.25);
+    expect(PARAMS.otter.swim).toBe(0.85);
+    expect(PARAMS.penguin.walk).toBe(0.42);
+  });
 
   it("penguins may cross the same ground position at safely different swimming depths", () => {
     const ex = EXHIBITS.penguins, dt = 1 / 30;

@@ -17,8 +17,12 @@ export const HUB_WALL_H = 7;
 /** How far the floor runs forward of the centre (the open plaza). */
 export const HUB_FRONT = 8.5;
 
-/** The central display tank (decorative: no care, no purchase). */
-export const HUB_TANK = { x: HUB_CENTRE.x, z: HUB_CENTRE.z, r: 2, h: 3.2, plinth: 0.55, plinthR: 2.45 };
+/**
+ * The central display tank (decorative: no care, no purchase). A tall column
+ * (6.4 m of water on a 0.55 m plinth, 2026-11-14; was 3.2 m): the rim stays
+ * just under the 7 m wall cornice.
+ */
+export const HUB_TANK = { x: HUB_CENTRE.x, z: HUB_CENTRE.z, r: 2, h: 6.4, plinth: 0.55, plinthR: 2.45 };
 /** Visitors never come closer to the tank's centre than this. */
 export const TANK_CLEAR = HUB_TANK.plinthR + 0.35;
 

@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { setGame, useGame } from "../game/store";
 import { lagoonHappiness, lagoonMood, lowestNeed, LAGOON_TOYS, type LagoonToy, type LagoonView } from "../game/logic/lagoon";
 import {
-  feedDolphins, giveLagoonToy, holdLagoonBall, throwLagoonBall, lagoonHelpNudge, LAGOON_MILESTONES, openToys, setLagoonView, startLagoonActivity, startLagoonTour, TOY_NAMES, watchLagoonIntro
+  feedDolphins, giveLagoonToy, holdLagoonBall, throwLagoonBall, lagoonHelpNudge, LAGOON_MILESTONES, openToys, setLagoonView, startLagoonActivity, startLagoonHighJump, startLagoonTour, TOY_NAMES, watchLagoonIntro
 } from "../game/flow/lagoon";
+import { highJumpActive } from "../game/lagoon/highJump";
 import { ballCatchPaused, canHoldBall, lagoonRt } from "../game/lagoon/lagoonRuntime";
 import { Big } from "./Hud";
 import { Icon } from "./icons";
@@ -50,6 +51,26 @@ function ToyPicture({ toy, size = 64 }: { toy: LagoonToy; size?: number }) {
       {[0, 1, 2, 3].map((k) => <path key={k} d={`M${10 + k * 8} 44 C ${4 + k * 8} 30, ${18 + k * 8} 22, ${10 + k * 8} 6`} stroke={k % 2 ? "#4f8a3a" : "#6aa84f"} strokeWidth="5" fill="none" strokeLinecap="round" />)}
     </svg>
   );
+}
+
+/** The High Jump card's picture: a crane jib, the hanging buoy and a leaping dolphin. */
+function HighJumpPicture({ size = 64 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true">
+      <rect x="4" y="6" width="3" height="38" fill="#2f8f9d" />
+      <rect x="4" y="5" width="36" height="3" rx="1" fill="#2f8f9d" />
+      <line x1="31" y1="8" x2="31" y2="15" stroke="#26343c" strokeWidth="1.2" />
+      <circle cx="31" cy="18" r="3.6" fill="#ff8a3d" stroke="#ffffff" strokeWidth="1.2" />
+      <path d="M12 42 C 16 30, 22 24, 28 22 C 26 26, 25 30, 26 33 C 22 32, 18 36, 16 43 Z" fill="#7f98a8" />
+      <path d="M8 44 q8 -4 16 0 q8 4 16 0" stroke="#4dabf7" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Re-render on the High Jump's start/end only (polled, a few times a second). */
+const pollJump = (fn: () => void) => { const t = window.setInterval(fn, 250); return () => window.clearInterval(t); };
+function useHighJumpActive() {
+  return useSyncExternalStore(pollJump, highJumpActive, highJumpActive);
 }
 
 export function LagoonGoals({ before }: { before?: ReactNode } = {}) {
@@ -124,7 +145,7 @@ function HappinessCard() {
   if (!p) return null;
   const h = lagoonHappiness(p), mood = lagoonMood(p), low = lowestNeed(p);
   return (
-    <div className="panel wing-status outdoor-status ui" data-testid="lagoon-status" data-happy={h}>
+    <div className="panel wing-status outdoor-status lagoon-status ui" data-testid="lagoon-status" data-happy={h}>
       <header>
         <span className="outdoor-status-title"><Icon id={mood} size={30} /><span>Dolphins<Ja>イルカの きもち</Ja></span></span>
         <span className="fishcount" data-testid="lagoon-happy">{h}</span>
@@ -146,6 +167,7 @@ const NO_TOYS: LagoonToy[] = [];
 
 function ToyPanel() {
   const toys = useGame((s) => s.model.progress.lagoon?.toys ?? NO_TOYS);
+  const jumping = useHighJumpActive();
   return (
     <div className="panel shop coast-shop outdoor-toys ui" data-testid="lagoon-toys" role="dialog" aria-label="Toys">
       <header>
@@ -154,6 +176,11 @@ function ToyPanel() {
         <button className="round close-btn" onClick={() => setGame({ areaPanel: null })} aria-label="Close" data-testid="toys-close"><Icon id="close" size={22} /></button>
       </header>
       <div className="grid">
+        <button className={`card decor-card highjump-card ${jumping ? "short" : ""}`} onClick={() => startLagoonHighJump()} data-testid="lagoon-highjump" aria-disabled={jumping}>
+          <span className="pics"><HighJumpPicture size={70} /></span>
+          <strong className="structure-name">High Jump<Ja>ハイジャンプ</Ja></strong>
+          {jumping && <small className="need-tag">Jumping! <Ja>ジャンプちゅう</Ja></small>}
+        </button>
         {LAGOON_TOYS.map((t) => {
           const owned = toys.includes(t);
           return (

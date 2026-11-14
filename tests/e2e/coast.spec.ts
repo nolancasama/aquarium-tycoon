@@ -89,10 +89,10 @@ test("locked at the hub and on the map; a preview sandbox opens it; penguins nee
   await waitFor(page, (s) => !s.line && (s.progress as { coastIntroSeen?: boolean }).coastIntroSeen === true, 15_000, "intro done");
   await expect(page.getByTestId("coast-goals")).toContainText("Penguin Paradise");
 
-  // The penguins: three of them, unhappy until they have resting rocks.
+  // The penguins: two of them (2026-11-14), unhappy until they have resting rocks.
   await page.getByTestId("coast-view-penguins").click();
   await expect(page.getByTestId("coast-status")).toBeVisible();
-  await expect(page.getByTestId("coast-capacity")).toContainText("3/6");
+  await expect(page.getByTestId("coast-capacity")).toContainText("2/6");
   await expect(page.getByTestId("coast-need")).toContainText("The penguins need rocks!");
   await page.getByTestId("btn-coast-items").click();
   await expect(page.getByTestId("coast-shop")).toBeVisible();
@@ -119,10 +119,10 @@ test("locked at the hub and on the map; a preview sandbox opens it; penguins nee
   await hook(page, "coastVisitor", "penguins");
   await page.getByTestId("coast-visitor").click();
   const countQuestion = await waitFor(page, (s) => s.prompt?.question === "How many penguins?", 10_000, "the question");
-  expect(countQuestion.prompt!.choices).toEqual(["pg2", "pg3", "pg4"]);
+  expect(countQuestion.prompt!.choices).toEqual(["pg1", "pg2", "pg3"]);
   expect((await coast(page)).underwater).toBe(true);
   expect((await state(page) as unknown as { camera: { pos: { y: number } } }).camera.pos.y).toBeGreaterThan(5);
-  await answer(page, "pg3");
+  await answer(page, "pg2");
   await waitFor(page, (s) => !s.prompt, 10_000, "answered");
   c = await coast(page);
   expect((c.progress as { penguinActs: number }).penguinActs).toBe(1);
@@ -139,6 +139,37 @@ test("locked at the hub and on the map; a preview sandbox opens it; penguins nee
   await waitFor(page, (s) => s.tanks.find((t) => t.type === "penguins")!.food >= 85, 30_000, "fed");
   await expect(page.getByTestId("btn-feed")).toBeEnabled({ timeout: 30_000 });
   await expect(page.getByTestId("btn-feed")).toContainText("Feed");
+
+  // Buy a penguin with the real button: 60 coins once (a double tap buys one),
+  // it comes out of the staff door, and the habitat shows 3/6.
+  const coinsBefore = (await state(page)).coins;
+  await expect(page.getByTestId("btn-buy-penguin")).toBeEnabled();
+  await page.getByTestId("btn-buy-penguin").dblclick();
+  await waitFor(page, (s) => s.coins === coinsBefore - 60, 5_000, "paid once");
+  type Keeper = { keeper: { arrival: { phase: string; door: number } } };
+  await expect.poll(async () => (await hook<Keeper>(page, "coast")).keeper.arrival.phase, { timeout: 5_000 }).not.toBe("idle");
+  await expect(page.getByTestId("btn-clean")).toBeDisabled();
+  await expect.poll(async () => (await hook<Keeper>(page, "coast")).keeper.arrival.phase, { timeout: 30_000 }).toBe("idle");
+  await expect(page.getByTestId("coast-capacity")).toContainText("3/6");
+  expect((await state(page)).coins).toBe(coinsBefore - 60);
+  expect(((await coast(page)).progress as { penguinsBought: number }).penguinsBought).toBe(1);
+
+  // Clean never moves the selected camera: five cleaners for five seconds, cleaning applied once.
+  await hook(page, "setCare", penguins.id, 95, 30);
+  await page.waitForTimeout(400);
+  type Cam = { camera: { pos: { x: number; y: number; z: number } } };
+  const camBefore = (await state(page) as unknown as Cam).camera.pos;
+  await page.getByTestId("btn-clean").click();
+  await expect(page.getByTestId("btn-clean")).toContainText("Cleaning...");
+  for (let i = 0; i < 3; i++) {
+    await page.waitForTimeout(900);
+    const cam = (await state(page) as unknown as Cam).camera.pos;
+    expect(cam.y).toBeCloseTo(camBefore.y, 3);
+    expect(cam.z).toBeCloseTo(camBefore.z, 3);
+    expect((await coast(page)).underwater).toBe(false);
+  }
+  await waitFor(page, (s) => s.tanks.find((t) => t.type === "penguins")!.clean >= 90, 15_000, "cleaned");
+  await expect(page.getByTestId("btn-clean")).toBeEnabled({ timeout: 10_000 });
   // Reload: the preview was never saved. Coins, the coast and everything else are as before it.
   await page.reload();
   await page.getByTestId("btn-continue").click();
@@ -241,8 +272,10 @@ for (const [width, height] of [[1366, 768], [1280, 720], [1024, 768], [1024, 600
     expect(water.y).toBeLessThan(land.y - 3);
     expect(water.y).toBeLessThan(1.4);
     expect(water.y).toBeCloseTo(-1.45, 1);
-    // Standing back in the lower gallery (local z = 30) so its walkway shows.
-    expect(water.z).toBeCloseTo(-30, 1);
+    // Close to the glass (local z 21.5, a little further on narrow screens; the
+    // glass is at local z 11): the window fills the view with a strip of floor.
+    expect(water.z).toBeGreaterThan(-60 + 20.9);
+    expect(water.z).toBeLessThan(-60 + 24.6);
 
     const box = async (tid: string) => (await page.getByTestId(tid).boundingBox())!;
     const goals = await box("coast-goals"), views = await box("coast-views"), status = await box("coast-status");

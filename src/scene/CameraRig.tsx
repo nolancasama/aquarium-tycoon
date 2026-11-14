@@ -12,7 +12,8 @@ import { BOAT, ISLAND, SANCTUARY_ORIGIN, SANCTUARY_REVEAL_FROM, SANCTUARY_SHOTS 
 import type { SanctuaryView } from "../game/logic/sanctuary";
 import { sanctFocus } from "../game/flow/sanctuary";
 import { sanctRt } from "../game/sanctuary/sanctuaryRuntime";
-import { LAGOON_COUNT_SHOT, LAGOON_ORIGIN, LAGOON_REVEAL_FROM, LAGOON_SHOTS } from "../game/data/lagoon";
+import { DECK_JUMP_SHOT, LAGOON_COUNT_SHOT, LAGOON_ORIGIN, LAGOON_REVEAL_FROM, LAGOON_SHOTS } from "../game/data/lagoon";
+import { highJumpFraming } from "../game/lagoon/highJump";
 import type { LagoonView } from "../game/logic/lagoon";
 import { lagoonFocus } from "../game/flow/lagoon";
 import { lagoonRt } from "../game/lagoon/lagoonRuntime";
@@ -135,7 +136,8 @@ export function lagoonCam(view: LagoonView, aspect: number, counting: boolean): 
       };
     }
   }
-  const base = counting ? LAGOON_COUNT_SHOT : LAGOON_SHOTS[view];
+  // The Deck keeps its place on the deck; during a High Jump it frames the whole leap and splash.
+  const base = counting ? LAGOON_COUNT_SHOT : view === "deck" && highJumpFraming() ? DECK_JUMP_SHOT : LAGOON_SHOTS[view];
   const k = view === "gallery" && !counting ? 1 : Math.max(1, 1.78 / aspect);
   let pos = { x: base.target.x + (base.pos.x - base.target.x) * k, y: base.target.y + (base.pos.y - base.target.y) * k, z: base.target.z + (base.pos.z - base.target.z) * k };
   let target = base.target;

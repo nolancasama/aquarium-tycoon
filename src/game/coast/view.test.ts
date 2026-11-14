@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EXHIBITS } from "../data/coast";
-import { blendCoastShot, coastExhibitShot, COAST_VIEW_SECONDS } from "./view";
+import { blendCoastShot, coastExhibitShot, COAST_VIEW_SECONDS, UNDERWATER_EYE_Z } from "./view";
 
 describe("coast exhibit cameras", () => {
   it.each([1366 / 768, 1024 / 768, 1024 / 600])("frames land closely and keeps gallery eye height at aspect %s", (aspect) => {
@@ -11,7 +11,9 @@ describe("coast exhibit cameras", () => {
     expect(land.target.y).toBeLessThanOrEqual(4);
     expect(land.pos.z - ex.z).toBeLessThan(25);
     expect(lower.pos.y).toBeCloseTo(-3.05 + 1.6);
-    expect(lower.pos.z - ex.z).toBe(30);
+    // Close to the glass (local z 11): the window fills the frame, not the floor.
+    expect(lower.pos.z - ex.z).toBeGreaterThanOrEqual(20);
+    expect(lower.pos.z - ex.z).toBeLessThanOrEqual(24);
     expect(lower.target.z).toBeLessThan(ex.z + ex.pool.maxZ);
   });
 
@@ -28,6 +30,15 @@ describe("coast exhibit cameras", () => {
     }
     expect(blendCoastShot(land, lower, COAST_VIEW_SECONDS, out)).toEqual(lower);
     expect(blendCoastShot(land, lower, 5, out)).toEqual(lower);
+  });
+
+  it("the closest (widest) underwater shot stays outside the glass and keeps a little floor", () => {
+    const ex = EXHIBITS.penguins;
+    const lower = coastExhibitShot("penguins", 1366 / 768, true);
+    expect(lower.pos.z - ex.z).toBeCloseTo(UNDERWATER_EYE_Z, 1);
+    // Looking very slightly up: less walkway floor than the former downward aim.
+    expect(lower.target.y).toBeGreaterThan(lower.pos.y);
+    expect(lower.target.y - lower.pos.y).toBeLessThan(1);
   });
 
   it("temporarily fits land and swimming animals for the unchanged all-penguin count", () => {

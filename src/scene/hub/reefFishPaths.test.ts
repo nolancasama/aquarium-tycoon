@@ -14,13 +14,13 @@ describe("reef fish roaming", () => {
   it("clears actual production reef geometry for every displayed fish and its real body size", () => {
     const reef = createHubReef();
     const production = [
-      { count: 4, size: 0.43, band: [0.6, 2.5] as const },
-      { count: 6, size: 0.28, band: [0.65, 2.6] as const },
-      { count: 4, size: 0.36, band: [0.35, 1.5] as const },
-      { count: 4, size: 0.38, band: [0.7, 2.35] as const },
-      { count: 4, size: 0.29, band: [1.6, 2.75] as const }
+      { count: 4, size: 0.43, band: [0.6, 5.3] as const },
+      { count: 6, size: 0.28, band: [0.65, 5.7] as const },
+      { count: 4, size: 0.36, band: [0.35, 2.6] as const },
+      { count: 4, size: 0.38, band: [0.7, 4.8] as const },
+      { count: 4, size: 0.29, band: [1.8, 6.0] as const }
     ];
-    let index = 0;
+    let index = 0, highest = 0, upperHalf = 0;
     for (const school of production) for (let fish = 0; fish < school.count; fish++, index++) {
       const size = school.size * (0.88 + ((index * 29) % 10) / 60);
       const path = createReefFishPath(index + 1, school.band, size, reef.obstacles);
@@ -36,7 +36,15 @@ describe("reef fish roaming", () => {
       expect(maxRadius, `fish ${index + 1}`).toBeLessThanOrEqual(REEF_SWIM_RADIUS + 1e-8);
       expect(minY, `fish ${index + 1}`).toBeGreaterThanOrEqual(path.band[0] - 1e-8);
       expect(maxY, `fish ${index + 1}`).toBeLessThanOrEqual(path.band[1] + 1e-8);
+      expect(maxY + path.clearance, `fish ${index + 1}`).toBeLessThanOrEqual(REEF_SWIM_HEIGHT + 1e-8);
+      highest = Math.max(highest, maxY);
+      if (maxY > REEF_SWIM_HEIGHT / 2) upperHalf++;
     }
+    // The tall (6.4 m) tank is used: fish reach near the surface, and most
+    // routes climb into the upper half rather than staying by the reef.
+    expect(REEF_SWIM_HEIGHT).toBeGreaterThan(6);
+    expect(highest).toBeGreaterThan(5.3);
+    expect(upperHalf).toBeGreaterThanOrEqual(14);
     reef.geometry.dispose();
     reef.elements.forEach((element) => element.geometry.dispose());
   });

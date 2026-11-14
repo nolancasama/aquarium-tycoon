@@ -42,7 +42,10 @@ describe("save recovery diagnostics", () => {
     expect(model.coins).toBe(raw.model.coins);
     expect(model.stats).toEqual(raw.model.stats);
     // Includes the eight-level stage, stars, photo, trophies and historical answers.
-    expect(model.progress).toEqual(raw.model.progress);
+    // The only migration: saves from before 2026-11-14 gain an empty penguin-purchase allowance.
+    const migrated = raw.model.progress.coast && raw.model.progress.coast.penguinsBought === undefined
+      ? { ...raw.model.progress, coast: { ...raw.model.progress.coast, penguinsBought: 0 } } : raw.model.progress;
+    expect(model.progress).toEqual(migrated);
     expect(model.rush).toEqual(raw.model.rush);
     expect(model.quarantine).toEqual(raw.model.quarantine);
     expect(decodeSave(encodeSave(model))!.model).toEqual(model);

@@ -1,4 +1,6 @@
 import { COAST_DECOR } from "../data/decor";
+import { SPECIES } from "../data/fish";
+import { TANKS } from "../data/tanks";
 import { areaAvailable, COAST_HABITATS_SHOWN, coastHabitatShown } from "../data/release";
 import type { CoastHabitat } from "../data/coast";
 import type { DecorKind, SlotId, SpeciesId, TankType } from "../types";
@@ -56,12 +58,47 @@ export interface CoastProgress {
   sealActs: number;
   otterActs: number;
   trophy: boolean;
+  /** Penguins bought one at a time (0..PENGUIN_PURCHASES); independent of how many penguins a save already has. */
+  penguinsBought: number;
 }
 
 export const newCoastProgress = (): CoastProgress => ({
   milestone: 0, sawPenguinSwim: false, sawSealDive: false, sawOtterFloat: false,
-  penguinActs: 0, sealActs: 0, otterActs: 0, trophy: false
+  penguinActs: 0, sealActs: 0, otterActs: 0, trophy: false, penguinsBought: 0
 });
+
+/** A newly opened Penguin Coast starts with two penguins (2026-11-14; saves opened earlier keep their three or four). */
+export const PENGUIN_START = 2;
+/** Extra penguins a player may buy, one per tap, on top of the start and the milestone reward. */
+export const PENGUIN_PURCHASES = 2;
+/** The animal's existing shop price (data/fish.ts). */
+export const PENGUIN_PRICE = SPECIES.penguin.price;
+
+export type PenguinBuyState = { ok: true; left: number } | { ok: false; reason: "locked" | "bought" | "full" | "coins"; left: number };
+
+/** Can one more penguin be bought now? Allowance, habitat capacity and coins are all checked. */
+export function penguinBuyState(m: Model): PenguinBuyState {
+  const p = m.progress.coast;
+  const t = tankAt(m, HABITAT_PAD.penguins);
+  const left = Math.max(0, PENGUIN_PURCHASES - (p?.penguinsBought ?? 0));
+  if (!m.progress.coastOpen || !p || !t || t.type !== "penguins" || !coastHabitatShown("penguins")) return { ok: false, reason: "locked", left };
+  if (left <= 0) return { ok: false, reason: "bought", left };
+  if (!hasSpace(t, "penguin") || t.fish.length >= TANKS.penguins.capacity) return { ok: false, reason: "full", left };
+  if (m.coins < PENGUIN_PRICE) return { ok: false, reason: "coins", left };
+  return { ok: true, left };
+}
+
+/** Buy one penguin straight into the habitat. Returns its new stable id (`f<n>`, the same form the renaming panel uses). */
+export function buyPenguin(m: Model): Result {
+  const state = penguinBuyState(m);
+  if (!state.ok) return { ok: false, reason: state.reason === "coins" ? "coins" : state.reason === "full" ? "full" : "locked" };
+  const t = tankAt(m, HABITAT_PAD.penguins)!, id = `f${m.nextId}`;
+  return { ok: true, id, m: {
+    ...m, coins: m.coins - PENGUIN_PRICE, nextId: m.nextId + 1,
+    tanks: m.tanks.map((x) => x.id === t.id ? { ...x, fish: [...x.fish, { id, species: "penguin" }] } : x),
+    progress: { ...m.progress, coast: { ...m.progress.coast!, penguinsBought: m.progress.coast!.penguinsBought + 1 } }
+  } };
+}
 
 export const coastUnlocked = (m: Model): boolean => Boolean(m.progress.freePlay && m.progress.tunnelOpen && m.progress.tunnel?.trophy);
 
@@ -164,7 +201,7 @@ export function checkCoastMilestones(m: Model): { m: Model; reached: number[] } 
     if (!coastMilestoneReady(out, next)) break;
     // Activity counts start again for the milestone after (each asks for its own).
     out = { ...out, progress: { ...out.progress, coast: { ...p, milestone: next, trophy: next === 5 || p.trophy, penguinActs: 0, ...(coastHabitatShown("seals") ? { sealActs: 0 } : {}), ...(coastHabitatShown("otters") ? { otterActs: 0 } : {}) } } };
-    if (next === 1) out = addHabitat(out, "penguins", 3);
+    if (next === 1) out = addHabitat(out, "penguins", PENGUIN_START);
     if (next === 2) {
       out = giveAnimals(out, "penguins", 1);
       if (coastHabitatShown("seals")) out = addHabitat(out, "seals", 1);

@@ -5,10 +5,11 @@ import { getGame, useGame } from "../../game/store";
 import { rt } from "../../game/runtime";
 import { LAGOON_HALL } from "../../game/data/rooms";
 import {
-  BRIDGE, DECK, DECK_SPOTS, BOARDWALK_PATH, GALLERY, GALLERY_SPOTS, LAGOON_DOMAIN, LAGOON_ORIGIN, PLATFORM, SEA_GATE
+  BRIDGE, CRANE, CRANE_REACH, DECK, DECK_SPOTS, BOARDWALK_PATH, GALLERY, GALLERY_SPOTS, LAGOON_DOMAIN, LAGOON_ORIGIN, PLATFORM, SEA_GATE
 } from "../../game/data/lagoon";
+import { buoyPoint, jibYaw, jumpRt, trolleyPoint } from "../../game/lagoon/highJump";
 import { LAND_Y, pointInPolygon } from "../../game/marine/domain";
-import { BALL_HELD, feedingPose, lagoonRt, resetFeeding, RING } from "../../game/lagoon/lagoonRuntime";
+import { BALL_HELD, feedingPose, lagoonRt, leaveHighJump, resetFeeding, RING } from "../../game/lagoon/lagoonRuntime";
 import { holdLagoonBall, throwLagoonBall, lagoonFocus, lagoonTick, lookText, tapDolphin, tapLook } from "../../game/flow/lagoon";
 import { audio } from "../../audio/audio";
 import { DOLPHINS } from "../../game/logic/lagoon";
@@ -30,6 +31,9 @@ import { FishSchool, Gulls, LightShafts, MarineFx, outlineMask, SkyDome, seaMate
  * bottlenose dolphins, their toys, visitors and the keeper. Drawn and stepped
  * only while the lagoon is shown. Area-local coordinates under one group.
  */
+
+/** Boardwalk lamp posts (x, at z 15.4). The one at x = 8 stood in the pavilion doorway and was removed (2026-11-14). */
+export const BOARDWALK_LAMPS = [-8, 0, 16] as const;
 
 export const lagoonShown = () => { const g = getGame(); return g.screen === "game" && g.hall === LAGOON_HALL; };
 const O = LAGOON_ORIGIN;
@@ -183,13 +187,12 @@ function Structures() {
     for (const x of G.mullions) b.box(0.11, W.top - W.bottom, 0.66, x, W.bottom, wz, "#5b7f96");
     b.box(W.maxX - W.minX + 0.2, 0.2, 0.7, (W.minX + W.maxX) / 2, W.top - 0.1, wz, "#2f4f66");
     b.box(W.maxX - W.minX + 0.2, 0.2, 0.7, (W.minX + W.maxX) / 2, W.bottom - 0.1, wz, "#2f4f66");
-    // The gallery room behind it: floor, ceiling, walls, benches, light strips.
+    // The gallery room behind it: floor, ceiling, walls, light strips (no benches since 2026-11-14).
     const z0 = G.z + 0.6, z1 = G.back;
     b.box(G.maxX - G.minX + 0.8, 0.3, z1 - z0 + 0.4, (G.minX + G.maxX) / 2, G.floor - 0.3, (z0 + z1) / 2, "#1c2f3d");
     b.box(G.maxX - G.minX + 0.8, GALLERY_COVER_TOP - G.ceiling, z1 - z0 + 0.4, (G.minX + G.maxX) / 2, G.ceiling, (z0 + z1) / 2, "#223a4d");
     b.box(G.maxX - G.minX + 0.8, GALLERY_COVER_TOP - G.floor + 0.3, 0.4, (G.minX + G.maxX) / 2, G.floor - 0.3, z1 + 0.2, "#26445b");
     for (const s of [-1, 1]) b.box(0.4, GALLERY_COVER_TOP - G.floor + 0.3, z1 - z0 + 0.6, s < 0 ? G.minX - 0.2 : G.maxX + 0.2, G.floor - 0.3, (z0 + z1) / 2, "#26445b");
-    for (const x of [5.6, 12.4]) { b.box(2.8, 0.42, 0.6, x, G.floor, 14.4, "#3d6680"); b.box(2.8, 0.08, 0.66, x, G.floor + 0.42, 14.4, "#5d8aa5"); }
     for (const x of [4.2, 9, 13.8]) for (const z of [z0 + 0.35, 13.5]) b.box(3.2, 0.06, 0.18, x, G.ceiling - 0.07, z, "#bff0ff");
     // A soft blue carpet runner and two dolphin posters on the side walls.
     b.box(3.4, 0.02, G.back - z0 - 1, 9, G.floor, (z0 + G.back) / 2 + 0.3, "#2a5d7a");
@@ -203,8 +206,8 @@ function Structures() {
       const posts = Math.ceil(l / 2.2);
       for (let p = 0; p <= posts; p++) { const t = p / posts; b.box(0.08, 1.15, 0.08, a.x + (c.x - a.x) * t, LAND_Y, a.z + (c.z - a.z) * t, "#f2f6f7"); }
     }
-    for (const x of [-8, 0, 8, 16]) { b.cyl(0.06, 0.08, 3.2, x, LAND_Y, 15.4, "#2f4f66", 8); b.sphere(0.24, x, LAND_Y + 3.3, 15.4, "#fff6d8", [1, 1, 1], 8); }
-    for (const x of [-6, 3, 19]) { b.box(1.8, 0.45, 0.5, x, LAND_Y + 0.15, 14.6, "#8a5a36"); b.box(1.8, 0.5, 0.1, x, LAND_Y + 0.6, 14.85, "#8a5a36"); }
+    // Lamps along the boardwalk; none in front of the gallery pavilion's doorway (x 7.4-10.6).
+    for (const x of BOARDWALK_LAMPS) { b.cyl(0.06, 0.08, 3.2, x, LAND_Y, 15.4, "#2f4f66", 8); b.sphere(0.24, x, LAND_Y + 3.3, 15.4, "#fff6d8", [1, 1, 1], 8); }
     // Gallery entrance pavilion on the boardwalk.
     b.box(6.4, 2.6, 0.25, 9, LAND_Y, 19.3, "#e9e3d6");
     for (const s of [-1, 1]) b.box(0.25, 2.6, 3.8, 9 + s * 3.1, LAND_Y, 17.5, "#e9e3d6");
@@ -238,6 +241,9 @@ function Structures() {
       if (x > SEA_GATE.minX - 0.6 && x < SEA_GATE.maxX + 0.6) continue;
       for (const z of [-14.4, -16.2]) {
         const r = 0.9 + rnd() * 0.8;
+        // The High Jump crane's pad stands here in the breakwater.
+        // (Same five random draws as a placed boulder, so every other boulder keeps its shape.)
+        if (Math.hypot(x - CRANE.base.x, z - CRANE.base.z) < 2.1) { for (let k = 0; k < 5; k++) rnd(); continue; }
         b.add(new THREE.DodecahedronGeometry(r, 0), rnd() > 0.5 ? "#8a8d89" : "#777b78", [x + rnd() * 0.6, LAND_Y + 0.1 + r * 0.35, z + rnd() * 0.6], [rnd() * 3, rnd() * 3, 0], [1, 0.72, 1]);
       }
     }
@@ -613,6 +619,136 @@ function FeedFish() {
   return <mesh ref={ref} geometry={geo} material={mat} frustumCulled={false} visible={false} raycast={() => undefined} name="lagoon-feed-fish" />;
 }
 
+// ------------------------------------------------------------------ the High Jump crane
+
+const cranePaint = { white: "#f2f6f7", teal: "#2f8f9d", dark: "#2f4f66", concrete: "#b9b2a4", orange: "#ff8a3d" };
+
+/** A thin straight member between two points (local metres). */
+function strut(b: PartBuilder, a: THREE.Vector3, c: THREE.Vector3, w: number, color: string) {
+  const d = c.clone().sub(a), l = d.length();
+  const g = new THREE.BoxGeometry(w, l, w);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+  b.add(g, color, a.clone().add(c).multiplyScalar(0.5).toArray() as [number, number, number]);
+}
+
+/**
+ * A slim lattice jib crane on a concrete pad in the breakwater. Its jib slews
+ * out over the water and lowers a soft, striped buoy for the High Jump, then
+ * swings back along the breakwater with the buoy reeled up (jumpRt drives it).
+ * Four draws: the tower, the slewing jib, the cable and the buoy.
+ */
+function Crane() {
+  const C = CRANE, top = C.jibY;
+  const tower = useMemo(() => {
+    const b = new PartBuilder(0.3);
+    const ground = lagoonGround(C.base.x, C.base.z);
+    b.box(2.6, C.padTop - ground + 0.5, 2.6, C.base.x, ground - 0.5, C.base.z, cranePaint.concrete);
+    b.box(2.8, 0.12, 2.8, C.base.x, C.padTop - 0.06, C.base.z, "#cfc8b9");
+    // Lattice mast: corner posts, rings and cross braces, white with teal bands.
+    const h0 = C.padTop, h1 = top - 0.55, half = 0.3;
+    const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    for (const [sx, sz] of corners) b.box(0.08, h1 - h0, 0.08, C.base.x + sx * half, h0, C.base.z + sz * half, cranePaint.white);
+    const rings = 7;
+    for (let k = 0; k <= rings; k++) {
+      const y = h0 + (h1 - h0) * k / rings;
+      for (let i = 0; i < 4; i++) {
+        const [ax, az] = corners[i], [cx, cz] = corners[(i + 1) % 4];
+        strut(b, new THREE.Vector3(C.base.x + ax * half, y, C.base.z + az * half), new THREE.Vector3(C.base.x + cx * half, y, C.base.z + cz * half), 0.05, k % 2 ? cranePaint.teal : cranePaint.white);
+        if (k < rings) {
+          const y2 = h0 + (h1 - h0) * (k + 1) / rings;
+          strut(b, new THREE.Vector3(C.base.x + ax * half, y, C.base.z + az * half), new THREE.Vector3(C.base.x + cx * half, y2, C.base.z + cz * half), 0.035, cranePaint.white);
+        }
+      }
+    }
+    b.cyl(0.5, 0.5, 0.2, C.base.x, h1, C.base.z, cranePaint.dark, 16);
+    return b.build();
+  }, [C, top]);
+  const jib = useMemo(() => {
+    // Built along local +z from the mast axis; the group turns it (jibYaw).
+    const b = new PartBuilder(0);
+    const y = top - 0.25, L = C.jibLength;
+    b.cyl(0.45, 0.45, 0.18, 0, top - 0.37, 0, cranePaint.teal, 16);
+    b.box(0.9, 0.85, 1.0, -0.75, top - 0.2, -0.1, cranePaint.white);
+    b.box(0.92, 0.32, 0.6, -0.75, top + 0.15, 0.2, "#9fd3e0");
+    // Triangular jib: two lower chords and a top chord with zig-zag lacing.
+    const lo = [new THREE.Vector3(-0.22, y, 0), new THREE.Vector3(0.22, y, 0)];
+    const hi = (z: number) => new THREE.Vector3(0, y + 0.42 * (1 - z / (L + 0.6)), z);
+    for (const p of lo) strut(b, p, new THREE.Vector3(p.x, y, L), 0.07, cranePaint.white);
+    strut(b, hi(0), hi(L), 0.06, cranePaint.white);
+    for (let z = 0; z < L - 0.2; z += 0.8) for (const p of lo) {
+      strut(b, new THREE.Vector3(p.x, y, z), hi(z + 0.4), 0.035, cranePaint.teal);
+      strut(b, hi(z + 0.4), new THREE.Vector3(p.x, y, z + 0.8), 0.035, cranePaint.teal);
+    }
+    // Counter-jib, its weights, a short tower top and the pendant lines to the jib.
+    strut(b, new THREE.Vector3(0, y, 0), new THREE.Vector3(0, y, -3.2), 0.12, cranePaint.white);
+    b.box(0.9, 0.7, 0.9, 0, y - 0.45, -3.05, "#7d8a91");
+    const peak = new THREE.Vector3(0, top + 1.5, 0);
+    strut(b, new THREE.Vector3(0, top - 0.3, 0), peak, 0.09, cranePaint.white);
+    strut(b, peak, hi(L * 0.72), 0.022, cranePaint.dark);
+    strut(b, peak, new THREE.Vector3(0, y, -3.05), 0.022, cranePaint.dark);
+    // Trolley over the buoy, and a tip lamp so the jib end reads at a distance.
+    b.box(0.55, 0.22, 0.5, 0, y - 0.22, CRANE_REACH - 0.25, cranePaint.orange);
+    b.sphere(0.1, 0, y + 0.1, L, cranePaint.orange, [1, 1, 1], 8);
+    return b.build();
+  }, [C, top]);
+  const buoyGeo = useMemo(() => {
+    const b = new PartBuilder(0);
+    const cols = ["#ff8a3d", "#ffffff", "#2f9fd0", "#ffffff"];
+    for (let k = 0; k < 8; k++) b.add(new THREE.SphereGeometry(C.buoy.r, 14, 10, (k / 8) * Math.PI * 2, Math.PI / 4), cols[k % 4], [0, 0, 0], [0, 0, 0], [1, 1, 1], { vary: false });
+    b.add(new THREE.TorusGeometry(C.buoy.r * 1.01, 0.05, 6, 20), "#ffd43b", [0, 0, 0], [Math.PI / 2, 0, 0]);
+    b.add(new THREE.TorusGeometry(0.07, 0.025, 6, 10), cranePaint.dark, [0, C.buoy.r + 0.05, 0]);
+    return b.build();
+  }, [C]);
+  const jibRef = useRef<THREE.Group>(null), cable = useRef<THREE.Mesh>(null), buoy = useRef<THREE.Mesh>(null);
+  const fx = useFx();
+  const seen = useRef({ touchAt: -100, phase: "idle" as string });
+  const at = useMemo(() => ({ trolley: { x: 0, y: 0, z: 0 }, buoy: { x: 0, y: 0, z: 0 }, d: new THREE.Vector3(), up: new THREE.Vector3(0, 1, 0) }), []);
+  useFrame(() => {
+    if (!lagoonShown()) return;
+    if (jibRef.current) jibRef.current.rotation.y = jibYaw();
+    trolleyPoint(at.trolley); buoyPoint(at.buoy);
+    const b = buoy.current, c = cable.current;
+    if (b) {
+      b.position.set(at.buoy.x, at.buoy.y, at.buoy.z);
+      // A soft squash and bounce when the snout touches it.
+      const since = lagoonRt.time - jumpRt.touchAt;
+      const pop = since >= 0 && since < 0.8 ? Math.sin(since * 14) * Math.exp(-since * 4) * 0.22 : 0;
+      b.scale.set(1 + pop, 1 - pop, 1 + pop);
+      b.rotation.y = lagoonRt.time * 0.2;
+    }
+    if (c) {
+      // From the trolley to the buoy's top eye.
+      const top = { x: at.buoy.x, y: at.buoy.y + C.buoy.r + 0.08, z: at.buoy.z };
+      at.d.set(top.x - at.trolley.x, top.y - (at.trolley.y - 0.25), top.z - at.trolley.z);
+      const len = at.d.length();
+      c.position.set((top.x + at.trolley.x) / 2, (top.y + at.trolley.y - 0.25) / 2, (top.z + at.trolley.z) / 2);
+      c.quaternion.setFromUnitVectors(at.up, at.d.normalize());
+      c.scale.set(1, Math.max(0.05, len), 1);
+    }
+    // Effects at the touch (a burst of spray off the buoy) and the re-entry (a second, wider splash ring).
+    const f = fx.current, s = seen.current;
+    if (f && jumpRt.touchAt !== s.touchAt && jumpRt.touchAt > 0) { f.spout(O.x + at.buoy.x, at.buoy.y - C.buoy.r, O.z + at.buoy.z, 0.9); audio.play("bubble"); }
+    if (f && jumpRt.phase === "splash" && s.phase === "air") {
+      const m = jumpRt.id ? lagoonRt.pod?.byId(jumpRt.id) : undefined;
+      if (m) f.splash(O.x + m.x, 0, O.z + m.z, 3.6, 0, true);
+    }
+    s.touchAt = jumpRt.touchAt; s.phase = jumpRt.phase;
+  });
+  return (
+    <group name="lagoon-crane">
+      <mesh geometry={tower} material={smoothMat} raycast={() => undefined} name="lagoon-crane-tower" />
+      <group ref={jibRef} position={[C.base.x, 0, C.base.z]} rotation={[0, C.parkedYaw, 0]}>
+        <mesh geometry={jib} material={smoothMat} raycast={() => undefined} name="lagoon-crane-jib" />
+      </group>
+      <mesh ref={cable} raycast={() => undefined} name="lagoon-crane-cable">
+        <cylinderGeometry args={[0.025, 0.025, 1, 6, 1]} />
+        <meshLambertMaterial color="#26343c" />
+      </mesh>
+      <mesh ref={buoy} geometry={buoyGeo} material={smoothMat} raycast={() => undefined} name="lagoon-crane-buoy" />
+    </group>
+  );
+}
+
 // ------------------------------------------------------------------ "Look!"
 
 function lookTexture(label: string, ja: string) {
@@ -765,7 +901,7 @@ const useFx = () => fxPool;
 
 function Tick() {
   useFrame((_, dt) => {
-    if (!lagoonShown()) { resetFeeding(); return; }
+    if (!lagoonShown()) { resetFeeding(); leaveHighJump(); return; }
     lagoonTick(Math.min(dt, 0.1));
     const fx = fxPool.current;
     for (let i = 0; i < lagoonRt.fx.length; i++) {
@@ -809,6 +945,7 @@ export function DolphinLagoon() {
         <Rewards />
         {DOLPHINS.map((d, i) => <Dolphin key={d.id} id={d.id} index={i} />)}
         <Toys />
+        <Crane />
         <FeedFish />
         <People />
         <LookBubble />

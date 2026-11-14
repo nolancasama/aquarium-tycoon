@@ -4,9 +4,9 @@ import { setGame, useGame } from "../game/store";
 import { COAST_HALL } from "../game/data/rooms";
 import { DECOR, COAST_DECOR } from "../game/data/decor";
 import { TANKS } from "../game/data/tanks";
-import { COAST_PRICE, coastMilestoneLimit, HABITAT_PAD, habitatOpen, needMet } from "../game/logic/coast";
+import { COAST_PRICE, coastMilestoneLimit, HABITAT_PAD, habitatOpen, needMet, PENGUIN_PRICE, penguinBuyState } from "../game/logic/coast";
 import { happiness, tankAt, usedSpace } from "../game/logic/model";
-import { buyCoast, buyCoastItem, COAST_MILESTONES, coastMilestoneReward, setCoastUnderwater, setCoastView, skipCoastReveal, startCoastActivity, watchCoastIntro } from "../game/flow/coast";
+import { buyCoast, buyCoastItem, buyPenguinNow, COAST_MILESTONES, coastMilestoneReward, setCoastUnderwater, setCoastView, skipCoastReveal, startCoastActivity, watchCoastIntro } from "../game/flow/coast";
 import { COAST_HABITATS_SHOWN, coastHabitatShown } from "../game/data/release";
 import { cleanTank, feedTank, openDecorate } from "../game/flow/actions";
 import type { CoastHabitat } from "../game/data/coast";
@@ -132,6 +132,28 @@ function HabitatCard({ h }: { h: CoastHabitat }) {
           <b>{NEED_TEXT[h].en}</b><Ja>{NEED_TEXT[h].ja}</Ja> <Icon id="speaker" size={18} />
         </button>
       )}
+      {h === "penguins" && <BuyPenguin busy={careBusy} />}
+    </div>
+  );
+}
+
+/** One extra penguin per tap (two in all), through the staff door. */
+function BuyPenguin({ busy }: { busy: boolean }) {
+  const model = useGame((s) => s.model);
+  const free = useGame((s) => s.mode === "play" && !s.prompt && !s.line && !s.stageCard && !s.placing && !s.coastActivity && !s.panel);
+  const state = penguinBuyState(model);
+  if (!state.ok && state.reason === "locked") return null;
+  const why = state.ok ? null : state.reason === "bought" ? { en: "No more penguins", ja: "もう かえないよ" }
+    : state.reason === "full" ? { en: "The habitat is full", ja: "いっぱい だよ" }
+    : { en: `${PENGUIN_PRICE - model.coins} more coins`, ja: `あと ${PENGUIN_PRICE - model.coins} コイン` };
+  return (
+    <div className="coast-buy-penguin" data-testid="coast-buy-penguin" data-left={state.left}>
+      <button className="coast-buy-btn" data-testid="btn-buy-penguin" disabled={!state.ok || busy || !free} onClick={() => buyPenguinNow()}>
+        <PenguinGlyph size={26} />
+        <span><b>Buy Penguin</b><Ja>ペンギンを かう</Ja></span>
+        <span className="price"><Icon id="coin" size={18} /> {PENGUIN_PRICE}</span>
+      </button>
+      <small>{why ? <>{why.en}<Ja>{why.ja}</Ja></> : <><Icon id="coin" size={14} /> {model.coins} · {state.left} left <Ja>あと {state.left}わ</Ja></>}</small>
     </div>
   );
 }
@@ -254,7 +276,7 @@ export function CoastOffer() {
       <div className="panel map-panel coast-offer" role="dialog" aria-label="Open the Coastal & Polar Zone" data-testid="coast-offer">
         <header><b>Coastal &amp; Polar Zone <Ja>かいがんと さむい ちいき</Ja></b></header>
         <p>{COAST_HABITATS_SHOWN.map((h) => NAMES[h].en).join(", ")}! <Ja>{COAST_HABITATS_SHOWN.map((h) => NAMES[h].ja).join("・")}！</Ja></p>
-        <p className="coast-offer-gift"><PenguinGlyph size={30} /><PenguinGlyph size={30} /><PenguinGlyph size={30} /> Three penguins come with it. <Ja>ペンギンが 3わ ついてくるよ</Ja></p>
+        <p className="coast-offer-gift"><PenguinGlyph size={30} /><PenguinGlyph size={30} /> Two penguins come with it. <Ja>ペンギンが 2わ ついてくるよ</Ja></p>
         <footer>
           <button className="primary" disabled={short} onClick={buyCoast} data-testid="btn-buy-coast"><Icon id="coin" size={24} /> {COAST_PRICE} Open! <Ja>ひらく</Ja></button>
           <button className="secondary" onClick={() => setGame({ coastOffer: false })} data-testid="btn-coast-later">Not now <Ja>あとで</Ja></button>

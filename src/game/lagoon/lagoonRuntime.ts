@@ -4,6 +4,7 @@ import { BRIDGE, DECK, LAGOON_DOMAIN, PLATFORM, SEA_GATE } from "../data/lagoon"
 import { beginFeeding, createFeeding, feedPose, feedingActive, mouthPoint, stepFeeding } from "./feeding";
 import type { Swimmer } from "../marine/pod";
 import { publishFeedingTestState } from "./feedingTestState";
+import { highJumpActive, jumpRt, resetHighJump, stepHighJump, type JumpEvent } from "./highJump";
 
 /**
  * The lagoon's live state (runtime only, never saved): the dolphin pod, the
@@ -121,7 +122,9 @@ export const lagoonRt = {
   tricks: 0,
   passes: 0,
   misses: 0,
-  ringPasses: 0
+  ringPasses: 0,
+  /** High Jump moments for the flow (touch, cancel, ...); drained each frame. */
+  jumpEvents: [] as JumpEvent[]
 };
 
 /** The viewpoints' watching spots: in front of the gallery window, below the deck, beside the pontoon. */
@@ -149,7 +152,7 @@ export function dropToy(kind: LagoonToy) {
 
 /** Catch never takes an animal or the pointer away from an existing activity. */
 export function ballCatchPaused(): boolean {
-  if (lagoonRt.catchInputPaused || lagoonRt.tricksPaused || isFeeding()) return true;
+  if (lagoonRt.catchInputPaused || lagoonRt.tricksPaused || isFeeding() || highJumpActive()) return true;
   const pod = lagoonRt.pod;
   if (pod) for (const m of pod.members) if (m.mode === "charge" || m.mode === "leap" || lagoonRt.time < m.hold) return true;
   return false;
@@ -218,6 +221,16 @@ export function feedPod() {
 export const isFeeding = () => feedingActive(lagoonRt.feeding);
 export const feedingPose = (id: string) => feedPose(lagoonRt.feeding, id, lagoonRt.time);
 export const dolphinMouthPoint = (m: Swimmer, pitch = m.pitch + feedingPose(m.id).pitch) => mouthPoint(m, pitch, feedingPose(m.id).jaw);
+/** Leaving the area parks the High Jump crane; a run-up in progress becomes ordinary swimming. */
+export function leaveHighJump() {
+  if (!highJumpActive()) return;
+  const m = jumpRt.id ? lagoonRt.pod?.byId(jumpRt.id) : undefined;
+  if (m && m.mode === "charge") { m.trick = null; m.mode = "swim"; m.modeT = 0; }
+  if (m && m.attract?.kind === "point") m.attract = null;
+  resetHighJump();
+  lagoonRt.jumpEvents = [];
+}
+
 /** Leaving the area cancels only the transient coordination and its poses. */
 export function resetFeeding() {
   if (lagoonRt.feeding.phase === "idle") return;
@@ -339,6 +352,8 @@ let nextWatch = 0;
 function interest() {
   const pod = lagoonRt.pod!;
   const t = lagoonRt.time;
+  // The High Jump has the pod's attention: no fetching, ring runs or pass-bys meanwhile.
+  if (highJumpActive()) return;
   const w = lagoonRt.watch;
   // Curious dolphins: while the visitors watch from a viewpoint, one of them (often with a
   // companion) is always cruising past it, there and back.
@@ -393,7 +408,7 @@ let lastKind: TrickKind | null = null;
 function scheduleTricks() {
   const pod = lagoonRt.pod!, t = lagoonRt.time;
   if (t < nextTrick) return;
-  if (lagoonRt.tricksPaused || isFeeding() || pod.members.some((m) => t < m.hold)) { nextTrick = t + 2; return; }
+  if (lagoonRt.tricksPaused || isFeeding() || highJumpActive() || pod.members.some((m) => t < m.hold)) { nextTrick = t + 2; return; }
   const kinds = TRICK_KINDS.filter((k) => k !== lastKind);
   const kind = kinds[Math.floor(trng() * kinds.length)];
   const free = pod.members.filter((m) => !m.mother && m.mode === "swim" && !m.attract && !ringRuns.has(m.id));
@@ -552,6 +567,11 @@ export function stepLagoonRt(dt: number): PodEvent[] {
     m.attract.z = toy.y > 0 ? toy.landZ : toy.z;
   }
   pod.step(dt);
+  for (const e of stepHighJump(pod, dt, lagoonRt.time, lagoonAirClear, lagoonRt.tricksPaused || isFeeding())) {
+    lagoonRt.jumpEvents.push(e);
+    // Touching the buoy is play (rate-limited by the flow like every other play).
+    if (e === "touch") lagoonRt.plays++;
+  }
   stepFeeding(lagoonRt.feeding, pod, lagoonRt.time);
   stepToy(dt);
   stepPasses();
@@ -612,6 +632,8 @@ export function clearLagoonRt() {
   lagoonRt.passes = 0;
   lagoonRt.misses = 0;
   lagoonRt.ringPasses = 0;
+  lagoonRt.jumpEvents = [];
+  resetHighJump();
   nextInterest = 0;
   nextCatchNotice = 0;
   nextWatch = 0;

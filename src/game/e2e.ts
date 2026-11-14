@@ -16,7 +16,8 @@ import { HUB_BAYS, HUB_R, onRing } from "./data/hub";
 import { coastTo, lagoonTo, sanctuaryTo } from "../ui/DebugPanel";
 import { sanctRt } from "./sanctuary/sanctuaryRuntime";
 import { sanctFocus, startSanctActivity, type SanctQuestionKind } from "./flow/sanctuary";
-import { holdLagoonBall, throwLagoonBall, startLagoonActivity, type LagoonQuestion } from "./flow/lagoon";
+import { holdLagoonBall, throwLagoonBall, startLagoonActivity, startLagoonHighJump, type LagoonQuestion } from "./flow/lagoon";
+import { buoyPoint, jumpRt, snoutTip } from "./lagoon/highJump";
 import { SANCTUARY_ORIGIN } from "./data/sanctuary";
 import { enterOutdoor } from "./flow/outdoor";
 import { ballCatchSnapshot, dropToy, forceRing, forceTrick, lagoonPod, lagoonRt } from "./lagoon/lagoonRuntime";
@@ -401,6 +402,14 @@ export function installE2eHook(seed: number) {
       dropToy(kind);
       return true;
     },
+    /** Toys → High Jump through the real flow (false when refused). */
+    lagoonHighJump() { return startLagoonHighJump(); },
+    /** The High Jump attraction now (crane, phase, jumper, touch and counters). */
+    lagoonJump() {
+      const { lane, plan, ...rest } = jumpRt;
+      const m = jumpRt.id ? lagoonRt.pod?.byId(jumpRt.id) : undefined;
+      return { ...rest, lane: lane ? { yaw: lane.yaw } : null, launched: Boolean(plan?.launch), buoy: buoyPoint(), jumper: m ? { id: m.id, mode: m.mode, x: m.x, y: m.y, z: m.z, tip: snoutTip(m) } : null };
+    },
     lagoonCatch() {
       const chaser = lagoonRt.pod?.members.find((m) => m.attract?.kind === "toy");
       return { ...ballCatchSnapshot(), chaser: chaser ? { id: chaser.id, x: chaser.x, y: chaser.y, z: chaser.z } : null };
@@ -471,7 +480,7 @@ export function installE2eHook(seed: number) {
         progress: g.model.progress.coast ?? null,
         view: g.coastView,
         underwater: g.coastUnderwater,
-        keeper: { clean: { ...keeperRt.clean }, feed: { phase: keeperRt.feed.phase } },
+        keeper: { clean: { ...keeperRt.clean }, feed: { phase: keeperRt.feed.phase }, arrival: { phase: keeperRt.arrival.phase, door: keeperRt.arrival.door, id: keeperRt.arrival.id } },
         waiting: g.coastWaiting,
         activity: g.coastActivity,
         entries: { ...coastRt.entries },
