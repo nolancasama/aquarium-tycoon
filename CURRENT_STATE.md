@@ -1,5 +1,41 @@
 # Current State
 
+## Hub tank, penguin purchases, five cleaners, fast swims, Lagoon High Jump (2026-11-14, uncommitted on `main`)
+
+Built directly by Claude (owner asked: no router). Decisions: DESIGN_DECISIONS
+"2026-11-14 — Tall hub tank, penguin purchases, five cleaners, fast swims,
+Lagoon High Jump". Release locks, save version and the eight levels unchanged.
+
+- **Hub:** display tank water 3.2 → 6.4 m (`HUB_TANK.h`); fish bands to ~6 m
+  with climbing routes (`reefFishPaths.ts`); full-height bubbles; fresnel glass.
+- **Penguin Coast:** new habitats start with 2 penguins; Penguin Paradise +1;
+  **Buy Penguin** (habitat card) ×2 at 60 coins → 5 (old saves keep all; the
+  allowance is `progress.coast.penguinsBought`). Bought birds walk out of the
+  staff door (`coastRuntime` arrivals, mover mode `arrive`, door shared with
+  feeding via `keeperRt.arrival`). Clean = five cleaners (3 land incl. a hose
+  with spray/line/tap, 2 at the lower glass moving inward with sponge/pole and
+  floor buckets) and **never moves the camera** (`frameCoastForClean` removed).
+  Underwater eye at local z 21.5. Penguin swim bursts ~3–3.5 m/s across the
+  window with bubble trails (`planDash` in `motion.ts`, `MAX_SWIM_SPEED`).
+- **Dolphin Lagoon:** Toys → **High Jump** (`game/lagoon/highJump.ts`,
+  `pod.targetLeap`/`solveTargetLeap`, crane in `DolphinLagoon.tsx`, Deck framing
+  `DECK_JUMP_SHOT`); benches and the pavilion-front lamp removed; needs card at
+  the right edge (inboard of the arrow on compact layouts).
+- **Verified:** typecheck; unit 963/963 (new: `lagoon/highJump.test.ts` incl. a
+  12-seed run, purchase/save tests in `logic/coast.test.ts`, arrival tests in
+  `coastRuntime.test.ts`, five-cleaner and camera tests); production build;
+  Playwright 31/31 (coast, outdoor incl. a new High Jump test, hub, arrows,
+  nav-layout, layout, save, save-recovery; one worker, 14.7 min, on the
+  production preview; a first two-worker run under heavy CPU load timed out in
+  untouched specs). Frames judged by eye at 1366×768, 1024×768 and 1024×600
+  (SwiftShader): `node .tmp/review-1114.mjs <url> <w> <h> <hub|coast|lagoon>` →
+  `.tmp/review-1114/`. In the browser the High Jump touched once at every size
+  (closest snout-to-buoy-centre 0.40–0.45 m, buoy r 0.42), no cancels.
+- **Known / not verified:** real Chromebook frame rates; motion judged from
+  frames, not watched live; the crane's parked jib is visible at the back
+  of the Deck view; penguin purchases can only be played inside a preview while
+  the coast is release-locked (save round-trip covered by unit tests).
+
 ## Penguin Coast keeper care (2026-11-13)
 
 - Feed now runs an explicit door / walk / bucket tip / watch / return state
@@ -68,6 +104,10 @@ Lagoon deck, bigger Penguin Coast". Built by Codex in four worktrees
 
 ## Next steps
 
+0. **2026-11-14 hub/coast/lagoon update** (section above): implemented and
+   verified, NOT committed or pushed; awaiting the owner's OK to commit to
+   `main` and deploy to GitHub Pages. Owner to judge motion live (bursts,
+   arrival, High Jump) on a Chromebook.
 0. **12-item improvement plan.** Wave 1 DONE, merged and pushed live 2026-11-14
    (e9adffe): hub corridor + Lagoon boardwalk z-fighting and a
    solid chest lid; Penguin Coast time-lapse Clean montage, connected lower

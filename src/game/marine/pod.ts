@@ -72,6 +72,51 @@ export const TRICK_LAUNCH: Record<TrickKind, { vy: number; hv: number; flip: num
 };
 /** Seconds in the air from a take-off at y ≈ -0.2 to the re-entry at y = -0.25. */
 export const trickAirtime = (k: TrickKind) => (2 * TRICK_LAUNCH[k].vy) / 9.8 + 0.01;
+
+/**
+ * An authored leap at a fixed point in the air (the lagoon's High Jump buoy).
+ * The run-up dives to `deep`, rises `rise` metres before the take-off and
+ * takes off `lead` (plus or minus a window) before the point under the target;
+ * the flight is then solved so the snout tip's highest point is the aim point.
+ */
+export interface TargetLeap {
+  tx: number; ty: number; tz: number;
+  lead: number; rise: number; deep: number;
+  launch?: { x0: number; y0: number; z0: number; vx: number; vz: number; vy0: number; t0: number; touch: number };
+  aborted?: boolean;
+  /** Nearest the run-up has come to the point under the target (an overshoot is given up). */
+  closest?: number;
+}
+
+/**
+ * Take-off speeds for a snout-first touch: the snout tip (half a body length
+ * ahead along the pitched body, pitch following the flight path) peaks at
+ * height `aimY`, a horizontal distance `dist` from the take-off. Ballistic and
+ * analytic (no frame-rate dependence); solved by nested bisection.
+ */
+export function solveTargetLeap(y0: number, dist: number, aimY: number, reach: number) {
+  const g = 9.8;
+  const peak = (vy0: number, hv: number) => {
+    let best = -Infinity, bt = 0, bh = 0;
+    const end = vy0 / g + 0.4;
+    for (let i = 0; i <= 320; i++) {
+      const t = (end * i) / 320, p = Math.atan2(vy0 - g * t, hv);
+      const y = y0 + vy0 * t - 0.5 * g * t * t + reach * Math.sin(p);
+      if (y > best) { best = y; bt = t; bh = hv * t + reach * Math.cos(p); }
+    }
+    return { y: best, t: bt, h: bh };
+  };
+  const vyFor = (hv: number) => {
+    let lo = 2, hi = 16;
+    for (let k = 0; k < 40; k++) { const mid = (lo + hi) / 2; if (peak(mid, hv).y < aimY) lo = mid; else hi = mid; }
+    return hi;
+  };
+  let lo = 0.2, hi = 5;
+  for (let k = 0; k < 36; k++) { const mid = (lo + hi) / 2; if (peak(vyFor(mid), mid).h < dist) lo = mid; else hi = mid; }
+  const hv = (lo + hi) / 2, vy0 = vyFor(hv), pk = peak(vy0, hv);
+  const airtime = (vy0 + Math.sqrt(Math.max(0, vy0 * vy0 + 2 * g * (y0 + 0.25)))) / g;
+  return { hv, vy0, touch: pk.t, airtime, peak: pk.y, reachH: pk.h };
+}
 export type AttractKind = "feed" | "toy" | "bubbles" | "point";
 
 export interface MemberDef {
@@ -115,8 +160,8 @@ export interface Swimmer {
   hold: number;
   holdY: number | null;
   air: { vx: number; vz: number; above?: boolean; entered?: boolean } | null;
-  /** A trick under way (run-up or airborne), with the take-off time once launched. */
-  trick: { kind: TrickKind; t0: number; airtime: number } | null;
+  /** A trick under way (run-up or airborne), with the take-off time once launched; `plan` for an authored target leap. */
+  trick: { kind: TrickKind; t0: number; airtime: number; plan?: TargetLeap } | null;
   diveEmitted: boolean;
   deepY: number;
   /** Shore margin for this body (a calf keeps closer than an adult: it can follow its mother anywhere she goes). */
@@ -304,6 +349,23 @@ export class Pod {
     return true;
   }
 
+  /**
+   * Begin an authored target leap from wherever this adult is (the lagoon's
+   * High Jump). It drops any attraction and companion slot, runs at the point
+   * under the target and flies only if it reaches the take-off window heading
+   * there; otherwise the plan is marked aborted and it simply swims on.
+   */
+  targetLeap(id: string, plan: TargetLeap): boolean {
+    const s = this.byId(id);
+    if (!s || !this.opts.tricks || s.species !== "dolphin" || s.mother || s.mode === "leap" || s.mode === "charge" || this.time < s.hold) return false;
+    s.attract = null; s.follow = null;
+    s.target = { x: plan.tx, z: plan.tz };
+    this.setMode(s, "charge");
+    s.trick = { kind: "high", t0: -1, airtime: 2, plan };
+    s.breathAt = Math.max(s.breathAt, this.time + 30);
+    return true;
+  }
+
   step(dt: number) {
     let left = Math.max(0, Math.min(dt, 0.25));
     while (left > 1e-6) {
@@ -385,7 +447,10 @@ export class Pod {
     // A run-up gives way to feeding or a question (the figure itself, once airborne, always lands).
     if (s.mode === "charge" && (s.attract || holding)) this.setMode(s, "swim");
     if (s.mode !== "charge" && s.mode !== "leap") s.trick = null;
-    const leader = this.byId(s.follow?.id);
+    const plan = s.mode === "charge" ? s.trick?.plan : undefined;
+    const planDist = plan ? Math.hypot(plan.tx - s.x, plan.tz - s.z) : Infinity;
+    // A planned run-up goes straight at its target: no companion slot, no new roaming target.
+    const leader = plan ? undefined : this.byId(s.follow?.id);
     const surf = surfaceY(s);
 
     // --------------------------------------------------- where to, how fast
@@ -419,20 +484,27 @@ export class Pod {
       want = clamp(leader.speed + ahead * 0.7, p.slow, p.fast);
       // Close to the slot: match the leader's heading (parallel swimming), else head for the slot.
       desiredYaw = off < s.len * 0.8 ? leader.yaw + clamp(Math.atan2(gx - s.x, gz - s.z) - leader.yaw, -0.4, 0.4) : null;
-    } else if (Math.hypot(gx - s.x, gz - s.z) < Math.max(3, s.len)) {
+    } else if (!plan && Math.hypot(gx - s.x, gz - s.z) < Math.max(3, s.len)) {
       this.newTarget(s);
       gx = s.target.x; gz = s.target.z;
     }
     if (s.mode === "rest") want = p.slow * 0.45;
     if (s.mode === "rise" || s.mode === "surface") want = Math.min(want, p.cruise);
     // The run-up: settle a little deeper, then a sprint up to the surface.
-    if (s.mode === "charge") want = s.modeT < 1.1 ? p.cruise * 1.1 : p.fast;
+    if (s.mode === "charge" && plan) {
+      // Line up first (slow enough to turn inside the lane), then the sprint.
+      const err = Math.abs(wrap(Math.atan2(plan.tx - s.x, plan.tz - s.z) - s.yaw));
+      const align = err > 0.7 ? 0.3 : err > 0.3 ? 0.6 : 1;
+      want = Math.max(p.slow, (planDist > plan.lead + plan.rise + 2 ? p.fast * 0.8 : p.fast) * align);
+    } else if (s.mode === "charge") want = s.modeT < 1.1 ? p.cruise * 1.1 : p.fast;
 
     // --------------------------------------------------- steering (look ahead, never into the shore)
     if (s.mode !== "leap") {
       let yawWant = desiredYaw ?? Math.atan2(gx - s.x, gz - s.z);
       const margin = s.attract ? s.margin * 0.6 : s.margin;
-      const look = feeding ? s.len * 0.5 + Math.min(feedDistance, Math.max(s.speed, 0.3)) * 0.35 : s.len * 0.6 + Math.max(s.speed, 0.5) * 2.2 + 1;
+      // A planned run-up's lane was checked clear beforehand; a long look past the
+      // target would only see the far shore and steer it off its line.
+      const look = feeding ? s.len * 0.5 + Math.min(feedDistance, Math.max(s.speed, 0.3)) * 0.35 : plan ? s.len * 0.6 + 3 : s.len * 0.6 + Math.max(s.speed, 0.5) * 2.2 + 1;
       if (!this.clear(s, yawWant, look, margin)) {
         let found: number | null = null;
         for (let k = 1; k <= 9 && found === null; k++) {
@@ -447,7 +519,7 @@ export class Pod {
         } else yawWant = found;
         if (!s.attract && !leader) this.newTarget(s);
       }
-      const rate = p.turnRate * (s.mode === "spyhop" ? 0.3 : 1) * (holding ? 0.4 : 1) * (s.size < 0.8 ? 1.25 : 1);
+      const rate = p.turnRate * (s.mode === "spyhop" ? 0.3 : 1) * (holding ? 0.4 : 1) * (s.size < 0.8 ? 1.25 : 1) * (plan ? 1.5 : 1);
       const dy = clamp(wrap(yawWant - s.yaw), -rate * dt, rate * dt);
       s.yaw = wrap(s.yaw + dy);
       s.turn += (dy / dt - s.turn) * Math.min(1, dt * 3);
@@ -513,6 +585,19 @@ export class Pod {
       case "leap":
         break;
       case "charge": {
+        if (plan) {
+          // Deeper first, then a steep sprint up; it flies only from the take-off window, heading at the target.
+          const inWindow = planDist <= plan.lead + 1.1 && planDist >= Math.max(0.7, plan.lead - 1.1);
+          if (planDist > plan.lead + plan.rise) { yWant = Math.max(lowest, plan.deep); pitchWant = -0.12; }
+          else if (!inWindow) { yWant = Math.max(lowest, -0.55); pitchWant = 0.35; }
+          else { yWant = surf; pitchWant = 0.6; }
+          const aimed = Math.abs(wrap(Math.atan2(plan.tx - s.x, plan.tz - s.z) - s.yaw)) < 0.45;
+          if (inWindow && aimed && s.y > -0.8) { this.launchTargetLeap(s, plan, now); break; }
+          plan.closest = Math.min(plan.closest ?? Infinity, planDist);
+          const passed = plan.closest < plan.lead + 3 && planDist > plan.closest + 1.5;
+          if (planDist < plan.lead - 1.1 || passed || s.modeT > 16) { plan.aborted = true; s.trick = null; this.setMode(s, "swim"); }
+          break;
+        }
         const t = s.modeT;
         yWant = t < 1.1 ? Math.max(lowest, -2.2) : surf;
         pitchWant = t < 1.1 ? -0.2 : 0.5;
@@ -549,10 +634,20 @@ export class Pod {
       // Ballistic through the air, nose following the arc.
       const air = s.air!;
       const px = s.x, py = s.y, pz = s.z, pitch = s.pitch, vy = s.vy;
-      s.x += air.vx * dt;
-      s.z += air.vz * dt;
-      s.vy -= 9.8 * dt;
-      s.y += s.vy * dt;
+      const launched = s.trick?.plan?.launch;
+      if (launched) {
+        // An authored leap is exact at any frame rate: the planned touch really happens.
+        const tau = now - launched.t0;
+        s.x = launched.x0 + launched.vx * tau;
+        s.z = launched.z0 + launched.vz * tau;
+        s.vy = launched.vy0 - 9.8 * tau;
+        s.y = launched.y0 + launched.vy0 * tau - 4.9 * tau * tau;
+      } else {
+        s.x += air.vx * dt;
+        s.z += air.vz * dt;
+        s.vy -= 9.8 * dt;
+        s.y += s.vy * dt;
+      }
       const along = Math.atan2(s.vy, Math.hypot(air.vx, air.vz));
       s.pitch = along;
       if (s.trick) {
@@ -654,6 +749,23 @@ export class Pod {
     s.y = Math.max(s.y, -0.2);
     this.emit("leap", s);
     if (s.species !== "dolphin") this.emit("splash", s, { y: 0 });
+  }
+
+  /** Take off at an authored target: the flight solved from where the run-up actually is now. */
+  private launchTargetLeap(s: Swimmer, plan: TargetLeap, now: number) {
+    const dx = plan.tx - s.x, dz = plan.tz - s.z, dist = Math.hypot(dx, dz) || 1e-6;
+    const y0 = Math.min(s.y, -0.2);
+    const sol = solveTargetLeap(y0, dist, plan.ty, s.len * 0.5);
+    const fx = dx / dist, fz = dz / dist;
+    s.yaw = Math.atan2(dx, dz);
+    this.setMode(s, "leap");
+    s.speed = sol.hv;
+    s.air = { vx: fx * sol.hv, vz: fz * sol.hv };
+    s.vy = sol.vy0;
+    s.y = y0;
+    plan.launch = { x0: s.x, y0, z0: s.z, vx: fx * sol.hv, vz: fz * sol.hv, vy0: sol.vy0, t0: now, touch: sol.touch };
+    s.trick = { kind: "high", t0: now, airtime: sol.airtime, plan };
+    this.emit("leap", s);
   }
 
   /** Take off into a trick figure (the run-up has reached the surface at speed). */

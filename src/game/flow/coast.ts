@@ -4,8 +4,8 @@ import { EXHIBITS, type CoastHabitat } from "../data/coast";
 import { COAST_DECOR } from "../data/decor";
 import { PENGUIN_NUMBER_PHRASE } from "../logic/english";
 import { award, buyDecor, clean, feed, tankAt } from "../logic/model";
-import { checkCoastMilestones, COAST_PRICE, coastUnlocked, coastQuestionHabitats, HABITAT_PAD, habitatOpen, openCoast, recordCoastActivity, storeHiddenCoast } from "../logic/coast";
-import { clearCoastMeal, coastRt, feedCoast, holdAnimal, syncCoast } from "../coast/coastRuntime";
+import { buyPenguin, checkCoastMilestones, COAST_PRICE, coastUnlocked, coastQuestionHabitats, HABITAT_PAD, habitatOpen, openCoast, PENGUIN_PRICE, penguinBuyState, recordCoastActivity, storeHiddenCoast } from "../logic/coast";
+import { clearCoastMeal, coastRt, feedCoast, holdAnimal, queuePenguinArrival, syncCoast } from "../coast/coastRuntime";
 import { consumeKeeperBenefit, finishKeepers, keeperBusy, keeperRt, resetKeepers, startKeeperClean, startKeeperFeed, type KeeperCare } from "../coast/keeper";
 import type { CoastDecorKind, VisitorType } from "../types";
 import { ask, speak } from "./ask";
@@ -30,7 +30,6 @@ const cameraShot: CameraShot = { pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0
 const cameraFrom: CameraShot = { pos: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 } };
 let cameraKey = "", cameraElapsed = COAST_VIEW_SECONDS;
 let questionFrame: { token: symbol; kind: CoastQuestionFrame } | null = null;
-let cleanCameraToken: symbol | null = null;
 let reviewShot: CameraShot | null = null;
 
 /** A question borrows the framing, never changes the player's selected view. */
@@ -40,13 +39,6 @@ export function frameCoastWaterForQuestion(includeLand = false): () => void {
   return () => { if (questionFrame?.token === token) questionFrame = null; };
 }
 
-/** Care borrows a land/window composition without changing the selected view. */
-export function frameCoastForClean(): () => void {
-  const token = Symbol("coast-clean-camera");
-  cleanCameraToken = token;
-  return () => { if (cleanCameraToken === token) cleanCameraToken = null; };
-}
-
 /** Coast-only diagnostic hook; production UI never calls this. */
 export function reviewCoastCamera(shot: CameraShot | null) { reviewShot = shot; }
 
@@ -54,7 +46,6 @@ export function releaseCoastCamera() {
   if (rt.camera.shot === cameraShot) rt.camera.shot = null;
   cameraKey = "";
   questionFrame = null;
-  cleanCameraToken = null;
   reviewShot = null;
 }
 
@@ -65,14 +56,14 @@ export function coastCameraTick(aspect: number, dt: number) {
   if (!inCoast(g) || g.coastRevealing || !penguinView) { releaseCoastCamera(); return; }
   // Other flow-owned shots retain ownership.
   if (rt.camera.shot && rt.camera.shot !== cameraShot) return;
-  const frame = questionFrame?.kind ?? (cleanCameraToken ? "clean" : undefined);
+  // Care never moves the camera (2026-11-14): only a visitor question borrows a framing.
+  const frame = questionFrame?.kind;
   const key = `${g.coastView}:${g.coastUnderwater}:${frame ?? ""}:${aspect}:${reviewShot ? JSON.stringify(reviewShot) : ""}`;
   const points = questionFrame ? [...coastRt.animals.values()].filter((a) => a.habitat === "penguins" && (questionFrame?.kind === "count" || a.m.area === "water")).map((a) => ({ x: EXHIBITS.penguins.x + a.m.x, y: a.m.y, z: EXHIBITS.penguins.z + a.m.z })) : [];
   const target = reviewShot ?? coastExhibitShot(g.coastView, aspect, g.coastUnderwater, frame, points);
   if (cameraKey !== key) {
     Object.assign(cameraFrom.pos, rt.camera.pos); Object.assign(cameraFrom.target, rt.camera.target);
-    // A held photograph needs its complete composition from its first frame.
-    cameraElapsed = frame === "clean" ? COAST_VIEW_SECONDS : 0;
+    cameraElapsed = 0;
     cameraKey = key;
   }
   cameraElapsed = Math.min(COAST_VIEW_SECONDS, cameraElapsed + dt);
@@ -157,6 +148,33 @@ export function buyCoastItem(kind: CoastDecorKind) {
   setGame({ panel: "decorate", placing: { kind: "decor", decorId: r.id! } });
 }
 
+let lastPenguinBuy = -Infinity;
+/**
+ * Buy one penguin (60 coins). The purchase and its new id are committed (and
+ * saved) at once; the walk out of the staff door is presentation only. One
+ * per tap: a second tap is refused while that penguin's door is still busy.
+ */
+export function buyPenguinNow(): boolean {
+  const g = getGame(), now = performance.now();
+  if (!free() || !inCoast(g) || g.coastView !== "penguins" || g.panel || g.placing || keeperBusy() || coastRt.arrivals.length || now - lastPenguinBuy < 900) return false;
+  const state = penguinBuyState(g.model);
+  if (!state.ok) {
+    audio.play("error");
+    if (state.reason === "coins") toast({ en: "More coins, please!", ja: `${PENGUIN_PRICE} コイン ひつようだよ`, tone: "warn" });
+    return false;
+  }
+  const r = commit(buyPenguin(g.model));
+  if (!r.ok || !r.id) return false;
+  lastPenguinBuy = now;
+  queuePenguinArrival(r.id);
+  audio.play("purchase");
+  // The view is never switched for the player; from Underwater they are told where to look.
+  toast(g.coastUnderwater
+    ? { en: "A penguin, please! Here it comes!", ja: "ペンギンが くるよ！「ペンギン」で ドアを みてね", tone: "good" }
+    : { en: "A penguin, please! Here it comes!", ja: "ペンギンが くるよ！ ドアを みてね", tone: "good" }, 3200);
+  return true;
+}
+
 export const habitatItems = (h: CoastHabitat) => coastHabitatShown(h) ? COAST_DECOR[h] : [];
 
 /** Feed: the food the habitat's animals eat; on land they go to the fish station, in the water to the front. */
@@ -174,8 +192,6 @@ export const coastFocus = { id: null as string | null, numbers: false };
 let careTankId: string | null = null;
 let stopCareWatch: (() => void) | null = null;
 let cleanFrame = -1;
-let restoreCleanCamera: (() => void) | null = null;
-function endCleanCamera() { restoreCleanCamera?.(); restoreCleanCamera = null; }
 function stopCareSubscription() { const stop = stopCareWatch; stopCareWatch = null; stop?.(); }
 
 /** Penguin branch of the shared actions: guard before applying any care maths. */
@@ -186,13 +202,11 @@ export function startPenguinCare(kind: KeeperCare): boolean {
   syncCoast(g.model);
   if (!(kind === "feed" ? startKeeperFeed(g.model) : startKeeperClean(g.model))) return false;
   careTankId = tank.id; cleanFrame = -1;
-  if (kind === "clean") restoreCleanCamera = frameCoastForClean();
   const preview = g.previewAreas.includes("coast");
   stopCareWatch = useGame.subscribe((now) => {
     const previewEnded = preview && !now.previewAreas.includes("coast");
     if (!inCoast(now) || previewEnded || !now.model.tanks.some((t) => t.id === careTankId && t.type === "penguins")) {
       stopCareSubscription();
-      endCleanCamera();
       if (!previewEnded) { finishKeepers(); applyKeeperBenefits(); }
       // Ending preview restores its entire original model, discarding temporary care too.
       careTankId = null; resetKeepers(); clearCoastMeal();
@@ -228,7 +242,7 @@ export function coastKeeperTick() {
     cleanFrame = c.frame;
     audio.play("tick");
   }
-  if (!keeperBusy()) { endCleanCamera(); stopCareSubscription(); careTankId = null; }
+  if (!keeperBusy()) { stopCareSubscription(); careTankId = null; }
 }
 
 const VISITORS: VisitorType[] = ["child", "adult", "fan", "grandma", "explorer"];
@@ -237,7 +251,7 @@ let nextVisitorAt = 12;
 /** A visitor comes to a window with a question now and then (only while the zone is shown and calm). */
 export function coastVisitorTick() {
   const g = getGame();
-  if (!inCoast(g) || g.coastRevealing || g.coastWaiting || g.coastActivity || !free() || g.panel || g.placing) return;
+  if (!inCoast(g) || g.coastRevealing || g.coastWaiting || g.coastActivity || !free() || g.panel || g.placing || keeperRt.arrival.phase !== "idle") return;
   if (coastRt.time < nextVisitorAt) return;
   nextVisitorAt = coastRt.time + 22 + Math.random() * 14;
   const open = coastQuestionHabitats(g.model);
@@ -255,7 +269,8 @@ export function coastVisitorTick() {
 export async function startCoastActivity() {
   const g = getGame();
   const w = g.coastWaiting;
-  if (!w || !free() || !coastHabitatShown(w.habitat)) return;
+  // Questions count and hold every penguin: wait until a newcomer is out of the doorway.
+  if (!w || !free() || !coastHabitatShown(w.habitat) || keeperRt.arrival.phase !== "idle" || coastRt.arrivals.length) return;
   skipCoastReveal();
   setGame({ coastWaiting: null, coastView: w.habitat, ...(w.habitat !== "penguins" ? { coastUnderwater: false } : {}), coastActivity: { habitat: w.habitat, by: w.type }, panel: null, placing: null });
   const restoreCamera = w.habitat === "penguins" ? frameCoastWaterForQuestion(true) : () => {};
@@ -352,7 +367,7 @@ async function askOtter(by: VisitorType): Promise<boolean> {
 // ------------------------------------------------------------------ milestones
 
 export const COAST_MILESTONES = [
-  { en: "Open the Coast", ja: "かいがんを ひらこう", todo: { en: "Open the zone at the Grand Hub", ja: "グランド ホールで ひらこう" }, reward: { en: "Three penguins", ja: "ペンギン 3わ" } },
+  { en: "Open the Coast", ja: "かいがんを ひらこう", todo: { en: "Open the zone at the Grand Hub", ja: "グランド ホールで ひらこう" }, reward: { en: "Two penguins", ja: "ペンギン 2わ" } },
   { en: "Penguin Paradise", ja: "ペンギンの らくえん", todo: { en: "Resting rocks, a swim, 2 questions", ja: "やすむ いわ・およぐ ところ・しつもん 2つ" }, reward: { en: "A penguin and Seal Cove", ja: "ペンギンと アザラシの いりえ" } },
   { en: "Seal Cove", ja: "アザラシの いりえ", todo: { en: "Haul-out rock, a dive, help 2 visitors", ja: "いわ・もぐる ところ・2にん たすける" }, reward: { en: "A play ball and Otter Bay", ja: "ボールと ラッコの わん" } },
   { en: "Otter Bay", ja: "ラッコの わん", todo: { en: "Floating toy, watch otters float, 1 question", ja: "おもちゃ・うかぶ ラッコ・しつもん 1つ" }, reward: { en: "A cozy den and a seal", ja: "かくれがと アザラシ" } },

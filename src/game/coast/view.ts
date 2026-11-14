@@ -7,20 +7,20 @@ export const COAST_VIEW_SECONDS = 0.8;
 export type CoastQuestionFrame = "water" | "count";
 
 /** Natural 35 degree lens; gallery eyes stay 1.6 m above its permanent floor. */
-export function coastExhibitShot(view: CoastView, aspect: number, underwater: boolean, question?: CoastQuestionFrame | "clean", animals: readonly Vec3[] = []): CameraShot {
+/** Underwater view: eye 1.6 m above the gallery floor, close to the glass (local z 11). */
+export const UNDERWATER_EYE_Z = 21.5;
+
+/**
+ * The selected view's camera. Care (Feed, Clean) never changes it; only a
+ * visitor question borrows a temporary framing (`question`).
+ */
+export function coastExhibitShot(view: CoastView, aspect: number, underwater: boolean, question?: CoastQuestionFrame, animals: readonly Vec3[] = []): CameraShot {
   const ex = EXHIBITS.penguins;
   const world = (x: number, y: number, z: number): Vec3 => ({ x: ex.x + x, y, z: ex.z + z });
   // Extra portrait retreat leaves the full-width room arrows clear of the shore.
   const portrait = Math.max(0, 1.7 - aspect);
   const k = Math.max(1, 1.78 / aspect) + portrait * 0.5;
   if (view !== "penguins" && !(view === "all" && COAST_HABITATS_SHOWN.length === 1 && COAST_HABITATS_SHOWN[0] === "penguins")) return coastCamera(view, false, underwater);
-  if (question === "clean") {
-    // A low, close view gives the land team readable silhouettes, with the
-    // gallery worker beside the bottom controls rather than behind them.
-    const retreat = Math.max(1, 1.4 / aspect);
-    const side = Math.max(0, (1.6 - aspect) / (1.6 - 4 / 3)) * 1.1;
-    return { pos: world(side, 3.5 * retreat, 4 + 25 * retreat), target: world(side, 0.8, 4) };
-  }
   if (question) {
     const points = animals.length ? animals : question === "count"
       ? [world(-9, 2.5, -8), world(9, -2.5, 10)]
@@ -30,7 +30,9 @@ export function coastExhibitShot(view: CoastView, aspect: number, underwater: bo
     const distance = Math.max(12, spread * 6.2) * k;
     return { pos: { x: center.x, y: center.y + distance * 0.622, z: center.z + distance * 0.783 }, target: { ...center, y: center.y + 0.3 } };
   }
-  if (underwater) return { pos: world(0, -1.45, 30), target: world(0, -2.3, 4) };
+  // Close to the glass: the window fills most of the frame, with a strip of
+  // gallery floor for context. Narrower screens step back for width.
+  if (underwater) return { pos: world(0, -1.45, UNDERWATER_EYE_Z + (k - 1) * 4.5), target: world(0, -0.75, 4) };
   // Retreat for width, but keep the habitat in the middle of tall screens;
   // the former upward aim left the penguins down behind the care controls.
   const target = world(0, 4 - portrait * (1.5 / (1.7 - 4 / 3)), -4.8);

@@ -2619,3 +2619,100 @@ feeding) and Claude (navigation, tricks, fish; Codex hit its usage limit).
   walkway; keeping stairs to a removed level; floating floors or unsupported
   slabs; oversized focus objects held beside hands; interpolating or looping
   the photographs. No save, economy, release-lock, curriculum or other-bay changes.
+
+## 2026-11-14 — Tall hub tank, penguin purchases, five cleaners, fast swims, Lagoon High Jump
+
+Owner plan reviewed and implemented by Claude directly (no router, at the
+owner's request). Decisions taken while building, with what was rejected:
+
+- **Grand Hub tank:** water height 3.2 → 6.4 m (same 2 m radius, 0.55 m plinth;
+  rim at 6.95 m under the 7 m cornice; no roof to clip). Fish keep their kinds,
+  colours and count (22) but swim bands that reach ~6 m; path nodes scale with
+  band height and half the legs prefer steep climbs/dives, so routes rise and
+  fall through the column. Bubble columns run the full height at a steady
+  ~1.5 m/s. The old 0.13-opacity water read as a hologram at this height, so the
+  water uses a small fresnel shader (clear centre, bright silhouette; one draw,
+  no lights). Rejected: stretching the old tank or fish; a wider tank.
+- **Penguin start and purchases:** a newly opened Penguin Coast starts with
+  **two** penguins (was three); Penguin Paradise still gives one; **two** more
+  may be bought one per tap at the species' existing **60 coins**
+  (`buyPenguin`, `PENGUIN_PURCHASES`). The allowance is
+  `progress.coast.penguinsBought` (0–2, missing = 0), independent of how many
+  penguins a save has; capacity (6) is also checked. Old saves keep every
+  penguin and name (the owner's real save: milestone 5, four penguins → may buy
+  two, reaching six). The new id is the ordinary `f<n>` (rename-compatible).
+  The purchase is committed and saved at once; the walk out of the staff door is
+  runtime presentation only, so a reload or leaving simply finds the bird on the
+  shelf (never a replay or a second charge). One arrival at a time: the button
+  is refused while the door is busy (and for 0.9 s), so a double tap buys one.
+  The button lives in the habitat card (price, coins, "n left"/reason). Rejected:
+  a fifth bottom-bar button (crowds 1024 px), deriving the allowance from the
+  animal count (would let old saves overfill or punish them).
+- **Arrival through the door:** door opens (0.8 s) while the bird waits in the
+  dark corridor; it waddles straight out (new runtime mover mode `arrive`,
+  peer-checked); the leaf closes only once it is past the threshold; it then
+  joins the colony. Arrivals never overlap feeding (shared door guard; Feed/
+  Clean/Items wait), and visitor questions wait too. During an arrival the
+  doorway apron is reserved like the keeper's body: others keep off it and a
+  bird resting there gets up — found in review, where a newcomer resting at the
+  exit held the next one in the doorway for 9+ s.
+- **Five cleaners:** three upper (left A, centre B with a hose, right C; at least
+  one fully back-facing in every shot; never within 2.5 m; clear of rocks,
+  ledges, item slots and the doorway — tested) and two lower on the visitor side
+  of the glass, moving monotonically inward from x ≈ ±2.8 m to ±1.0 m. The lower
+  start was pulled in from ±4.5 m because at Underwater eye height the cleaners'
+  heads sit exactly in the room arrows' mid-screen band. Lower tools alternate a
+  hand sponge and a 1.6 m telescopic pole; each has a water bucket standing on
+  the floor on its outer side; wipe marks sit where the tool tip really meets
+  the pane, and earlier spots keep a small sparkle. The hose: pistol nozzle on
+  the forearm axis; spray droplets leave along the nozzle and stop at the cliff
+  or ground; it never sprays a penguin (the worker lets go if one is in the
+  cone); the hose lies on the shelf from the worker to a wall tap/reel beside the
+  staff door, via authored points that keep it off rocks and slots (tested).
+  Upper cleaners are solid to walking penguins during the montage (`crew`).
+  At 4:3 the habitat card covers the back-right shelf and the right arrow its
+  middle-right, so upper spots were moved (after review) to where all three
+  are visible in every shot at 1366×768, 1024×768 and 1024×600.
+  Five authored photographs, five seconds, no loop; benefit applied once.
+- **Clean never moves the camera:** `frameCoastForClean` and the "clean"
+  framing were removed. Penguins and Underwater both keep their own camera;
+  either team is visible from its view; switching views by hand mid-clean
+  neither restarts nor repeats it. Question framings are unchanged.
+- **Underwater camera:** eye 1.6 m above the gallery floor at local z = 21.5
+  (was 30), aiming slightly up; narrower screens step back (`+4.5·(k−1)`). The
+  glass fills ~85% of the frame height with a strip of floor; the earlier
+  "20–30% floor" gallery test was updated to the new intent.
+- **Fast swims:** 45% of new penguin swim legs are bursts: join a lane parallel
+  to the window (z 5.4–8 m, varied depth), zip across at 2.0–2.3 × 1.5 m/s
+  (~3.0–3.5 m/s), bank through a three-point U-turn and often race back on a lane
+  nearer the glass. Burst waypoints are swum through (no stop-and-align), turn
+  faster (3.4 rad/s) and brake into corners; breathing waits for the burst to
+  end. Cap `MAX_SWIM_SPEED` 3.6 m/s for penguins under water only; walking,
+  ramps, seals and otters keep 1.9. Flipper beat scales with speed. A ring of 56
+  bubble instances sheds behind fast birds (one draw). All legs remain checked
+  against the pool, rocks, floes and peers.
+- **Lagoon High Jump (Toys):** a slewing lattice jib crane on a concrete pad in
+  the breakwater at (−4.5, −15.3); deployed, it hangs a padded striped buoy at
+  4.6 m over deep water at (−4, −6); parked, the jib lies along the breakwater
+  with the buoy reeled up. An adult (never the calf; a mother only if no one else
+  is free) swims a checked lane (right → left across the Deck view, mast to one
+  side), dives deeper, sprints up and leaps; `pod.targetLeap` solves the flight
+  at the real take-off point so the snout tip's highest point is just under the
+  buoy, and the flight is analytic (identical at any frame rate). The buoy swings
+  on contact; a big entry splash plus a second ring follow. Others are steered
+  clear of the lane; feeding, toys, the ball, spontaneous tricks, visitor
+  questions and Look! bubbles wait while it runs. A missed window retries up to
+  twice, else it cancels politely and parks. Reward: only the ordinary,
+  rate-limited Play gain on the touch (no toy gain), so rapid replays earn
+  nothing extra. Nothing is saved (no LagoonToy or save change). Deck view keeps
+  its place on the deck but frames the whole jump while it is on; other views
+  are never switched — a nudge points at Deck. Rejected: a crane on the front
+  quay (in the overview's foreground), a bigger generic "high" trick (could not
+  guarantee the touch), a 59° buoy swing (reduced to ~35°).
+- **Lagoon scenery and HUD:** benches removed from the boardwalk (x −6, 3, 19)
+  and the gallery (x 5.6, 12.4); the boardwalk lamp at x = 8, directly in front
+  of the pavilion doorway, removed (lamps at −8, 0, 16 remain); no visitor sat on
+  the benches. The Dolphins needs card moved to 12 px from the right edge where
+  the full-size arrows apply (its bottom stays above the arrow band at 768 px);
+  on compact layouts (< 1024 wide or < 700 tall) it stays just inboard of the
+  64 px arrow. Verified clear of the keeper at 1366×768, 1024×768, 1024×600.

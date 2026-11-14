@@ -105,13 +105,13 @@ describe("principal lower penguin gallery", () => {
       const floorPoint = new THREE.Vector3(0, lower.top, lower.minZ + 0.8).project(camera);
       expect(floorPoint.x).toBeGreaterThan(-1);
       expect(floorPoint.x).toBeLessThan(1);
-      // The sill sits near 58% of image height, leaving 20-30% foreground
-      // floor before the bottom controls, rather than merely inside the image.
-      expect(floorPoint.y).toBeGreaterThan(-0.25);
-      expect(floorPoint.y).toBeLessThan(-0.1);
+      // Close to the glass (2026-11-14): the sill sits low, leaving only a strip
+      // of floor (about 12-30% of the image) and the window filling the rest.
+      expect(floorPoint.y).toBeGreaterThan(-0.76);
+      expect(floorPoint.y).toBeLessThan(-0.4);
+      // The glass reaches the top of the frame: its lintel is at or beyond the top edge.
       const lintel = new THREE.Vector3(0, PENGUIN_GALLERY.coping.bottom, PENGUIN_GALLERY.coping.maxZ).project(camera);
-      expect(lintel.y).toBeGreaterThan(0.7);
-      expect(lintel.y).toBeLessThan(1);
+      expect(lintel.y).toBeGreaterThan(0.85);
       const foregroundRay = new THREE.Raycaster();
       foregroundRay.setFromCamera(new THREE.Vector2(0, -0.9), camera);
       expect(foregroundRay.intersectObject(gallery.mesh)[0]?.point.y).toBeCloseTo(lower.top);

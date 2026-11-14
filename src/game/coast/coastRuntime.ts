@@ -2,8 +2,8 @@ import { COAST_HABITATS, EXHIBITS, PENGUIN_STAFF_DOOR, type CoastHabitat } from 
 import { tankAt, type Model } from "../logic/model";
 import { HABITAT_PAD, recordCoastSight } from "../logic/coast";
 import { coastHabitatShown } from "../data/release";
-import { newMover, RAMP_STEP, SPECIES_OF, stationSpots, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
-import { finishKeepers, KEEPER_CLEARANCE, keeperBusy, keeperRt, resetKeepers, stepKeepers } from "./keeper";
+import { landLegClear, newMover, PENGUIN_LAND_SEPARATION, RAMP_STEP, SPECIES_OF, stationSpots, stepMover, waterLegClear, type Mover, type MoveCtx } from "./motion";
+import { cleanShotAt, CREW_RADIUS, finishKeepers, KEEPER_CLEARANCE, keeperBusy, keeperRt, resetKeepers, startArrival, stepArrival, stepKeepers, UPPER_CLEANERS } from "./keeper";
 
 /**
  * Live animals of the coastal habitats (runtime only, never saved). One mover
@@ -29,16 +29,27 @@ export const coastRt = {
   /** Sights waiting to be committed to the model (the flow drains this). */
   sights: [] as ("penguinSwim" | "sealDive" | "otterFloat")[],
   /** Count of entries into the water, per habitat (activities and tests). */
-  entries: { penguins: 0, seals: 0, otters: 0 } as Record<CoastHabitat, number>
+  entries: { penguins: 0, seals: 0, otters: 0 } as Record<CoastHabitat, number>,
+  /** Bought penguins waiting to come out of the staff door (runtime only: a reload simply places them on land). */
+  arrivals: [] as string[]
 };
+
+const door = PENGUIN_STAFF_DOOR;
+/** Inside the dark corridor behind the leaf, then the threshold, then clear of the doorway on the shelf. */
+export const ARRIVAL = { inside: door.z - 0.75, threshold: door.z + 0.2, out: door.z + 1.35 };
+/** Queue a just-bought penguin (already in the saved model) to walk out through the staff door. */
+export function queuePenguinArrival(id: string) { if (!coastRt.arrivals.includes(id)) coastRt.arrivals.push(id); }
 
 let seed = 1;
 const peerLists: Record<CoastHabitat, Mover[]> = { penguins: [], seals: [], otters: [] };
 const liveIds = new Set<string>();
 const staffBody = { x: 0, z: 0, active: false, r: KEEPER_CLEARANCE };
+// Reused crew bodies for the Clean montage's upper team: no per-frame objects.
+const crewSlots = UPPER_CLEANERS.map(() => ({ x: 0, z: 0, r: CREW_RADIUS }));
+const crewLive: { x: number; z: number; r: number }[] = [];
 function makeContext(h: CoastHabitat): MoveCtx { return {
   time: 0, landItems: [], toy: null, restSpots: [], movers: peerLists[h],
-  ...(h === "penguins" ? { staff: staffBody } : {}),
+  ...(h === "penguins" ? { staff: staffBody, crew: crewLive } : {}),
   onEvent: (_m: Mover, kind: Parameters<NonNullable<MoveCtx["onEvent"]>>[1]) => {
     if (kind === "eatFish" && coastRt.stationFood) coastRt.stationFood.fish = Math.max(0, coastRt.stationFood.fish - 1);
     if (kind === "enterWater") coastRt.entries[h]++;
@@ -77,8 +88,12 @@ export function syncCoast(model: Model) {
       live.add(f.id);
       if (!coastRt.animals.has(f.id)) {
         const m = newMover(f.id, SPECIES_OF[h], EXHIBITS[h], seed++ * 31 + f.id.length, coastRt.time, cachedCtx(model, h).landItems, h === "penguins" ? peerLists[h] : undefined);
-        // Initial positions only: the arrival camera watches real, continuously moving animals.
-        if (h === "penguins" && !model.progress.coastIntroSeen) {
+        if (h === "penguins" && coastRt.arrivals.includes(f.id)) {
+          // A bought penguin waits in the dark corridor until the door opens.
+          Object.assign(m, { x: door.x, y: EXHIBITS.penguins.land.y, z: ARRIVAL.inside, mode: "arrive", area: "land", heading: 0, speed: 0, pitch: 0, action: null });
+          m.path = [];
+        } else if (h === "penguins" && !model.progress.coastIntroSeen) {
+          // Initial positions only: the arrival camera watches real, continuously moving animals.
           const n = [...coastRt.animals.values()].filter((a) => a.habitat === h).length;
           const ex = EXHIBITS[h], r = ex.ramps[0], surface = ex.pool.surface - 0.06;
           if (n === 0 && r.width) {
@@ -127,7 +142,9 @@ export function habitatCtx(model: Model, h: CoastHabitat): Pick<MoveCtx, "landIt
 export function stepCoast(model: Model, dt: number, shown: boolean) {
   if (!shown) {
     if (keeperBusy()) { finishKeepers(); clearCoastMeal(); }
+    settleArrivals();
     staffBody.active = false;
+    crewLive.length = 0;
     return;
   }
   coastRt.time += dt;
@@ -136,6 +153,12 @@ export function stepCoast(model: Model, dt: number, shown: boolean) {
   const f = keeperRt.feed;
   staffBody.x = f.x; staffBody.z = f.z;
   staffBody.active = f.phase !== "idle" && f.phase !== "doorClosing";
+  // (Never at the same time as feeding: an arrival then reserves the doorway apron instead.)
+  stepArrivals(dt);
+  // The upper cleaners of the current photograph are solid to walking penguins.
+  crewLive.length = 0;
+  const shot = keeperRt.clean.phase === "montage" ? cleanShotAt(keeperRt.clean.elapsed) : null;
+  if (shot) for (const i of UPPER_CLEANERS) { const w = shot.workers[i], c = crewSlots[i]; c.x = w.x; c.z = w.z; crewLive.push(c); }
   if (f.phase === "tip" && !f.pileStarted) {
     clearCoastMeal();
     f.pileStarted = true;
@@ -158,6 +181,51 @@ export function stepCoast(model: Model, dt: number, shown: boolean) {
     ctx.time = coastRt.time;
     stepMover(a.m, EXHIBITS[a.habitat], dt, ctx);
     if (a.habitat === "otters" && a.m.mode === "float" && a.m.y > EXHIBITS.otters.pool.surface - 0.1) coastRt.sights.push("otterFloat");
+  }
+}
+
+/** One bought penguin at a time comes out once the door is free (never during feeding or cleaning). */
+function stepArrivals(dt: number) {
+  const a = keeperRt.arrival;
+  if (a.phase === "idle" && coastRt.arrivals.length && !keeperBusy()) {
+    const id = coastRt.arrivals[0], bird = coastRt.animals.get(id);
+    if (!bird || bird.m.mode !== "arrive") coastRt.arrivals.shift();
+    else if (startArrival(id)) coastRt.arrivals.shift();
+  }
+  if (a.phase === "idle") return;
+  const bird = a.id ? coastRt.animals.get(a.id) : undefined;
+  // The doorway apron is reserved like the keeper's body: others keep off it, and
+  // a bird resting there gets up and goes elsewhere, so the newcomer is never stuck.
+  if (a.phase !== "doorClosing") {
+    staffBody.x = door.x; staffBody.z = door.z + 0.9; staffBody.active = true;
+    for (const p of peerLists.penguins) {
+      if (p === bird?.m || p.mode !== "rest" || p.area !== "land") continue;
+      if (Math.hypot(p.x - staffBody.x, p.z - staffBody.z) < staffBody.r + 0.5) p.until = Math.min(p.until, coastRt.time);
+    }
+  }
+  const where = !bird ? "gone" : bird.m.mode === "arrive" && bird.m.z < ARRIVAL.threshold + 0.25 ? "inside" : "clear";
+  if (stepArrival(dt, where) && bird) {
+    const y = EXHIBITS.penguins.land.y;
+    bird.m.path = [{ x: door.x, y, z: ARRIVAL.threshold }, { x: door.x, y, z: ARRIVAL.out }];
+  }
+}
+
+/** Leaving mid-arrival (or before one began): every bought bird is simply on the shelf, clear of the others. */
+function settleArrivals() {
+  coastRt.arrivals.length = 0;
+  const ex = EXHIBITS.penguins, items = contexts.penguins.landItems;
+  for (const a of coastRt.animals.values()) {
+    if (a.habitat !== "penguins" || a.m.mode !== "arrive") continue;
+    const m = a.m;
+    let spot: { x: number; z: number } | null = null;
+    for (let ring = 0; ring < 6 && !spot; ring++) for (let k = 0; k < 8 && !spot; k++) {
+      const angle = k * Math.PI / 4, r = ring * 0.9;
+      const q = { x: door.x + Math.sin(angle) * r, z: ARRIVAL.out + Math.abs(Math.cos(angle)) * r };
+      if (landLegClear(ex, q, q, items, 0.35) && peerLists.penguins.every((p) => p === m || Math.hypot(p.x - q.x, p.z - q.z) >= PENGUIN_LAND_SEPARATION + 0.1)) spot = q;
+    }
+    spot ??= { x: door.x, z: ARRIVAL.out };
+    Object.assign(m, { x: spot.x, z: spot.z, y: ex.land.y, mode: "rest", area: "land", speed: 0, pitch: 0, heading: 0, until: coastRt.time + 1 });
+    m.path = [];
   }
 }
 
@@ -229,6 +297,8 @@ export function clearCoast() {
   coastRt.time = 0;
   coastRt.stationFood = null;
   coastRt.entries = { penguins: 0, seals: 0, otters: 0 };
+  coastRt.arrivals = [];
+  crewLive.length = 0;
   seed = 1;
   for (const h of COAST_HABITATS) peerLists[h].length = 0;
   decorRefs.clear();

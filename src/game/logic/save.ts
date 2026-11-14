@@ -6,7 +6,7 @@ import { roomOpen, roomOwned } from "../data/rooms";
 import { isSavedPhrase } from "./english";
 import { isSavedSentencePattern } from "./sentenceTeaching";
 import { decodeRush } from "../rush/decode";
-import type { CoastProgress } from "./coast";
+import { PENGUIN_PURCHASES, type CoastProgress } from "./coast";
 import { coastSlotFits } from "../data/coast";
 import { areaReleased } from "../data/release";
 import { storeLocked } from "./stored";
@@ -246,7 +246,9 @@ function readProgress(raw: unknown, version: number): Progress {
       milestone,
       sawPenguinSwim: c.sawPenguinSwim === true, sawSealDive: c.sawSealDive === true, sawOtterFloat: c.sawOtterFloat === true,
       penguinActs: acts(c.penguinActs), sealActs: acts(c.sealActs), otterActs: acts(c.otterActs),
-      trophy: milestone === 5
+      trophy: milestone === 5,
+      // Added 2026-11-14; older saves have bought none. Owned penguins are never derived from this.
+      penguinsBought: Math.max(0, Math.min(PENGUIN_PURCHASES, Math.floor(num(c.penguinsBought, 0))))
     };
   }
   // The outdoor expansions: only a released area can be owned. Until then any

@@ -8,6 +8,7 @@ import {
 import { award } from "../logic/model";
 import { DOLPHIN_NUMBER_PHRASE } from "../logic/english";
 import { dropToy, feedPod, holdBall, throwBall, isFeeding, lagoonPod, lagoonRt, stepLagoonRt, WATCH_SPOTS } from "../lagoon/lagoonRuntime";
+import { highJumpActive, startHighJump } from "../lagoon/highJump";
 import { type PodEvent } from "../marine/pod";
 import { LAGOON_ORIGIN } from "../data/lagoon";
 import type { VisitorType } from "../types";
@@ -68,6 +69,10 @@ function noteVisit(v: LagoonView) {
 let fedAt = -100;
 export function feedDolphins() {
   if (!calm()) return;
+  if (highJumpActive()) {
+    toast({ en: "Watch the high jump first!", ja: "まず ハイジャンプを みよう！", tone: "info" });
+    return;
+  }
   if (isFeeding() || (lagoonRt.time >= fedAt && lagoonRt.time - fedAt < 12)) {
     toast({ en: "They are still eating!", ja: "まだ たべているよ。すこし まってね", tone: "info" });
     return;
@@ -96,6 +101,10 @@ export const TOY_NAMES: Record<LagoonToy, { en: string; ja: string; word: string
 export function giveLagoonToy(toy: LagoonToy) {
   const p = model().progress.lagoon;
   if (!p) return;
+  if (highJumpActive()) {
+    toast({ en: "Watch the high jump first!", ja: "まず ハイジャンプを みよう！", tone: "info" });
+    return;
+  }
   if (!p.toys.includes(toy)) {
     audio.play("error");
     toast({ en: "Not yet!", ja: "もくひょうを クリアすると もらえるよ", tone: "info" });
@@ -108,6 +117,36 @@ export function giveLagoonToy(toy: LagoonToy) {
   setGame({ areaPanel: null });
   void speak(TOY_NAMES[toy].word);
   celebrate(before);
+}
+
+/**
+ * Toys → High Jump: the crane hangs a buoy over the water and a dolphin leaps
+ * to touch it. Replayable, one at a time. It never switches the player's view;
+ * from another view a short hint points at the Deck. Its only reward is the
+ * ordinary, rate-limited Play gain when the buoy is touched.
+ */
+export function startLagoonHighJump(): boolean {
+  if (!model().progress.lagoon || !calm()) return false;
+  if (highJumpActive()) {
+    toast({ en: "Look! The dolphin is jumping!", ja: "いま ジャンプ しているよ！", tone: "info" });
+    return false;
+  }
+  if (isFeeding()) {
+    toast({ en: "They are still eating!", ja: "まだ たべているよ。すこし まってね", tone: "info" });
+    return false;
+  }
+  const toy = lagoonRt.toy;
+  if (toy?.kind === "ball" && (toy.state === "held" || toy.state === "thrown")) {
+    toast({ en: "Throw the ball first!", ja: "さきに ボールを なげよう！", tone: "info" });
+    return false;
+  }
+  if (!startHighJump()) return false;
+  audio.play("purchase");
+  setGame({ areaPanel: null });
+  void speak("Jump!");
+  toast({ en: "High jump! Look!", ja: "ハイジャンプ！ よく みてね！", tone: "good" }, 2600);
+  if (getGame().lagoonView !== "deck") nudge({ en: "Watch from the Deck!", ja: "「デッキ」から みると よく みえるよ！", kind: "tap", target: "lagoon-view-deck" }, 7000);
+  return true;
 }
 
 /** Catch uses the same calm gate as care; a held ball never delays another activity. */
@@ -149,7 +188,8 @@ function onScreen(x: number, y: number, z: number): boolean {
 function offerLook(e: PodEvent) {
   const kind = SIGHT_OF[e.kind];
   const p = model().progress.lagoon;
-  if (!kind || !p || lagoonRt.look || lagoonRt.time < lagoonRt.lookReadyAt || !calm() || getGame().areaPanel) return;
+  // No "Look!" bubble over the High Jump: nothing covers the leap itself.
+  if (!kind || !p || lagoonRt.look || lagoonRt.time < lagoonRt.lookReadyAt || !calm() || getGame().areaPanel || highJumpActive()) return;
   const seen = p.seen.includes(kind);
   if (seen && lagoonRt.time - lastShown[kind] < 45) return;
   // From the underwater gallery a breath at the surface is out of sight; a pair or a dive under water is not.
@@ -188,6 +228,15 @@ export function lagoonTick(dt: number) {
   lagoonRt.tricksPaused = lagoonFocus.count || lagoonFocus.id !== null || Boolean(getGame().areaActivity);
   lagoonRt.catchInputPaused = !calm() || Boolean(getGame().areaPanel) || view === "gallery";
   const events = stepLagoonRt(dt);
+  for (const e of lagoonRt.jumpEvents) {
+    if (e === "touch") {
+      audio.play("wow");
+      void speak("Wow! Jump!");
+      toast({ en: "Wow! Jump!", ja: "すごい！ ジャンプ！", tone: "good" }, 2600);
+    } else if (e === "launch") audio.play("splash");
+    else if (e === "cancel") toast({ en: "Let's try again later!", ja: "また あとで やってみよう！", tone: "info" }, 2600);
+  }
+  lagoonRt.jumpEvents.length = 0;
   const before = model().progress.lagoon?.milestone ?? 0;
   for (const e of events) {
     if (e.kind === "pair" && lagoonRt.time - lastTogether > 10) { lastTogether = lagoonRt.time; updateModel(lagoonTogether); }
@@ -214,7 +263,7 @@ let nextVisitorAt = 14;
 
 function visitorTick() {
   const g = getGame();
-  if (g.areaWaiting || g.areaActivity || !calm() || g.areaPanel) return;
+  if (g.areaWaiting || g.areaActivity || !calm() || g.areaPanel || highJumpActive()) return;
   if (lagoonRt.time < nextVisitorAt) return;
   nextVisitorAt = lagoonRt.time + 22 + Math.random() * 14;
   setGame({ areaWaiting: { area: "lagoon", type: VISITORS[Math.floor(Math.random() * VISITORS.length)] } });
@@ -239,7 +288,8 @@ export async function startLagoonActivity(kind?: LagoonQuestion) {
   if (kind && !LAGOON_QUESTIONS.includes(kind)) return;
   const g = getGame();
   const w = g.areaWaiting;
-  if ((!w && !kind) || !calm()) return;
+  // A question holds and counts the pod: it waits until the High Jump is over.
+  if ((!w && !kind) || !calm() || highJumpActive()) return;
   lagoonRt.look = null;
   setGame({ areaWaiting: null, areaActivity: { area: "lagoon", by: w?.type ?? "child" }, areaPanel: null });
   const ok = await askLagoon(kind ?? pickQuestion(), w?.type ?? "child");

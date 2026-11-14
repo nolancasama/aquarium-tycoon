@@ -188,6 +188,38 @@ test("Ctrl+Alt+D previews the Dolphin Lagoon; it plays mic-free; back to the hub
   expect(errors).toEqual([]);
 });
 
+test("Lagoon High Jump from Toys: the crane deploys, a dolphin touches the buoy, lands, the crane parks; replayable", async ({ page }) => {
+  const errors = await load(page);
+  await waitFor(page, (s) => s.mode === "play", 10_000, "calm");
+  await clearLines(page);
+  await enterArea(page, "lagoon");
+  await clearLines(page);
+  await page.mouse.click(5, 5);
+  await page.getByTestId("lagoon-view-deck").click();
+  await page.waitForTimeout(800);
+  type Jump = { phase: string; touches: number; jumps: number; cancels: number; closest: number; slew: number; drop: number };
+  const jump = () => hook<Jump>(page, "lagoonJump");
+  for (let round = 1; round <= 2; round++) {
+    await expect(page.getByTestId("btn-lagoon-toys")).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId("btn-lagoon-toys").click();
+    await expect(page.getByTestId("lagoon-highjump")).toBeVisible();
+    await page.getByTestId("lagoon-highjump").click();
+    await expect.poll(async () => (await jump()).phase, { timeout: 5_000 }).not.toBe("idle");
+    // While it is on, feeding waits (a friendly note, no feed).
+    const fed = (await lagoon(page)).progress!.fed;
+    await page.getByTestId("btn-lagoon-feed").click();
+    expect((await lagoon(page)).progress!.fed).toBe(fed);
+    await expect.poll(async () => (await jump()).phase, { timeout: 90_000 }).toBe("idle");
+    const j = await jump();
+    expect(j.cancels).toBe(0);
+    expect(j.touches).toBe(round);
+    expect(j.slew).toBe(0);
+    expect(j.drop).toBe(0);
+    expect((await lagoon(page)).view).toBe("deck");
+  }
+  expect(errors).toEqual([]);
+});
+
 test("Grand Ocean Sanctuary preview: a research sticker, the cleanup by tapping litter, a habitat choice, Pico's tour, the trophy once", async ({ page }) => {
   test.setTimeout(300_000);
   const errors = await load(page, 600);

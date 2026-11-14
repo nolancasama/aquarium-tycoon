@@ -10,7 +10,7 @@ import { unstoreAvailable } from "./stored";
 // Its own rules are tested as they run when it may be entered: in a preview here.
 beforeAll(() => grantPreview("coast"));
 afterAll(() => clearPreviewAccess());
-import { checkCoastMilestones, COAST_PRICE, coastMilestoneLimit, coastQuestionHabitats, coastUnlocked, habitatOpen, NEED_CAP, newCoastProgress, openCoast, recordCoastActivity, recordCoastSight, storeHiddenCoast } from "./coast";
+import { buyPenguin, PENGUIN_PRICE, PENGUIN_PURCHASES, penguinBuyState, checkCoastMilestones, COAST_PRICE, coastMilestoneLimit, coastQuestionHabitats, coastUnlocked, habitatOpen, NEED_CAP, newCoastProgress, openCoast, recordCoastActivity, recordCoastSight, storeHiddenCoast } from "./coast";
 import { decodeSave, encodeSave } from "./save";
 import { decorFits } from "../data/decor";
 import { COAST_HALL, HUB_HALL, roomOpen } from "../data/rooms";
@@ -43,7 +43,7 @@ const place = (m: Model, slot: "M" | "N" | "O", kind: string): Model => ({
 });
 
 describe("Coastal & Polar Zone rules", () => {
-  it("unlocks after the Shark Tunnel trophy, then costs coins, and opens with three penguins", () => {
+  it("unlocks after the Shark Tunnel trophy, then costs coins, and opens with two penguins", () => {
     expect(coastUnlocked(tunnelDone(1000, false))).toBe(false);
     expect(openCoast(tunnelDone(1000, false))).toEqual({ ok: false, reason: "locked" });
     expect(openCoast(tunnelDone(COAST_PRICE - 1))).toEqual({ ok: false, reason: "coins" });
@@ -51,7 +51,7 @@ describe("Coastal & Polar Zone rules", () => {
     expect(m.coins).toBe(7);
     expect(m.progress.coast?.milestone).toBe(1);
     expect(tankAt(m, "M")?.type).toBe("penguins");
-    expect(tankAt(m, "M")?.fish.map((f) => f.species)).toEqual(["penguin", "penguin", "penguin"]);
+    expect(tankAt(m, "M")?.fish.map((f) => f.species)).toEqual(["penguin", "penguin"]);
     expect(habitatOpen(m, "seals")).toBe(false);
     expect(roomOpen(COAST_HALL, m.progress)).toBe(true);
     expect(roomOpen(HUB_HALL, m.progress)).toBe(true);
@@ -92,7 +92,7 @@ describe("Coastal & Polar Zone rules", () => {
     expect(m.progress.coast?.milestone).toBe(1);
     m = checkCoastMilestones(place(m, "M", "penguinRock")).m;
     expect(m.progress.coast?.milestone).toBe(2);
-    expect(tankAt(m, "M")?.fish).toHaveLength(4);
+    expect(tankAt(m, "M")?.fish).toHaveLength(3);
     expect(tankAt(m, "N")?.fish.map((f) => f.species)).toEqual(["seal"]);
     // Running the check again pays nothing more.
     const again = checkCoastMilestones(m).m;
@@ -124,7 +124,7 @@ describe("Coastal & Polar Zone rules", () => {
     m = recordCoastActivity(recordCoastActivity(m, "penguins"), "penguins");
     expect(coastMilestoneLimit()).toBe(2);
     expect(m.progress.coast?.milestone).toBe(2);
-    expect(tankAt(m, "M")?.fish).toHaveLength(4);
+    expect(tankAt(m, "M")?.fish).toHaveLength(3);
     expect(tankAt(m, "N")).toBeNull();
     expect(tankAt(m, "O")).toBeNull();
     expect(m.inv.fish).toEqual([]);
@@ -166,13 +166,83 @@ describe("Coastal & Polar Zone rules", () => {
     expect(coastMilestoneLimit()).toBe(5);
   });
 
+  it("2 at opening, 3 after Penguin Paradise, then two bought one at a time for 60 coins each (5 in all)", () => {
+    let m = ok(openCoast(tunnelDone(COAST_PRICE + 500)));
+    const penguins = () => tankAt(m, "M")!.fish.filter((f) => f.species === "penguin");
+    expect(penguins()).toHaveLength(2);
+    m = place(m, "M", "penguinRock");
+    m = recordCoastSight(m, "penguinSwim");
+    m = recordCoastActivity(recordCoastActivity(m, "penguins"), "penguins");
+    expect(m.progress.coast?.milestone).toBe(2);
+    expect(penguins()).toHaveLength(3);
+    expect(PENGUIN_PRICE).toBe(60);
+    expect(PENGUIN_PURCHASES).toBe(2);
+    const coins = m.coins, ids = new Set(penguins().map((f) => f.id));
+    const first = buyPenguin(m);
+    if (!first.ok) throw new Error(first.reason);
+    expect(first.id).toMatch(/^f\d+$/);
+    expect(ids.has(first.id!)).toBe(false);
+    m = first.m;
+    expect(m.coins).toBe(coins - 60);
+    expect(penguins().map((f) => f.id)).toContain(first.id);
+    expect(m.progress.coast?.penguinsBought).toBe(1);
+    const second = buyPenguin(m);
+    if (!second.ok) throw new Error(second.reason);
+    expect(second.id).not.toBe(first.id);
+    m = second.m;
+    expect(penguins()).toHaveLength(5);
+    expect(m.coins).toBe(coins - 120);
+    expect(penguinBuyState(m)).toEqual({ ok: false, reason: "bought", left: 0 });
+    expect(buyPenguin(m)).toEqual({ ok: false, reason: "locked" });
+    // Bought penguins, their ids and the allowance survive a save and reload.
+    const back = decodeSave(encodeSave(m))!.model;
+    expect(tankAt(back, "M")!.fish.map((f) => f.id)).toEqual(tankAt(m, "M")!.fish.map((f) => f.id));
+    expect(back.progress.coast?.penguinsBought).toBe(2);
+    expect(back.coins).toBe(m.coins);
+  });
+
+  it("refuses a penguin without coins, without room, or before the coast is open; never overfills", () => {
+    const closed = tunnelDone(1000);
+    expect(penguinBuyState(closed)).toMatchObject({ ok: false, reason: "locked" });
+    let m = ok(openCoast(tunnelDone(COAST_PRICE + 59)));
+    expect(penguinBuyState(m)).toEqual({ ok: false, reason: "coins", left: 2 });
+    expect(buyPenguin(m)).toEqual({ ok: false, reason: "coins" });
+    // A colony already at the six-bird capacity cannot take another, whatever the allowance.
+    m = { ...m, coins: 999, tanks: m.tanks.map((t) => t.slot === "M" ? { ...t, fish: Array.from({ length: 6 }, (_, i) => ({ id: `f${900 + i}`, species: "penguin" as const })) } : t) };
+    expect(penguinBuyState(m)).toEqual({ ok: false, reason: "full", left: 2 });
+    expect(buyPenguin(m)).toEqual({ ok: false, reason: "full" });
+  });
+
+  it("an older save keeps its three or four penguins and names, and may still buy two up to six", () => {
+    let m = ok(openCoast(tunnelDone(COAST_PRICE + 500)));
+    // As saved before 2026-11-14: three penguins from opening, one from Penguin Paradise, no purchase field.
+    const four = Array.from({ length: 4 }, (_, i) => ({ id: `f${200 + i}`, species: "penguin" as const, ...(i === 0 ? { name: "ゆき" } : {}) }));
+    m = { ...m, tanks: m.tanks.map((t) => t.slot === "M" ? { ...t, fish: four } : t), progress: { ...m.progress, coast: { ...m.progress.coast!, milestone: 2 } } };
+    const raw = JSON.parse(encodeSave(m));
+    delete raw.model.progress.coast.penguinsBought;
+    const old = decodeSave(JSON.stringify(raw))!.model;
+    expect(tankAt(old, "M")!.fish).toEqual(four);
+    expect(old.progress.coast?.penguinsBought).toBe(0);
+    let after = ok(buyPenguin(old));
+    after = ok(buyPenguin(after));
+    expect(tankAt(after, "M")!.fish).toHaveLength(6);
+    expect(tankAt(after, "M")!.fish.slice(0, 4)).toEqual(four);
+    expect(penguinBuyState(after)).toMatchObject({ ok: false, reason: "bought" });
+    // A forged allowance cannot exceed the limit.
+    const forged = JSON.parse(encodeSave(old));
+    forged.model.progress.coast.penguinsBought = -7;
+    expect(decodeSave(JSON.stringify(forged))!.model.progress.coast?.penguinsBought).toBe(0);
+    forged.model.progress.coast.penguinsBought = 40;
+    expect(decodeSave(JSON.stringify(forged))!.model.progress.coast?.penguinsBought).toBe(2);
+  });
+
   it("saves and loads the zone; older saves load with it closed; a forged one is not trusted", () => {
     let m = ok(openCoast(tunnelDone()));
     m = recordCoastSight(m, "penguinSwim");
     const back = decodeSave(encodeSave(m))!.model;
     expect(back.progress.coastOpen).toBe(true);
     expect(back.progress.coast).toEqual({ ...newCoastProgress(), milestone: 1, sawPenguinSwim: true });
-    expect(tankAt(back, "M")?.fish).toHaveLength(3);
+    expect(tankAt(back, "M")?.fish).toHaveLength(2);
     expect(back.coins).toBe(m.coins);
     // A save from before the zone existed.
     const old = tunnelDone();

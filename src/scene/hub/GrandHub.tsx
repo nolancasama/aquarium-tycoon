@@ -208,8 +208,23 @@ function DisplayTank() {
   useEffect(() => () => {
     statics.dispose(); reef.geometry.dispose(); reef.elements.forEach(e => e.geometry.dispose());
   }, [statics, reef]);
-  const water = useMemo(() => new THREE.MeshLambertMaterial({ color: "#8fe0ee", transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide }), []);
-  const surface = useMemo(() => new THREE.MeshBasicMaterial({ color: "#b8f0f8", transparent: true, opacity: 0.2, depthWrite: false }), []);
+  // Glass and water of the tall column: clear in the middle, brighter toward the
+  // silhouette (a fresnel edge), so 6.4 m of water reads as one glass cylinder.
+  const water = useMemo(() => new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    uniforms: { uColor: { value: new THREE.Color("#7fd3e6") }, uEdge: { value: new THREE.Color("#e6fbff") } },
+    vertexShader: `varying vec3 vN; varying vec3 vV; varying float vY;
+      void main() { vec4 p = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-p.xyz); vY = position.y; gl_Position = projectionMatrix * p; }`,
+    fragmentShader: `uniform vec3 uColor; uniform vec3 uEdge; varying vec3 vN; varying vec3 vV; varying float vY;
+      void main() {
+        float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.4);
+        float a = 0.12 + f * 0.5 + 0.03 * smoothstep(0.0, -3.0, vY);
+        gl_FragColor = vec4(mix(uColor, uEdge, f), a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`
+  }), []);
+  const surface = useMemo(() => new THREE.MeshBasicMaterial({ color: "#bdf2fa", transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide }), []);
   return (
     <group>
       <mesh geometry={statics} material={smoothMat} raycast={() => undefined} />
@@ -231,16 +246,16 @@ function DisplayTank() {
  * band and pace; colours are reef-bright but natural.
  */
 const REEF: { kind: SmallFishKind; size: number; band: [number, number]; pace: number; looks: SmallFishLook[] }[] = [
-  { kind: "tang", size: 0.43, band: [0.6, 2.5], pace: 0.24, looks: [
+  { kind: "tang", size: 0.43, band: [0.6, 5.3], pace: 0.24, looks: [
     { color: "#2f6fd6", accent: "#ffd23f" }, { color: "#3474dc", accent: "#ffcf3a" }, { color: "#f4c430", accent: "#f7d75a" }, { color: "#f2c12e", accent: "#f5d54f" }] },
-  { kind: "chromis", size: 0.28, band: [0.65, 2.6], pace: 0.32, looks: [
+  { kind: "chromis", size: 0.28, band: [0.65, 5.7], pace: 0.32, looks: [
     { color: "#5fc6d8", accent: "#7fd6e2" }, { color: "#55bfd3", accent: "#7ad3df" }, { color: "#62cadb", accent: "#86dae4" },
     { color: "#ffb21f", accent: "#ffd166" }, { color: "#f7a51b", accent: "#ffcc5c" }, { color: "#5b4bc4", accent: "#f4d03f" }] },
-  { kind: "wrasse", size: 0.36, band: [0.35, 1.5], pace: 0.28, looks: [
+  { kind: "wrasse", size: 0.36, band: [0.35, 2.6], pace: 0.28, looks: [
     { color: "#3fa66b", accent: "#ff8fb1" }, { color: "#44a872", accent: "#f78fb3" }, { color: "#e5674d", accent: "#3fb2c9" }, { color: "#3c9e68", accent: "#ff9cba" }] },
-  { kind: "snapper", size: 0.38, band: [0.7, 2.35], pace: 0.26, looks: [
+  { kind: "snapper", size: 0.38, band: [0.7, 4.8], pace: 0.26, looks: [
     { color: "#e05a47", accent: "#f2a03d" }, { color: "#d9543f", accent: "#efa040" }, { color: "#f0d05a", accent: "#4f8fd6" }, { color: "#e2604a", accent: "#f0a542" }] },
-  { kind: "sardine", size: 0.29, band: [1.6, 2.75], pace: 0.4, looks: [
+  { kind: "sardine", size: 0.29, band: [1.8, 6.0], pace: 0.4, looks: [
     { color: "#6f8fa6", accent: "#9fb3c2" }, { color: "#6a8aa1", accent: "#9cb1c0" }, { color: "#7394aa", accent: "#a3b6c5" }, { color: "#6c8ca3", accent: "#9db2c1" }] }
 ];
 
@@ -280,7 +295,9 @@ function TankFish({ obstacles }: { obstacles: readonly THREE.Box3[] }) {
   return <group>{schools.map((s, i) => <primitive key={i} object={s.mesh} />)}</group>;
 }
 
-const BUBBLES = 14;
+/** Two columns rising the full height of the tall tank at a steady ~1.5 m/s. */
+const BUBBLES = 26;
+const BUBBLE_RISE = HUB_TANK.h - 0.35;
 function Bubbles() {
   const ref = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -290,7 +307,7 @@ function Bubbles() {
     if (!m || !hubShown()) return;
     for (let i = 0; i < BUBBLES; i++) {
       const src = i % 2 ? { x: -0.6, z: -0.4 } : { x: 0.5, z: 0.55 };
-      const h = ((rt.time * 0.55 + i * 0.37) % 1) * (HUB_TANK.h - 0.35);
+      const h = ((rt.time * 1.55 / BUBBLE_RISE + i * 0.37) % 1) * BUBBLE_RISE;
       dummy.position.set(HUB_TANK.x + src.x + Math.sin(rt.time * 3 + i) * 0.05, HUB_TANK.plinth + 0.5 + h, HUB_TANK.z + src.z);
       dummy.scale.setScalar(0.5 + (i % 3) * 0.25);
       dummy.updateMatrix();

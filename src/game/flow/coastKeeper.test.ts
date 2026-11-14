@@ -6,7 +6,7 @@ import { clean, feed, newModel, newTank } from "../logic/model";
 import { resetRuntime, rt } from "../runtime";
 import { getGame, model, setGame } from "../store";
 import { cleanTank, feedTank } from "./actions";
-import { coastCameraTick, coastKeeperTick, frameCoastWaterForQuestion, releaseCoastCamera, startPenguinCare } from "./coast";
+import { coastCameraTick, coastKeeperTick, frameCoastWaterForQuestion, releaseCoastCamera, setCoastUnderwater, setCoastView, startPenguinCare } from "./coast";
 
 vi.mock("../../audio/audio", () => ({ audio: { play: vi.fn() } }));
 vi.mock("../sim", () => ({ dropPellets: vi.fn(), dropPinch: vi.fn() }));
@@ -117,38 +117,61 @@ describe("penguin keeper care actions", () => {
     expect(model().tanks[0].clean).toBe(70);
   });
 
-  it.each([1366 / 768, 1024 / 768, 1024 / 600])("borrows Clean framing for three workers and restores Underwater at aspect %s", async (aspect) => {
-    setGame({ coastUnderwater: true, coastRevealing: false });
-    coastCameraTick(aspect, 1);
-    const selected = structuredClone(rt.camera.shot);
+  for (const underwater of [false, true]) {
+    it.each([1366 / 768, 1024 / 768, 1024 / 600])(`Clean keeps the selected ${underwater ? "Underwater" : "Penguins"} view and camera for all five cleaners at aspect %s`, async (aspect) => {
+      setGame({ coastUnderwater: underwater, coastRevealing: false });
+      coastCameraTick(aspect, 1);
+      const selected = structuredClone(rt.camera.shot);
+      await cleanTank();
+      expect(keeperRt.clean.phase).toBe("montage");
+      for (const shot of CLEAN_SHOTS) {
+        coastCameraTick(aspect, 0.016);
+        expect(rt.camera.shot).toEqual(selected);
+        expect(getGame().coastUnderwater).toBe(underwater);
+        expect(getGame().coastView).toBe("penguins");
+        expect(cleanShotAt(keeperRt.clean.elapsed)?.workers).toHaveLength(5);
+        expect(keeperRt.clean.frame).toBe(shot.start);
+        expect(model().tanks[0].clean).toBe(35);
+        advance(1);
+      }
+      coastCameraTick(aspect, 1);
+      expect(keeperRt.clean.phase).toBe("idle");
+      expect(rt.camera.shot).toEqual(selected);
+    });
+  }
+
+  it("switching views by hand during Clean neither restarts nor repeats the montage, and cleans once", async () => {
+    const before = model(), expected = clean(before, before.tanks[0].id);
+    if (!expected.ok) throw new Error(expected.reason);
     await cleanTank();
-    coastCameraTick(aspect, 0.016);
-    const cleanCamera = structuredClone(rt.camera.shot);
-    expect(cleanCamera!.pos.y).toBeGreaterThan(2.73); // Above the window lintel.
-    expect(cleanCamera).not.toEqual(selected);
+    advance(1.5);
+    const elapsed = keeperRt.clean.elapsed;
+    setCoastUnderwater();
     expect(getGame().coastUnderwater).toBe(true);
-    for (const shot of CLEAN_SHOTS) {
-      expect(cleanShotAt(keeperRt.clean.elapsed)?.workers).toHaveLength(3);
-      expect(keeperRt.clean.frame).toBe(shot.start);
-      expect(model().tanks[0].clean).toBe(35);
-      advance(1);
-    }
-    coastCameraTick(aspect, 1);
+    coastCameraTick(1366 / 768, 1);
+    expect(keeperRt.clean.elapsed).toBe(elapsed);
+    advance(1);
+    setCoastView("penguins");
+    expect(getGame().coastUnderwater).toBe(false);
+    advance(3);
     expect(keeperRt.clean.phase).toBe("idle");
-    expect(rt.camera.shot).toEqual(selected);
-    expect(getGame().coastUnderwater).toBe(true);
+    expect(model().tanks[0].clean).toBe(expected.m.tanks[0].clean);
+    advance(2);
+    expect(model().tanks[0].clean).toBe(expected.m.tanks[0].clean);
   });
 
-  it("releases borrowed Clean framing on early departure", async () => {
+  it("leaving during Clean releases the camera, and the coast view returns unchanged", async () => {
+    coastCameraTick(1366 / 768, 1);
+    const selected = structuredClone(rt.camera.shot);
     await cleanTank();
     coastCameraTick(1366 / 768, 1);
-    expect(rt.camera.shot!.pos.y).toBeGreaterThan(2.73);
+    expect(rt.camera.shot).toEqual(selected);
     setGame({ hall: 0 });
     coastCameraTick(1366 / 768, 1);
     expect(rt.camera.shot).toBeNull();
     setGame({ hall: COAST_HALL, coastRevealing: false });
     coastCameraTick(1366 / 768, 1);
-    expect(rt.camera.shot!.pos.y).toBeLessThan(14);
+    expect(rt.camera.shot).toEqual(selected);
   });
 
   it.each(["feed", "clean"] as const)("settles unfinished %s exactly once when leaving and re-enters idle", async (kind) => {

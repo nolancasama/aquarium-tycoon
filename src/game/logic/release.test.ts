@@ -51,7 +51,7 @@ function coastOwner(coins = 99999): Model {
       ...m.progress, stage: 8, tutorial: "done", star: true, superStar: true, freePlay: true, hallOpen: true, galleryOpen: true, atriumOpen: true,
       tunnelOpen: true, tunnel: { milestone: 5, observed: 9, helped: 3, findDone: true, whereDone: true, countDone: true, trophy: true },
       coastOpen: true, coastIntroSeen: true,
-      coast: { milestone: 3, sawPenguinSwim: true, sawSealDive: true, sawOtterFloat: false, penguinActs: 0, sealActs: 0, otterActs: 0, trophy: false }
+      coast: { milestone: 3, sawPenguinSwim: true, sawSealDive: true, sawOtterFloat: false, penguinActs: 0, sealActs: 0, otterActs: 0, trophy: false, penguinsBought: 0 }
     }
   };
 }

@@ -31,6 +31,18 @@
 @media (prefers-reduced-motion: reduce) { .outdoor-goals .outdoor-tour { animation: none; } }
 
 .outdoor-toys .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* The lagoon's panel adds High Jump: four cards in one row. */
+.outdoor-toys .grid:has(.highjump-card) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.outdoor-toys .highjump-card { border-color: #ff8a3d; }
+
+/* Dolphin Lagoon: the needs card sits near the right edge (above the right arrow),
+   so the keeper on the care pontoon and the fish stay in view. */
+.wing-status.lagoon-status { right: 12px; }
+/* Compact edge navigation (narrow or short screens): the arrow band reaches up
+   past the card, so the card stays just inboard of the 64 px arrow instead. */
+@media (width < 1024px), (height < 700px) {
+  .wing-status.lagoon-status { right: calc(var(--room-nav-width) + 8px); }
+}
 .outdoor-toys .need-tag { display: inline-flex; align-items: center; gap: 3px; }
 
 /* The first-visit card: big and bright, over the reveal. */

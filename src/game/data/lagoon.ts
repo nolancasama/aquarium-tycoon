@@ -40,6 +40,25 @@ export const DECK = { minX: -23, maxX: -14, minZ: 9.5, maxZ: 15.5, top: 4.6 };
 export const BRIDGE = { x: -21, z0: -12.6, z1: -0.8, rise: 1.6 };
 /** The sea gate in the breakwater: a gap with a net (the dolphins stay in; the sea comes in). */
 export const SEA_GATE = { minX: 0.5, maxX: 4.5, z0: -13.6, z1: -18 };
+/**
+ * The High Jump crane (Toys → High Jump): a slewing jib crane on a concrete pad
+ * in the breakwater. Deployed, its jib reaches over open water and hangs a
+ * padded buoy at `buoy` (4.6 m above the water); parked, the jib lies along
+ * the breakwater with the buoy reeled up under it. The buoy sits near the
+ * Deck view's centre line, the mast well to its side.
+ */
+export const CRANE = {
+  base: { x: -4.5, z: -15.3 }, padTop: 1.7, jibY: 7.7, jibLength: 10.3,
+  buoy: { x: -4, y: 4.6, z: -6, r: 0.42 },
+  /** Jib heading parked (along the breakwater toward -x). */
+  parkedYaw: -Math.PI / 2
+} as const;
+/** Deployed jib heading (the trolley sits right over the buoy). */
+export const CRANE_YAW = Math.atan2(CRANE.buoy.x - CRANE.base.x, CRANE.buoy.z - CRANE.base.z);
+export const CRANE_REACH = Math.hypot(CRANE.buoy.x - CRANE.base.x, CRANE.buoy.z - CRANE.base.z);
+/** The deck view while a High Jump is on: a little closer along the rail, centred on the whole leap and splash. */
+export const DECK_JUMP_SHOT = { pos: { x: -15.4, y: 6.7, z: 10.6 }, target: { x: -3.2, y: 2.7, z: -6.6 } };
+
 /** Where the toys go in (floating), and the bubble curtain's ring on the floor. */
 export const TOY_SPOT: Vec3 = { x: -3, y: 0, z: -1 };
 export const BUBBLE_SPOT: Vec2 = { x: 4, z: 2.5 };

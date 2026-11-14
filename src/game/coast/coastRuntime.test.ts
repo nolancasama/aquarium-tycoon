@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { clearCoast, coastRt, feedCoast, stepCoast } from "./coastRuntime";
+import { ARRIVAL, clearCoast, coastRt, feedCoast, queuePenguinArrival, stepCoast } from "./coastRuntime";
+import { keeperRt, startKeeperFeed } from "./keeper";
+import { PENGUIN_STAFF_DOOR } from "../data/coast";
 import { newModel, newTank } from "../logic/model";
 import { PENGUIN_LAND_SEPARATION } from "./motion";
 
@@ -74,5 +76,90 @@ describe("coastal feeding presentation", () => {
     stepCoast(m, 0.1, true);
     expect(coastRt.stationFood).toBeNull();
     expect([...coastRt.animals.values()].every((a) => !a.m.feeding)).toBe(true);
+  });
+});
+
+describe("a bought penguin arriving through the staff door", () => {
+  const withNewcomer = (m: ReturnType<typeof colony>) => ({ ...m, tanks: m.tanks.map((t) => ({ ...t, fish: [...t.fish, { id: "f777", species: "penguin" as const }] })) });
+
+  it("waits in the corridor while the door opens, waddles out clear of the others, then the door closes", () => {
+    const before = colony(false, 3);
+    for (let i = 0; i < 40; i++) stepCoast(before, 0.1, true);
+    const m = withNewcomer(before);
+    queuePenguinArrival("f777");
+    stepCoast(m, 0.05, true);
+    const bird = coastRt.animals.get("f777")!.m, door = PENGUIN_STAFF_DOOR;
+    expect(bird.mode).toBe("arrive");
+    expect(bird.z).toBeLessThan(door.z - 0.5); // inside the dark corridor, not in the exhibit
+    expect(keeperRt.arrival.phase).toBe("doorOpening");
+    expect(startKeeperFeed(m)).toBe(false); // the keeper never meets the newcomer in the doorway
+    const phases: string[] = [];
+    let minGap = Infinity, movedBeforeOpen = 0, closedOnBird = false;
+    for (let i = 0; i < 600 && (keeperRt.arrival.phase !== "idle" || phases.length === 0); i++) {
+      const z = bird.z;
+      stepCoast(m, 0.05, true);
+      if (phases[phases.length - 1] !== keeperRt.arrival.phase) phases.push(keeperRt.arrival.phase);
+      if (keeperRt.arrival.door < 1 && keeperRt.arrival.phase === "doorOpening") movedBeforeOpen += Math.abs(bird.z - z);
+      if (keeperRt.arrival.phase === "doorClosing" && bird.z < ARRIVAL.threshold) closedOnBird = true;
+      for (const other of coastRt.animals.values()) if (other.m !== bird && other.m.area !== "water") minGap = Math.min(minGap, Math.hypot(other.m.x - bird.x, other.m.z - bird.z));
+    }
+    // The leaf closes behind the bird while it finishes stepping clear of the doorway.
+    for (let i = 0; i < 200 && bird.mode === "arrive"; i++) {
+      stepCoast(m, 0.05, true);
+      for (const other of coastRt.animals.values()) if (other.m !== bird && other.m.area !== "water") minGap = Math.min(minGap, Math.hypot(other.m.x - bird.x, other.m.z - bird.z));
+    }
+    expect(phases).toEqual(["doorOpening", "walkOut", "doorClosing", "idle"]);
+    expect(movedBeforeOpen).toBe(0);
+    expect(closedOnBird).toBe(false);
+    expect(keeperRt.arrival.door).toBe(0);
+    expect(bird.mode).not.toBe("arrive");
+    expect(bird.area).toBe("land");
+    expect(bird.z).toBeGreaterThan(door.z + 1);
+    expect(minGap).toBeGreaterThanOrEqual(PENGUIN_LAND_SEPARATION - 1e-6);
+    expect(startKeeperFeed(m)).toBe(true);
+  });
+
+  it("a bird resting right outside the door moves off, so the newcomer comes out promptly", () => {
+    const base = colony(false, 2);
+    stepCoast(base, 0.05, true);
+    const sitter = coastRt.animals.get("penguin-0")!.m;
+    // Resting on the doorway apron, in the newcomer's way, for a long time.
+    Object.assign(sitter, { x: PENGUIN_STAFF_DOOR.x, z: ARRIVAL.out + 0.1, y: 2.35, mode: "rest", area: "land", until: 1e9, path: [] });
+    const m = withNewcomer(base);
+    queuePenguinArrival("f777");
+    let t = 0;
+    for (; t < 30 && (keeperRt.arrival.phase !== "idle" || t < 0.2); t += 0.05) stepCoast(m, 0.05, true);
+    expect(keeperRt.arrival.phase).toBe("idle");
+    expect(t).toBeLessThan(10);
+    const bird = coastRt.animals.get("f777")!.m;
+    expect(Math.hypot(bird.x - sitter.x, bird.z - sitter.z)).toBeGreaterThanOrEqual(PENGUIN_LAND_SEPARATION - 1e-6);
+  });
+
+  it("leaving mid-arrival leaves the bought bird standing on the shelf; the door is closed on return", () => {
+    const m = withNewcomer(colony(false, 2));
+    queuePenguinArrival("f777");
+    for (let i = 0; i < 20; i++) stepCoast(m, 0.05, true);
+    expect(keeperRt.arrival.phase).not.toBe("idle");
+    stepCoast(m, 0.05, false);
+    const bird = coastRt.animals.get("f777")!.m;
+    expect(bird.mode).toBe("rest");
+    expect(bird.area).toBe("land");
+    expect(bird.z).toBeGreaterThan(PENGUIN_STAFF_DOOR.z + 1);
+    expect(keeperRt.arrival.phase).toBe("idle");
+    expect(keeperRt.arrival.door).toBe(0);
+    expect(coastRt.arrivals).toEqual([]);
+    for (let i = 0; i < 20; i++) stepCoast(m, 0.05, true);
+    expect(keeperRt.arrival.phase).toBe("idle");
+  });
+
+  it("an arrival whose penguin disappears (a preview ends) just closes the door", () => {
+    const base = colony(false, 2), m = withNewcomer(base);
+    queuePenguinArrival("f777");
+    for (let i = 0; i < 25; i++) stepCoast(m, 0.05, true);
+    expect(keeperRt.arrival.phase).toBe("walkOut");
+    for (let i = 0; i < 40; i++) stepCoast(base, 0.05, true);
+    expect(coastRt.animals.has("f777")).toBe(false);
+    expect(keeperRt.arrival.phase).toBe("idle");
+    expect(keeperRt.arrival.door).toBe(0);
   });
 });

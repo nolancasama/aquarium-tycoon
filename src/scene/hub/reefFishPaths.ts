@@ -1,7 +1,9 @@
 import * as THREE from "three";
+import { HUB_TANK } from "../../game/data/hub";
 
 export const REEF_SWIM_RADIUS = 1.88;
-export const REEF_SWIM_HEIGHT = 3;
+/** Above the sand bed (hubReef REEF_FLOOR 0.14), kept under the water surface. */
+export const REEF_SWIM_HEIGHT = HUB_TANK.h - 0.14 - 0.16;
 
 export interface ReefFishPath {
   curve: THREE.CurvePath<THREE.Vector3>;
@@ -70,7 +72,9 @@ export function createReefFishPath(
   if (radius <= 0 || low >= high) throw new Error("Reef fish has no usable swimming band");
   const boxes = obstacles.map((box) => box.clone().expandByScalar(clearance));
   const nodes: THREE.Vector3[] = [];
-  for (let attempt = 0; attempt < 3500 && nodes.length < 84; attempt++) {
+  // Node density follows the band's height, so tall bands stay as well connected.
+  const wanted = Math.min(140, Math.round(84 * Math.max(1, (high - low) / 2.2)));
+  for (let attempt = 0; attempt < 5000 && nodes.length < wanted; attempt++) {
     const angle = random() * Math.PI * 2, r = Math.sqrt(random()) * radius;
     const point = new THREE.Vector3(Math.cos(angle) * r, low + random() * (high - low), Math.sin(angle) * r);
     if (boxes.every((box) => box.distanceToPoint(point) > 0.025)) nodes.push(point);
@@ -98,7 +102,14 @@ export function createReefFishPath(
       const choices = links[current].filter((next) => !walk.includes(next)
         && (step === 1 || forward(walk[step - 2], current, next)));
       if (!choices.length) break;
-      walk.push(choices[Math.floor(random() * choices.length)]);
+      // Half the legs prefer a steep climb or descent: routes rise and fall
+      // through the tall column instead of circling at one depth.
+      let pool = choices;
+      if (random() < 0.5 && choices.length > 2) {
+        const dy = (n: number) => Math.abs(nodes[n].y - nodes[current].y);
+        pool = [...choices].sort((a, b) => dy(b) - dy(a)).slice(0, Math.ceil(choices.length / 3));
+      }
+      walk.push(pool[Math.floor(random() * pool.length)]);
     }
     if (walk.length < 6) continue;
     const last = walk[walk.length - 1];

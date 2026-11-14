@@ -33,9 +33,18 @@ export type MoveMode =
   /** Head at the surface to breathe. */
   | "breathe"
   /** Otters: floating on the back at the surface. */
-  | "float";
+  | "float"
+  /** A newly bought penguin waddling out of the staff doorway onto the shelf (runtime only). */
+  | "arrive";
 
 export type Area = "land" | "island" | "ledge" | "water";
+
+/**
+ * A path point. `fast` marks a penguin burst leg (a speed factor on the swim
+ * speed); fast points are swum through without stopping to line up, so a pass
+ * and its banked turn read as one continuous movement.
+ */
+export type PathPoint = Vec3 & { fast?: number };
 
 export interface Mover {
   id: string;
@@ -50,7 +59,7 @@ export interface Mover {
   area: Area;
   island: number;
   /** Straight-line legs still to travel (exhibit-local, with y). */
-  path: Vec3[];
+  path: PathPoint[];
   /** Where a ramp/climb leg started (its progress is measured from here). */
   from: Vec3;
   speed: number;
@@ -96,6 +105,8 @@ export interface MoveCtx {
   movers?: readonly Mover[];
   /** Penguin staff body, reused by the runtime; checked on each swept movement step. */
   staff?: { x: number; z: number; active: boolean; r: number };
+  /** Cleaning staff on the land shelf during the Clean montage (penguins walk round them). */
+  crew?: readonly { x: number; z: number; r: number }[];
   /** Events: entered or left the water (for milestones and activities). */
   onEvent?: (m: Mover, kind: "enterWater" | "leaveWater" | "breathe" | "dive" | "play" | "eatFish") => void;
 }
@@ -123,6 +134,13 @@ export const PARAMS: Record<CoastSpecies, Params> = {
 
 /** Fastest any leg can move (m/s): tests use it to prove there is no teleporting. */
 export const MAX_SPEED = 1.9;
+/** Penguins under water only (bursts); walking, ramps, seals and otters keep MAX_SPEED. */
+export const MAX_SWIM_SPEED = 3.6;
+/** Penguin bursts past the viewing window: how often a new swim leg is one, and its speed factor on PARAMS.penguin.swim (about 3.0-3.5 m/s). */
+export const PENGUIN_DASH = { chance: 0.45, factor: [2.0, 2.3] as [number, number] };
+/** The fastest a mover in this mode may travel (m/s). */
+export const speedCap = (m: Pick<Mover, "species" | "mode">) =>
+  m.species === "penguin" && (m.mode === "swim" || m.mode === "breathe") ? MAX_SWIM_SPEED : MAX_SPEED;
 /** Conservative visible GLB envelopes, including beak and trailing feet. */
 export const PENGUIN_LAND_SEPARATION = 0.9;
 export const PENGUIN_SWIM_SEPARATION = 1.3;
@@ -278,8 +296,49 @@ function startSwim(m: Mover, ex: ExhibitDef, ctx: MoveCtx) {
   nextSwimLeg(m, ex, ctx, m.species !== "otter");
 }
 
+/**
+ * A penguin burst: join a lane parallel to the viewing window, zip across it,
+ * bank round a tight U-turn and often race back the other way on a lane nearer
+ * the glass. Lanes, depths and lengths vary per burst. Every leg is checked
+ * clear before it is used; peers are still avoided each step by travel().
+ */
+function planDash(m: Mover, ex: ExhibitDef): boolean {
+  const body = PARAMS.penguin.body, band = swimBand(ex), p = ex.pool;
+  // Lanes sit between the floe/island (behind) and the low rocks by the glass.
+  const laneMin = p.minZ + (p.maxZ - p.minZ) * 0.55, laneMax = p.maxZ - 2.75;
+  if (laneMax - laneMin < 1.5) return false;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const r = 0.8 + rand(m) * 0.15;
+    const zA = laneMin + rand(m) * Math.max(0, laneMax - 2 * r - laneMin), zB = zA + 2 * r;
+    const lowY = band.low + 0.55, highY = band.high - 0.75;
+    const y = lowY + rand(m) * (highY - lowY);
+    const y2 = Math.max(lowY, Math.min(highY, y + (rand(m) - 0.5) * 1.6));
+    const reach = (p.maxX - p.minX) / 2 * (0.66 + rand(m) * 0.08);
+    const dir = m.x > 0.5 ? -1 : m.x < -0.5 ? 1 : rand(m) < 0.5 ? -1 : 1;
+    const fast = between(m, PENGUIN_DASH.factor);
+    const startX = Math.max(-reach, Math.min(reach, m.x + dir * 1.2)), endX = dir * reach;
+    if (Math.abs(endX - startX) < reach * 0.8) continue;
+    const path: PathPoint[] = [{ x: startX, y, z: zA, fast: 1 }, { x: endX, y, z: zA, fast }];
+    for (const k of [1, 2, 3]) {
+      const a = (k * Math.PI) / 3;
+      path.push({ x: endX + dir * r * Math.sin(a), y: y + (y2 - y) * k / 3, z: zA + r - r * Math.cos(a), fast: fast * 0.8 });
+    }
+    if (rand(m) < 0.6) path.push({ x: -dir * reach * (0.55 + rand(m) * 0.4), y: y2, z: zB, fast: fast * (0.9 + rand(m) * 0.15) });
+    let from: Vec3 = m, ok = true;
+    for (const q of path) {
+      if (q.y < band.low || q.y > band.high || !waterLegClear(ex, from, q, body)) { ok = false; break; }
+      from = q;
+    }
+    if (!ok) continue;
+    m.path = path;
+    return true;
+  }
+  return false;
+}
+
 function nextSwimLeg(m: Mover, ex: ExhibitDef, _ctx: MoveCtx, deep: boolean) {
   const body = PARAMS[m.species].body;
+  if (m.species === "penguin" && deep && !m.feeding && !m.attract && !m.exit && rand(m) < PENGUIN_DASH.chance && planDash(m, ex)) return;
   for (let i = 0; i < 30; i++) {
     const want = m.species === "otter" && !deep ? waterPoint(m, ex, true) : waterPoint(m, ex, false, m.species === "otter");
     // Prefer gentle turns: reject sharp ones for the first tries.
@@ -320,6 +379,7 @@ function rampLane(m: Mover, ex: ExhibitDef, i: number, up = false) {
 function destinationFree(m: Mover, q: Vec2, ctx: MoveCtx, clearance = PENGUIN_LAND_SEPARATION + 0.12) {
   if (m.species !== "penguin") return true;
   if (ctx.staff?.active && Math.hypot(q.x - ctx.staff.x, q.z - ctx.staff.z) < ctx.staff.r + 0.12) return false;
+  for (const c of ctx.crew ?? []) if (Math.hypot(q.x - c.x, q.z - c.z) < c.r + 0.12) return false;
   for (const peer of ctx.movers ?? []) {
     if (peer === m) continue;
     if (Math.hypot(peer.x - q.x, peer.z - q.z) < clearance) return false;
@@ -446,7 +506,8 @@ function ledgePath(ex: ExhibitDef, i: number, rest = ex.ledges![i].rest): Vec3[]
 /** Advance one animal by dt seconds. */
 export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
   const p = PARAMS[m.species];
-  m.phase += dt * (m.speed > 0.05 ? (m.area === "water" ? 6 : 9) : 1.2);
+  // Flipper strokes quicken with speed in the water (a burst beats ~1.5x faster).
+  m.phase += dt * (m.speed > 0.05 ? (m.area === "water" ? (m.species === "penguin" ? 3 + m.speed * 2 : 6) : 9) : 1.2);
   if (m.action && ctx.time > m.actionUntil) m.action = null;
   if (m.species === "penguin" && !m.feeding && (m.mode === "swim" || m.mode === "breathe") && (m.blockedFor ?? 0) > 1.5) clearCrowdedSwimLeg(m, ex, ctx);
   if (m.feeding) {
@@ -566,10 +627,18 @@ export function stepMover(m: Mover, ex: ExhibitDef, dt: number, ctx: MoveCtx) {
       }
       break;
     }
+    case "arrive": {
+      // Out of the doorway in a straight, peer-checked line; then it joins the colony.
+      m.area = "land";
+      if (!m.path.length) { m.speed = 0; break; }
+      if (travel(m, ex, dt, p.walk, false, ctx)) { startRest(m, ctx); m.until = ctx.time + 0.6; m.action = "look"; }
+      break;
+    }
     case "swim": {
       m.area = "water";
       if (m.attract && !m.exit) { swimToAttract(m, ex); }
-      if (!m.exit && ctx.time >= m.nextBreath && m.species !== "otter") {
+      // A burst finishes before the bird goes up to breathe.
+      if (!m.exit && ctx.time >= m.nextBreath && m.species !== "otter" && !m.path[0]?.fast) {
         m.mode = "breathe";
         m.until = 0;
         const up = { x: m.x, y: ex.pool.surface - 0.06, z: m.z };
@@ -728,6 +797,10 @@ function travel(m: Mover, ex: ExhibitDef, dt: number, speed: number, steer: bool
   const flat = Math.hypot(dx, dz);
   if (m.species === "penguin") {
     const swimming = m.mode === "swim" || m.mode === "breathe";
+    // Burst waypoints are swum through (no stop to line up) and set the leg's speed.
+    const burst = swimming && t.fast !== undefined;
+    if (burst && m.path.length > 1 && d < 0.55) { m.path.shift(); return travel(m, ex, dt, speed, steer, ctx); }
+    if (burst) speed *= t.fast!;
     const freeSteer = swimming || m.mode === "walk";
     const peers = ctx.movers;
     let vx = dx / (d || 1), vy = dy / (d || 1), vz = dz / (d || 1);
@@ -753,7 +826,7 @@ function travel(m: Mover, ex: ExhibitDef, dt: number, speed: number, steer: bool
       }
     }
     const staff = ctx.staff;
-    if (!swimming && staff?.active && Math.abs(m.y - ex.land.y) < 0.85) {
+    if (!swimming && m.mode !== "arrive" && staff?.active && Math.abs(m.y - ex.land.y) < 0.85) {
       const ax = m.x - staff.x, az = m.z - staff.z, distance = Math.hypot(ax, az);
       if (distance < staff.r + 1.3 && -(ax * vx + az * vz) > -0.1) {
         const strength = Math.max(0, (staff.r + 1.3 - distance) / 1.3);
@@ -762,21 +835,37 @@ function travel(m: Mover, ex: ExhibitDef, dt: number, speed: number, steer: bool
         vz += (-oldVx / horizontal * 1.4 + az / (distance || 1)) * strength;
       }
     }
+    if (!swimming && ctx.crew?.length && Math.abs(m.y - ex.land.y) < 0.85) for (const c of ctx.crew) {
+      const ax = m.x - c.x, az = m.z - c.z, distance = Math.hypot(ax, az);
+      if (distance < c.r + 1.1 && -(ax * vx + az * vz) > -0.1) {
+        const strength = Math.max(0, (c.r + 1.1 - distance) / 1.1);
+        const horizontal = Math.hypot(vx, vz) || 1, oldVx = vx;
+        vx += (vz / horizontal * 1.4 + ax / (distance || 1)) * strength;
+        vz += (-oldVx / horizontal * 1.4 + az / (distance || 1)) * strength;
+      }
+    }
     const heading = Math.hypot(vx, vz) > 1e-7 ? Math.atan2(vx, vz) : m.heading;
     const pitch = swimming ? Math.atan2(vy, Math.hypot(vx, vz)) : 0;
     if (freeSteer) {
-      m.heading += Math.max(-dt * 2.4, Math.min(dt * 2.4, angleDiff(m.heading, heading)));
+      // A burst banks harder, so its U-turn stays tight at speed.
+      const turnRate = burst ? 3.4 : 2.4;
+      m.heading += Math.max(-dt * turnRate, Math.min(dt * turnRate, angleDiff(m.heading, heading)));
       m.pitch += Math.max(-dt * 2, Math.min(dt * 2, pitch - m.pitch));
       // Walking also follows its smoothed heading, rather than sliding sideways during turns.
       const cp = Math.cos(m.pitch);
       vx = Math.sin(m.heading) * cp; vy = swimming ? Math.sin(m.pitch) : 0; vz = Math.cos(m.heading) * cp;
-      if (Math.abs(angleDiff(m.heading, heading)) > 1 || Math.abs(m.pitch - pitch) > 0.8) pace = 0;
+      const off = Math.abs(angleDiff(m.heading, heading));
+      // Bursts brake into a turn instead of stopping dead; everything else lines up first.
+      if (burst ? off > 1.9 || Math.abs(m.pitch - pitch) > 0.8 : off > 1 || Math.abs(m.pitch - pitch) > 0.8) pace = 0;
+      else if (burst && off > 0.9) pace = Math.min(pace, 0.5);
     } else {
       if (flat > 0.02) m.heading = turnToward(m.heading, Math.atan2(dx, dz), dt * 5);
       m.pitch += (0 - m.pitch) * Math.min(1, dt * 5);
     }
-    m.speed += (Math.min(speed * pace, d * 2) - m.speed) * Math.min(1, dt * 4);
-    let step = Math.min(m.speed * dt, MAX_SPEED * dt, d);
+    // Only the last point of a path is braked into; burst corners carry their speed.
+    const approach = burst && m.path.length > 1 ? d * 2 + 1.4 : d * 2;
+    m.speed += (Math.min(speed * pace, approach) - m.speed) * Math.min(1, dt * (burst ? 2.6 : 4));
+    let step = Math.min(m.speed * dt, speedCap(m) * dt, d);
     // An aligned endpoint is reached exactly, without overshooting or orbiting it.
     const end = d < 1e-5 || (d <= step + 1e-6 && (!freeSteer || (Math.abs(angleDiff(m.heading, Math.atan2(dx, dz))) < 0.14 && (!swimming || Math.abs(m.pitch - Math.atan2(dy, flat)) < 0.14))));
     if (end) { vx = dx / (d || 1); vy = dy / (d || 1); vz = dz / (d || 1); step = d; }
@@ -784,8 +873,12 @@ function travel(m: Mover, ex: ExhibitDef, dt: number, speed: number, steer: bool
     let valid = true;
     if (swimming) valid = waterLegClear(ex, m, proposed, PARAMS.penguin.body) && waterLegClear(ex, proposed, t, PARAMS.penguin.body) && proposed.y >= ex.pool.floor + SWIM_MARGIN && proposed.y <= ex.pool.surface - 0.04;
     else if (m.mode === "walk") valid = landLegClear(ex, m, proposed, ctx.landItems, PARAMS.penguin.body) && landLegClear(ex, proposed, t, ctx.landItems, PARAMS.penguin.body);
-    if (!swimming && staff?.active && Math.abs(proposed.y - ex.land.y) < 0.85 &&
+    if (!swimming && m.mode !== "arrive" && staff?.active && Math.abs(proposed.y - ex.land.y) < 0.85 &&
       segDist(m, proposed, staff) < Math.min(staff.r, Math.hypot(m.x - staff.x, m.z - staff.z)) - 1e-8) valid = false;
+    // A cleaner that appears beside a bird at a montage cut: the bird may only move away.
+    if (!swimming && Math.abs(proposed.y - ex.land.y) < 0.85) for (const c of ctx.crew ?? []) {
+      if (segDist(m, proposed, c) < Math.min(c.r, Math.hypot(m.x - c.x, m.z - c.z)) - 1e-8) { valid = false; break; }
+    }
     if (!valid || (peers && !peerStepClear(m, proposed.x, proposed.y, proposed.z, peers))) {
       // Yield in place; never project a body out of a wall or teleport it away from a peer.
       m.speed = 0;
